@@ -148,4 +148,50 @@ describe("pointer adapter", () => {
     dispose();
     expect(handlers.onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("self_released_capture_does_not_end_gesture", () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const h = {
+      onDown: vi.fn(),
+      onMove: vi.fn(),
+      onUp: vi.fn(),
+      onCancel: vi.fn(),
+      onPan: vi.fn(),
+      onPanEnd: vi.fn(),
+      onPinch: vi.fn(),
+    };
+    // Real capture semantics (jsdom has none): track captured ids.
+    const captured = new Set<number>();
+    Object.assign(el, {
+      setPointerCapture: (id: number) => captured.add(id),
+      hasPointerCapture: (id: number) => captured.has(id),
+      releasePointerCapture: (id: number) => captured.delete(id),
+    });
+    createPointerAdapter(el, h, { palmRejection: "high", drawWithFinger: true, getCamera: camera });
+    const finger = { pointerType: "touch", width: 8, height: 8, buttons: 1 };
+    fire(el, "pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 });
+    expect(h.onDown).toHaveBeenCalledTimes(1);
+    fire(el, "pointerdown", { ...finger, pointerId: 12, clientX: 60, clientY: 10 });
+    expect(h.onCancel).toHaveBeenCalledTimes(1);
+    expect(h.onPinch).toHaveBeenCalledWith(expect.objectContaining({ phase: "start" }));
+    // The browser later reports the capture we released for the first finger.
+    fire(el, "lostpointercapture", { pointerId: 11, pointerType: "touch" });
+    expect(h.onPinch).not.toHaveBeenCalledWith(expect.objectContaining({ phase: "end" }));
+    expect(h.onPanEnd).not.toHaveBeenCalled();
+    fire(el, "pointermove", { ...finger, pointerId: 12, clientX: 110, clientY: 10 });
+    expect(h.onPinch).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "move", dist: 100 }));
+
+    // Mouse id re-used after a stale stroke: the old capture's loss must not cancel the new stroke.
+    const mouse = { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, pressure: 0.5 };
+    fire(el, "pointerup", { ...finger, pointerId: 11, buttons: 0 });
+    fire(el, "pointerup", { ...finger, pointerId: 12, buttons: 0 });
+    fire(el, "pointerdown", { ...mouse, clientX: 0, clientY: 0 });
+    fire(el, "pointerdown", { ...mouse, clientX: 50, clientY: 0 }); // up was lost: cancel + restart
+    expect(h.onCancel).toHaveBeenCalledTimes(2);
+    fire(el, "lostpointercapture", { pointerId: 1, pointerType: "mouse" });
+    expect(h.onCancel).toHaveBeenCalledTimes(2);
+    fire(el, "pointerup", { ...mouse, clientX: 60, buttons: 0 });
+    expect(h.onUp).toHaveBeenCalledTimes(1);
+  });
 });

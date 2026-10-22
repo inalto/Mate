@@ -77,6 +77,8 @@ export function createPointerAdapter(
   let drawLast: Vec2 = { x: 0, y: 0 };
   let lastStylusAt = -Infinity;
   const rejected = new Set<number>();
+  /** Pointers whose capture we released ourselves; their (async) lostpointercapture is ignored. */
+  const expectedRelease = new Set<number>();
   const touches = new Map<number, Vec2>();
   let pinching = false;
 
@@ -102,7 +104,10 @@ export function createPointerAdapter(
   };
   const release = (id: number) => {
     try {
-      if (el.hasPointerCapture?.(id)) el.releasePointerCapture(id);
+      if (el.hasPointerCapture?.(id)) {
+        el.releasePointerCapture(id);
+        expectedRelease.add(id);
+      }
     } catch {
       /* ignore */
     }
@@ -234,23 +239,28 @@ export function createPointerAdapter(
   }
   const onUp = (e: PointerEvent) => end(e, false);
   const onCancelEv = (e: PointerEvent) => end(e, true);
+  /** Capture lost without an up/cancel (focus change, alt-tab) cancels the open stroke. Releases we
+   * made ourselves (finger → pinch, restart, normal up) and non-drawing pointers are ignored. */
+  const onLostCapture = (e: PointerEvent) => {
+    if (expectedRelease.delete(e.pointerId)) return;
+    if (e.pointerId === drawId) end(e, true);
+  };
   const onContext = (e: Event) => e.preventDefault();
 
   el.addEventListener("pointerdown", onDown);
   el.addEventListener("pointermove", onMove);
   el.addEventListener("pointerup", onUp);
   el.addEventListener("pointercancel", onCancelEv);
-  // Capture lost without an up/cancel (focus change, alt-tab): cancel. After a normal up the
-  // pointer is no longer tracked, so this is a no-op.
-  el.addEventListener("lostpointercapture", onCancelEv);
+  el.addEventListener("lostpointercapture", onLostCapture);
   el.addEventListener("contextmenu", onContext);
   return () => {
     cancelDraw();
     for (const id of touches.keys()) release(id);
     touches.clear();
     rejected.clear();
+    expectedRelease.clear();
     pinching = false;
-    el.removeEventListener("lostpointercapture", onCancelEv);
+    el.removeEventListener("lostpointercapture", onLostCapture);
     el.removeEventListener("pointerdown", onDown);
     el.removeEventListener("pointermove", onMove);
     el.removeEventListener("pointerup", onUp);
