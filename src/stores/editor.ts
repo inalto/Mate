@@ -4,7 +4,11 @@ import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
 import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
+import { contentOf, type TextAttributes, type TextBoxContent } from "../model/content";
 import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
+import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
+import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
+import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
 import { scaleElements, translateElements } from "../tools/lasso";
@@ -23,7 +27,7 @@ import {
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "text";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -76,6 +80,24 @@ export interface EditorState {
   /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
   scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
+  /**
+   * Text tool: add an empty text box at `at` (first baseline snapped to ruled lines when the
+   * setting is on) and open its editor; its id, or null when refused.
+   */
+  addTextBox(at: Vec2): string | null;
+  /**
+   * End of a text edit session: persist `after` (HTML sanitised, plain text derived) as one history
+   * entry; nothing when unchanged. A new box's creation and first session are one entry; a box
+   * left empty is removed (a new one without any history).
+   */
+  commitTextEdit(after: Element): void;
+  /**
+   * The open editor's commit, run once when its session ends (before the store moves on, so the
+   * entry lands in order). Returns an unbind function.
+   */
+  bindEditSession(commit: () => void): () => void;
+  /** Box-wide text formatting for the selected text boxes (replaces matching inline styles). */
+  restyleTextBox(patch: Partial<TextAttributes>): void;
   removeElements(ids: string[]): void;
   setTool(tool: ToolId): void;
   setPreset(preset: PenPreset): void;
@@ -232,6 +254,17 @@ export function createEditorStore(): EditorStore {
   const index = new SpatialIndex();
   /** Actions of the eraser drag in progress (pushed as one entry by endEraser). */
   let eraseBatch: Action[] = [];
+  /** Text box added by addTextBox whose first edit session is still open. */
+  let freshText: string | null = null;
+  /** Commit of the open edit session (bindEditSession). */
+  let editCommit: (() => void) | null = null;
+  const textKey = (id: string) => `text-new:${id}`;
+  /** Run the open editor's commit (once) before the edit session ends. */
+  const closeEdit = () => {
+    const fn = editCommit;
+    editCommit = null;
+    fn?.();
+  };
 
   const store = create<EditorState>((set, get) => ({
     pageId: null,
@@ -253,6 +286,8 @@ export function createEditorStore(): EditorStore {
     limitReached: false,
 
     async loadPage(pageId) {
+      closeEdit();
+      freshText = null;
       const token = ++loadToken;
       const preset = defaultPreset();
       history.clear();
@@ -353,6 +388,73 @@ export function createEditorStore(): EditorStore {
       );
     },
 
+    addTextBox(at) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const cfg = useSettingsStore.getState().settings;
+      const attrs = defaultTextAttributes(cfg.defaultTextColor, cfg.defaultTextSize);
+      const pos = cfg.alignTextToLines && s.page ? alignToRuledLine(at, attrs.fontSize, s.page, cfg.defaultPageAspectRatio) : at;
+      const top = topZ(s.elements.values());
+      const box = textBoxElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), pos, attrs);
+      const el = top > 0 ? withMeta(box, { zIndex: top }) : box;
+      if (!record("Text", [{ type: "add", el }], textKey(el.id))) return null;
+      freshText = el.id;
+      set({ selection: new Set([el.id]), editingId: el.id });
+      return el.id;
+    },
+
+    commitTextEdit(after) {
+      const cur = get().elements.get(after.id);
+      const fresh = freshText === after.id;
+      if (fresh) freshText = null;
+      if (!cur || cur.type !== "text-box") return;
+      const c = contentOf<TextBoxContent>(after);
+      const contentHtml = sanitizeHtml(c.contentHtml);
+      const rawContent = plainText(contentHtml);
+      const textAttributes = textAttrsOf(after);
+      const next: Element = { ...after, color: textAttributes.color, content: { ...c, contentHtml, rawContent, textAttributes } };
+      if (rawContent.trim() === "") {
+        // A new box left empty disappears with its creation entry; an emptied box is deleted.
+        if (fresh && history.discardTop(textKey(cur.id))) {
+          applyActions([{ type: "delete", el: cur }]);
+          syncHistoryFlags();
+          return;
+        }
+        record("Delete", [{ type: "delete", el: cur }]);
+        return;
+      }
+      if (sameText(cur, next)) return;
+      record("Text", [{ type: "update", before: cur, after: stamp(next) }], fresh ? textKey(cur.id) : undefined);
+    },
+
+    bindEditSession(commit) {
+      editCommit = commit;
+      return () => {
+        if (editCommit === commit) editCommit = null;
+      };
+    },
+
+    restyleTextBox(patch) {
+      const now = new Date().toISOString();
+      const actions: Action[] = [];
+      for (const cur of selectedElements()) {
+        if (cur.type !== "text-box") continue;
+        const before = textAttrsOf(cur);
+        const attrs = { ...before, ...patch };
+        let html = sanitizeHtml(contentOf<TextBoxContent>(cur).contentHtml);
+        if (patch.color !== undefined) html = stripInlineStyle(html, "color");
+        if (patch.fontFamily !== undefined) html = stripInlineStyle(html, "font-family");
+        if (patch.fontSize !== undefined) html = stripInlineStyle(html, "font-size");
+        const scaled = ((cur.boxHeight ?? 0) * attrs.fontSize) / before.fontSize;
+        const boxHeight = boxHeightFor(measureHtmlHeight(html, attrs, cur.boxWidth ?? 0), attrs.fontSize, scaled);
+        const content = { ...contentOf<TextBoxContent>(cur), contentHtml: html, textAttributes: attrs };
+        const after: Element = { ...cur, content, color: attrs.color, boxHeight };
+        if (!sameText(cur, after)) actions.push({ type: "update", before: cur, after: stamp(after, now) });
+      }
+      record("Style", actions);
+    },
+
     removeElements(ids) {
       const cur = get().elements;
       record("Delete", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
@@ -363,10 +465,15 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      if (tool === "eraser" || tool === "shape") set({ tool, selection: new Set(), editingId: null });
-      else set({ tool });
+      if (tool === "eraser" || tool === "shape" || tool === "text") {
+        closeEdit();
+        set({ tool, selection: new Set(), editingId: null });
+      } else set({ tool });
     },
-    setPreset: (preset) => set({ preset, tool: preset.type, selection: new Set(), editingId: null }),
+    setPreset: (preset) => {
+      closeEdit();
+      set({ preset, tool: preset.type, selection: new Set(), editingId: null });
+    },
     setCamera: (camera) => set({ camera }),
     setViewport: (viewport) => set({ viewport }),
     resetCamera() {
@@ -416,14 +523,19 @@ export function createEditorStore(): EditorStore {
     beginEdit(id) {
       const el = get().elements.get(id);
       if (!el || !isBoxed(el)) return;
+      if (get().editingId !== id) closeEdit();
       set({ selection: new Set([id]), editingId: id });
     },
     endEdit() {
+      closeEdit();
       if (get().editingId !== null) set({ editingId: null });
     },
     select(ids) {
+      const wanted = [...ids];
+      const prev = get().editingId;
+      if (prev !== null && !wanted.includes(prev)) closeEdit(); // may remove an empty box
       const s = get();
-      const selection = new Set([...ids].filter((id) => s.elements.has(id)));
+      const selection = new Set(wanted.filter((id) => s.elements.has(id)));
       const editingId = s.editingId !== null && selection.has(s.editingId) ? s.editingId : null;
       set({ selection, editingId });
     },
@@ -515,6 +627,7 @@ export function createEditorStore(): EditorStore {
     selectInk(type) {
       const s = get();
       if (s.preset.type === type) {
+        closeEdit();
         set({ tool: type, selection: new Set(), editingId: null });
         return;
       }

@@ -29,7 +29,7 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
     <div className="overlay-clip">
       <div className="overlay-layer" data-testid="overlay-layer" style={layerStyle}>
         {editing && (
-          <div className="box-editor" data-editor-for={editing.id} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
+          <div className="box-editor" data-editor-for={editing.id} data-editor-type={editing.type} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
             {createElement(editorFor(editing.type), { el: editing, store })}
           </div>
         )}

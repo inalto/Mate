@@ -112,6 +112,18 @@ export class History {
     return [...s.entry.actions];
   }
 
+  /**
+   * Remove the newest entry without applying anything when its merge key is `mergeKey` (the caller
+   * reverts its effect itself); false when the newest entry has another key.
+   */
+  discardTop(mergeKey: string): boolean {
+    const top = this.undoStack[this.undoStack.length - 1];
+    if (!top || top.entry.mergeKey !== mergeKey) return false;
+    this.undoStack.pop();
+    this.total -= top.bytes;
+    return true;
+  }
+
   canUndo(): boolean {
     return this.undoStack.length > 0;
   }

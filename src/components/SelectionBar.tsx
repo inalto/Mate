@@ -1,12 +1,15 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
-// (when shapes are selected), width.
+// (when shapes are selected), width; a single text box gets box-wide text formatting instead of
+// colour and width. Hidden while a text box is being edited (its editor has its own bar).
 import { Copy, CopySimple, Stack, Trash } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
 import { hasFill } from "../shapes/geometry";
+import { textAttrsOf } from "../text/textBox";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
+import TextFormatControls from "./TextFormatControls";
 import { useDismiss } from "./useDismiss";
 
 const BAR_GAP = 12;
@@ -100,7 +103,8 @@ export default function SelectionBar() {
   const elements = ed((s) => s.elements);
   const camera = ed((s) => s.camera);
   const viewport = ed((s) => s.viewport);
-  const b = selection.size > 0 ? selectionBounds(elements, selection) : null;
+  const editingText = ed((s) => s.editingId !== null && s.elements.get(s.editingId)?.type === "text-box");
+  const b = selection.size > 0 && !editingText ? selectionBounds(elements, selection) : null;
   if (!b) return null;
   const s = ed.getState;
 
@@ -116,6 +120,7 @@ export default function SelectionBar() {
   const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape");
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
+  const textBox = selected.length === 1 && selected[0]?.type === "text-box" ? selected[0] : undefined;
 
   return (
     <div className="selection-bar" role="toolbar" aria-label="Selection" style={{ left, top }}>
@@ -130,7 +135,8 @@ export default function SelectionBar() {
       </button>
       <ArrangeMenu />
       <span className="tb-sep" />
-      {PEN_PALETTE.map((c) => (
+      {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
+      {!textBox && PEN_PALETTE.map((c) => (
         <button
           key={c}
           type="button"

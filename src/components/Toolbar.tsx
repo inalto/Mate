@@ -1,5 +1,5 @@
-// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options), cursor,
-// lasso, undo/redo, zoom.
+// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options), text,
+// cursor, lasso, undo/redo, zoom.
 import {
   ArrowUUpLeft,
   ArrowUUpRight,
@@ -12,6 +12,7 @@ import {
   Pen,
   PenNib,
   Plus,
+  TextT,
 } from "@phosphor-icons/react";
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
@@ -216,7 +217,7 @@ export default function Toolbar() {
   const zoom = ed((s) => s.camera.z);
   const s = ed.getState;
 
-  const toolBtn = (id: "cursor" | "lasso", label: string, icon: ReactNode) => (
+  const toolBtn = (id: "cursor" | "lasso" | "text", label: string, icon: ReactNode) => (
     <button
       type="button"
       className={tool === id ? "tb-btn active" : "tb-btn"}
@@ -242,6 +243,7 @@ export default function Toolbar() {
       <span className="tb-sep" />
       <EraserButton />
       <ShapeButton />
+      {toolBtn("text", "Text (T)", <TextT size={18} />)}
       {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
       {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}
       <span className="tb-sep" />

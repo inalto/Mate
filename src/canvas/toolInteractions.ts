@@ -1,6 +1,7 @@
 // Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon),
 // selection drag-move and corner-handle scaling, click/double-click on boxed elements (select /
-// open the editor), shape tool (drag a box, Shift constrains, live preview). Geometry is pure; `createToolController` wires it
+// open the editor), shape tool (drag a box, Shift constrains, live preview), text tool (click adds or
+// edits a text box). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
@@ -188,6 +189,12 @@ export function createToolController(deps: ToolDeps) {
     } else if (tool === "shape") {
       g = { kind: "shape", start: p, end: p };
       preview = [];
+    } else if (tool === "text") {
+      // Text tool: a text box under the pointer opens for editing; empty canvas gets a new box.
+      const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
+      if (hit && s.elements.get(hit)?.type === "text-box") s.beginEdit(hit);
+      else s.addTextBox(p);
+      g = { kind: "idle" };
     } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
       g = { kind: "idle" };
     } else if (tool === "cursor" || tool === "lasso") {

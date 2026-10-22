@@ -473,6 +473,10 @@ button.card:hover {
   cursor: default;
 }
 
+.canvas-view[data-tool="text"] .canvas-live {
+  cursor: text;
+}
+
 /* Overlay layer: DOM frames and editors over a pane's canvas, in page units (the layer carries the
    camera transform; --overlay-inv-z keeps strokes and handles a constant screen size). */
 .overlay-clip {
@@ -609,6 +613,56 @@ button.card:hover {
 .box-frame-handle.e,
 .box-frame-handle.w {
   cursor: ew-resize;
+}
+
+/* Text box editor: the slot grows with its content (the box height is committed at the end). */
+.box-editor[data-editor-type="text-box"] {
+  height: auto !important;
+}
+
+.text-box-editor {
+  position: relative;
+  width: 100%;
+  cursor: text;
+}
+
+/* Formatting bar above the edited box, kept at a constant screen size. */
+.text-format-bar {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  transform-origin: 0 100%;
+  transform: scale(var(--overlay-inv-z, 1)) translateY(-8px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  color: var(--color-text);
+  font: 14px / 1.2 var(--font-ui);
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  z-index: 2;
+}
+
+.tb-select {
+  height: 32px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.tb-size {
+  min-width: 2ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .toolbar,

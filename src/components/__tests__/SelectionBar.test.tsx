@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
@@ -7,6 +7,7 @@ vi.mock("../../ipc/elementsQueue", () => ({
 }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
 
+import { contentOf, type TextBoxContent } from "../../model/content";
 import { shapeFromDrag } from "../../shapes/geometry";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
@@ -36,5 +37,29 @@ describe("SelectionBar", () => {
     expect(s().elements.get(id)!.fillColor).toBe("transparent");
     fireEvent.change(screen.getByRole("slider", { name: "Selection width" }), { target: { value: "10" } });
     expect(s().elements.get(id)!.width).toBe(4);
+  });
+
+  it("formats_a_selected_text_box_as_a_whole", async () => {
+    useNotebookStore.setState({ loaded: true });
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    const s = () => useEditorStore.getState();
+    const id = s().addTextBox({ x: 100, y: 200 })!;
+    s().commitTextEdit({ ...s().elements.get(id)!, content: { ...(s().elements.get(id)!.content as object), contentHtml: "<p>hi</p>" } });
+    s().endEdit();
+    s().select([id]);
+    const attrs = () => contentOf<TextBoxContent>(s().elements.get(id)!).textAttributes;
+    render(<SelectionBar />);
+    expect(screen.queryByRole("button", { name: "Bold" })).toBeNull(); // marks need the editor
+    fireEvent.change(screen.getByRole("combobox", { name: "Font" }), { target: { value: "serif" } });
+    fireEvent.click(screen.getByRole("button", { name: "Smaller text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Text colour #1565C0" }));
+    fireEvent.click(screen.getByRole("button", { name: "Align right" }));
+    expect(attrs()).toEqual({ fontFamily: "serif", fontSize: 18, color: "#1565C0", align: "right" });
+    expect(screen.queryByRole("slider", { name: "Selection width" })).toBeNull();
+    // While the box is being edited its own bar is shown instead.
+    act(() => s().beginEdit(id));
+    expect(screen.queryByRole("toolbar", { name: "Selection" })).toBeNull();
+    act(() => s().endEdit());
   });
 });

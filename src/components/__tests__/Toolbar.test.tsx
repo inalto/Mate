@@ -36,6 +36,13 @@ describe("Toolbar", () => {
     expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
   });
 
+  it("text_tool_button", () => {
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Text (T)" }));
+    expect(useEditorStore.getState().tool).toBe("text");
+    expect(screen.getByRole("button", { name: "Text (T)" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("shape_tool_menu_sets_and_persists_shape_defaults", async () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
