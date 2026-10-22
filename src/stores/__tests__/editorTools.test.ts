@@ -15,7 +15,9 @@ vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.els) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
 
+import { useToastStore } from "../../components/Toast";
 import { useEditorStore } from "../editor";
+import { PAGE_FULL_TOAST, watchPageLimit } from "../pageLimit";
 import { useNotebookStore } from "../notebook";
 import { useSettingsStore } from "../settings";
 
@@ -113,6 +115,34 @@ describe("editor store tools", () => {
     expect(s().elements.has("a")).toBe(false);
     expect(s().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE - 1);
     expect(queue.enqueueUpsert).not.toHaveBeenCalled();
+  });
+
+  it("limit_toast_shown_when_page_full", async () => {
+    const fill = Array.from({ length: LIMITS.MAX_ELEMENTS_PER_PAGE - 1 }, (_, i) => el(`f${i}`, [[i, 1000], [i, 1001]]));
+    await load([a, ...fill]);
+    const s = () => useEditorStore.getState();
+    const toast = useToastStore.getState();
+    toast.dismiss();
+    const stop = watchPageLimit(useEditorStore);
+    expect(s().limitReached).toBe(false);
+    // A pen-down at the limit is refused and flips the flag; the toast shows once per page load.
+    expect(s().beginStroke()).toBe(false);
+    expect(s().limitReached).toBe(true);
+    expect(useToastStore.getState().message).toBe(PAGE_FULL_TOAST);
+    useToastStore.getState().dismiss();
+    s().removeElements(["a"]);
+    expect(s().limitReached).toBe(false); // back below the limit
+    expect(s().beginStroke()).toBe(true);
+    s().addElement(el("z", [[0, 50], [10, 50]]));
+    expect(s().beginStroke()).toBe(false);
+    expect(s().limitReached).toBe(true);
+    expect(useToastStore.getState().message).toBeNull(); // not again for this load
+    await load([a, ...fill]);
+    expect(s().limitReached).toBe(false);
+    s().beginStroke();
+    expect(useToastStore.getState().message).toBe(PAGE_FULL_TOAST);
+    stop();
+    useToastStore.getState().dismiss();
   });
 
   it("undo_refused_when_it_would_exceed_limit", async () => {

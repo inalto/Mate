@@ -12,6 +12,7 @@ import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
+import { watchPageLimit } from "../stores/pageLimit";
 import { useSettingsStore } from "../stores/settings";
 import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
@@ -63,6 +64,11 @@ export default function Editor() {
     [navigate],
   );
   useEffect(() => watchThumbnails(), []);
+  // "This page is full" toast when the pen is refused at the element limit (each pane's store).
+  useEffect(() => {
+    const unsubs = ([0, 1] as const).map((i) => watchPageLimit(editorForPane(i)));
+    return () => unsubs.forEach((u) => u());
+  }, []);
 
   if (!pageId || !tab || !tab.panes.some((p) => p.pageId === pageId)) return null;
 

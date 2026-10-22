@@ -53,12 +53,15 @@ export interface EditorState {
   panHold: boolean;
   canUndo: boolean;
   canRedo: boolean;
-  /** True after a change was refused because the page would exceed LIMITS.MAX_ELEMENTS_PER_PAGE
-   * (cleared by the next accepted change); UI may surface it. */
+  /** True after a change (or a pen-down) was refused because the page would exceed
+   * LIMITS.MAX_ELEMENTS_PER_PAGE; cleared when the count drops below the limit or a page loads.
+   * The editor route surfaces it as a toast (stores/pageLimit.ts). */
   limitReached: boolean;
   loadPage(pageId: string): Promise<void>;
   /** Adopt an edited page record (mode, sheet size, background) without reloading elements. */
   refreshPage(page: Page): void;
+  /** Pen-down: false (and `limitReached` set) when the page is full, so no stroke may start. */
+  beginStroke(): boolean;
   addElement(el: Element): void;
   updateElements(els: Element[]): void;
   removeElements(ids: string[]): void;
@@ -243,6 +246,7 @@ export function createEditorStore(): EditorStore {
         elements: new Map(),
         selection: new Set(),
         contentBottom: 0,
+        limitReached: false,
         preset,
         tool: preset.type,
       });
@@ -280,6 +284,12 @@ export function createEditorStore(): EditorStore {
       if (layout(cur) === layout(page)) return;
       set({ page });
       if (cur.mode !== page.mode || cur.pageWidth !== page.pageWidth || cur.pageHeight !== page.pageHeight) get().resetCamera();
+    },
+
+    beginStroke() {
+      if (get().elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE) return true;
+      if (!get().limitReached) set({ limitReached: true });
+      return false;
     },
 
     addElement(el) {
@@ -530,7 +540,12 @@ export function createEditorStore(): EditorStore {
         bottom = Math.max(bottom, maxY(el));
       }
     }
-    store.setState({ elements, selection, contentBottom: grewOnly ? bottom : bottomOf(elements.values()) });
+    store.setState({
+      elements,
+      selection,
+      contentBottom: grewOnly ? bottom : bottomOf(elements.values()),
+      ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
+    });
     syncHistoryFlags();
   }
 
@@ -572,7 +587,6 @@ export function createEditorStore(): EditorStore {
     flushEraseBatch();
     history.push({ label, actions, mergeKey });
     applyActions(actions);
-    if (S().limitReached) store.setState({ limitReached: false });
     return true;
   }
 

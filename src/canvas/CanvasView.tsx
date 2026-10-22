@@ -6,7 +6,6 @@ import { useEffect, useRef } from "react";
 import { renderStroke } from "../ink/render";
 import type { ThemeName } from "../ink/types";
 import { elementsQueue } from "../ipc/elementsQueue";
-import { LIMITS } from "../model/constants";
 import type { Element, Point, Settings } from "../model/types";
 import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
@@ -211,7 +210,8 @@ function createEngine(
           if (mode === "tool") tools.down(p, tool);
           return;
         }
-        if (s.elements.size >= LIMITS.MAX_ELEMENTS_PER_PAGE) {
+        if (!s.beginStroke()) {
+          // Page full: the editor route shows a toast when limitReached flips.
           mode = "none";
           return;
         }
