@@ -3,7 +3,7 @@ mod state;
 
 use commands::{archive, elements, export, lifecycle, notebook, settings, thumbnails};
 use state::AppState;
-use tauri::{Manager, WindowEvent};
+use tauri::{Manager, RunEvent, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -56,6 +56,19 @@ pub fn run() {
       lifecycle::complete_close_attempt,
       lifecycle::write_recovery_artifact,
     ])
-    .run(tauri::generate_context!())
-    .expect("error while building tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|app, event| {
+      // macOS: Cmd+Q, the app menu "Quit" and Dock "Quit" end the app without a window
+      // `CloseRequested`, so they would skip the flush handshake. Route a user-initiated exit
+      // (`code: None`; a programmatic `app.exit` carries a code) through the same close attempt on
+      // the main window. On Windows/Linux this event fires after the last window was destroyed,
+      // when there is no main window any more, so it passes through unchanged.
+      if let RunEvent::ExitRequested { api, code: None, .. } = event
+        && let Some(main) = app.get_webview_window("main")
+        && lifecycle::start_exit_attempt(&main.as_ref().window())
+      {
+        api.prevent_exit();
+      }
+    });
 }

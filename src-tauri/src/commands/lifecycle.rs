@@ -17,6 +17,8 @@ pub struct CloseGate {
     counter: u64,
     /// Current attempt id and whether the frontend acknowledged it.
     current: Option<(u64, bool)>,
+    /// A user-initiated app quit (`RunEvent::ExitRequested`) is waiting for the flush to finish.
+    exit_pending: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -38,6 +40,21 @@ impl CloseGate {
         self.counter += 1;
         self.current = Some((self.counter, false));
         Some(self.counter)
+    }
+
+    /// A user-initiated app quit (macOS Cmd+Q, Dock "Quit"): same handshake as a window close, but
+    /// the app must exit once the main window is destroyed.
+    pub fn on_exit_requested(&mut self) -> Option<u64> {
+        let id = self.on_close_requested();
+        if id.is_some() {
+            self.exit_pending = true;
+        }
+        id
+    }
+
+    /// Called after the main window was destroyed: true exactly once if an app quit is pending.
+    pub fn take_exit_after_destroy(&mut self) -> bool {
+        std::mem::take(&mut self.exit_pending)
     }
 
     /// The frontend acknowledged `id`; false if stale.
@@ -90,8 +107,24 @@ fn eval_js(window: &Window, js: String) {
 /// Handles `CloseRequested`. Returns true if the close was prevented (the frontend flushes first);
 /// false if the window should close now.
 pub fn start_close_attempt(window: &Window) -> bool {
+    start_attempt(window, false)
+}
+
+/// Handles a user-initiated `RunEvent::ExitRequested` (macOS Cmd+Q / app menu "Quit" / Dock quit,
+/// which never send `CloseRequested`). Same contract as `start_close_attempt`: true = the exit was
+/// prevented and the frontend flushes first; `complete_close_attempt` then destroys the window and
+/// exits the app.
+pub fn start_exit_attempt(window: &Window) -> bool {
+    start_attempt(window, true)
+}
+
+fn start_attempt(window: &Window, exit: bool) -> bool {
     let state = window.state::<AppState>();
-    let Some(id) = gate(&state).on_close_requested() else {
+    let id = {
+        let mut g = gate(&state);
+        if exit { g.on_exit_requested() } else { g.on_close_requested() }
+    };
+    let Some(id) = id else {
         return false;
     };
     eval_js(window, format!(
@@ -135,7 +168,14 @@ pub fn complete_close_attempt(
     if !current && force != Some(true) {
         return Err("stale close attempt".into());
     }
-    window.destroy().map_err(|e| e.to_string())
+    window.destroy().map_err(|e| e.to_string())?;
+    // A quit (Cmd+Q) was prevented to flush first. Destroying the last window usually ends the
+    // app on its own (it emits ExitRequested again, which then finds no main window and is let
+    // through); exit explicitly in case it does not. The gate hands this out once.
+    if gate(&state).take_exit_after_destroy() {
+        window.app_handle().exit(0);
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -224,6 +264,27 @@ mod tests {
         assert_eq!(g.expire(a), Expiry::Acknowledged);
         assert_eq!(g.expire(a), Expiry::Stale);
         assert!(g.on_close_requested().is_some());
+    }
+
+    #[test]
+    fn exit_request_starts_attempt_like_close() {
+        let mut g = CloseGate::default();
+        let a = g.on_exit_requested().unwrap();
+        assert!(g.is_current(a));
+        assert!(g.acknowledge(a));
+        // The flushed attempt completes: the app exits exactly once.
+        assert!(g.clear_if_current(a));
+        assert!(g.take_exit_after_destroy());
+        assert!(!g.take_exit_after_destroy());
+        // An unresponsive frontend lets the next exit request through, like a window close.
+        let mut g = CloseGate::default();
+        g.on_exit_requested().unwrap();
+        assert_eq!(g.on_exit_requested(), None);
+        // A plain window close never asks for an app exit.
+        let mut g = CloseGate::default();
+        let c = g.on_close_requested().unwrap();
+        assert!(g.clear_if_current(c));
+        assert!(!g.take_exit_after_destroy());
     }
 
     #[test]
