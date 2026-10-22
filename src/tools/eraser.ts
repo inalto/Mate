@@ -45,7 +45,8 @@ function segDist2(a: Vec2, b: Vec2, c: Vec2): number {
   return x * x + y * y;
 }
 
-function polylineTouches(pts: Point[], c: Vec2, r: number): boolean {
+/** True when any segment of `pts` comes within `r` of `c`. */
+export function polylineTouches(pts: Point[], c: Vec2, r: number): boolean {
   const r2 = r * r;
   if (pts.length === 1) return segDist2(pts[0], pts[0], c) <= r2;
   for (let i = 0; i + 1 < pts.length; i++) if (segDist2(pts[i], pts[i + 1], c) <= r2) return true;

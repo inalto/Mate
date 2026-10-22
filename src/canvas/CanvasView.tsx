@@ -1,13 +1,15 @@
 // Canvas editor surface: a static layer (background + committed elements via SnapshotCache) under an
-// interaction layer (live stroke). Camera math lives in camera.ts/gestures.ts, the stroke pipeline
-// in strokeCommit.ts; this file wires DOM events, the editor store and rendering together.
+// interaction layer (live stroke, tool overlays). Camera math lives in camera.ts/gestures.ts, the
+// stroke pipeline in strokeCommit.ts, eraser/lasso/selection in toolInteractions.ts; this file wires
+// DOM events, the editor store and rendering together.
 import { useEffect, useRef } from "react";
 import { renderStroke } from "../ink/render";
 import type { ThemeName } from "../ink/types";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { LIMITS } from "../model/constants";
 import type { Element, Point, Settings } from "../model/types";
-import { clampToPage, sheetStack, useEditorStore } from "../stores/editor";
+import { clampToPage, isInkTool, sheetStack, useEditorStore } from "../stores/editor";
+import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
 import { paintBackground, type SurfaceColors } from "./background";
 import { worldToScreen, type Vec2 } from "./camera";
@@ -15,10 +17,10 @@ import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from 
 import { createPointerAdapter, type PalmRejection } from "./input";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
+import { createToolController, pointerTool } from "./toolInteractions";
 
 /** Quiet period after the last camera change before the snapshot is re-rasterised. */
 const RASTER_DEBOUNCE_MS = 150;
-const INK_TOOLS = new Set(["pen", "highlighter", "fountain-pen"]);
 
 const nextFrame = (cb: () => void): void => {
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(cb);
@@ -57,12 +59,11 @@ function createEngine(
   let disposed = false;
 
   // Pointer interaction state.
-  let mode: "none" | "draw" | "pan" = "none";
+  let mode: "none" | "draw" | "pan" | "tool" = "none";
   let builder: StrokeBuilder | null = null;
   let liveEl: Element | null = null;
   let lastPan: Vec2 = { x: 0, y: 0 };
   let pinchStart: PinchStart | null = null;
-  let spaceHeld = false;
   /** True while our own commit updates the store (the element is already in the snapshot). */
   let committing = false;
   let sheetCount = 0;
@@ -80,7 +81,7 @@ function createEngine(
       sheetCount = stack.count;
       const bgPage = { mode: s.page.mode, width: stack.width, height: stack.height, count: stack.count };
       paintBackground(ctx, s.page.backgroundConfig, cache.worldClip(), bgPage, theme(), colors);
-    } else if (el.type === "stroke") {
+    } else if (el.type === "stroke" && !tools.hidden.has(el.id)) {
       renderStroke(asCtx(ctx), el, theme(), s.camera.z);
     }
   };
@@ -91,7 +92,7 @@ function createEngine(
     const s = ready();
     if (!s) return;
     cache.ensure(s.viewport, s.camera, dpr);
-    cache.rasterAll([...s.elements.values()], paintScene);
+    cache.rasterAll(renderOrder(s.elements.values()), paintScene);
   };
 
   const drawStatic = () => {
@@ -124,10 +125,12 @@ function createEngine(
     if (disposed || !lctx) return;
     lctx.setTransform(1, 0, 0, 1, 0, 0);
     lctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
-    if (!liveEl) return;
     const c = st().camera;
-    lctx.setTransform(dpr * c.z, 0, 0, dpr * c.z, dpr * c.x, dpr * c.y);
-    renderStroke(lctx, liveEl, theme(), c.z);
+    if (liveEl) {
+      lctx.setTransform(dpr * c.z, 0, 0, dpr * c.z, dpr * c.x, dpr * c.y);
+      renderStroke(lctx, liveEl, theme(), c.z);
+    }
+    if (tools.draw(lctx, c, dpr)) requestLive(); // marching ants animate while selected
   };
   const requestLive = () => {
     if (liveQueued) return;
@@ -139,6 +142,19 @@ function createEngine(
     liveEl = points && points.length > 0 ? strokeElement(points, { pageId, preset: s.preset }, "live", "") : null;
     requestLive();
   };
+
+  const tools = createToolController({
+    el: liveCanvas,
+    requestLive,
+    invalidate: () => {
+      cache.invalidate();
+      requestStatic();
+    },
+    renderElement: (ctx, el) => {
+      if (el.type === "stroke") renderStroke(ctx, el, theme(), st().camera.z);
+    },
+    getSettings,
+  });
 
   const resize = () => {
     const r = host.getBoundingClientRect();
@@ -173,13 +189,19 @@ function createEngine(
       onDown(p, info) {
         const s = ready();
         if (!s) return;
-        if (spaceHeld || (info.buttons & 4) !== 0 || info.isBarrel) {
+        const { tool, temp } = pointerTool(s.tool, s.panHold, info, getSettings());
+        if (temp) s.pushTempTool(temp);
+        if (tool === "pan") {
           mode = "pan";
           lastPan = worldToScreen(s.camera, p);
           return;
         }
-        // Eraser end and non-ink tools are wired by later tasks.
-        if (info.isEraserEnd || !INK_TOOLS.has(s.tool) || s.elements.size >= LIMITS.MAX_ELEMENTS_PER_PAGE) {
+        if (!isInkTool(tool)) {
+          mode = tool === "none" ? "none" : "tool";
+          if (mode === "tool") tools.down(p, tool);
+          return;
+        }
+        if (s.elements.size >= LIMITS.MAX_ELEMENTS_PER_PAGE) {
           mode = "none";
           return;
         }
@@ -203,19 +225,22 @@ function createEngine(
         } else if (mode === "draw" && builder) {
           builder.push(points);
           setLive(builder.preview(predicted));
-        }
+        } else if (mode === "tool") tools.move(points);
       },
       onUp(p) {
         if (mode === "draw" && builder) {
           builder.push([p]);
           const pts = builder.finish();
           if (pts.length > 0) commit(strokeElement(pts, { pageId, preset: st().preset }));
-        }
+        } else if (mode === "tool") tools.up();
         builder = null;
         mode = "none";
+        st().popTempTool();
         setLive(null);
       },
       onCancel() {
+        if (mode === "tool") tools.cancel();
+        st().popTempTool();
         builder = null;
         mode = "none";
         setLive(null);
@@ -256,23 +281,6 @@ function createEngine(
     snapTimer = setTimeout(() => st().setCamera(clampToPage(st().camera)), SNAP_BACK_MS);
   };
 
-  const isTyping = (t: EventTarget | null) =>
-    t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
-  const setSpace = (held: boolean) => {
-    spaceHeld = held;
-    host.classList.toggle("is-panning", held);
-  };
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.code === "Space" && !isTyping(e.target)) {
-      e.preventDefault();
-      if (!e.repeat) setSpace(true);
-    }
-  };
-  const onKeyUp = (e: KeyboardEvent) => {
-    if (e.code === "Space") setSpace(false);
-  };
-  const onBlur = () => setSpace(false);
-
   const unsubscribe = useEditorStore.subscribe((s, prev) => {
     if (s.elements !== prev.elements || s.page !== prev.page || s.loadedPageId !== prev.loadedPageId) {
       const own = committing && s.page === prev.page;
@@ -282,14 +290,15 @@ function createEngine(
     }
     if (s.camera !== prev.camera || s.viewport !== prev.viewport) {
       requestStatic();
-      if (liveEl) requestLive();
+      requestLive();
     }
+    if (s.selection !== prev.selection || s.tool !== prev.tool || s.tempTool !== prev.tempTool) requestLive();
+    if (s.panHold !== prev.panHold) host.classList.toggle("is-panning", s.panHold);
+    if (s.tool !== prev.tool) host.dataset.tool = s.tool;
   });
+  host.dataset.tool = st().tool;
 
   host.addEventListener("wheel", onWheel, { passive: false });
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
-  window.addEventListener("blur", onBlur);
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
   if (ro) ro.observe(host);
   else window.addEventListener("resize", resize);
@@ -307,13 +316,11 @@ function createEngine(
     dispose() {
       disposed = true;
       adapter();
+      tools.dispose();
       unsubscribe();
       ro?.disconnect();
       window.removeEventListener("resize", resize);
       host.removeEventListener("wheel", onWheel);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", onBlur);
       if (rasterTimer !== null) clearTimeout(rasterTimer);
       if (snapTimer !== null) clearTimeout(snapTimer);
       void elementsQueue.flushAll();
