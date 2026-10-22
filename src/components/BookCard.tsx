@@ -1,6 +1,7 @@
 import { DotsThree } from "@phosphor-icons/react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { exportUnitArchive } from "../ipc/archive";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
 import type { Unit } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
@@ -63,6 +64,14 @@ export default function BookCard({ unit }: { unit: Unit }) {
     else setDraft(unit.title);
   };
 
+  const exportBook = async () => {
+    try {
+      await exportUnitArchive(unit.id);
+    } catch (err) {
+      alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const act = (fn: () => Promise<void>) => async () => {
     setMenu("closed");
     await fn();
@@ -115,6 +124,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
                 {unit.isFavourite ? "Unfavourite" : "Favourite"}
               </button>
               <button role="menuitem" onClick={() => setMenu("shelf")}>Move to shelf</button>
+              <button role="menuitem" onClick={act(exportBook)}>Export book…</button>
               <button role="menuitem" onClick={act(() => trash("unit", unit.id))}>Delete</button>
             </>
           )}

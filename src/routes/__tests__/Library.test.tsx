@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Unit } from "../../model/types";
@@ -15,11 +15,17 @@ vi.mock("../../ipc/notebook", () => ({
   purgeEntity: vi.fn(async () => {}),
   purgeTrashOlderThan: vi.fn(async () => 0),
 }));
+vi.mock("../../ipc/archive", () => ({
+  importUnitArchive: vi.fn(async () => ({ unitId: "new", pages: 3, elements: 10, skipped: 2 })),
+  exportUnitArchive: vi.fn(async () => "C:/physics.mate"),
+}));
 vi.mock("../../ipc/settings", () => ({
   getSettings: vi.fn(),
   setSettings: vi.fn(async () => {}),
 }));
 
+import { exportUnitArchive, importUnitArchive } from "../../ipc/archive";
+import { getNotebookTree } from "../../ipc/notebook";
 import { useNotebookStore } from "../../stores/notebook";
 import Library from "../Library";
 
@@ -92,5 +98,24 @@ describe("Library", () => {
     fireEvent.change(input, { target: { value: "Maths" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(await screen.findByText("Maths")).toBeTruthy();
+  });
+
+  it("imports a book, reloads the tree and reports counts", async () => {
+    const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    renderLibrary();
+    fireEvent.click(screen.getByText("Import book…"));
+    await waitFor(() => expect(alert).toHaveBeenCalled());
+    expect(importUnitArchive).toHaveBeenCalled();
+    expect(getNotebookTree).toHaveBeenCalled();
+    expect(alert.mock.calls[0][0]).toContain("3 pages, 10 elements, 2 skipped");
+    alert.mockRestore();
+  });
+
+  it("exports a book from its card menu", async () => {
+    setUnits([unit("1", "Physics")]);
+    renderLibrary();
+    fireEvent.click(screen.getByLabelText("Actions for Physics"));
+    fireEvent.click(screen.getByText("Export book…"));
+    await waitFor(() => expect(exportUnitArchive).toHaveBeenCalledWith("1"));
   });
 });

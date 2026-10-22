@@ -6,14 +6,14 @@ import { isDarkTheme, mapInkColor } from "./theme";
 import type { Element, PenStyle, ThemeName } from "./types";
 
 /** The subset of path-building calls shared by `Path2D` and `CanvasRenderingContext2D`. */
-interface PathSink {
+export interface PathSink {
   moveTo(x: number, y: number): void;
   quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void;
   closePath(): void;
 }
 
 /** Closed polygon with quadratic midpoint smoothing: M p0, Q p_i mid(p_i, p_{i+1}) …, Z. */
-function traceSmoothPolygon(sink: PathSink, poly: number[][]): void {
+export function traceSmoothPolygon(sink: PathSink, poly: number[][]): void {
   const n = poly.length;
   sink.moveTo(poly[0][0], poly[0][1]);
   for (let i = 0; i < n; i++) {

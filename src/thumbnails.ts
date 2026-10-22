@@ -1,16 +1,14 @@
 // Page thumbnails: render the page (background + strokes) into an offscreen canvas 320 px wide and
 // export WebP. Always drawn with the light theme so cards look the same in every app theme.
-import { paintBackground, type Rect } from "./canvas/background";
+import type { Rect } from "./canvas/background";
 import { sheetSize } from "./canvas/camera";
-import { renderStroke } from "./ink/render";
+import { contentRegion, paintScene } from "./export/scene";
 import { saveThumbnail } from "./ipc/thumbnails";
 import type { Element, Page } from "./model/types";
 import { editorForPane, getFocusedEditor } from "./stores/focusedEditor";
 import type { EditorStore } from "./stores/editor";
 import { useNotebookStore } from "./stores/notebook";
 import { useSettingsStore } from "./stores/settings";
-import { elementBounds } from "./tools/spatialIndex";
-import { renderOrder } from "./tools/zorder";
 
 export const THUMB_WIDTH = 320;
 export const THUMB_MAX_HEIGHT = 480;
@@ -24,21 +22,9 @@ export function thumbnailRegion(page: Page, elements: Iterable<Element>, default
     const { width, height } = sheetSize(page, defaultAspect);
     return { x: 0, y: 0, width, height };
   }
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const el of elements) {
-    const b = elementBounds(el);
-    minX = Math.min(minX, b.x);
-    minY = Math.min(minY, b.y);
-    maxX = Math.max(maxX, b.x + b.width);
-    maxY = Math.max(maxY, b.y + b.height);
-  }
-  if (!Number.isFinite(minX)) return { x: 0, y: 0, width: 1024, height: 768 };
-  const width = Math.max(maxX - minX + 2 * CONTENT_PADDING, 320);
-  const height = Math.max(maxY - minY + 2 * CONTENT_PADDING, 240);
-  return { x: minX - CONTENT_PADDING, y: minY - CONTENT_PADDING, width, height };
+  const r = contentRegion(elements, CONTENT_PADDING);
+  if (!r) return { x: 0, y: 0, width: 1024, height: 768 };
+  return { ...r, width: Math.max(r.width, 320), height: Math.max(r.height, 240) };
 }
 
 /** Render `elements` of `page` to a WebP blob, 320 px wide. */
@@ -59,9 +45,7 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   ctx.translate(-region.x, -region.y);
   const clip: Rect = { x: region.x, y: region.y, width: region.width, height: height / scale };
   const sheet = { mode: page.mode, ...sheetSize(page, aspect), count: 1 };
-  const colors = { paper: "#ffffff", desk: "#eceef1" };
-  paintBackground(ctx, page.backgroundConfig, clip, sheet, "light", colors);
-  for (const el of renderOrder(list)) if (el.type === "stroke") renderStroke(ctx, el, "light", scale);
+  paintScene(ctx, page, list, clip, sheet, { theme: "light", background: "plain", pageFrame: true, zoomBucket: scale });
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("thumbnail encoding failed"))), "image/webp", THUMB_QUALITY),
   );

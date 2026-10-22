@@ -1,6 +1,7 @@
 import { Plus } from "@phosphor-icons/react";
 import { useState } from "react";
 import BookCard from "../components/BookCard";
+import { importUnitArchive } from "../ipc/archive";
 import type { Unit } from "../model/types";
 import ShelfSection from "../components/ShelfSection";
 import { useNotebookStore } from "../stores/notebook";
@@ -23,6 +24,17 @@ export default function Library() {
 
   const newBook = () => {
     void store.createUnit("Untitled book");
+  };
+  const importBook = async () => {
+    try {
+      const report = await importUnitArchive();
+      if (!report) return;
+      await store.load();
+      const skipped = report.skipped > 0 ? `, ${report.skipped} skipped (over limits)` : "";
+      alert(`Imported book: ${report.pages} pages, ${report.elements} elements${skipped}.`);
+    } catch (err) {
+      alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
   const tile = (
     <button type="button" className="new-tile" onClick={newBook}>
@@ -52,6 +64,7 @@ export default function Library() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        <button type="button" className="btn" onClick={() => void importBook()}>Import book…</button>
         <div className="segmented" role="group" aria-label="Sort books">
           <button aria-pressed={view === "recent"} onClick={() => setView("recent")}>Recent</button>
           <button aria-pressed={view === "az"} onClick={() => setView("az")}>A-Z</button>

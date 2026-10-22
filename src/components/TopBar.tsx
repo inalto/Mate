@@ -7,6 +7,7 @@ import { useChromeStore } from "../stores/chrome";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
+import ExportDialog from "./ExportDialog";
 import { useDismiss } from "./useDismiss";
 
 const SHORTCUT_HELP: [string, string][] = [
@@ -22,7 +23,7 @@ const SHORTCUT_HELP: [string, string][] = [
   ["Zoom in / out / reset", "Ctrl+= / Ctrl+- / Ctrl+0"],
 ];
 
-function MoreMenu({ pageId }: { pageId: string | null }) {
+function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): void }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -39,7 +40,7 @@ function MoreMenu({ pageId }: { pageId: string | null }) {
       </button>
       {open && (
         <div className="menu menu-right" role="menu">
-          <button role="menuitem" disabled title="Export arrives in a later release">Export page…</button>
+          <button role="menuitem" disabled={!pageId} onClick={pick(onExport)}>Export page…</button>
           <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPageSettings(pageId))}>Page settings</button>
           <button role="menuitem" onClick={pick(() => navigate("/settings"))}>Settings</button>
           <button role="menuitem" onClick={pick(() => chrome().setShortcutsOpen(true))}>Keyboard shortcuts</button>
@@ -77,6 +78,7 @@ export default function TopBar() {
   const pageId = useTabsStore((s) => focusedPageId(s));
   const title = useNotebookStore((s) => s.tree.pages.find((p) => p.id === pageId)?.title ?? "");
   const [draft, setDraft] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const cancelled = useRef(false);
   const commit = async () => {
@@ -108,7 +110,8 @@ export default function TopBar() {
           }
         }}
       />
-      <MoreMenu pageId={pageId} />
+      <MoreMenu pageId={pageId} onExport={() => setExporting(true)} />
+      {exporting && pageId && <ExportDialog pageId={pageId} onClose={() => setExporting(false)} />}
     </header>
   );
 }
