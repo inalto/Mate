@@ -66,6 +66,16 @@ export function contentOf<T>(el: Pick<Element, "content">): Partial<T> {
   return c !== null && typeof c === "object" && !Array.isArray(c) ? (c as Partial<T>) : {};
 }
 
+/** z-order of PDF page placements: below everything a user adds (see tools/zorder). */
+export const PDF_Z_INDEX = -1_000_000;
+
+/**
+ * An `image` element showing a page of an imported PDF. Placements are locked: never hit-tested,
+ * lasso-selected, erased, framed or reordered, and always drawn first.
+ */
+export const isPdfPlacement = (el: Pick<Element, "type" | "content">): boolean =>
+  el.type === "image" && typeof contentOf<ImageContent>(el).pdfSourceKey === "string";
+
 /** Element types laid out as a box: `points[0]` is the top-left anchor (page units). */
 export const BOXED_TYPES: readonly ElementType[] = ["text-box", "table", "codespace", "graph", "image"];
 

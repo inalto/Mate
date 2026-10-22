@@ -2,17 +2,20 @@
 // the box centre), the placeholder frame until it has loaded. In dark themes, images are inverted
 // (invert + hue-rotate keeps hues) when the setting is on and the image is black-and-white
 // (`isBW`, default true). SVG: the image embedded as a data URL (prepared by `prepareImages`),
-// cropped through a clipPath.
+// cropped through a clipPath. PDF page placements (`content.pdfSourceKey`) draw the rendered page
+// tile for the current zoom bucket instead (pdf/render), with the same dark-theme inversion; SVG
+// embeds the page rendered by `preparePdfPages` as a PNG data URL.
 import { n } from "../export/svgUtil";
 import { dataUrlOf, getImage, naturalSize } from "../images/load";
 import { isDarkTheme } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import { contentOf, type ImageContent } from "../model/content";
+import { getPdfTile, pdfDataUrlOf, zoomBucketFor } from "../pdf/render";
 import type { Element } from "../model/types";
 import { useSettingsStore } from "../stores/settings";
 import { boxRect } from "../tools/spatialIndex";
 import { drawBoxBitmap, PLACEHOLDER_COLOR, rotatedSvg } from "./boxDraw";
-import { registerRenderer, type ElementRenderer } from "./registry";
+import { registerRenderer, type ElementRenderer, type RenderOptions } from "./registry";
 
 export const INVERT_FILTER = "invert(1) hue-rotate(180deg)";
 
@@ -35,8 +38,39 @@ export function shouldInvert(el: Element, theme: ThemeName): boolean {
   return contentOf<ImageContent>(el).isBW ?? true;
 }
 
+/** The PDF page an element shows, if it is a PDF placement. */
+function pdfPageOf(el: Element): { assetId: string; page: number } | null {
+  const c = contentOf<ImageContent>(el);
+  if (typeof c.pdfSourceKey !== "string") return null;
+  const page = typeof c.pdfPageIndex === "number" && c.pdfPageIndex >= 1 ? Math.floor(c.pdfPageIndex) : 1;
+  return { assetId: c.pdfSourceKey, page };
+}
+
+function drawPdfPage(ctx: CanvasRenderingContext2D, el: Element, pdf: { assetId: string; page: number }, o: RenderOptions): void {
+  const r = boxRect(el);
+  const bucket = zoomBucketFor(o.zoomBucket * (o.pixelRatio ?? 1));
+  const tile = getPdfTile(pdf.assetId, pdf.page, bucket, r.width);
+  if (!tile) return drawBoxBitmap(ctx, el, null, o);
+  ctx.save();
+  if (shouldInvert(el, o.theme)) ctx.filter = INVERT_FILTER;
+  ctx.drawImage(tile, r.x, r.y, r.width, r.height);
+  ctx.restore();
+}
+
+function pdfPageSvg(el: Element, pdf: { assetId: string; page: number }, o: RenderOptions): string {
+  const r = boxRect(el);
+  const href = pdfDataUrlOf(pdf.assetId, pdf.page);
+  if (!href) {
+    return `<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}" fill="none" stroke="${PLACEHOLDER_COLOR}" stroke-width="${n(1 / o.zoomBucket)}"/>`;
+  }
+  const filter = shouldInvert(el, o.theme) ? ` style="filter:${INVERT_FILTER}"` : "";
+  return `<image x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}" href="${href}" preserveAspectRatio="none"${filter}/>`;
+}
+
 export const imageRenderer: ElementRenderer = {
   draw(ctx, el, o) {
+    const pdf = pdfPageOf(el);
+    if (pdf) return drawPdfPage(ctx, el, pdf, o);
     const img = el.imageUrl ? getImage(el.imageUrl) : null;
     if (!img) return drawBoxBitmap(ctx, el, null, o);
     const r = boxRect(el);
@@ -66,6 +100,8 @@ export const imageRenderer: ElementRenderer = {
     ctx.restore();
   },
   svg(el, o) {
+    const pdf = pdfPageOf(el);
+    if (pdf) return pdfPageSvg(el, pdf, o);
     const r = boxRect(el);
     const href = el.imageUrl ? dataUrlOf(el.imageUrl) : undefined;
     if (!href) {

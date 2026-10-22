@@ -10,6 +10,7 @@ import { polylineTouches } from "../tools/eraser";
 import { lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
+import { isPdfPlacement } from "../model/content";
 import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import type { PointerInfo } from "./input";
 
@@ -66,7 +67,7 @@ export function scaleFromDrag(b: Rect, corner: Corner, p: Vec2, uniform: boolean
 /** Topmost element under `p` (strokes by distance, shapes by outline or interior, others by bounds). */
 export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number): string | null {
   const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
-  const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e)).filter((el) =>
+  const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e && !isPdfPlacement(e))).filter((el) =>
     el.type === "stroke"
       ? polylineTouches(el.points, p, el.width / 2 + tol)
       : el.type === "shape"

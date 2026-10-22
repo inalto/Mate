@@ -2,6 +2,7 @@
 // where they enter/leave the eraser circle. Shapes are hit along their outline (or anywhere inside
 // when filled); partial mode turns a touched shape outline into stroke fragments. Text boxes,
 // tables, code blocks and graphs are never erased.
+import { isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
 import { hasFill, isClosedShape, shapeElementOutline, shapeHit } from "../shapes/geometry";
@@ -30,7 +31,7 @@ function erasable(el: Element, opts: EraseOptions): boolean {
     case "shape":
       return opts.eraseShapes;
     case "image":
-      return opts.eraseImages;
+      return opts.eraseImages && !isPdfPlacement(el); // PDF pages are locked
     default:
       return false; // text-box, table, codespace, graph and other structured content are never erased
   }

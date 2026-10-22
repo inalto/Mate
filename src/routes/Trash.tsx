@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { purgeTrashOlderThan } from "../ipc/notebook";
-import { useNotebookStore } from "../stores/notebook";
+import { collectAssets, useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 
 /** `0` means keep forever. */
@@ -27,7 +27,7 @@ export default function Trash() {
     // Never prune with a setting that has not been loaded from disk yet.
     if (!settingsLoaded) return;
     void (async () => {
-      if (retention > 0) await purgeTrashOlderThan(retention);
+      if (retention > 0 && (await purgeTrashOlderThan(retention)) > 0) await collectAssets();
       await useNotebookStore.getState().loadTrash();
     })();
   }, [settingsLoaded, retention]);
@@ -39,7 +39,7 @@ export default function Trash() {
 
   const emptyTrash = async () => {
     setConfirming(false);
-    for (const item of items) await store.purge(item.kind, item.id);
+    await store.emptyTrash();
   };
 
   return (

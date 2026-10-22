@@ -1,15 +1,18 @@
 import { Plus } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
 import { importUnitArchive } from "../ipc/archive";
 import type { Unit } from "../model/types";
 import ShelfSection from "../components/ShelfSection";
+import { pickAndImportPdf } from "../pdf/import";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 
 type View = "recent" | "az" | "shelves";
 
 export default function Library() {
+  const navigate = useNavigate();
   const tree = useNotebookStore((s) => s.tree);
   const libraryView = useSettingsStore((s) => s.settings.libraryView);
   const view: View = libraryView === "az" || libraryView === "shelves" ? libraryView : "recent";
@@ -35,6 +38,10 @@ export default function Library() {
     } catch (err) {
       alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+  };
+  const importPdf = async () => {
+    const page = await pickAndImportPdf();
+    if (page) navigate(`/edit/${page.id}`);
   };
   const tile = (
     <button type="button" className="new-tile" onClick={newBook}>
@@ -65,6 +72,7 @@ export default function Library() {
           onChange={(e) => setQuery(e.target.value)}
         />
         <button type="button" className="btn" onClick={() => void importBook()}>Import book…</button>
+        <button type="button" className="btn" onClick={() => void importPdf()}>Import PDF…</button>
         <div className="segmented" role="group" aria-label="Sort books">
           <button aria-pressed={view === "recent"} onClick={() => setView("recent")}>Recent</button>
           <button aria-pressed={view === "az"} onClick={() => setView("az")}>A-Z</button>

@@ -4,7 +4,7 @@ import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
 import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
-import { contentOf, type TableContent, type TextAttributes, type TextBoxContent } from "../model/content";
+import { contentOf, isPdfPlacement, type TableContent, type TextAttributes, type TextBoxContent } from "../model/content";
 import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
@@ -583,7 +583,7 @@ export function createEditorStore(): EditorStore {
 
     beginEdit(id) {
       const el = get().elements.get(id);
-      if (!el || !isBoxed(el)) return;
+      if (!el || !isBoxed(el) || isPdfPlacement(el)) return;
       if (get().editingId !== id) closeEdit();
       set({ selection: new Set([id]), editingId: id });
     },
@@ -596,12 +596,16 @@ export function createEditorStore(): EditorStore {
       const prev = get().editingId;
       if (prev !== null && !wanted.includes(prev)) closeEdit(); // may remove an empty box
       const s = get();
-      const selection = new Set(wanted.filter((id) => s.elements.has(id)));
+      const selectable = (id: string) => {
+        const el = s.elements.get(id);
+        return !!el && !isPdfPlacement(el); // PDF page placements are locked
+      };
+      const selection = new Set(wanted.filter(selectable));
       const editingId = s.editingId !== null && selection.has(s.editingId) ? s.editingId : null;
       set({ selection, editingId });
     },
     selectAll() {
-      set({ selection: new Set(get().elements.keys()) });
+      set({ selection: new Set([...get().elements.values()].filter((el) => !isPdfPlacement(el)).map((el) => el.id)) });
     },
 
     moveSelection(dx, dy) {

@@ -19,6 +19,10 @@ vi.mock("../../ipc/archive", () => ({
   importUnitArchive: vi.fn(async () => ({ unitId: "new", pages: 3, elements: 10, skipped: 2 })),
   exportUnitArchive: vi.fn(async () => "C:/physics.mate"),
 }));
+const pickAndImportPdf = vi.hoisted(() => vi.fn(async () => ({ id: "pdf-page" })));
+vi.mock("../../pdf/import", () => ({ pickAndImportPdf }));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock("react-router", async (orig) => ({ ...(await orig<typeof import("react-router")>()), useNavigate: () => navigate }));
 vi.mock("../../ipc/settings", () => ({
   getSettings: vi.fn(),
   setSettings: vi.fn(async () => {}),
@@ -117,5 +121,13 @@ describe("Library", () => {
     fireEvent.click(screen.getByLabelText("Actions for Physics"));
     fireEvent.click(screen.getByText("Export book…"));
     await waitFor(() => expect(exportUnitArchive).toHaveBeenCalledWith("1"));
+  });
+
+  it("imports a PDF as a page and opens it", async () => {
+    setUnits([unit("1", "Physics")]);
+    renderLibrary();
+    fireEvent.click(screen.getByText("Import PDF…"));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/edit/pdf-page"));
+    expect(pickAndImportPdf).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,6 +3,7 @@ import { prepareImages } from "../images/load";
 import { loadElements } from "../ipc/elements";
 import { writeExportFile } from "../ipc/export";
 import type { Element } from "../model/types";
+import { preparePdfPages } from "../pdf/render";
 import { prepareTextSnapshots } from "../overlay/snapshot";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
@@ -62,6 +63,8 @@ export async function exportPage(
   // Text boxes are drawn from bitmaps rendered asynchronously: have them ready for the PNG.
   if (format === "png") await prepareTextSnapshots(elements, opts.theme, opts.scale);
   await prepareImages(elements, format === "svg");
+  // PDF pages: rendered at the export scale for PNG; embedded as 2× PNGs in SVG.
+  await preparePdfPages(elements, format === "svg" ? 2 : opts.scale, format === "svg");
   const bytes =
     format === "png"
       ? await canvasToPng(renderToCanvas(elements, page, opts))

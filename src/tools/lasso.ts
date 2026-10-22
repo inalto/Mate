@@ -1,4 +1,5 @@
 // Lasso selection and selection transforms (pure).
+import { isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
 import { isClosedShape, normalizeShape, shapeRectOf } from "../shapes/geometry";
@@ -39,7 +40,7 @@ export function lassoSelect(
   const out: string[] = [];
   for (const id of index.query(polygonBounds(polygon))) {
     const el = elements.get(id);
-    if (!el || el.points.length === 0) continue;
+    if (!el || el.points.length === 0 || isPdfPlacement(el)) continue;
     const b = elementBounds(el);
     if (pointInPolygon({ x: b.x + b.width / 2, y: b.y + b.height / 2 }, polygon)) {
       out.push(id);

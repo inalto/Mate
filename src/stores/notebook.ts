@@ -11,6 +11,7 @@ import type {
 import * as ipc from "../ipc/notebook";
 import { loadElements, upsertElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
+import { gcAssets } from "../ipc/assets";
 import { useSettingsStore } from "./settings";
 
 export interface ShelfGroup {
@@ -27,7 +28,8 @@ interface NotebookState {
   createBookshelf: (title: string) => Promise<Bookshelf>;
   createUnit: (title: string, bookshelfId?: string) => Promise<Unit>;
   createSection: (unitId: string, title: string) => Promise<Section>;
-  createPage: (sectionId: string, title: string, parentId?: string) => Promise<Page>;
+  /** Create a page with mode/background from settings; `overrides` replace those defaults. */
+  createPage: (sectionId: string, title: string, parentId?: string, overrides?: Partial<Page>) => Promise<Page>;
   rename: (kind: EntityKind, id: string, title: string) => Promise<void>;
   setColor: (kind: EntityKind, id: string, color: string) => Promise<void>;
   toggleFavourite: (kind: EntityKind, id: string) => Promise<void>;
@@ -45,7 +47,10 @@ interface NotebookState {
   reorder: (kind: EntityKind, parentId: string | null, orderedIds: string[]) => Promise<void>;
   trash: (kind: EntityKind, id: string) => Promise<void>;
   restore: (kind: EntityKind, id: string) => Promise<void>;
+  /** Delete permanently, then remove assets nothing references any more. */
   purge: (kind: EntityKind, id: string) => Promise<void>;
+  /** Delete every trash item permanently, then collect unreferenced assets once. */
+  emptyTrash: () => Promise<void>;
   unitsByRecent: () => Unit[];
   unitsAZ: () => Unit[];
   unitsByShelf: () => ShelfGroup[];
@@ -57,6 +62,15 @@ interface Changes {
   title?: string;
   color?: string;
   toggleFavourite?: boolean;
+}
+
+/** Remove asset files (images, PDFs) that no element references after a purge; never fails. */
+export async function collectAssets(): Promise<void> {
+  try {
+    await gcAssets();
+  } catch (err) {
+    console.warn("asset gc failed", err);
+  }
 }
 
 const emptyTree = (): NotebookTree => ({ bookshelves: [], units: [], sections: [], pages: [] });
@@ -204,7 +218,7 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
       return section;
     },
 
-    createPage: async (sectionId, title, parentId) => {
+    createPage: async (sectionId, title, parentId, overrides) => {
       const { settings } = useSettingsStore.getState();
       const stamp = now();
       const siblings = tree().pages.filter(
@@ -226,6 +240,7 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
         createdAt: stamp,
         updatedAt: stamp,
         version: 0,
+        ...overrides,
       };
       await savePage(page);
       return page;
@@ -361,6 +376,12 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
     purge: async (kind, id) => {
       await ipc.purgeEntity(kind, id);
       await get().loadTrash();
+      await collectAssets();
+    },
+    emptyTrash: async () => {
+      for (const item of get().trashItems) await ipc.purgeEntity(item.kind, item.id);
+      await get().loadTrash();
+      await collectAssets();
     },
 
     unitsByRecent: () =>
