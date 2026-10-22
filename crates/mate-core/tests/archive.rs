@@ -1,10 +1,25 @@
 mod common;
 
+use std::fs;
 use std::io::{Cursor, Write};
+use std::path::PathBuf;
 
 use common::{page, section, stroke, unit};
 use mate_core::archive::{export_unit, import_archive};
+use mate_core::assets;
 use mate_core::storage::{Storage, StorageError};
+
+/// A fresh (empty, not yet created) per-test directory under the system temp dir.
+fn tmp(name: &str) -> PathBuf {
+    let d = std::env::temp_dir().join(format!("mate-archive-{name}-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&d);
+    d
+}
+
+const PNG: &[u8] = &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4];
+const PDF: &[u8] = b"%PDF-1.7
+%fake
+";
 
 /// Unit `u1` with sections `sa`, `sb`; pages `pa1`, `pa2` (child of `pa1`), `pb1`; 10 elements.
 fn source() -> Storage {
@@ -32,11 +47,11 @@ fn source() -> Storage {
 #[test]
 fn round_trip_preserves_structure_and_elements() {
     let src = source();
-    let bytes = export_unit(&src, "u1").unwrap();
+    let bytes = export_unit(&src, "u1", &tmp("none")).unwrap();
 
     let mut dst = Storage::open_in_memory().unwrap();
     dst.upsert_unit(&unit("existing", None)).unwrap();
-    let report = import_archive(&mut dst, &bytes).unwrap();
+    let report = import_archive(&mut dst, &bytes, &tmp("none-dst")).unwrap();
     assert_eq!(report.pages, 3);
     assert_eq!(report.elements, 10);
     assert_eq!(report.skipped, 0);
@@ -90,7 +105,7 @@ fn round_trip_preserves_structure_and_elements() {
     assert_eq!(total, 10);
 
     // Re-importing never collides.
-    let again = import_archive(&mut dst, &bytes).unwrap();
+    let again = import_archive(&mut dst, &bytes, &tmp("none-dst")).unwrap();
     assert_ne!(again.unit_id, report.unit_id);
     assert_eq!(again.elements, 10);
 }
@@ -109,7 +124,7 @@ fn rejects_newer_schema() {
         zip.finish().unwrap();
     }
     let mut dst = Storage::open_in_memory().unwrap();
-    match import_archive(&mut dst, buf.get_ref()) {
+    match import_archive(&mut dst, buf.get_ref(), &tmp("none-dst")) {
         Err(StorageError::Limit(msg)) => assert!(msg.contains("newer version"), "{msg}"),
         other => panic!("expected Limit error, got {other:?}"),
     }
@@ -120,7 +135,7 @@ fn rejects_newer_schema() {
 fn rejects_non_zip_and_missing_manifest() {
     let mut dst = Storage::open_in_memory().unwrap();
     assert!(matches!(
-        import_archive(&mut dst, b"not a zip"),
+        import_archive(&mut dst, b"not a zip", &tmp("none-dst")),
         Err(StorageError::Limit(_))
     ));
 
@@ -132,7 +147,7 @@ fn rejects_non_zip_and_missing_manifest() {
         zip.write_all(b"{}").unwrap();
         zip.finish().unwrap();
     }
-    match import_archive(&mut dst, buf.get_ref()) {
+    match import_archive(&mut dst, buf.get_ref(), &tmp("none-dst")) {
         Err(StorageError::Limit(msg)) => assert!(msg.contains("manifest"), "{msg}"),
         other => panic!("expected Limit error, got {other:?}"),
     }
@@ -145,7 +160,7 @@ fn skips_elements_over_limits() {
     src.upsert_section(&section("s", "u1")).unwrap();
     src.upsert_page(&page("p", "s", None)).unwrap();
     src.upsert_elements(&[stroke("ok", "p", 3)]).unwrap();
-    let bytes = export_unit(&src, "u1").unwrap();
+    let bytes = export_unit(&src, "u1", &tmp("none")).unwrap();
 
     // Re-pack the archive with one oversized element added to the page.
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
@@ -170,7 +185,127 @@ fn skips_elements_over_limits() {
     }
 
     let mut dst = Storage::open_in_memory().unwrap();
-    let report = import_archive(&mut dst, out.get_ref()).unwrap();
+    let report = import_archive(&mut dst, out.get_ref(), &tmp("none-dst")).unwrap();
     assert_eq!(report.elements, 1);
     assert_eq!(report.skipped, 1);
+}
+
+/// Unit `u1` / section `s` / page `p` with an image element and a PDF page element whose assets
+/// live in `dir`, plus a stroke.
+fn source_with_assets(dir: &std::path::Path) -> (Storage, String, String) {
+    let img = assets::save_sniffed(dir, PNG).unwrap();
+    let pdf = assets::save_sniffed(dir, PDF).unwrap();
+    let mut st = Storage::open_in_memory().unwrap();
+    st.upsert_unit(&unit("u1", None)).unwrap();
+    st.upsert_section(&section("s", "u1")).unwrap();
+    st.upsert_page(&page("p", "s", None)).unwrap();
+    let mut image = stroke("img", "p", 2);
+    image.r#type = mate_core::model::ElementType::Image;
+    image.image_url = Some(img.id.clone());
+    let mut pdf_page = stroke("pdfp", "p", 2);
+    pdf_page.r#type = mate_core::model::ElementType::Image;
+    pdf_page.content = Some(serde_json::json!({ "pdfSourceKey": pdf.id, "pdfPage": 1 }));
+    st.upsert_elements(&[image, pdf_page, stroke("ink", "p", 3)])
+        .unwrap();
+    (st, img.id, pdf.id)
+}
+
+fn imported_elements(dst: &Storage, unit_id: &str) -> Vec<mate_core::model::Element> {
+    let tree = dst.list_tree().unwrap();
+    let sec = tree.sections.iter().find(|s| s.unit_id == unit_id).unwrap();
+    let page = tree.pages.iter().find(|p| p.section_id == sec.id).unwrap();
+    dst.load_elements(&page.id).unwrap()
+}
+
+#[test]
+fn archive_round_trips_assets() {
+    let src_dir = tmp("assets-src");
+    let (src, img_id, pdf_id) = source_with_assets(&src_dir);
+    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+
+    let mut zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
+    let names: Vec<String> = zip.file_names().map(str::to_owned).collect();
+    assert!(names.contains(&format!("assets/{img_id}.png")), "{names:?}");
+    assert!(names.contains(&format!("assets/{pdf_id}.pdf")), "{names:?}");
+    let mut manifest = String::new();
+    std::io::Read::read_to_string(&mut zip.by_name("manifest.json").unwrap(), &mut manifest)
+        .unwrap();
+    assert!(manifest.contains("\"schemaVersion\": 1"), "{manifest}");
+
+    let dst_dir = tmp("assets-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    assert_eq!(report.elements, 3);
+    let els = imported_elements(&dst, &report.unit_id);
+    let image = els.iter().find(|e| e.image_url.is_some()).unwrap();
+    let new_img = image.image_url.clone().unwrap();
+    assert_ne!(new_img, img_id, "asset ids are re-minted");
+    assert_eq!(
+        fs::read(assets::asset_path(&dst_dir, &new_img).unwrap()).unwrap(),
+        PNG
+    );
+    let pdf_el = els
+        .iter()
+        .find(|e| {
+            e.content
+                .as_ref()
+                .is_some_and(|c| c.get("pdfSourceKey").is_some())
+        })
+        .unwrap();
+    let content = pdf_el.content.as_ref().unwrap();
+    let new_pdf = content["pdfSourceKey"].as_str().unwrap();
+    assert_ne!(new_pdf, pdf_id);
+    assert_eq!(content["pdfPage"], 1, "other content fields are kept");
+    assert_eq!(
+        fs::read(assets::asset_path(&dst_dir, new_pdf).unwrap()).unwrap(),
+        PDF
+    );
+
+    // A second import mints another copy rather than sharing files.
+    let again = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    let again_img = imported_elements(&dst, &again.unit_id)
+        .into_iter()
+        .find_map(|e| e.image_url)
+        .unwrap();
+    assert_ne!(again_img, new_img);
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn import_tolerates_missing_asset() {
+    let src_dir = tmp("missing-src");
+    let (src, img_id, pdf_id) = source_with_assets(&src_dir);
+    // The PDF file vanished before export: its entry is simply absent.
+    assert!(assets::delete_asset(&src_dir, &pdf_id));
+    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
+    assert!(!zip.file_names().any(|n| n.contains(&pdf_id)));
+
+    let dst_dir = tmp("missing-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    assert_eq!(
+        report.elements, 3,
+        "the element with the missing asset is kept"
+    );
+    let els = imported_elements(&dst, &report.unit_id);
+    let pdf_el = els
+        .iter()
+        .find(|e| {
+            e.content
+                .as_ref()
+                .is_some_and(|c| c.get("pdfSourceKey").is_some())
+        })
+        .unwrap();
+    assert_eq!(
+        pdf_el.content.as_ref().unwrap()["pdfSourceKey"],
+        pdf_id.as_str(),
+        "id left dangling"
+    );
+    let image = els.iter().find_map(|e| e.image_url.clone()).unwrap();
+    assert_ne!(image, img_id);
+    assert!(assets::asset_path(&dst_dir, &image).is_some());
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
 }
