@@ -135,10 +135,17 @@ export function createPointerAdapter(
     }
   };
 
+  const isStylus = (e: PointerEvent) => e.pointerType === "pen" || e.pointerType === "eraser";
+
   const onDown = (e: PointerEvent) => {
     const t = e.pointerType;
-    if (t === "pen" || t === "eraser") lastStylusAt = e.timeStamp;
+    if (isStylus(e)) lastStylusAt = e.timeStamp;
     if (t === "touch") {
+      if (drawId !== null && drawType !== "touch") {
+        // Touch during a pen/mouse stroke is a resting hand: reject the whole contact.
+        rejected.add(e.pointerId);
+        return;
+      }
       const palm =
         isPalmContact(e, opts.palmRejection) ||
         (opts.palmRejection !== "off" && e.timeStamp - lastStylusAt < STYLUS_SEEN_WINDOW_MS);
@@ -167,10 +174,9 @@ export function createPointerAdapter(
     }
     // Pen / mouse: one drawing pointer at a time; right mouse button is ignored.
     if (t === "mouse" && e.button === 2) return;
-    if (drawId !== null) {
-      if (drawType !== "touch") return;
-      cancelDraw(); // pen wins over a finger stroke
-    }
+    // A new pen/mouse down while a stroke is open means its up/cancel was lost (or it was a
+    // finger stroke, which the pen overrides): cancel the stale stroke and start fresh.
+    if (drawId !== null) cancelDraw();
     drawId = e.pointerId;
     drawType = t;
     capture(e.pointerId);
@@ -179,6 +185,11 @@ export function createPointerAdapter(
   };
 
   const onMove = (e: PointerEvent) => {
+    if (isStylus(e)) lastStylusAt = e.timeStamp; // hover counts as "stylus seen"
+    if (e.pointerId === drawId && drawType !== "touch" && e.buttons === 0) {
+      end(e, false); // buttons released without a pointerup reaching us
+      return;
+    }
     if (e.pointerId === drawId) {
       drawLast = local(e);
       const rect = el.getBoundingClientRect();
@@ -201,7 +212,8 @@ export function createPointerAdapter(
     }
   };
 
-  const end = (e: PointerEvent, cancelled: boolean) => {
+  function end(e: PointerEvent, cancelled: boolean) {
+    if (isStylus(e)) lastStylusAt = e.timeStamp;
     rejected.delete(e.pointerId);
     if (e.pointerId === drawId) {
       release(e.pointerId);
@@ -219,7 +231,7 @@ export function createPointerAdapter(
     }
     touches.delete(e.pointerId);
     if (touches.size === 0) handlers.onPanEnd?.();
-  };
+  }
   const onUp = (e: PointerEvent) => end(e, false);
   const onCancelEv = (e: PointerEvent) => end(e, true);
   const onContext = (e: Event) => e.preventDefault();
@@ -228,8 +240,17 @@ export function createPointerAdapter(
   el.addEventListener("pointermove", onMove);
   el.addEventListener("pointerup", onUp);
   el.addEventListener("pointercancel", onCancelEv);
+  // Capture lost without an up/cancel (focus change, alt-tab): cancel. After a normal up the
+  // pointer is no longer tracked, so this is a no-op.
+  el.addEventListener("lostpointercapture", onCancelEv);
   el.addEventListener("contextmenu", onContext);
   return () => {
+    cancelDraw();
+    for (const id of touches.keys()) release(id);
+    touches.clear();
+    rejected.clear();
+    pinching = false;
+    el.removeEventListener("lostpointercapture", onCancelEv);
     el.removeEventListener("pointerdown", onDown);
     el.removeEventListener("pointermove", onMove);
     el.removeEventListener("pointerup", onUp);
