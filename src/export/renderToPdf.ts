@@ -25,6 +25,7 @@ import { detectRealPressure, penParams, strokeDiscs } from "../ink/strokePoints"
 import { mapInkColor } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import { readAsset } from "../ipc/assets";
+import { isMathBox } from "../math/mathBox";
 import { PAGE_GAP } from "../model/constants";
 import { contentOf, isPdfPlacement, type ImageContent } from "../model/content";
 import type { Element, Page } from "../model/types";
@@ -522,7 +523,8 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
     }
     p.setOpacity(1);
   }
-  if (ctx.opts.searchable) for (const el of onSheet) if (el.type === "text-box") paintTextLayer(p, el);
+  // Math boxes are left out: their raw content is LaTeX source, not the text a reader searches for.
+  if (ctx.opts.searchable) for (const el of onSheet) if (el.type === "text-box" && !isMathBox(el)) paintTextLayer(p, el);
 }
 
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve));

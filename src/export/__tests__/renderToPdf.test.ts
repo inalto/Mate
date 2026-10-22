@@ -217,4 +217,17 @@ describe("renderToPdf", () => {
     const off = text(await renderToPdf([tb], page(), { ...OPTS, compress: false }, deps()));
     expect(off).not.toContain("Hello searchable");
   });
+
+  it("math boxes stay out of the searchable text layer", async () => {
+    const math = box("m", "text-box", 50, 50, 300, 80, {
+      subtype: "math",
+      latex: "\\sqrt{x}+y",
+      contentHtml: "<span>ab</span>",
+      rawContent: "\\sqrt{x}+y",
+      textAttributes: { fontFamily: "serif", fontSize: 18, color: "#000000", align: "center" },
+    });
+    const on = text(await renderToPdf([math], page(), { ...OPTS, searchable: true, compress: false }, deps()));
+    expect(on).not.toContain("sqrt");
+    expect(on).not.toMatch(/\b3 Tr\b/);
+  });
 });
