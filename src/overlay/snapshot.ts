@@ -1,15 +1,14 @@
 // Bridge from DOM editors to the canvas: an editor publishes a bitmap of its rendered content for
 // the element's current revision; the canvas, exports and thumbnails then draw that bitmap.
 //
-// Text boxes are rendered here from their stored (sanitised) HTML, on demand: the renderer asks for
+// Text boxes, tables and code blocks are rendered here from their stored (sanitised) content, on demand: the renderer asks for
 // a bitmap when it has none at the needed scale, PNG export and thumbnails wait for theirs, and the
 // editor renders drafts while typing. Bitmaps are also kept per element by appearance (HTML,
 // attributes, size, colour), so a box that only moved — a new revision — is drawn at once.
-import { mapInkColor } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import type { Element } from "../model/types";
 import { boxSnapshots, type BoxBitmap } from "../renderers/boxSnapshot";
-import { textContentOf } from "../text/textBox";
+import { boxAppearance, isHtmlBox } from "../text/boxHtml";
 import { htmlToBitmap } from "./htmlToBitmap";
 
 /** Publish `bitmap` as the appearance of `el` at its current revision (`el.updatedAt`). */
@@ -53,19 +52,13 @@ export function snapshotScale(pxPerUnit: number, width: number, height: number):
   return s;
 }
 
-function appearance(el: Element, theme: ThemeName) {
-  const content = textContentOf(el);
-  const width = el.boxWidth ?? 0;
-  const height = el.boxHeight ?? 0;
-  const color = mapInkColor(content.textAttributes.color, theme);
-  const key = JSON.stringify([content.contentHtml, content.textAttributes, width, height, color]);
-  return { content, width, height, color, key };
-}
+/** Appearance of a text box, table or code block (null for other types). */
+const appearance = (el: Element, theme: ThemeName) => boxAppearance(el, theme);
 
 /** Remembered bitmap of `el` as it looks now (any revision), with its scale; else null. */
 export function textSnapshotFor(el: Element, theme: ThemeName): { bitmap: BoxBitmap; scale: number } | null {
   const m = textMemo.get(memoKey(el.id, theme));
-  return m && m.key === appearance(el, theme).key ? m : null;
+  return m && m.key === appearance(el, theme)?.key ? m : null;
 }
 
 function remember(slot: string, r: Rendered): void {
@@ -81,6 +74,7 @@ function remember(slot: string, r: Rendered): void {
  */
 export function renderTextSnapshot(el: Element, theme: ThemeName, scale: number, publish = true): Promise<void> {
   const a = appearance(el, theme);
+  if (!a) return Promise.resolve();
   const slot = memoKey(el.id, theme);
   const have = textMemo.get(slot);
   if (have && have.key === a.key && have.scale >= scale) {
@@ -91,7 +85,7 @@ export function renderTextSnapshot(el: Element, theme: ThemeName, scale: number,
   if (failed.has(attempt) || a.width <= 0 || a.height <= 0) return Promise.resolve();
   const running = inflight.get(slot);
   if (running && running.key === a.key && running.scale >= scale) return running.done;
-  const done: Promise<void> = htmlToBitmap(a.content, a.width, a.height, a.color, scale).then(
+  const done: Promise<void> = htmlToBitmap(a.foreignObject, a.width, a.height, scale).then(
     (bitmap) => {
       if (inflight.get(slot)?.done === done) inflight.delete(slot);
       const cur = textMemo.get(slot);
@@ -114,7 +108,7 @@ export function requestTextSnapshot(el: Element, theme: ThemeName, scale: number
 }
 
 /**
- * Render the text boxes among `els` at `pxPerUnit` before a synchronous paint (PNG, thumbnails).
+ * Render the text boxes, tables and code blocks among `els` at `pxPerUnit` before a synchronous paint (PNG, thumbnails).
  * Kept per theme and not published: the export's theme may differ from the canvas's.
  */
 export async function prepareTextSnapshots(
@@ -125,7 +119,7 @@ export async function prepareTextSnapshots(
 ): Promise<void> {
   const jobs: Promise<void>[] = [];
   for (const el of els) {
-    if (el.type !== "text-box" || el.deletedAt) continue;
+    if (!isHtmlBox(el) || el.deletedAt) continue;
     jobs.push(renderTextSnapshot(el, theme, snapshotScale(pxPerUnit, el.boxWidth ?? 0, el.boxHeight ?? 0), false));
   }
   if (jobs.length === 0) return;

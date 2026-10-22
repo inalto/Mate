@@ -10,6 +10,7 @@ import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "..
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
+import { codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement } from "../text/tableCode";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
@@ -88,6 +89,9 @@ export interface EditorState {
    * setting is on) and open its editor; its id, or null when refused.
    */
   addTextBox(at: Vec2): string | null;
+  /** Insert an empty 3x3 table / code block at the viewport centre and edit it (one "Table"/"Code" entry). */
+  addTable(): string | null;
+  addCodespace(): string | null;
   /**
    * Insert an image asset of `natural` pixel size at the viewport centre (or centred on `at`, in
    * page units), scaled to fit 80 % of the visible viewport; one history entry. Its id, or null.
@@ -392,7 +396,10 @@ export function createEditorStore(): EditorStore {
       const cur = get().elements;
       record(
         "Edit",
-        els.filter((e) => cur.has(e.id)).map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
+        // A table never grows past MAX_TABLE_CELLS: such an update is refused.
+        els
+          .filter((e) => cur.has(e.id) && !(e.type === "table" && tableCells(e) > MAX_TABLE_CELLS))
+          .map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
       );
     },
 
@@ -410,6 +417,14 @@ export function createEditorStore(): EditorStore {
       freshText = el.id;
       set({ selection: new Set([el.id]), editingId: el.id });
       return el.id;
+    },
+
+    addTable() {
+      return insertBox("Table", tableElement);
+    },
+
+    addCodespace() {
+      return insertBox("Code", codespaceElement);
     },
 
     addImage(assetId, natural, at) {
@@ -793,6 +808,24 @@ export function createEditorStore(): EditorStore {
     history.push({ label, actions, mergeKey });
     applyActions(applied);
     return true;
+  }
+
+  /** Add a default-sized box centred in the viewport (top of the stack) and start editing it. */
+  function insertBox(label: string, make: typeof tableElement): string | null {
+    closeEdit();
+    const s = S();
+    if (!s.pageId) return null;
+    const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+    const c = screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+    const color = useSettingsStore.getState().settings.defaultTextColor;
+    const probe = make(s.pageId, crypto.randomUUID(), new Date().toISOString(), c, color);
+    const at = { x: c.x - (probe.boxWidth ?? 0) / 2, y: c.y - (probe.boxHeight ?? 0) / 2 };
+    const top = topZ(s.elements.values());
+    const box = { ...probe, points: [{ ...probe.points[0], ...at }] };
+    const el = top > 0 ? withMeta(box, { zIndex: top }) : box;
+    if (!record(label, [{ type: "add", el }])) return null;
+    store.setState({ tool: "cursor", selection: new Set([el.id]), editingId: el.id });
+    return el.id;
   }
 
   function selectedElements(): Element[] {

@@ -217,3 +217,20 @@ describe("text box rendering", () => {
     expect(snapshotScale(8, 2000, 30)).toBe(2); // ≤ 4096 device px per side
   });
 });
+
+describe("table and code snapshots", () => {
+  beforeEach(() => clearTextSnapshots());
+  afterEach(() => setHtmlRasterizer(null));
+
+  it("renders_tables_and_codespaces_through_the_html_pipeline", async () => {
+    const r = stubRasterizer();
+    setHtmlRasterizer(r.fn);
+    const t = el("t", [[0, 0]], { type: "table", boxWidth: 200, boxHeight: 100, content: { subtype: "table", tableData: { rows: [["x<y"]] } } });
+    const c = el("c", [[0, 0]], { type: "codespace", boxWidth: 200, boxHeight: 100, content: { subtype: "codespace", code: "a && b", language: "plain" } });
+    await prepareTextSnapshots([t, c], "light", 1);
+    expect(r.calls).toHaveLength(2);
+    expect(r.calls[0].svg).toContain("x&lt;y");
+    expect(r.calls[1].svg).toContain("a &amp;&amp; b");
+    expect(textSnapshotFor(t, "light")).not.toBeNull();
+  });
+});

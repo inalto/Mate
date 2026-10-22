@@ -2,10 +2,9 @@
 // rasterizer. The default loads the SVG as an image and draws it on a canvas (needs a real browser
 // engine; jsdom never loads it). Fonts are referenced by name: an SVG image cannot load web fonts,
 // so faces not installed on the system fall back to the stack's next family.
-import type { TextBoxContent } from "../model/content";
 import type { BoxBitmap } from "../renderers/boxSnapshot";
 import { n } from "../export/svgUtil";
-import { textBoxForeignObject } from "../text/foreignObject";
+import type { Rect } from "../tools/spatialIndex";
 
 /** Rasterise a standalone SVG document to a `width`×`height` device-pixel bitmap. */
 export type HtmlRasterizer = (svg: string, width: number, height: number) => Promise<BoxBitmap>;
@@ -33,11 +32,14 @@ export function setHtmlRasterizer(r: HtmlRasterizer | null): void {
   rasterizer = r ?? svgImageRasterizer;
 }
 
-/** Bitmap of `content` laid out in a `width`×`height` (page units) box, at `scale` px per unit. */
-export function htmlToBitmap(content: TextBoxContent, width: number, height: number, color: string, scale: number): Promise<BoxBitmap> {
+/**
+ * Bitmap of a box laid out in a `width` by `height` (page units) box, at `scale` px per unit;
+ * `foreignObject(r)` builds the box's `<foreignObject>` for the rectangle `r`.
+ */
+export function htmlToBitmap(foreignObject: (r: Rect) => string, width: number, height: number, scale: number): Promise<BoxBitmap> {
   const w = Math.max(1, Math.ceil(width * scale));
   const h = Math.max(1, Math.ceil(height * scale));
-  const fo = textBoxForeignObject(content, { x: 0, y: 0, width, height }, color);
+  const fo = foreignObject({ x: 0, y: 0, width, height });
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${n(width)} ${n(height)}">${fo}</svg>`;
   return rasterizer(svg, w, h);
 }

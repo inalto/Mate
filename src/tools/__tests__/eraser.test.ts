@@ -60,6 +60,7 @@ describe("eraser", () => {
     const { elements, index } = setup([
       el("tb", [[0, 0], [100, 0]], { type: "text-box", boxWidth: 100, boxHeight: 40 }),
       el("tbl", [[0, 0], [100, 0]], { type: "table", boxWidth: 100, boxHeight: 40 }),
+      el("code", [[0, 0], [100, 0]], { type: "codespace", boxWidth: 100, boxHeight: 40 }),
     ]);
     for (const mode of ["stroke", "partial"] as const) {
       expect(eraseAt(elements, index, { x: 50, y: 10 }, 20, mode, opts)).toEqual({ removed: [], replaced: [] });

@@ -1,7 +1,7 @@
 // Built-in renderers: ink strokes, and the boxed types (text-box, table, codespace, graph, image)
 // drawn from their editor snapshot when one exists for the current revision, else as a light
-// placeholder frame so the box stays visible before its editor has produced a snapshot. Text boxes
-// render their own snapshots on demand and export to SVG as a `<foreignObject>` (./textBox).
+// placeholder frame so the box stays visible before its editor has produced a snapshot. Text boxes, tables and code
+// blocks render their own snapshots on demand and export to SVG as a `<foreignObject>` (./htmlBox).
 // Imported for its side effect by the scene (exports, thumbnails) and the canvas.
 import { renderStroke } from "../ink/render";
 import { strokeSvg } from "../ink/strokeSvg";
@@ -12,7 +12,7 @@ import { n } from "../export/svgUtil";
 import { drawBoxBitmap, PLACEHOLDER_COLOR, rotatedSvg } from "./boxDraw";
 import { boxSnapshots, type BoxBitmap } from "./boxSnapshot";
 import { registerRenderer, type ElementRenderer, type RenderOptions } from "./registry";
-import { textBoxRenderer } from "./textBox";
+import { htmlBoxRenderer } from "./htmlBox";
 // Types with their own renderer module (registered on import).
 import "./shape";
 import "./image";
@@ -42,4 +42,4 @@ export const boxedRenderer: ElementRenderer = {
 };
 
 for (const t of BOXED_TYPES) if (t !== "image") registerRenderer(t, boxedRenderer);
-registerRenderer("text-box", textBoxRenderer);
+for (const t of ["text-box", "table", "codespace"] as const) registerRenderer(t, htmlBoxRenderer);

@@ -45,6 +45,17 @@ describe("Toolbar", () => {
     expect(pick).toHaveBeenCalledTimes(1);
   });
 
+  it("insert_table_and_code_buttons", () => {
+    const addTable = vi.fn();
+    const addCodespace = vi.fn();
+    useEditorStore.setState({ addTable, addCodespace });
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Insert table" }));
+    fireEvent.click(screen.getByRole("button", { name: "Insert code" }));
+    expect(addTable).toHaveBeenCalledTimes(1);
+    expect(addCodespace).toHaveBeenCalledTimes(1);
+  });
+
   it("text_tool_button", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Text (T)" }));

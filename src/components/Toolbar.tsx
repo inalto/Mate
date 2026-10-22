@@ -13,7 +13,9 @@ import {
   Pen,
   PenNib,
   Plus,
+  Table,
   TextT,
+  Code,
 } from "@phosphor-icons/react";
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
@@ -248,6 +250,12 @@ export default function Toolbar() {
       {toolBtn("text", "Text (T)", <TextT size={18} />)}
       <button type="button" className="tb-btn" aria-label="Insert image…" title="Insert image…" onClick={() => void pickAndInsertImage()}>
         <ImageSquare size={18} />
+      </button>
+      <button type="button" className="tb-btn" aria-label="Insert table" title="Insert table" onClick={() => s().addTable()}>
+        <Table size={18} />
+      </button>
+      <button type="button" className="tb-btn" aria-label="Insert code" title="Insert code" onClick={() => s().addCodespace()}>
+        <Code size={18} />
       </button>
       {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
       {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}
