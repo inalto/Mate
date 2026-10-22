@@ -280,6 +280,24 @@ describe("CanvasView snapshot", () => {
     await waitFor(() => expect(spy).toHaveBeenCalled());
     await new Promise((r) => setTimeout(r, 300));
     expect(spy).toHaveBeenCalledTimes(1);
-    expect([...(spy.mock.calls[0][0] as Iterable<Element>)]).toHaveLength(5000);
+    // Only strokes inside the snapshot clip are drawn (x ≤ ~200 at the default camera).
+    const drawn = [...(spy.mock.calls[0][0] as Iterable<Element>)];
+    expect(drawn.length).toBeGreaterThan(0);
+    expect(drawn.length).toBeLessThan(5000);
+  });
+
+  it("raster_draws_only_visible_elements", async () => {
+    const near = [stroke("n1", 0), stroke("n2", 50), stroke("n3", 100)];
+    const far = [stroke("f1", 5000), stroke("f2", 9000)];
+    // z-order: n3 below n1 below n2.
+    near[0] = { ...near[0], content: { zIndex: 2 } };
+    near[1] = { ...near[1], content: { zIndex: 3 } };
+    near[2] = { ...near[2], content: { zIndex: 1 } };
+    vi.mocked(ipc.loadElements).mockResolvedValue([far[0], near[1], near[0], far[1], near[2]]);
+    const spy = vi.spyOn(SnapshotCache.prototype, "rasterAll");
+    render(createElement(CanvasView, { pageId: "page-1" }));
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    const drawn = [...(spy.mock.calls[0][0] as Iterable<Element>)].map((e) => e.id);
+    expect(drawn).toEqual(["n3", "n1", "n2"]);
   });
 });

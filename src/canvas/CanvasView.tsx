@@ -94,7 +94,14 @@ function createEngine(
     const s = ready();
     if (!s) return;
     cache.ensure(s.viewport, s.camera, dpr);
-    cache.rasterAll(renderOrder(s.elements.values()), paintScene);
+    // Only what the bitmap can show: the clip is the viewport plus the snapshot margin, and index
+    // bounds include stroke width. Pans within the margin blit; leaving it re-rasterises.
+    const visible: Element[] = [];
+    for (const id of store.spatialIndex().query(cache.worldClip())) {
+      const el = s.elements.get(id);
+      if (el) visible.push(el);
+    }
+    cache.rasterAll(renderOrder(visible), paintScene);
   };
 
   const drawStatic = () => {
