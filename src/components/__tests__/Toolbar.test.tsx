@@ -8,7 +8,7 @@ vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
 import { setSettings } from "../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { useEditorStore } from "../../stores/editor";
-import { useSettingsStore } from "../../stores/settings";
+import { flushSettings, useSettingsStore } from "../../stores/settings";
 import Toolbar from "../Toolbar";
 
 const renderBar = () =>
@@ -36,7 +36,7 @@ describe("Toolbar", () => {
     expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
   });
 
-  it("shape_tool_menu_sets_and_persists_shape_defaults", () => {
+  it("shape_tool_menu_sets_and_persists_shape_defaults", async () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Shape" }));
     expect(useEditorStore.getState().tool).toBe("shape");
@@ -62,6 +62,7 @@ describe("Toolbar", () => {
     expect(setSettings).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Shape" })); // closes and saves
     expect(screen.queryByRole("dialog", { name: "Shape options" })).toBeNull();
+    await flushSettings();
     expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ defaultShapeType: "star", defaultShapeStrokeWidth: 6.5 }));
   });
 });

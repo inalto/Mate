@@ -20,6 +20,9 @@ vi.mock("../../ipc/elementsQueue", () => ({
     }),
   },
 }));
+vi.mock("../../stores/settings", () => ({
+  flushSettings: vi.fn(async () => void calls.push("settings")),
+}));
 const showToast = vi.fn();
 vi.mock("../../components/Toast", () => ({ showToast: (...a: unknown[]) => showToast(...a) }));
 let startedResult = true;
@@ -41,9 +44,15 @@ beforeEach(() => {
 });
 
 describe("close handler", () => {
+  it("flushes_pending_settings_on_beforeunload", async () => {
+    window.dispatchEvent(new Event("beforeunload"));
+    await Promise.resolve();
+    expect(calls).toContain("settings");
+  });
+
   it("completes_when_queue_flushes", async () => {
     await w.__mateFlushAndClose!(1);
-    expect(calls).toEqual(["started:1", "flush", "complete:1"]);
+    expect(calls).toEqual(["started:1", "flush", "settings", "complete:1"]);
     expect(ipc.completeCloseAttempt).toHaveBeenCalledTimes(1);
     expect(localStorage.getItem(CLEAN_EXIT_KEY)).toBe("1");
     expect(showToast).not.toHaveBeenCalled();

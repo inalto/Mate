@@ -3,6 +3,7 @@
 import { showToast } from "../components/Toast";
 import { elementsQueue } from "../ipc/elementsQueue";
 import * as lifecycle from "../ipc/lifecycle";
+import { flushSettings } from "../stores/settings";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 
 export const CLEAN_EXIT_KEY = "mate_clean_exit_v1";
@@ -96,6 +97,13 @@ export function installCloseHandler(): void {
       }
       return;
     }
+    try {
+      await flushSettings();
+    } catch (err) {
+      // Preferences, not notes: a failed settings write does not hold the window open.
+      console.error("saving settings before close failed", err);
+    }
+    if (current !== id) return;
     current = null;
     safeSet(CLEAN_EXIT_KEY, "1");
     try {
@@ -117,7 +125,10 @@ export function installCloseHandler(): void {
   };
 
   // Best-effort flush on reload / navigation away (e.g. dev reloads).
-  const bestEffort = () => void elementsQueue.flushAll();
+  const bestEffort = () => {
+    void elementsQueue.flushAll();
+    flushSettings().catch((err) => console.error("saving settings failed", err));
+  };
   window.addEventListener("beforeunload", bestEffort);
   window.addEventListener("pagehide", bestEffort);
 }
