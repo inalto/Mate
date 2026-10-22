@@ -10,6 +10,7 @@ import type {
 } from "../model/types";
 import * as ipc from "../ipc/notebook";
 import { loadElements, upsertElements } from "../ipc/elements";
+import { elementsQueue } from "../ipc/elementsQueue";
 import { useSettingsStore } from "./settings";
 
 export interface ShelfGroup {
@@ -287,6 +288,8 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
     },
 
     duplicatePage: async (id) => {
+      // Strokes drawn just before duplicating may still sit in the write-behind queue.
+      await elementsQueue.flushAll();
       const src = tree().pages.find((p) => p.id === id);
       if (!src) return null;
       const stamp = now();

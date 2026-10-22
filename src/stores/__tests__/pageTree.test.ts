@@ -4,7 +4,16 @@ import type { Page } from "../../model/types";
 vi.mock("../../ipc/notebook", () => ({ upsertPage: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []), upsertElements: vi.fn(async () => {}) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+const order = vi.hoisted(() => [] as string[]);
+vi.mock("../../ipc/elementsQueue", () => ({
+  elementsQueue: {
+    flushAll: vi.fn(async () => {
+      order.push("flush");
+    }),
+  },
+}));
 
+import * as elementsIpc from "../../ipc/elements";
 import { useNotebookStore } from "../notebook";
 
 const page = (id: string, orderIndex: number, extra: Partial<Page> = {}): Page => ({
@@ -59,5 +68,15 @@ describe("page tree operations", () => {
     expect(get("b1").depth).toBe(0);
     const top = useNotebookStore.getState().tree.pages.filter((p) => !p.parentId).sort((x, y) => x.orderIndex - y.orderIndex);
     expect(top.map((p) => p.id)).toEqual(["a", "b", "b1", "c"]);
+  });
+
+  it("duplicatePage_flushes_pending_writes_first", async () => {
+    order.length = 0;
+    vi.mocked(elementsIpc.loadElements).mockImplementationOnce(async () => {
+      order.push("load");
+      return [];
+    });
+    await useNotebookStore.getState().duplicatePage("a");
+    expect(order).toEqual(["flush", "load"]);
   });
 });
