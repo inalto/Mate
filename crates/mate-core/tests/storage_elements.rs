@@ -93,3 +93,42 @@ fn referenced_asset_ids_include_images_pdf_keys_and_soft_deleted() {
         ["asset-a", "asset-b", "asset-pdf", "asset-trashed"].iter().map(|s| s.to_string()).collect();
     assert_eq!(ids, want);
 }
+
+#[test]
+fn asset_gc_only_when_unreferenced() {
+    use mate_core::assets::{gc_unreferenced, save_sniffed};
+    use mate_core::storage::EntityKind;
+    use std::time::Duration;
+
+    let dir = std::env::temp_dir().join(format!("mate-gc-pdf-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let pdf = save_sniffed(&dir, b"%PDF-1.7\n%stub\n").unwrap();
+
+    let mut st = seeded();
+    st.upsert_page(&common::page("p2", "sec1", None)).unwrap();
+    let placement = |id: &str, page_id: &str| {
+        let mut e = stroke(id, page_id, 1);
+        e.r#type = ElementType::Image;
+        e.pen_style = None;
+        e.content = Some(serde_json::json!({ "pdfSourceKey": pdf.id, "pdfPageIndex": 1 }));
+        e
+    };
+    st.upsert_elements(&[placement("a", "p1"), placement("b", "p2")]).unwrap();
+
+    // Purging one of the two pages keeps the shared PDF source.
+    st.soft_delete(EntityKind::Page, "p1").unwrap();
+    st.purge(EntityKind::Page, "p1").unwrap();
+    assert_eq!(gc_unreferenced(&dir, &st.referenced_asset_ids().unwrap(), Duration::ZERO), 0);
+    assert!(pdf.path.exists());
+
+    // Trashed but not purged: still referenced (the trash can be restored).
+    st.soft_delete(EntityKind::Page, "p2").unwrap();
+    assert_eq!(gc_unreferenced(&dir, &st.referenced_asset_ids().unwrap(), Duration::ZERO), 0);
+    assert!(pdf.path.exists());
+
+    // Purging the last page referencing it removes the file.
+    st.purge(EntityKind::Page, "p2").unwrap();
+    assert_eq!(gc_unreferenced(&dir, &st.referenced_asset_ids().unwrap(), Duration::ZERO), 1);
+    assert!(!pdf.path.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}

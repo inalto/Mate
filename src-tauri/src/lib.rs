@@ -1,7 +1,7 @@
 mod commands;
 mod state;
 
-use commands::{archive, assets, elements, export, lifecycle, notebook, settings, thumbnails};
+use commands::{archive, assets, elements, export, lifecycle, notebook, pdf, settings, thumbnails};
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -29,6 +29,7 @@ pub fn run() {
       }
       let state = AppState::init(app.handle())?;
       app.manage(state);
+      app.manage(pdf::PendingOpenFile::new(pdf::pdf_from_args(std::env::args())));
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -54,6 +55,8 @@ pub fn run() {
       assets::delete_asset,
       assets::read_asset,
       assets::gc_assets,
+      pdf::read_shared_pdf,
+      pdf::take_pending_open_file,
       export::write_export_file,
       archive::export_unit_archive,
       archive::import_unit_archive,
@@ -65,6 +68,13 @@ pub fn run() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
     .run(|app, event| {
+      // macOS delivers "Open with Mate" (and double-clicked .pdf files) as an event, not argv.
+      #[cfg(any(target_os = "macos", target_os = "ios"))]
+      if let RunEvent::Opened { urls } = &event {
+        for path in urls.iter().filter_map(|u| u.to_file_path().ok()) {
+          pdf::file_opened(app, path.to_string_lossy().into_owned());
+        }
+      }
       // macOS: Cmd+Q, the app menu "Quit" and Dock "Quit" end the app without a window
       // `CloseRequested`, so they would skip the flush handshake. Route a user-initiated exit
       // (`code: None`; a programmatic `app.exit` carries a code) through the same close attempt on
