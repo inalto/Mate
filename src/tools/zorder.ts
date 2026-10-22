@@ -1,4 +1,6 @@
-// Z-order (pure): render order is content.zIndex ascending, then createdAt, then id.
+// Z-order (pure): PDF page placements first (locked at the bottom), then content.zIndex ascending,
+// then createdAt, then id.
+import { isPdfPlacement } from "../model/content";
 import type { Element } from "../model/types";
 import { contentMeta, withMeta } from "./spatialIndex";
 
@@ -7,6 +9,8 @@ export type ZOp = "forward" | "backward" | "front" | "back";
 export const zOf = (el: Element): number => contentMeta(el).zIndex ?? 0;
 
 export function compareZ(a: Element, b: Element): number {
+  const pa = isPdfPlacement(a);
+  if (pa !== isPdfPlacement(b)) return pa ? -1 : 1;
   return zOf(a) - zOf(b) || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
@@ -21,9 +25,10 @@ export function topZ(els: Iterable<Element>): number {
   return m;
 }
 
-/** Apply `op` to the selected ids; returns only the elements whose zIndex changes. */
+/** Apply `op` to the selected ids; returns only the elements whose zIndex changes. PDF page
+ * placements are neither moved nor renumbered. */
 export function reorder(all: Iterable<Element>, ids: ReadonlySet<string>, op: ZOp): Element[] {
-  const order = renderOrder(all);
+  const order = renderOrder(all).filter((e) => !isPdfPlacement(e));
   const selected = order.filter((e) => ids.has(e.id));
   if (selected.length === 0) return [];
   if (op === "front" || op === "back") {

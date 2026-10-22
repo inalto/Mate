@@ -1,14 +1,35 @@
-// Page export: render the page to PNG or SVG and save it through the native save dialog.
+// Page export: render the page to PNG, SVG, PDF or LaTeX and save it through the native save
+// dialog. Graphs need the lazily loaded math engine: it is awaited first so no "Loading…" frame is
+// exported.
+import { screenToWorld, sheetSize } from "../canvas/camera";
+import { prepareImages } from "../images/load";
 import { loadElements } from "../ipc/elements";
 import { writeExportFile } from "../ipc/export";
+import { PAGE_GAP } from "../model/constants";
+import { isPdfPlacement } from "../model/content";
 import type { Element } from "../model/types";
+import { preparePdfPages } from "../pdf/render";
+import { prepareTextSnapshots } from "../overlay/snapshot";
+import { endAllEdits } from "../overlay/useEditSession";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
-import { renderToCanvas } from "./renderToCanvas";
+import { useSettingsStore } from "../stores/settings";
+import { canvasExportLayout, renderToCanvas } from "./renderToCanvas";
+import { readyGraphs } from "./readyGraphs";
+import { renderToLatex } from "./renderToLatex";
 import { renderToSvg } from "./renderToSvg";
 import type { ExportOptions } from "./scene";
 
-export type PageExportFormat = "png" | "svg";
+export type PageExportFormat = "png" | "svg" | "pdf" | "latex";
+
+export interface PageExportOptions extends Partial<ExportOptions> {
+  /** PDF: every sheet, or the sheet shown in the editor (page mode). */
+  pages?: "all" | "current";
+  /** PDF: add an invisible text layer from text boxes. */
+  searchable?: boolean;
+}
+
+const EXTENSIONS: Record<PageExportFormat, string> = { png: "png", svg: "svg", pdf: "pdf", latex: "tex" };
 
 /** Slug of `title` (`[^a-z0-9]+` → `-`, trimmed, ≤ 60 chars) + `.ext`, else `mate-export-YYYY-MM-DD.ext`. */
 export function pageExportFilename(title: string, ext: string, now: Date = new Date()): string {
@@ -32,6 +53,19 @@ async function elementsOf(pageId: string): Promise<Element[]> {
   return loadElements(pageId);
 }
 
+/** 0-based sheet at the centre of the editor showing `pageId` (0 when no editor shows it). */
+export function currentSheetIndex(pageId: string): number {
+  for (const i of [0, 1] as const) {
+    const s = editorForPane(i).getState();
+    if (s.loadedPageId !== pageId || !s.page) continue;
+    const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+    const centreY = screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 }).y;
+    const { height } = sheetSize(s.page, useSettingsStore.getState().settings.defaultPageAspectRatio);
+    return Math.max(0, Math.floor(centreY / (height + PAGE_GAP)));
+  }
+  return 0;
+}
+
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   return new Promise((resolve, reject) =>
     canvas.toBlob(
@@ -45,11 +79,19 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array> {
 export async function exportPage(
   pageId: string,
   format: PageExportFormat,
-  options: Partial<ExportOptions> = {},
+  options: PageExportOptions = {},
 ): Promise<string | null> {
   const page = useNotebookStore.getState().tree.pages.find((p) => p.id === pageId);
   if (!page) throw new Error("page not found");
+  // An open box editor keeps its edits locally until the session ends: commit them first.
+  endAllEdits();
   const elements = await elementsOf(pageId);
+  const filename = pageExportFilename(page.title, EXTENSIONS[format]);
+  if (format === "latex") {
+    const tex = renderToLatex(elements.filter((e) => e.pageId === pageId));
+    return writeExportFile(filename, new TextEncoder().encode(tex));
+  }
+  await readyGraphs(elements);
   const opts: ExportOptions = {
     scale: 2,
     theme: "light",
@@ -57,9 +99,38 @@ export async function exportPage(
     pageFrame: page.mode === "page",
     ...options,
   };
-  const bytes =
-    format === "png"
-      ? await canvasToPng(renderToCanvas(elements, page, opts))
-      : new TextEncoder().encode(renderToSvg(elements, page, { ...opts, scale: 1 }));
-  return writeExportFile(pageExportFilename(page.title, format), bytes);
+  if (format === "pdf") {
+    // jsPDF and pdf-lib are large: loaded on the first PDF export only.
+    const { PDF_RASTER_SCALE, renderToPdf } = await import("./renderToPdf");
+    // Every box rendered before painting (no timeout): a box that cannot be rendered fails the export.
+    const textBitmaps = await prepareTextSnapshots(elements, opts.theme, PDF_RASTER_SCALE);
+    // Sheets backed by an imported PDF keep the original page and are drawn in light colours.
+    if (opts.theme !== "light" && elements.some(isPdfPlacement)) {
+      for (const [k, v] of await prepareTextSnapshots(elements, "light", PDF_RASTER_SCALE)) textBitmaps.set(k, v);
+    }
+    await prepareImages(elements);
+    const bytes = await renderToPdf(elements, page, {
+      theme: opts.theme,
+      background: opts.background,
+      pages: options.pages ?? "all",
+      currentSheet: options.pages === "current" ? currentSheetIndex(pageId) : undefined,
+      searchable: options.searchable ?? true,
+      textBitmaps,
+    });
+    return writeExportFile(filename, bytes);
+  }
+  // Text boxes are drawn from bitmaps rendered asynchronously: have them all ready for the PNG (the
+  // SVG embeds their HTML as <foreignObject> instead).
+  const textBitmaps = format === "png" ? await prepareTextSnapshots(elements, opts.theme, opts.scale) : undefined;
+  await prepareImages(elements, format === "svg");
+  let bytes: Uint8Array;
+  if (format === "png") {
+    // PDF pages at the scale the canvas is actually painted at, held by this export until it is drawn.
+    const pdfTiles = await preparePdfPages(elements, canvasExportLayout(elements, page, opts.scale).scale, { keep: true });
+    bytes = await canvasToPng(renderToCanvas(elements, page, opts, pdfTiles, textBitmaps));
+  } else {
+    await preparePdfPages(elements, 2, { embed: true }); // embedded as 2× PNGs
+    bytes = new TextEncoder().encode(renderToSvg(elements, page, { ...opts, scale: 1 }));
+  }
+  return writeExportFile(filename, bytes);
 }

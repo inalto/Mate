@@ -7,7 +7,8 @@ use tauri_plugin_dialog::DialogExt;
 use super::export::{ask_save_path, export_filename, write_atomically};
 use crate::state::AppState;
 
-/// Exports a unit (book) to a `.mate` file chosen in a save dialog. `None` if cancelled.
+/// Exports a unit (book) and the assets its elements reference to a `.mate` file chosen in a
+/// save dialog. `None` if cancelled.
 #[tauri::command]
 pub async fn export_unit_archive(
     app: AppHandle,
@@ -25,7 +26,8 @@ pub async fn export_unit_archive(
             .map(|u| u.title)
             .unwrap_or_default();
         (
-            export_unit(&storage, &unit_id).map_err(|e| e.to_string())?,
+            export_unit(&storage, &unit_id, &state.data_dir.join("assets"))
+                .map_err(|e| e.to_string())?,
             title,
         )
     };
@@ -36,7 +38,8 @@ pub async fn export_unit_archive(
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
-/// Imports a `.mate` file chosen in an open dialog as a new book. `None` if cancelled.
+/// Imports a `.mate` file chosen in an open dialog as a new book (its assets go to the asset
+/// store under new ids). `None` if cancelled.
 #[tauri::command]
 pub async fn import_unit_archive(
     app: AppHandle,
@@ -61,7 +64,7 @@ pub async fn import_unit_archive(
     }
     let bytes = fs::read(&path).map_err(|e| e.to_string())?;
     let mut storage = state.storage.lock().map_err(|e| e.to_string())?;
-    import_archive(&mut storage, &bytes)
+    import_archive(&mut storage, &bytes, &state.data_dir.join("assets"))
         .map(Some)
         .map_err(|e| e.to_string())
 }

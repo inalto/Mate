@@ -7,6 +7,9 @@ export type ShortcutAction =
   | "tool.eraser"
   | "tool.cursor"
   | "tool.lasso"
+  | "tool.shape"
+  | "tool.text"
+  | "tool.insertSpace"
   | "preset.slot"
   | "undo"
   | "redo"
@@ -65,6 +68,9 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = [
   { action: "tool.eraser", key: "e" },
   { action: "tool.cursor", key: "v" },
   { action: "tool.lasso", key: "l" },
+  { action: "tool.shape", key: "s" },
+  { action: "tool.text", key: "t" },
+  { action: "tool.insertSpace", key: "n" },
   ...Array.from({ length: 9 }, (_, i): ShortcutBinding => ({
     action: "preset.slot",
     code: `Digit${i + 1}`,
@@ -120,6 +126,8 @@ export function isTypingTarget(t: EventTarget | null): boolean {
   if (typeof HTMLElement === "undefined" || !(t instanceof HTMLElement)) return false;
   if (t instanceof HTMLInputElement) return TEXT_INPUT_TYPES.has((t.getAttribute("type") ?? "").toLowerCase());
   if (t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return true;
+  // MathLive's <math-field> keeps its editable surface in a shadow root: events arrive retargeted.
+  if (t.localName === "math-field" || t.closest("math-field")) return true;
   const ce = t.closest("[contenteditable]");
   return t.isContentEditable || (ce !== null && ce.getAttribute("contenteditable") !== "false");
 }

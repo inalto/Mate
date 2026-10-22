@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod assets;
 pub mod geometry;
 pub mod model;
 pub mod settings;

@@ -1,8 +1,12 @@
 // Eraser hit-testing (pure). Stroke mode removes any touched element; partial mode cuts strokes
-// where they enter/leave the eraser circle. Text boxes and tables are never erased.
+// where they enter/leave the eraser circle. Shapes are hit along their outline (or anywhere inside
+// when filled); partial mode turns a touched shape outline into stroke fragments. Text boxes,
+// tables, code blocks and graphs are never erased.
+import { isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
-import { elementBounds, type SpatialIndex } from "./spatialIndex";
+import { hasFill, isClosedShape, shapeElementOutline, shapeHit } from "../shapes/geometry";
+import { contentMeta, elementBounds, type SpatialIndex } from "./spatialIndex";
 
 export type EraseMode = "stroke" | "partial";
 
@@ -27,9 +31,9 @@ function erasable(el: Element, opts: EraseOptions): boolean {
     case "shape":
       return opts.eraseShapes;
     case "image":
-      return opts.eraseImages;
+      return opts.eraseImages && !isPdfPlacement(el); // PDF pages are locked
     default:
-      return false; // text-box, table and other structured content are never erased
+      return false; // text-box, table, codespace, graph and other structured content are never erased
   }
 }
 
@@ -127,6 +131,51 @@ export function splitPolyline(pts: Point[], c: Vec2, r: number): Point[][] | nul
   return frags;
 }
 
+/** Split a closed polyline; the fragments either side of its start/end point join into one. */
+function splitClosed(pts: Point[], c: Vec2, r: number): Point[][] | null {
+  const frags = splitPolyline(pts, c, r);
+  if (!frags || frags.length < 2) return frags;
+  const first = frags[0];
+  const last = frags[frags.length - 1];
+  if (first[0] !== pts[0] || last[last.length - 1] !== pts[pts.length - 1]) return frags;
+  return [[...last, ...first.slice(1)], ...frags.slice(1, -1)];
+}
+
+/**
+ * Partial erase of a shape: its outline polylines are cut like strokes. Null when untouched, else
+ * the remaining pieces (untouched polylines whole) as plain pen strokes in the shape's colour/width.
+ */
+function splitShape(el: Element, c: Vec2, reach: number): Point[][] | null {
+  const closed = isClosedShape(el.shapeType ?? "rectangle");
+  let touched = false;
+  const out: Point[][] = [];
+  shapeElementOutline(el).forEach((poly, i) => {
+    const pts = poly.map((v, k): Point => ({ x: v.x, y: v.y, pressure: 0.5, timestamp: k }));
+    // The main outline of closed shapes and every arrow head are closed polylines.
+    const frags = closed || i > 0 ? splitClosed(pts, c, reach) : splitPolyline(pts, c, reach);
+    if (frags) touched = true;
+    out.push(...(frags ?? [pts]));
+  });
+  return touched ? out : null;
+}
+
+/** A stroke element carrying a shape fragment (fill, box and rotation are dropped). */
+function shapeFragment(el: Element, points: Point[], id: string, now: string): Element {
+  const { shapeType: _t, fillColor: _f, boxWidth: _w, boxHeight: _h, content: _c, ...rest } = el;
+  const z = contentMeta(el).zIndex;
+  return {
+    ...rest,
+    id,
+    type: "stroke",
+    penStyle: "pen",
+    isHighlighter: false,
+    points,
+    ...(z !== undefined ? { content: { zIndex: z } } : {}),
+    updatedAt: now,
+    version: 0,
+  };
+}
+
 /**
  * Erase at `center` with `radiusUnits` (world units, already zoom-compensated by the caller).
  * A stroke is hit when any segment comes within radius + width/2.
@@ -146,6 +195,25 @@ export function eraseAt(
   for (const id of ids) {
     const el = elements.get(id);
     if (!el || el.points.length === 0 || !erasable(el, opts)) continue;
+    if (el.type === "shape") {
+      if (mode === "stroke") {
+        if (shapeHit(el, center, r, hasFill(el.fillColor))) result.removed.push(id);
+        continue;
+      }
+      const frags = splitShape(el, center, r + el.width / 2);
+      if (!frags) {
+        // Rubbing the inside of a filled shape erases it whole (there is no outline to cut there).
+        if (hasFill(el.fillColor) && shapeHit(el, center, r)) result.removed.push(id);
+        continue;
+      }
+      if (frags.length === 0) {
+        result.removed.push(id);
+        continue;
+      }
+      const now = opts.now ?? new Date().toISOString();
+      result.replaced.push({ removedId: id, parts: frags.map((points) => shapeFragment(el, points, newId(), now)) });
+      continue;
+    }
     if (el.type !== "stroke") {
       if (rectTouches(el, center, r)) result.removed.push(id);
       continue;

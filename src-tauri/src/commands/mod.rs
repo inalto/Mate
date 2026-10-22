@@ -1,7 +1,9 @@
 pub mod archive;
+pub mod assets;
 pub mod elements;
 pub mod export;
 pub mod lifecycle;
 pub mod notebook;
+pub mod pdf;
 pub mod settings;
 pub mod thumbnails;

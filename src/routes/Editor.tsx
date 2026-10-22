@@ -7,6 +7,8 @@ import Sidebar from "../components/Sidebar";
 import TabBar from "../components/TabBar";
 import Toolbar from "../components/Toolbar";
 import TopBar, { ShortcutsDialog } from "../components/TopBar";
+import OverlayLayer from "../overlay/OverlayLayer";
+import { preloadBoxEditors } from "../overlay/boxEditors";
 import { runEditorShortcut, startNewTab } from "../keys/editorCommands";
 import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
@@ -64,6 +66,8 @@ export default function Editor() {
     [navigate],
   );
   useEffect(() => watchThumbnails(), []);
+  // Box editors are separate chunks: fetch them once the editor is up, ahead of the first edit.
+  useEffect(() => preloadBoxEditors(), []);
   // "This page is full" toast when the pen is refused at the element limit (each pane's store).
   useEffect(() => {
     const unsubs = ([0, 1] as const).map((i) => watchPageLimit(editorForPane(i)));
@@ -89,6 +93,7 @@ export default function Editor() {
                 }}
               >
                 <CanvasView pageId={pane.pageId} store={editorForPane(i as PaneIndex)} />
+                <OverlayLayer store={editorForPane(i as PaneIndex)} />
               </div>
             ))}
           </div>

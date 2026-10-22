@@ -163,6 +163,12 @@ button.card:hover {
   margin-bottom: var(--space-3);
 }
 
+.field-subtitle {
+  font-size: 13px;
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--color-text-muted);
+}
+
 .muted {
   color: var(--color-text-muted);
 }
@@ -473,6 +479,362 @@ button.card:hover {
   cursor: default;
 }
 
+.canvas-view[data-tool="text"] .canvas-live {
+  cursor: text;
+}
+
+/* Overlay layer: DOM frames and editors over a pane's canvas, in page units (the layer carries the
+   camera transform; --overlay-inv-z keeps strokes and handles a constant screen size). */
+.overlay-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.overlay-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.box-frame,
+.box-editor {
+  position: absolute;
+  box-sizing: border-box;
+  transform-origin: 50% 50%;
+}
+
+.box-frame {
+  outline: calc(1.5px * var(--overlay-inv-z, 1)) solid var(--color-primary);
+}
+
+.box-editor {
+  pointer-events: auto;
+}
+
+.box-frame-edge {
+  position: absolute;
+  pointer-events: auto;
+  cursor: move;
+  touch-action: none;
+  --edge: calc(8px * var(--overlay-inv-z, 1));
+}
+
+.box-frame-edge.top,
+.box-frame-edge.bottom {
+  left: 0;
+  right: 0;
+  height: var(--edge);
+}
+
+.box-frame-edge.left,
+.box-frame-edge.right {
+  top: 0;
+  bottom: 0;
+  width: var(--edge);
+}
+
+.box-frame-edge.top {
+  top: calc(var(--edge) / -2);
+}
+
+.box-frame-edge.bottom {
+  bottom: calc(var(--edge) / -2);
+}
+
+.box-frame-edge.left {
+  left: calc(var(--edge) / -2);
+}
+
+.box-frame-edge.right {
+  right: calc(var(--edge) / -2);
+}
+
+.box-frame-handle {
+  --size: calc(10px * var(--overlay-inv-z, 1));
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  box-sizing: border-box;
+  background: #ffffff;
+  border: calc(1px * var(--overlay-inv-z, 1)) solid var(--color-primary);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.box-frame-handle.nw,
+.box-frame-handle.n,
+.box-frame-handle.ne {
+  top: 0;
+}
+
+.box-frame-handle.w,
+.box-frame-handle.e {
+  top: 50%;
+}
+
+.box-frame-handle.sw,
+.box-frame-handle.s,
+.box-frame-handle.se {
+  top: 100%;
+}
+
+.box-frame-handle.nw,
+.box-frame-handle.w,
+.box-frame-handle.sw {
+  left: 0;
+}
+
+.box-frame-handle.n,
+.box-frame-handle.s {
+  left: 50%;
+}
+
+.box-frame-handle.ne,
+.box-frame-handle.e,
+.box-frame-handle.se {
+  left: 100%;
+}
+
+.box-frame-handle.nw,
+.box-frame-handle.se {
+  cursor: nwse-resize;
+}
+
+.box-frame-handle.ne,
+.box-frame-handle.sw {
+  cursor: nesw-resize;
+}
+
+.box-frame-handle.n,
+.box-frame-handle.s {
+  cursor: ns-resize;
+}
+
+.box-frame-handle.e,
+.box-frame-handle.w {
+  cursor: ew-resize;
+}
+
+/* Text box editor: the slot grows with its content (the box height is committed at the end). */
+.box-editor[data-editor-type="text-box"] {
+  height: auto !important;
+}
+
+.text-box-editor {
+  position: relative;
+  width: 100%;
+  cursor: text;
+}
+
+/* Formatting bar above the edited box, kept at a constant screen size. */
+.text-format-bar {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  transform-origin: 0 100%;
+  transform: scale(var(--overlay-inv-z, 1)) translateY(-8px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  color: var(--color-text);
+  font: 14px / 1.2 var(--font-ui);
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  z-index: 2;
+}
+
+/* Table and code editors (mounted in the edited box's slot). */
+.table-editor,
+.code-editor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.table-editor-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.table-editor-grid td {
+  border: 1px solid;
+  padding: 2px 6px;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+}
+.table-editor-grid td:focus {
+  background: rgb(128 128 128 / 0.15);
+}
+.table-bar-btn {
+  width: auto;
+  padding: 0 var(--space-2);
+  font: inherit;
+}
+/* Graph editor: the plot fills the box; the settings panel sits left of it at a constant screen size. */
+.graph-editor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.graph-plot {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.graph-plot:active {
+  cursor: grabbing;
+}
+.graph-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.graph-panel {
+  position: absolute;
+  right: 100%;
+  top: 0;
+  width: 260px;
+  transform-origin: 100% 0;
+  transform: scale(var(--overlay-inv-z, 1)) translateX(-8px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  color: var(--color-text);
+  font: 13px / 1.3 var(--font-ui);
+  text-align: left;
+  cursor: default;
+  z-index: 2;
+}
+.graph-exprs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.graph-expr-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.graph-color {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.graph-expr-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: 13px var(--font-mono, monospace);
+}
+.graph-expr-input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.graph-icon-btn {
+  width: 28px;
+  height: 28px;
+}
+.graph-expr-error {
+  margin: 2px 0 0 22px;
+  color: var(--color-danger);
+  font-size: 12px;
+}
+.graph-add {
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+.graph-domain {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+}
+.graph-domain-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.graph-domain-field input {
+  min-width: 0;
+  height: 26px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: 13px var(--font-ui);
+}
+.graph-grid-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.code-editor-host,
+.code-editor-host .cm-editor {
+  height: 100%;
+}
+.code-editor-host .cm-editor {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 16px;
+}
+.code-editor-host .cm-scroller {
+  overflow: auto;
+}
+
+.tb-select {
+  height: 32px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.tb-size {
+  min-width: 2ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
 .toolbar,
 .selection-bar {
   position: absolute;
@@ -628,6 +990,33 @@ button.card:hover {
 
 .preset-menu {
   width: 240px;
+}
+
+.shape-menu,
+.fill-menu {
+  width: 248px;
+}
+
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-1);
+}
+
+.tb-label {
+  color: var(--color-text-muted);
+  font-size: 0.8em;
+}
+
+/* "No fill" swatch: a red diagonal through white. */
+.tb-swatch.no-fill {
+  background: linear-gradient(
+    to top right,
+    #ffffff calc(50% - 1px),
+    #c62828 calc(50% - 1px),
+    #c62828 calc(50% + 1px),
+    #ffffff calc(50% + 1px)
+  );
 }
 
 .hue-strip {
@@ -1038,4 +1427,26 @@ button.card:hover {
   align-items: center;
   gap: 12px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Typed math: the MathLive field fills the box while editing; the global katex.css styles the rest. */
+.math-editor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.math-editor-host {
+  width: 100%;
+}
+.math-editor math-field {
+  display: block;
+  width: 100%;
+  font-size: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px dashed var(--color-primary, #6b8e73);
+  border-radius: 4px;
+  padding: 0 4px;
+  --hue: 150;
 }

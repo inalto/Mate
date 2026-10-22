@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 import { LIMITS } from "../../model/constants";
 import { el } from "../../tools/__tests__/fixtures";
+import { shapeFromDrag } from "../../shapes/geometry";
 
 const queue = vi.hoisted(() => ({
   enqueueUpsert: vi.fn(),
@@ -164,4 +165,86 @@ describe("editor store tools", () => {
     s().undo(); // re-adding "a" would exceed: refused again
     expect(s().elements.has("a")).toBe(false);
   });
+
+  it("add_shape_is_one_entry_and_restyle_reaches_shapes", async () => {
+    await load([a]);
+    const s = () => useEditorStore.getState();
+    s().setTool("shape");
+    expect(s().tool).toBe("shape");
+    const drag = shapeFromDrag("rectangle", { x: 10, y: 10 }, { x: 60, y: 40 }, false);
+    const id = s().addShape({ shapeType: "rectangle", color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 }, drag);
+    const added = s().elements.get(id!)!;
+    expect(added).toMatchObject({ type: "shape", shapeType: "rectangle", boxWidth: 50, boxHeight: 30, pageId: "pg" });
+    expect(added.content).toEqual({ fillOpacity: 1 });
+    expect(queue.enqueueUpsert).toHaveBeenLastCalledWith(added);
+    s().select([id!, "a"]);
+    s().restyleSelection({ fillColor: "#C62828" });
+    expect(s().elements.get(id!)!.fillColor).toBe("#C62828");
+    expect(s().elements.get("a")!.fillColor).toBeUndefined(); // strokes have no fill
+    s().restyleSelection({ width: 5 });
+    expect(s().elements.get(id!)!.width).toBe(5);
+    expect(s().elements.get("a")!.width).toBe(5);
+    s().undo();
+    s().undo();
+    expect(s().elements.get(id!)!.fillColor).toBe("transparent");
+    s().undo();
+    expect(s().elements.has(id!)).toBe(false);
+    expect(s().canUndo).toBe(false);
+  });
+
+  it("shape_snap_undo_restores_stroke", async () => {
+    await load([a]);
+    const s = () => useEditorStore.getState();
+    const stroke = el("ink", [[0, 100], [100, 100], [100, 160], [0, 160], [0, 102]], { color: "#C62828", width: 3 });
+    const drag = shapeFromDrag("rectangle", { x: 0, y: 100 }, { x: 100, y: 160 }, false);
+    const shape = shapeElementFor(drag);
+    s().replaceStrokeWithShape(stroke, shape);
+    expect(s().elements.has("ink")).toBe(false);
+    expect(s().elements.get("shape-1")).toMatchObject({ type: "shape", color: "#C62828", width: 3 });
+    // The stroke was never committed, so nothing is deleted from storage.
+    expect(queue.enqueueDelete).not.toHaveBeenCalled();
+    expect(queue.enqueueUpsert).toHaveBeenCalledTimes(1);
+
+    s().undo();
+    expect(s().elements.has("shape-1")).toBe(false);
+    expect(s().elements.get("ink")).toEqual(stroke);
+    expect(queue.enqueueUpsert).toHaveBeenLastCalledWith(stroke);
+    expect(queue.enqueueDelete).toHaveBeenLastCalledWith("shape-1", "pg");
+    expect(s().canUndo).toBe(false); // the snap was a single entry
+    expect(s().canRedo).toBe(true);
+
+    s().redo();
+    expect(s().elements.has("ink")).toBe(false);
+    expect(s().elements.has("shape-1")).toBe(true);
+  });
+
+  it("scribble_erase_is_one_entry", async () => {
+    await load([a, b]);
+    const s = () => useEditorStore.getState();
+    s().scribbleErase(["a", "b", "missing"]);
+    expect(s().elements.size).toBe(0);
+    s().undo();
+    expect([...s().elements.keys()].sort()).toEqual(["a", "b"]);
+    expect(s().canUndo).toBe(false);
+  });
 });
+
+function shapeElementFor(drag: ReturnType<typeof shapeFromDrag>): Element {
+  return {
+    id: "shape-1",
+    pageId: "pg",
+    type: "shape",
+    shapeType: "rectangle",
+    points: drag.points,
+    color: "#C62828",
+    fillColor: "transparent",
+    width: 3,
+    isHighlighter: false,
+    boxWidth: drag.boxWidth,
+    boxHeight: drag.boxHeight,
+    content: { fillOpacity: 1 },
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    version: 0,
+  };
+}

@@ -105,6 +105,8 @@ describe("shortcuts", () => {
     unbind = bindShortcuts(DEFAULT_SHORTCUTS, dispatch);
     const cases: [KeyboardEventInit, string][] = [
       [{ key: "t", code: "KeyT", ctrlKey: true }, "tab.new"],
+      [{ key: "t", code: "KeyT" }, "tool.text"],
+      [{ key: "n", code: "KeyN" }, "tool.insertSpace"],
       [{ key: "w", code: "KeyW", ctrlKey: true }, "tab.close"],
       [{ key: "ArrowLeft", code: "ArrowLeft", altKey: true, shiftKey: true }, "tab.moveLeft"],
       [{ key: "ArrowRight", code: "ArrowRight", altKey: true, shiftKey: true }, "tab.moveRight"],

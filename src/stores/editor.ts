@@ -3,17 +3,31 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
-import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
+import { DEFAULT_SETTINGS, LIMITS, PAGE_GAP } from "../model/constants";
+import { contentOf, isPdfPlacement, type TableContent, type TextAttributes, type TextBoxContent } from "../model/content";
+import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
+import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
+import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
+import { fitImage } from "../images/fit";
+import { imageElement } from "../images/element";
+import { defaultGraphData, graphElement, inferGraphKind } from "../graph/data";
+import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
+import { isMathBox, latexOf, mathElement } from "../math/mathBox";
+import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
+import { alignElements, distributeElements, type AlignMode, type DistributeAxis } from "../tools/align";
 import { eraseAt } from "../tools/eraser";
+import { clampShift, shiftBelow, type SpaceOptions } from "../tools/insertSpace";
 import { History, type Action } from "../tools/history";
 import { scaleElements, translateElements } from "../tools/lasso";
-import { elementBounds, SpatialIndex, withMeta } from "../tools/spatialIndex";
+import { elementBounds, isBoxed, SpatialIndex, withMeta } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
 import {
   clampCamera,
   initialCamera,
+  screenToWorld,
   sheetCountFor,
   sheetSize,
+  stackBottom,
   type Camera,
   type SheetStack,
   type Vec2,
@@ -22,7 +36,7 @@ import {
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -41,10 +55,15 @@ export interface EditorState {
   loadError: string | null;
   elements: Map<string, Element>;
   tool: ToolId;
+  /** Insert-space tool options: "Remove" only accepts upward drags; "Cut images" moves straddling boxes. */
+  spaceMode: "insert" | "remove";
+  spaceCutImages: boolean;
   preset: PenPreset;
   camera: Camera;
   viewport: Viewport;
   selection: Set<string>;
+  /** Boxed element whose DOM editor is open (overlay layer), else null. */
+  editingId: string | null;
   /** Largest element y (world units), for the page-mode sheet count. */
   contentBottom: number;
   /** Temporary tool while a pen button / eraser end is held. */
@@ -57,13 +76,54 @@ export interface EditorState {
    * LIMITS.MAX_ELEMENTS_PER_PAGE; cleared when the count drops below the limit or a page loads.
    * The editor route surfaces it as a toast (stores/pageLimit.ts). */
   limitReached: boolean;
+  /** What limitReached refers to: the page item limit or a table cell limit. */
+  limitKind: "page" | "table";
   loadPage(pageId: string): Promise<void>;
   /** Adopt an edited page record (mode, sheet size, background) without reloading elements. */
   refreshPage(page: Page): void;
   /** Pen-down: false (and `limitReached` set) when the page is full, so no stroke may start. */
   beginStroke(): boolean;
   addElement(el: Element): void;
+  /** Add a shape drawn with the shape tool (one history entry); its id, or null when refused. */
+  addShape(style: ShapeStyle, drag: ShapeDrag): string | null;
+  /**
+   * Ink to shape: commit `shape` in place of the uncommitted `stroke` as one history entry "Ink to
+   * shape". Undo removes the shape and restores the original stroke; redo swaps them back.
+   */
+  replaceStrokeWithShape(stroke: Element, shape: Element): boolean;
+  /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
+  scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
+  /**
+   * Text tool: add an empty text box at `at` (first baseline snapped to ruled lines when the
+   * setting is on) and open its editor; its id, or null when refused.
+   */
+  addTextBox(at: Vec2): string | null;
+  /** Insert an empty 3x3 table / code block at the viewport centre and edit it (one "Table"/"Code" entry). */
+  addTable(): string | null;
+  addCodespace(): string | null;
+  /** Add an empty equation box centred in the viewport and start editing it. */
+  addMathBox(): string | null;
+  /** Insert a default graph (480×360, −10..10, one empty expression) at the viewport centre and edit it. */
+  addGraph(): string | null;
+  /**
+   * Insert an image asset of `natural` pixel size at the viewport centre (or centred on `at`, in
+   * page units), scaled to fit 80 % of the visible viewport; one history entry. Its id, or null.
+   */
+  addImage(assetId: string, natural: { width: number; height: number }, at?: Vec2): string | null;
+  /**
+   * End of a text edit session: persist `after` (HTML sanitised, plain text derived) as one history
+   * entry; nothing when unchanged. A new box's creation and first session are one entry; a box
+   * left empty is removed (a new one without any history).
+   */
+  commitTextEdit(after: Element): void;
+  /**
+   * The open editor's commit, run once when its session ends (before the store moves on, so the
+   * entry lands in order). Returns an unbind function.
+   */
+  bindEditSession(commit: () => void): () => void;
+  /** Box-wide text formatting for the selected text boxes (replaces matching inline styles). */
+  restyleTextBox(patch: Partial<TextAttributes>): void;
   removeElements(ids: string[]): void;
   setTool(tool: ToolId): void;
   setPreset(preset: PenPreset): void;
@@ -76,11 +136,24 @@ export interface EditorState {
   /** Erase at a world point with the settings' eraser; one drag is one history entry (endEraser). */
   eraser(center: Vec2): void;
   endEraser(): void;
+  /** Select only `id` and open its editor; ignored unless it is a loaded boxed element. */
+  beginEdit(id: string): void;
+  endEdit(): void;
+  /** Selecting anything that excludes the edited element closes its editor. */
   select(ids: Iterable<string>): void;
   selectAll(): void;
   moveSelection(dx: number, dy: number): void;
+  setSpaceOptions(patch: { spaceMode?: "insert" | "remove"; spaceCutImages?: boolean }): void;
+  /** Insert-space tool: shift everything below `lineY` by `dy` (clamped); one "Insert space" entry, none when it is 0. */
+  insertSpace(lineY: number, dy: number): void;
+  /** Align (>= 2 selected) or distribute (>= 3 selected) the selection; one history entry each. */
+  alignSelection(mode: AlignMode): void;
+  distributeSelection(axis: DistributeAxis): void;
+  /** Add a graph below the single selected equation, plotting its LaTeX; one "Graph" entry. */
+  graphFromSelectedEquation(): string | null;
   scaleSelection(origin: Vec2, sx: number, sy: number): void;
-  restyleSelection(patch: { color?: string; width?: number }): void;
+  /** Stroke colour applies to all; width to strokes and shapes; fill colour to shapes only. */
+  restyleSelection(patch: { color?: string; width?: number; fillColor?: string }): void;
   deleteSelection(): void;
   duplicateSelection(): void;
   copySelection(): void;
@@ -103,6 +176,10 @@ export interface EditorState {
 }
 
 const maxY = (el: Element): number => {
+  if (isBoxed(el) || el.type === "shape") {
+    const b = elementBounds(el);
+    return b.y + b.height;
+  }
   let m = -Infinity;
   for (const p of el.points) if (p.y > m) m = p.y;
   return m + el.width / 2;
@@ -118,6 +195,21 @@ export function sheetStack(s: Pick<EditorState, "page" | "contentBottom">): Shee
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
   const size = s.page ? sheetSize(s.page, aspect) : sheetSize(fallbackPage("", "canvas"), aspect);
   return { ...size, count: sheetCountFor(s.contentBottom, size.height) };
+}
+
+/** Options for the insert-space helpers; page mode caps insertion at the stack bottom plus one sheet. */
+function spaceOptions(s: EditorState): SpaceOptions {
+  const cutImages = s.spaceCutImages;
+  if (s.page?.mode !== "page") return { cutImages };
+  const stack = sheetStack(s);
+  return { cutImages, maxBottom: stackBottom(stack) + PAGE_GAP + stack.height };
+}
+
+/** The shift the insert-space tool really applies for a drag of `dy` (mode and bounds respected). */
+export function spaceShift(s: EditorState, lineY: number, dy: number): number {
+  const d = s.spaceMode === "remove" ? Math.min(dy, 0) : dy;
+  const out = clampShift([...s.elements.values()], lineY, d, spaceOptions(s));
+  return out === 0 ? 0 : out;
 }
 
 /** Clamp a camera to the current page bounds (no overscroll). */
@@ -211,6 +303,17 @@ export function createEditorStore(): EditorStore {
   const index = new SpatialIndex();
   /** Actions of the eraser drag in progress (pushed as one entry by endEraser). */
   let eraseBatch: Action[] = [];
+  /** Text box added by addTextBox whose first edit session is still open. */
+  let freshText: string | null = null;
+  /** Commit of the open edit session (bindEditSession). */
+  let editCommit: (() => void) | null = null;
+  const textKey = (id: string) => `text-new:${id}`;
+  /** Run the open editor's commit (once) before the edit session ends. */
+  const closeEdit = () => {
+    const fn = editCommit;
+    editCommit = null;
+    fn?.();
+  };
 
   const store = create<EditorState>((set, get) => ({
     pageId: null,
@@ -219,18 +322,24 @@ export function createEditorStore(): EditorStore {
     loadError: null,
     elements: new Map(),
     tool: "pen",
+    spaceMode: "insert",
+    spaceCutImages: false,
     preset: DEFAULT_SETTINGS.toolbarPresets[0],
     camera: { x: 0, y: 0, z: 1 },
     viewport: { width: 0, height: 0 },
     selection: new Set(),
+    editingId: null,
     contentBottom: 0,
     tempTool: null,
     panHold: false,
     canUndo: false,
     canRedo: false,
     limitReached: false,
+    limitKind: "page",
 
     async loadPage(pageId) {
+      closeEdit();
+      freshText = null;
       const token = ++loadToken;
       const preset = defaultPreset();
       history.clear();
@@ -245,6 +354,7 @@ export function createEditorStore(): EditorStore {
         loadError: null,
         elements: new Map(),
         selection: new Set(),
+        editingId: null,
         contentBottom: 0,
         limitReached: false,
         preset,
@@ -288,7 +398,7 @@ export function createEditorStore(): EditorStore {
 
     beginStroke() {
       if (get().elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE) return true;
-      if (!get().limitReached) set({ limitReached: true });
+      if (!get().limitReached) set({ limitReached: true, limitKind: "page" });
       return false;
     },
 
@@ -298,12 +408,143 @@ export function createEditorStore(): EditorStore {
       record("Draw", [{ type: "add", el: top > 0 && zOf(el) < top ? withMeta(el, { zIndex: top }) : el }]);
     },
 
+    addShape(style, drag) {
+      const pageId = get().pageId;
+      if (!pageId) return null;
+      const top = topZ(get().elements.values());
+      const shape = shapeElement(style, drag, pageId, crypto.randomUUID(), new Date().toISOString());
+      const el = top > 0 ? withMeta(shape, { zIndex: top }) : shape;
+      return record("Shape", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    replaceStrokeWithShape(stroke, shape) {
+      const top = topZ(get().elements.values());
+      const onTop = (el: Element) => (top > 0 && zOf(el) < top ? withMeta(el, { zIndex: top }) : el);
+      const added = onTop(shape);
+      // The stroke was never committed: the entry records it (so undo can restore it) but only the
+      // shape is applied now.
+      const actions: Action[] = [{ type: "delete", el: onTop(stroke) }, { type: "add", el: added }];
+      return record("Ink to shape", actions, undefined, [{ type: "add", el: added }]);
+    },
+
+    scribbleErase(ids) {
+      const cur = get().elements;
+      record("Scribble erase", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+    },
+
     updateElements(els) {
       const cur = get().elements;
+      let clamped = false;
+      // A table never grows past MAX_TABLE_CELLS: an over-limit one is cut to the limit and flagged.
+      const fit = (e: Element): Element => {
+        if (e.type !== "table" || tableCells(e) <= MAX_TABLE_CELLS) return e;
+        clamped = true;
+        return { ...e, content: { ...contentOf<TableContent>(e), subtype: "table", tableData: { rows: clampRows(tableRowsOf(e)) } } };
+      };
       record(
         "Edit",
-        els.filter((e) => cur.has(e.id)).map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
+        els.filter((e) => cur.has(e.id)).map((e) => fit(e)).map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
       );
+      if (clamped) set({ limitReached: true, limitKind: "table" });
+    },
+
+    addTable() {
+      return insertBox("Table", tableElement);
+    },
+
+    addCodespace() {
+      return insertBox("Code", codespaceElement);
+    },
+
+    addMathBox() {
+      return insertBox("Equation", mathElement);
+    },
+
+    addGraph() {
+      return insertBox("Graph", graphElement);
+    },
+
+    addTextBox(at) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const cfg = useSettingsStore.getState().settings;
+      const attrs = defaultTextAttributes(cfg.defaultTextColor, cfg.defaultTextSize);
+      const pos = cfg.alignTextToLines && s.page ? alignToRuledLine(at, attrs.fontSize, s.page, cfg.defaultPageAspectRatio) : at;
+      const top = topZ(s.elements.values());
+      const box = textBoxElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), pos, attrs);
+      const el = top > 0 ? withMeta(box, { zIndex: top }) : box;
+      if (!record("Text", [{ type: "add", el }], textKey(el.id))) return null;
+      freshText = el.id;
+      set({ selection: new Set([el.id]), editingId: el.id });
+      return el.id;
+    },
+
+    addImage(assetId, natural, at) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+      const tl = screenToWorld(s.camera, { x: 0, y: 0 });
+      const br = screenToWorld(s.camera, { x: vp.width, y: vp.height });
+      const box = fitImage(natural, { x: tl.x, y: tl.y, width: br.x - tl.x, height: br.y - tl.y }, at);
+      const top = topZ(s.elements.values());
+      const img = imageElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), assetId, box);
+      const el = top > 0 ? withMeta(img, { zIndex: top }) : img;
+      if (!record("Image", [{ type: "add", el }])) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      return el.id;
+    },
+
+    commitTextEdit(after) {
+      const cur = get().elements.get(after.id);
+      const fresh = freshText === after.id;
+      if (fresh) freshText = null;
+      if (!cur || cur.type !== "text-box") return;
+      const c = contentOf<TextBoxContent>(after);
+      const contentHtml = sanitizeHtml(c.contentHtml);
+      const rawContent = plainText(contentHtml);
+      const textAttributes = textAttrsOf(after);
+      const next: Element = { ...after, color: textAttributes.color, content: { ...c, contentHtml, rawContent, textAttributes } };
+      if (rawContent.trim() === "") {
+        // A new box left empty disappears with its creation entry; an emptied box is deleted.
+        if (fresh && history.discardTop(textKey(cur.id))) {
+          applyActions([{ type: "delete", el: cur }]);
+          syncHistoryFlags();
+          return;
+        }
+        record("Delete", [{ type: "delete", el: cur }]);
+        return;
+      }
+      if (sameText(cur, next)) return;
+      record("Text", [{ type: "update", before: cur, after: stamp(next) }], fresh ? textKey(cur.id) : undefined);
+    },
+
+    bindEditSession(commit) {
+      editCommit = commit;
+      return () => {
+        if (editCommit === commit) editCommit = null;
+      };
+    },
+
+    restyleTextBox(patch) {
+      const now = new Date().toISOString();
+      const actions: Action[] = [];
+      for (const cur of selectedElements()) {
+        if (cur.type !== "text-box") continue;
+        const before = textAttrsOf(cur);
+        const attrs = { ...before, ...patch };
+        let html = sanitizeHtml(contentOf<TextBoxContent>(cur).contentHtml);
+        if (patch.color !== undefined) html = stripInlineStyle(html, "color");
+        if (patch.fontFamily !== undefined) html = stripInlineStyle(html, "font-family");
+        if (patch.fontSize !== undefined) html = stripInlineStyle(html, "font-size");
+        const scaled = ((cur.boxHeight ?? 0) * attrs.fontSize) / before.fontSize;
+        const boxHeight = boxHeightFor(measureHtmlHeight(html, attrs, cur.boxWidth ?? 0), attrs.fontSize, scaled);
+        const content = { ...contentOf<TextBoxContent>(cur), contentHtml: html, textAttributes: attrs };
+        const after: Element = { ...cur, content, color: attrs.color, boxHeight };
+        if (!sameText(cur, after)) actions.push({ type: "update", before: cur, after: stamp(after, now) });
+      }
+      record("Style", actions);
     },
 
     removeElements(ids) {
@@ -316,9 +557,15 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      set({ tool, selection: tool === "eraser" ? new Set() : get().selection });
+      if (tool === "eraser" || tool === "shape" || tool === "text" || tool === "insert-space") {
+        closeEdit();
+        set({ tool, selection: new Set(), editingId: null });
+      } else set({ tool });
     },
-    setPreset: (preset) => set({ preset, tool: preset.type, selection: new Set() }),
+    setPreset: (preset) => {
+      closeEdit();
+      set({ preset, tool: preset.type, selection: new Set(), editingId: null });
+    },
     setCamera: (camera) => set({ camera }),
     setViewport: (viewport) => set({ viewport }),
     resetCamera() {
@@ -365,17 +612,78 @@ export function createEditorStore(): EditorStore {
       flushEraseBatch();
     },
 
+    beginEdit(id) {
+      const el = get().elements.get(id);
+      if (!el || !isBoxed(el) || isPdfPlacement(el)) return;
+      if (get().editingId !== id) closeEdit();
+      set({ selection: new Set([id]), editingId: id });
+    },
+    endEdit() {
+      closeEdit();
+      if (get().editingId !== null) set({ editingId: null });
+    },
     select(ids) {
-      const els = get().elements;
-      set({ selection: new Set([...ids].filter((id) => els.has(id))) });
+      const wanted = [...ids];
+      const prev = get().editingId;
+      if (prev !== null && !wanted.includes(prev)) closeEdit(); // may remove an empty box
+      const s = get();
+      const selectable = (id: string) => {
+        const el = s.elements.get(id);
+        return !!el && !isPdfPlacement(el); // PDF page placements are locked
+      };
+      const selection = new Set(wanted.filter(selectable));
+      const editingId = s.editingId !== null && selection.has(s.editingId) ? s.editingId : null;
+      set({ selection, editingId });
     },
     selectAll() {
-      set({ selection: new Set(get().elements.keys()) });
+      set({ selection: new Set([...get().elements.values()].filter((el) => !isPdfPlacement(el)).map((el) => el.id)) });
     },
 
     moveSelection(dx, dy) {
       if (dx === 0 && dy === 0) return;
       transformSelection("Move", (els) => translateElements(els, dx, dy));
+    },
+    setSpaceOptions(patch) {
+      set(patch);
+    },
+    insertSpace(lineY, dy) {
+      const s = get();
+      const d = spaceShift(s, lineY, dy);
+      if (d === 0) return;
+      const now = new Date().toISOString();
+      const all = [...s.elements.values()];
+      const after = shiftBelow(all, lineY, d, spaceOptions(s));
+      const actions: Action[] = [];
+      all.forEach((before, i) => {
+        if (after[i] !== before) actions.push({ type: "update", before, after: stamp(after[i], now) });
+      });
+      record("Insert space", actions);
+    },
+    alignSelection(mode) {
+      if (get().selection.size < 2) return;
+      transformSelection("Align", (els) => alignElements(els, mode));
+    },
+    distributeSelection(axis) {
+      if (get().selection.size < 3) return;
+      transformSelection("Distribute", (els) => distributeElements(els, axis));
+    },
+    graphFromSelectedEquation() {
+      const s = get();
+      const sel = selectedElements();
+      if (!s.pageId || sel.length !== 1 || !isMathBox(sel[0])) return null;
+      const math = sel[0];
+      const b = elementBounds(math);
+      const top = topZ(s.elements.values());
+      const base = graphElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), { x: b.x, y: b.y + b.height + DUPLICATE_OFFSET }, math.color);
+      const data = defaultGraphData();
+      const latex = latexOf(math);
+      data.kind = inferGraphKind(latex);
+      data.expressions = [{ ...data.expressions[0], latex }];
+      const graph = { ...base, content: { ...(base.content as object), graphData: data } };
+      const el = top > 0 ? withMeta(graph, { zIndex: top + 1 }) : graph;
+      if (!record("Graph", [{ type: "add", el }])) return null;
+      set({ selection: new Set([el.id]) });
+      return el.id;
     },
     scaleSelection(origin, sx, sy) {
       if (sx === 1 && sy === 1) return;
@@ -383,14 +691,17 @@ export function createEditorStore(): EditorStore {
     },
     restyleSelection(patch) {
       // Consecutive width changes (a slider drag) on the same selection merge into one entry.
-      const key = patch.color === undefined ? `width:${[...get().selection].sort().join(",")}` : undefined;
+      const widthOnly = patch.color === undefined && patch.fillColor === undefined;
+      const key = widthOnly ? `width:${[...get().selection].sort().join(",")}` : undefined;
+      const sized = (el: Element) => el.type === "stroke" || el.type === "shape";
       transformSelection(
         "Style",
         (els) =>
           els.map((el) => ({
             ...el,
             ...(patch.color !== undefined ? { color: patch.color } : {}),
-            ...(patch.width !== undefined && el.type === "stroke" ? { width: patch.width } : {}),
+            ...(patch.width !== undefined && sized(el) ? { width: patch.width } : {}),
+            ...(patch.fillColor !== undefined && el.type === "shape" ? { fillColor: patch.fillColor } : {}),
           })),
         key,
       );
@@ -423,7 +734,7 @@ export function createEditorStore(): EditorStore {
       flushEraseBatch();
       const peek = history.peekUndo();
       if (peek && exceedsLimit(peek)) {
-        set({ limitReached: true }); // leave the entry on the stack
+        set({ limitReached: true, limitKind: "page" }); // leave the entry on the stack
         return;
       }
       const actions = history.undo();
@@ -434,7 +745,7 @@ export function createEditorStore(): EditorStore {
       flushEraseBatch();
       const peek = history.peekRedo();
       if (peek && exceedsLimit(peek)) {
-        set({ limitReached: true });
+        set({ limitReached: true, limitKind: "page" });
         return;
       }
       const actions = history.redo();
@@ -454,7 +765,8 @@ export function createEditorStore(): EditorStore {
     selectInk(type) {
       const s = get();
       if (s.preset.type === type) {
-        set({ tool: type, selection: new Set() });
+        closeEdit();
+        set({ tool: type, selection: new Set(), editingId: null });
         return;
       }
       const found = presets().find((p) => p.type === type);
@@ -519,6 +831,7 @@ export function createEditorStore(): EditorStore {
     const s = S();
     const elements = new Map(s.elements);
     let selection = s.selection;
+    let editingId = s.editingId;
     let grewOnly = true;
     let bottom = s.contentBottom;
     for (const a of actions) {
@@ -530,6 +843,7 @@ export function createEditorStore(): EditorStore {
           selection = new Set(selection);
           selection.delete(a.el.id);
         }
+        if (editingId === a.el.id) editingId = null;
         grewOnly = false;
       } else {
         const el = a.type === "add" ? a.el : a.after;
@@ -543,6 +857,7 @@ export function createEditorStore(): EditorStore {
     store.setState({
       elements,
       selection,
+      editingId,
       contentBottom: grewOnly ? bottom : bottomOf(elements.values()),
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });
@@ -577,17 +892,39 @@ export function createEditorStore(): EditorStore {
     return n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size;
   }
 
-  /** Apply `actions` and push them as one history entry; refused (false) past the element limit. */
-  function record(label: string, actions: Action[], mergeKey?: string): boolean {
+  /**
+   * Apply `actions` and push them as one history entry; refused (false) past the element limit.
+   * `applied` (default `actions`) is what changes now, when the entry also records a state that was
+   * never committed (ink to shape: the stroke replaced before it was added).
+   */
+  function record(label: string, actions: Action[], mergeKey?: string, applied: Action[] = actions): boolean {
     if (actions.length === 0) return false;
-    if (exceedsLimit(actions)) {
-      store.setState({ limitReached: true });
+    if (exceedsLimit(applied)) {
+      store.setState({ limitReached: true, limitKind: "page" });
       return false;
     }
     flushEraseBatch();
     history.push({ label, actions, mergeKey });
-    applyActions(actions);
+    applyActions(applied);
     return true;
+  }
+
+  /** Add a default-sized box centred in the viewport (top of the stack) and start editing it. */
+  function insertBox(label: string, make: typeof tableElement): string | null {
+    closeEdit();
+    const s = S();
+    if (!s.pageId) return null;
+    const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+    const c = screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+    const color = useSettingsStore.getState().settings.defaultTextColor;
+    const probe = make(s.pageId, crypto.randomUUID(), new Date().toISOString(), c, color);
+    const at = { x: c.x - (probe.boxWidth ?? 0) / 2, y: c.y - (probe.boxHeight ?? 0) / 2 };
+    const top = topZ(s.elements.values());
+    const box = { ...probe, points: [{ ...probe.points[0], ...at }] };
+    const el = top > 0 ? withMeta(box, { zIndex: top }) : box;
+    if (!record(label, [{ type: "add", el }])) return null;
+    store.setState({ tool: "cursor", selection: new Set([el.id]), editingId: el.id });
+    return el.id;
   }
 
   function selectedElements(): Element[] {

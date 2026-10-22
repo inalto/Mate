@@ -1,10 +1,11 @@
-import { FilePlus, Notebook } from "@phosphor-icons/react";
+import { FilePdf, FilePlus, Notebook } from "@phosphor-icons/react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
 import { dismissRecovery, getRecoveryPageId } from "../lifecycle/close";
 import type { Page } from "../model/types";
+import { pickAndImportPdf } from "../pdf/import";
 import { useNotebookStore } from "../stores/notebook";
 
 function PageRow({ page }: { page: Page }) {
@@ -50,6 +51,11 @@ export default function Home() {
     navigate(`/edit/${page.id}`);
   };
 
+  const importPdf = async () => {
+    const page = await pickAndImportPdf();
+    if (page) navigate(`/edit/${page.id}`);
+  };
+
   const recentPages = store.recentPages(6);
   const recentBooks = store.unitsByRecent().slice(0, 6);
   const favourites = store.favouritePages();
@@ -87,6 +93,10 @@ export default function Home() {
         <button type="button" className="card" onClick={() => void newPage()}>
           <FilePlus size={24} />
           New page
+        </button>
+        <button type="button" className="card" onClick={() => void importPdf()}>
+          <FilePdf size={24} />
+          Import PDF…
         </button>
       </div>
 

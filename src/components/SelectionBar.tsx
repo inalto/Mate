@@ -1,11 +1,26 @@
-// Floating actions above the current selection: copy, duplicate, delete, arrange, colour, width.
-import { Copy, CopySimple, Stack, Trash } from "@phosphor-icons/react";
+// Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
+// (when shapes are selected), width; a single text box gets box-wide text formatting instead of
+// colour and width. Hidden while a text box is being edited (its editor has its own bar).
+import { AlignLeft, ChartLine, Copy, CopySimple, Function as FunctionIcon, Stack, Trash } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
-import { PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
+import { hasFill } from "../shapes/geometry";
+import { isMathBox, latexOf } from "../math/mathBox";
+import { textAttrsOf } from "../text/textBox";
+import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
+import TextFormatControls from "./TextFormatControls";
 import { useDismiss } from "./useDismiss";
+
+/** Write `text` to the clipboard; silently does nothing where the clipboard is unavailable. */
+function copyText(text: string): void {
+  try {
+    void navigator.clipboard?.writeText(text)?.catch(() => {});
+  } catch {
+    /* no clipboard access */
+  }
+}
 
 const BAR_GAP = 12;
 const BAR_HEIGHT = 44;
@@ -48,13 +63,100 @@ function ArrangeMenu() {
   );
 }
 
+/** Align (>= 2 selected) and distribute (>= 3 selected) menu. */
+function AlignMenu({ count }: { count: number }) {
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  const s = ed.getState;
+  const item = (label: string, run: () => void) => (
+    <button
+      key={label}
+      type="button"
+      role="menuitem"
+      className="tb-menu-item"
+      onClick={() => {
+        run();
+        setOpen(false);
+      }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <AlignLeft size={16} /> Align ▸
+      </button>
+      {open && (
+        <div className="tb-popover tb-menu" role="menu">
+          {item("Align left", () => s().alignSelection("left"))}
+          {item("Align center", () => s().alignSelection("center"))}
+          {item("Align right", () => s().alignSelection("right"))}
+          {item("Align top", () => s().alignSelection("top"))}
+          {item("Align middle", () => s().alignSelection("middle"))}
+          {item("Align bottom", () => s().alignSelection("bottom"))}
+          {count >= 3 && item("Distribute horizontally", () => s().distributeSelection("horizontal"))}
+          {count >= 3 && item("Distribute vertically", () => s().distributeSelection("vertical"))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Fill colour picker for the selected shapes. */
+function FillMenu({ current }: { current: string | undefined }) {
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  const apply = (fillColor: string) => {
+    ed.getState().restyleSelection({ fillColor });
+    setOpen(false);
+  };
+  const filled = hasFill(current);
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={filled ? "tb-swatch" : "tb-swatch no-fill"}
+        style={filled ? { background: current } : undefined}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label="Fill colour"
+        title="Fill colour"
+        onClick={() => setOpen((o) => !o)}
+      />
+      {open && (
+        <div className="tb-popover fill-menu" role="dialog" aria-label="Fill">
+          <div className="tb-row">
+            <button type="button" className="tb-swatch no-fill" aria-label="No fill" title="No fill" onClick={() => apply("transparent")} />
+            {FILL_PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={current?.toUpperCase() === c ? "tb-swatch active" : "tb-swatch"}
+                style={{ background: c }}
+                aria-label={`Fill ${c}`}
+                onClick={() => apply(c)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SelectionBar() {
   const ed = useFocusedEditor();
   const selection = ed((s) => s.selection);
   const elements = ed((s) => s.elements);
   const camera = ed((s) => s.camera);
   const viewport = ed((s) => s.viewport);
-  const b = selection.size > 0 ? selectionBounds(elements, selection) : null;
+  const editingText = ed((s) => s.editingId !== null && s.elements.get(s.editingId)?.type === "text-box");
+  const b = selection.size > 0 && !editingText ? selectionBounds(elements, selection) : null;
   if (!b) return null;
   const s = ed.getState;
 
@@ -66,8 +168,13 @@ export default function SelectionBar() {
   let top = tl.y - BAR_GAP - BAR_HEIGHT;
   if (top < TOP_RESERVED) top = Math.min(tl.y + h + BAR_GAP, viewport.height - BAR_HEIGHT - BAR_GAP);
 
-  const first = [...selection].map((id) => elements.get(id)).find((e) => e?.type === "stroke");
+  const selected = [...selection].map((id) => elements.get(id));
+  const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape");
+  const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
+  const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
+  const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
+  const textBox = selected.length === 1 && selected[0]?.type === "text-box" ? selected[0] : undefined;
 
   return (
     <div className="selection-bar" role="toolbar" aria-label="Selection" style={{ left, top }}>
@@ -81,8 +188,20 @@ export default function SelectionBar() {
         <Trash size={16} />
       </button>
       <ArrangeMenu />
+      {math && (
+        <button type="button" className="tb-btn" aria-label="Copy as LaTeX" title="Copy as LaTeX" onClick={() => copyText(math.map(latexOf).join("\n"))}>
+          <FunctionIcon size={16} /> LaTeX
+        </button>
+      )}
+      {math && math.length === 1 && (
+        <button type="button" className="tb-btn" aria-label="Graph from equation" title="Graph from equation" onClick={() => s().graphFromSelectedEquation()}>
+          <ChartLine size={16} /> Graph
+        </button>
+      )}
+      {selected.length >= 2 && <AlignMenu count={selected.length} />}
       <span className="tb-sep" />
-      {PEN_PALETTE.map((c) => (
+      {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
+      {!textBox && PEN_PALETTE.map((c) => (
         <button
           key={c}
           type="button"
@@ -92,6 +211,12 @@ export default function SelectionBar() {
           onClick={() => s().restyleSelection({ color: c })}
         />
       ))}
+      {firstShape && (
+        <>
+          <span className="tb-sep" />
+          <FillMenu current={firstShape.fillColor} />
+        </>
+      )}
       {first && (
         <>
           <span className="tb-sep" />

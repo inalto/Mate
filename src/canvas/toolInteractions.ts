@@ -1,12 +1,18 @@
 // Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon),
-// selection drag-move and corner-handle scaling. Geometry is pure; `createToolController` wires it
+// selection drag-move and corner-handle scaling, click/double-click on boxed elements (select /
+// open the editor), shape tool (drag a box, Shift constrains, live preview), text tool (click adds or
+// edits a text box). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
+import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
-import { elementBounds, type Rect, type SpatialIndex } from "../tools/spatialIndex";
+import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
+import { shiftBelow } from "../tools/insertSpace";
+import { spaceShift } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
+import { isPdfPlacement } from "../model/content";
 import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import type { PointerInfo } from "./input";
 
@@ -18,6 +24,11 @@ export const HANDLE_PX = 5;
 const HIT_SLOP_PX = 8;
 const MIN_SCALE = 0.05;
 const LASSO_STEP_PX = 3;
+/** A shape drag shorter than this (screen px) is a click and adds nothing. */
+const MIN_SHAPE_DRAG_PX = 3;
+/** Second click within this time (ms) and distance (screen px) on the same element is a double-click. */
+export const DOUBLE_TAP_MS = 400;
+const DOUBLE_TAP_PX = 8;
 
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
 
@@ -55,13 +66,36 @@ export function scaleFromDrag(b: Rect, corner: Corner, p: Vec2, uniform: boolean
   return { origin, sx, sy };
 }
 
-/** Topmost element under `p` (strokes by distance, others by bounds). */
+/** Topmost element under `p` (strokes by distance, shapes by outline or interior, others by bounds). */
 export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number): string | null {
   const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
-  const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e)).filter((el) =>
-    el.type === "stroke" ? polylineTouches(el.points, p, el.width / 2 + tol) : rectContains(elementBounds(el), p, tol),
+  const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e && !isPdfPlacement(e))).filter((el) =>
+    el.type === "stroke"
+      ? polylineTouches(el.points, p, el.width / 2 + tol)
+      : el.type === "shape"
+        ? shapeHit(el, p, tol)
+        : rectContains(elementBounds(el), p, tol),
   );
   return hits.length > 0 ? hits[hits.length - 1].id : null;
+}
+
+export interface Tap {
+  id: string;
+  t: number;
+  /** Screen px. */
+  x: number;
+  y: number;
+}
+
+/** True when `next` completes a double-click/tap started by `prev` (same element, quick, close). */
+export const isDoubleTap = (prev: Tap | null, next: Tap): boolean =>
+  !!prev && prev.id === next.id && next.t - prev.t <= DOUBLE_TAP_MS && Math.hypot(next.x - prev.x, next.y - prev.y) <= DOUBLE_TAP_PX;
+
+/** The selection is a single boxed element: the DOM overlay (BoxFrame) frames it, not the canvas. */
+export function framedByOverlay(elements: ReadonlyMap<string, Element>, selection: ReadonlySet<string>): boolean {
+  if (selection.size !== 1) return false;
+  const el = elements.get(selection.values().next().value!);
+  return !!el && isBoxed(el);
 }
 
 /** Tool for a pointer-down: space/middle button pan, pen eraser end / barrel actions, else the tool. */
@@ -77,6 +111,8 @@ type Gesture =
   | { kind: "idle" }
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
+  | { kind: "space"; lineY: number; dy: number; lifted: boolean }
+  | { kind: "shape"; start: Vec2; end: Vec2 }
   | { kind: "move"; start: Vec2; delta: Vec2; orig: Element[]; lifted: boolean }
   | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } };
 
@@ -89,6 +125,8 @@ export interface ToolDeps {
   invalidate(): void;
   renderElement(ctx: CanvasRenderingContext2D, el: Element): void;
   getSettings(): Settings;
+  /** Clock for double-click detection (ms; default performance.now). */
+  now?(): number;
 }
 
 export function createToolController(deps: ToolDeps) {
@@ -99,6 +137,28 @@ export function createToolController(deps: ToolDeps) {
   let preview: Element[] = [];
   let hover: Vec2 | null = null; // screen px
   let shift = false;
+  let lastTap: Tap | null = null;
+  const now = deps.now ?? (() => performance.now());
+
+  /** Double-click on a boxed element opens its editor; returns true when it did. */
+  const tapEdit = (p: Vec2): boolean => {
+    const s = st();
+    const id = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
+    const el = id ? s.elements.get(id) : undefined;
+    if (!id || !el || !isBoxed(el)) {
+      lastTap = null;
+      return false;
+    }
+    const scr = worldToScreen(s.camera, p);
+    const tap: Tap = { id, t: now(), x: scr.x, y: scr.y };
+    if (isDoubleTap(lastTap, tap)) {
+      lastTap = null;
+      s.beginEdit(id);
+      return true;
+    }
+    lastTap = tap;
+    return false;
+  };
 
   const lift = (els: Element[]) => {
     for (const e of els) hidden.add(e.id);
@@ -109,6 +169,13 @@ export function createToolController(deps: ToolDeps) {
     if (hidden.size === 0) return;
     hidden.clear();
     deps.invalidate();
+  };
+
+  /** The shape being dragged, as an element (for the live preview). */
+  const shapePreview = (start: Vec2, end: Vec2): Element[] => {
+    const style = shapeStyleOf(deps.getSettings());
+    const drag = shapeFromDrag(style.shapeType, start, end, shift);
+    return [shapeElement(style, drag, st().pageId ?? "", "shape-preview", "")];
   };
 
   const eraseAlong = (from: Vec2, to: Vec2) => {
@@ -123,6 +190,20 @@ export function createToolController(deps: ToolDeps) {
     if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
+    } else if (tool === "insert-space") {
+      g = { kind: "space", lineY: p.y, dy: 0, lifted: false };
+      preview = [];
+    } else if (tool === "shape") {
+      g = { kind: "shape", start: p, end: p };
+      preview = [];
+    } else if (tool === "text") {
+      // Text tool: a text box under the pointer opens for editing; empty canvas gets a new box.
+      const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
+      if (hit && s.elements.get(hit)?.type === "text-box") s.beginEdit(hit);
+      else s.addTextBox(p);
+      g = { kind: "idle" };
+    } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
+      g = { kind: "idle" };
     } else if (tool === "cursor" || tool === "lasso") {
       const b = selectionBounds(s.elements, s.selection);
       const corner = b ? hitHandle(b, p, s.camera.z) : null;
@@ -164,6 +245,29 @@ export function createToolController(deps: ToolDeps) {
           if (Math.hypot(q.x - last.x, q.y - last.y) * z >= LASSO_STEP_PX) g.points.push(q);
         }
         break;
+      case "space": {
+        const s = st();
+        g.dy = spaceShift(s, g.lineY, p.y - g.lineY);
+        const all = [...s.elements.values()];
+        const shifted = shiftBelow(all, g.lineY, g.dy, { cutImages: s.spaceCutImages });
+        const moved = shifted.filter((e, i) => e !== all[i]);
+        if (g.dy === 0) {
+          // Back at the line: show the originals again (nothing is shifted).
+          drop();
+          g.lifted = false;
+          break;
+        }
+        if (!g.lifted && moved.length > 0) {
+          g.lifted = true;
+          lift(moved);
+        }
+        preview = moved;
+        break;
+      }
+      case "shape":
+        g.end = p;
+        preview = shapePreview(g.start, g.end);
+        break;
       case "move":
         g.delta = { x: p.x - g.start.x, y: p.y - g.start.y };
         if (!g.lifted && (g.delta.x !== 0 || g.delta.y !== 0)) {
@@ -185,6 +289,17 @@ export function createToolController(deps: ToolDeps) {
     switch (g.kind) {
       case "erase":
         s.endEraser();
+        break;
+      case "shape": {
+        drop();
+        const style = shapeStyleOf(deps.getSettings());
+        const drag = shapeFromDrag(style.shapeType, g.start, g.end, shift);
+        if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addShape(style, drag);
+        break;
+      }
+      case "space":
+        drop();
+        s.insertSpace(g.lineY, g.dy);
         break;
       case "lasso":
         if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points));
@@ -214,11 +329,24 @@ export function createToolController(deps: ToolDeps) {
     const s = st();
     if (preview.length > 0) {
       ctx.setTransform(dpr * c.z, 0, 0, dpr * c.z, dpr * c.x, dpr * c.y);
+      if (g.kind === "space") ctx.globalAlpha = 0.55;
       for (const el of preview) deps.renderElement(ctx, el);
+      ctx.globalAlpha = 1;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let animate = false;
-    if (g.kind === "lasso" && g.points.length > 1) {
+    if (g.kind === "space") {
+      const y = Math.round(worldToScreen(c, { x: 0, y: g.lineY }).y) + 0.5;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(deps.el.clientWidth, y);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 5]);
+      ctx.strokeStyle = "#4a5d4e";
+      ctx.stroke();
+      ctx.restore();
+    } else if (g.kind === "lasso" && g.points.length > 1) {
       ctx.save();
       ctx.beginPath();
       g.points.forEach((q, i) => {
@@ -231,7 +359,7 @@ export function createToolController(deps: ToolDeps) {
       ctx.strokeStyle = "#4a5d4e";
       ctx.stroke();
       ctx.restore();
-    } else if (s.selection.size > 0) {
+    } else if (s.selection.size > 0 && !framedByOverlay(s.elements, s.selection)) {
       const b = selectionBounds(preview.length > 0 ? new Map(preview.map((e) => [e.id, e])) : s.elements, s.selection);
       if (b) {
         drawSelectionBounds(ctx, b, c);
@@ -266,7 +394,12 @@ export function createToolController(deps: ToolDeps) {
     deps.requestLive();
   };
   const onKey = (e: KeyboardEvent) => {
+    if (shift === e.shiftKey) return;
     shift = e.shiftKey;
+    if (g.kind === "shape" && preview.length > 0) {
+      preview = shapePreview(g.start, g.end);
+      deps.requestLive();
+    }
   };
   deps.el.addEventListener("pointermove", onHover);
   deps.el.addEventListener("pointerleave", onLeave);

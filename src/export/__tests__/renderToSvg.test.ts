@@ -118,3 +118,27 @@ describe("renderToSvg", () => {
     expect(count(svg, /<rect [^>]*rx="12"/g)).toBe(2);
   });
 });
+
+describe("SVG export of math boxes", () => {
+  it("katex_css_is_embedded_once_in_defs", async () => {
+    await import("../../renderers/builtins");
+    const { mathElement, mathContent } = await import("../../math/mathBox");
+    const { textAttrsOf } = await import("../../text/textBox");
+    const box = (id: string, x: number, latex: string): Element => {
+      const el = mathElement("p1", id, STAMP, { x, y: 0 }, "#000000");
+      return { ...el, content: mathContent({}, latex, textAttrsOf(el)) };
+    };
+    const svg = renderToSvg([box("m1", 0, "x^2"), box("m2", 300, "\frac{a}{b}")], page(), opts);
+    expect(count(svg, /@font-face/g)).toBeGreaterThan(0);
+    // The katex stylesheet (its @font-face rules) appears once, in <defs>, not per foreignObject.
+    const fontFaces = count(svg, /@font-face/g);
+    const single = renderToSvg([box("m1", 0, "x^2")], page(), opts);
+    expect(count(single, /@font-face/g)).toBe(fontFaces);
+    expect(svg.indexOf("<defs><style><![CDATA[")).toBeGreaterThan(-1);
+    expect(svg.indexOf("@font-face")).toBeLessThan(svg.indexOf("<foreignObject"));
+    // Each box keeps only its local rule.
+    expect(count(svg, /\.katex-display\{margin:0\}/g)).toBe(2);
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    expect(doc.getElementsByTagName("parsererror")).toHaveLength(0);
+  });
+});

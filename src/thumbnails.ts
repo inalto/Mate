@@ -1,10 +1,15 @@
-// Page thumbnails: render the page (background + strokes) into an offscreen canvas 320 px wide and
+// Page thumbnails: render the page (background + elements) into an offscreen canvas 320 px wide and
 // export WebP. Always drawn with the light theme so cards look the same in every app theme.
 import type { Rect } from "./canvas/background";
 import { sheetSize } from "./canvas/camera";
+import { readyGraphs } from "./export/readyGraphs";
 import { contentRegion, paintScene } from "./export/scene";
 import { saveThumbnail } from "./ipc/thumbnails";
 import type { Element, Page } from "./model/types";
+import { prepareImages } from "./images/load";
+import { preparePdfPages } from "./pdf/render";
+import { elementBounds, rectsOverlap } from "./tools/spatialIndex";
+import { prepareTextSnapshots, THUMBNAIL_TEXT_TIMEOUT_MS } from "./overlay/snapshot";
 import { editorForPane, getFocusedEditor } from "./stores/focusedEditor";
 import type { EditorStore } from "./stores/editor";
 import { useNotebookStore } from "./stores/notebook";
@@ -27,12 +32,24 @@ export function thumbnailRegion(page: Page, elements: Iterable<Element>, default
   return { ...r, width: Math.max(r.width, 320), height: Math.max(r.height, 240) };
 }
 
+/** Pages whose tainted-canvas failure was already reported. */
+const warnedTainted = new Set<string>();
+
 /** Render `elements` of `page` to a WebP blob, 320 px wide. */
 export async function captureThumbnail(pageId: string, elements: Iterable<Element>, page: Page): Promise<Blob> {
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
   const list = [...elements].filter((e) => e.pageId === pageId);
   const region = thumbnailRegion(page, list, aspect);
   const scale = THUMB_WIDTH / region.width;
+  await readyGraphs(list); // no "Loading…" graph frames in thumbnails
+  await prepareTextSnapshots(list, "light", scale, { timeoutMs: THUMBNAIL_TEXT_TIMEOUT_MS }); // bounded: best effort
+  await prepareImages(list);
+  // Only the PDF pages inside the thumbnail (page mode shows the first sheet only).
+  const pdfTiles = await preparePdfPages(
+    list.filter((e) => rectsOverlap(elementBounds(e), region)),
+    scale,
+    { keep: true },
+  );
   const height = Math.min(THUMB_MAX_HEIGHT, Math.max(1, Math.round(region.height * scale)));
   const canvas = document.createElement("canvas");
   canvas.width = THUMB_WIDTH;
@@ -45,10 +62,16 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   ctx.translate(-region.x, -region.y);
   const clip: Rect = { x: region.x, y: region.y, width: region.width, height: height / scale };
   const sheet = { mode: page.mode, ...sheetSize(page, aspect), count: 1 };
-  paintScene(ctx, page, list, clip, sheet, { theme: "light", background: "plain", pageFrame: true, zoomBucket: scale });
-  return new Promise((resolve, reject) =>
+  paintScene(ctx, page, list, clip, sheet, { theme: "light", background: "plain", pageFrame: true, zoomBucket: scale, pdfTiles });
+  return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("thumbnail encoding failed"))), "image/webp", THUMB_QUALITY),
-  );
+  ).catch((e: unknown) => {
+    if (e instanceof Error && e.name === "SecurityError" && !warnedTainted.has(pageId)) {
+      warnedTainted.add(pageId);
+      console.warn(`thumbnail for page ${pageId} skipped: canvas is tainted by a cross-origin image`);
+    }
+    throw e;
+  });
 }
 
 /** Capture and store a page's thumbnail, then patch its version so cards pick up the new file. */

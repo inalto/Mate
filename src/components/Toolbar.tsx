@@ -1,25 +1,36 @@
-// Editor toolbar: preset slots, add-pen menu, eraser (with options), cursor, lasso, undo/redo, zoom.
+// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options), text,
+// cursor, lasso, undo/redo, zoom.
 import {
   ArrowUUpLeft,
   ArrowUUpRight,
   Cursor,
+  ArrowsVertical,
   Eraser,
   Highlighter,
   House,
+  ImageSquare,
   Lasso,
   Minus,
   Pen,
   PenNib,
   Plus,
+  Table,
+  TextT,
+  Code,
+  MathOperations,
+  ChartLine,
 } from "@phosphor-icons/react";
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import { pickAndInsertImage } from "../images/insert";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { PenPreset } from "../model/types";
 import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useSettingsStore } from "../stores/settings";
 import PresetMenu from "./PresetMenu";
+import { SHAPE_LABEL } from "../shapes/catalog";
+import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
 import { useDismiss } from "./useDismiss";
 
 const INK_LABEL: Record<InkType, string> = { pen: "Pen", "fountain-pen": "Fountain pen", highlighter: "Highlighter" };
@@ -180,6 +191,82 @@ function EraserButton() {
   );
 }
 
+function ShapeButton() {
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "shape");
+  const type = useSettingsStore((s) => s.settings.defaultShapeType);
+  useDismiss(ref, open, () => setOpen(false));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label="Shape"
+        title={`Shape: ${SHAPE_LABEL[type]} (S)`}
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("shape"))}
+      >
+        <ShapeIcon type={type} />
+      </button>
+      {open && <ShapeMenu />}
+    </div>
+  );
+}
+
+/** Insert-space tool button; a second click opens its options (Insert / Remove, Cut images). */
+function InsertSpaceButton() {
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "insert-space");
+  const mode = ed((s) => s.spaceMode);
+  const cut = ed((s) => s.spaceCutImages);
+  useDismiss(ref, open, () => setOpen(false));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label="Insert space"
+        title="Insert space (N)"
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("insert-space"))}
+      >
+        <ArrowsVertical size={18} />
+      </button>
+      {open && (
+        <div className="tb-popover" role="dialog" aria-label="Insert space options">
+          <div className="tb-row" role="radiogroup" aria-label="Insert space mode">
+            {(
+              [
+                ["insert", "Insert"],
+                ["remove", "Remove"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={mode === v}
+                className={mode === v ? "tb-btn active" : "tb-btn"}
+                onClick={() => ed.getState().setSpaceOptions({ spaceMode: v })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="tb-row">
+            <input type="checkbox" checked={cut} onChange={(e) => ed.getState().setSpaceOptions({ spaceCutImages: e.target.checked })} />
+            Cut images
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Toolbar() {
   const ed = useFocusedEditor();
   const presets = useSettingsStore((s) => s.settings.toolbarPresets);
@@ -189,7 +276,7 @@ export default function Toolbar() {
   const zoom = ed((s) => s.camera.z);
   const s = ed.getState;
 
-  const toolBtn = (id: "cursor" | "lasso", label: string, icon: ReactNode) => (
+  const toolBtn = (id: "cursor" | "lasso" | "text", label: string, icon: ReactNode) => (
     <button
       type="button"
       className={tool === id ? "tb-btn active" : "tb-btn"}
@@ -214,8 +301,26 @@ export default function Toolbar() {
       <AddPenMenu />
       <span className="tb-sep" />
       <EraserButton />
+      <ShapeButton />
+      {toolBtn("text", "Text (T)", <TextT size={18} />)}
+      <button type="button" className="tb-btn" aria-label="Insert image…" title="Insert image…" onClick={() => void pickAndInsertImage()}>
+        <ImageSquare size={18} />
+      </button>
+      <button type="button" className="tb-btn" aria-label="Insert table" title="Insert table" onClick={() => s().addTable()}>
+        <Table size={18} />
+      </button>
+      <button type="button" className="tb-btn" aria-label="Insert code" title="Insert code" onClick={() => s().addCodespace()}>
+        <Code size={18} />
+      </button>
+      <button type="button" className="tb-btn" aria-label="Insert equation" title="Insert equation" onClick={() => s().addMathBox()}>
+        <MathOperations size={18} />
+      </button>
+      <button type="button" className="tb-btn" aria-label="Insert graph" title="Insert graph" onClick={() => s().addGraph()}>
+        <ChartLine size={18} />
+      </button>
       {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
       {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}
+      <InsertSpaceButton />
       <span className="tb-sep" />
       <button type="button" className="tb-btn" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={() => s().undo()}>
         <ArrowUUpLeft size={18} />

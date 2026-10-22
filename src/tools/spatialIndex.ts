@@ -1,5 +1,7 @@
 // Uniform-grid spatial index over element bounds (world units) for eraser / lasso candidate queries.
+import { contentOf, isBoxedType } from "../model/content";
 import type { Element } from "../model/types";
+import { rendererFor } from "../renderers/registry";
 
 export interface Rect {
   x: number;
@@ -14,10 +16,8 @@ export const rectsOverlap = (a: Rect, b: Rect): boolean =>
   a.x <= b.x + b.width && b.x <= a.x + a.width && a.y <= b.y + b.height && b.y <= a.y + a.height;
 
 /** Element metadata stored in `content` (JSON object): z-order and rotation (radians). */
-export function contentMeta(el: Element): { zIndex?: number; rotation?: number } {
-  const c = el.content;
-  return c !== null && typeof c === "object" && !Array.isArray(c) ? (c as { zIndex?: number; rotation?: number }) : {};
-}
+export const contentMeta = (el: Element): { zIndex?: number; rotation?: number } =>
+  contentOf<{ zIndex: number; rotation: number }>(el);
 
 /** Merge `patch` into `el.content` when it is an object (or empty); other content is left untouched. */
 export function withMeta(el: Element, patch: { zIndex?: number; rotation?: number }): Element {
@@ -37,16 +37,39 @@ function rotatedBox(r: Rect, rad: number): Rect {
   return { x: cx - hw, y: cy - hh, width: 2 * hw, height: 2 * hh };
 }
 
+/** Unrotated box of a boxed element: `points[0]` anchor, `boxWidth/boxHeight` (images: `width/height`). */
+export function boxRect(el: Element): Rect {
+  const a = el.points[0] ?? { x: 0, y: 0 };
+  const image = el.type === "image";
+  return {
+    x: a.x,
+    y: a.y,
+    width: (image ? el.width : el.boxWidth) ?? 0,
+    height: (image ? el.height : el.boxHeight) ?? 0,
+  };
+}
+
 /**
- * World bounds: boxed elements (boxWidth/boxHeight) span the box from their first point; others the
- * points' bbox expanded by width/2. `content.rotation` rotates the box about its centre.
+ * True when `el` is laid out as a box (boxed type, or any element carrying boxWidth/boxHeight).
+ * Shapes are not: they keep two anchor points and are selected and scaled on the canvas.
+ */
+export const isBoxed = (el: Element): boolean =>
+  el.type !== "shape" && (isBoxedType(el.type) || (el.boxWidth !== undefined && el.boxHeight !== undefined));
+
+/**
+ * World bounds: a renderer's own `bounds` when registered; boxed elements span their box from the
+ * first point (see `boxRect`); others the points' bbox expanded by width/2. `content.rotation`
+ * rotates the box about its centre.
  */
 export function elementBounds(el: Element): Rect {
   const pts = el.points;
   if (pts.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+  const custom = rendererFor(el.type)?.bounds;
   let r: Rect;
-  if (el.boxWidth !== undefined && el.boxHeight !== undefined) {
-    r = { x: pts[0].x, y: pts[0].y, width: el.boxWidth, height: el.boxHeight };
+  if (custom) {
+    r = custom(el);
+  } else if (isBoxed(el)) {
+    r = boxRect(el);
   } else {
     let minX = Infinity;
     let minY = Infinity;

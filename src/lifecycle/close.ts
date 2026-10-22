@@ -3,6 +3,8 @@
 import { showToast } from "../components/Toast";
 import { elementsQueue } from "../ipc/elementsQueue";
 import * as lifecycle from "../ipc/lifecycle";
+import { endAllEdits } from "../overlay/useEditSession";
+import { flushSettings } from "../stores/settings";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 
 export const CLEAN_EXIT_KEY = "mate_clean_exit_v1";
@@ -53,6 +55,8 @@ export function installCloseHandler(): void {
   let current: number | null = null;
 
   window.__mateFlushAndClose = async (id) => {
+    // Open box editors hold their edits locally until the session ends: commit them into the queue.
+    endAllEdits();
     try {
       if (!(await lifecycle.closeAttemptStarted(id))) return;
     } catch {
@@ -96,6 +100,13 @@ export function installCloseHandler(): void {
       }
       return;
     }
+    try {
+      await flushSettings();
+    } catch (err) {
+      // Preferences, not notes: a failed settings write does not hold the window open.
+      console.error("saving settings before close failed", err);
+    }
+    if (current !== id) return;
     current = null;
     safeSet(CLEAN_EXIT_KEY, "1");
     try {
@@ -117,7 +128,11 @@ export function installCloseHandler(): void {
   };
 
   // Best-effort flush on reload / navigation away (e.g. dev reloads).
-  const bestEffort = () => void elementsQueue.flushAll();
+  const bestEffort = () => {
+    endAllEdits();
+    void elementsQueue.flushAll();
+    flushSettings().catch((err) => console.error("saving settings failed", err));
+  };
   window.addEventListener("beforeunload", bestEffort);
   window.addEventListener("pagehide", bestEffort);
 }

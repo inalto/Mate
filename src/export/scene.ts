@@ -1,12 +1,14 @@
 // Shared scene drawing for exports and thumbnails: the world-space region to capture and the
-// background + ink painter for a 2D context. The SVG writer uses the same region and pattern.
+// background + element painter for a 2D context. The SVG writer uses the same region and pattern.
+// Elements are drawn by their type's renderer (renderers/registry), in z-order.
 import { paintBackground, type BackgroundPage, type Rect, type SurfaceColors } from "../canvas/background";
 import { sheetSize } from "../canvas/camera";
-import { renderStroke } from "../ink/render";
 import { isDarkTheme } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import { PAGE_GAP } from "../model/constants";
 import type { Element, Page } from "../model/types";
+import "../renderers/builtins";
+import { drawElement, type RenderOptions } from "../renderers/registry";
 import { elementBounds } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 
@@ -70,7 +72,7 @@ export function exportRegion(page: Page, elements: Element[], defaultAspect: str
 }
 
 /**
- * Paint background (unless transparent) and strokes for `clip` into `ctx`, which already has the
+ * Paint background (unless transparent) and elements for `clip` into `ctx`, which already has the
  * world transform. `zoomBucket` is the output scale (device pixels per unit).
  */
 export function paintScene(
@@ -79,14 +81,13 @@ export function paintScene(
   elements: Iterable<Element>,
   clip: Rect,
   sheet: BackgroundPage,
-  opts: Omit<ExportOptions, "scale"> & { zoomBucket: number },
+  opts: Omit<ExportOptions, "scale"> & { zoomBucket: number; pdfTiles?: RenderOptions["pdfTiles"]; textBitmaps?: RenderOptions["textBitmaps"] },
 ): void {
   if (opts.background === "plain") {
     const surface = surfaceFor(opts.theme);
     if (!opts.pageFrame) surface.desk = surface.paper;
     paintBackground(ctx, page.backgroundConfig, clip, sheet, opts.theme, surface);
   }
-  for (const el of renderOrder(elements)) {
-    if (el.type === "stroke") renderStroke(ctx, el, opts.theme, opts.zoomBucket);
-  }
+  const ropts = { theme: opts.theme, zoomBucket: opts.zoomBucket, pdfTiles: opts.pdfTiles, textBitmaps: opts.textBitmaps };
+  for (const el of renderOrder(elements)) drawElement(ctx, el, ropts);
 }

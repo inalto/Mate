@@ -30,3 +30,6 @@ export function hueOf(hex: string): number {
   const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return Math.round((h * 60 + 360) % 360);
 }
+
+/** Shape fill swatches: the ink colours plus the light highlighter tints. */
+export const FILL_PALETTE = [...PEN_PALETTE, ...HIGHLIGHTER_PALETTE];
