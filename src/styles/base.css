@@ -423,3 +423,112 @@ button.card:hover {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 1px var(--color-primary);
 }
+
+/* Editor */
+.editor {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.canvas-view {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  background: var(--canvas-desk);
+}
+
+.canvas-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+}
+
+.canvas-live {
+  cursor: crosshair;
+}
+
+.canvas-view.is-panning .canvas-live {
+  cursor: grab;
+}
+
+.mini-toolbar {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  max-width: calc(100% - var(--space-6));
+  overflow-x: auto;
+}
+
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mini-btn:hover,
+.mini-btn.active {
+  background: var(--color-surface-2);
+}
+
+.mini-btn.active {
+  color: var(--color-primary);
+}
+
+.mini-swatch {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 2px solid var(--color-surface-1);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--color-border);
+  cursor: pointer;
+}
+
+.mini-swatch.active {
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.mini-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 var(--space-1);
+  background: var(--color-border);
+}
+
+.mini-width {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-width span {
+  min-width: 2.5em;
+}
+
+.mini-zoom {
+  font-variant-numeric: tabular-nums;
+}

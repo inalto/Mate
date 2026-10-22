@@ -1,12 +1,14 @@
 import { useParams } from "react-router";
+import CanvasView from "../canvas/CanvasView";
+import MiniToolbar from "../components/MiniToolbar";
 
-/** Placeholder: the canvas editor arrives in a later task. */
 export default function Editor() {
   const { pageId } = useParams();
+  if (!pageId) return null;
   return (
-    <div className="screen">
-      <h1>Editor</h1>
-      <p className="muted">Page {pageId}</p>
+    <div className="editor">
+      <CanvasView key={pageId} pageId={pageId} />
+      <MiniToolbar />
     </div>
   );
 }

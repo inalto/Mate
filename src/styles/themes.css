@@ -1,4 +1,6 @@
 html[data-theme="dark"] {
+  --canvas-page: #18181b;
+  --canvas-desk: #0e0e10;
   --color-background: #121215;
   --color-primary: #6b8e73;
   --color-primary-contrast: #0c0d0e;
@@ -11,6 +13,8 @@ html[data-theme="dark"] {
 }
 
 html[data-theme="sepia"] {
+  --canvas-page: #f7efdb;
+  --canvas-desk: #e6d8b9;
   --color-background: #f1e7cf;
   --color-primary: #5c6b4a;
   --color-primary-contrast: #ffffff;
@@ -23,6 +27,8 @@ html[data-theme="sepia"] {
 }
 
 html[data-theme="high-contrast"] {
+  --canvas-page: #000000;
+  --canvas-desk: #16181b;
   --color-background: #08090b;
   --color-primary: #9bc1a4;
   --color-primary-contrast: #000000;
