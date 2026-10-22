@@ -2,6 +2,7 @@
 // exports and thumbnails all dispatch through here, so every type renders the same everywhere.
 // Built-in renderers are registered by ./builtins (imported for its side effect by the scene).
 import type { ThemeName } from "../ink/types";
+import type { PdfBitmap } from "../pdf/source";
 import type { Element, ElementType } from "../model/types";
 import type { Rect } from "../tools/spatialIndex";
 import type { BoxSnapshotCache } from "./boxSnapshot";
@@ -14,6 +15,8 @@ export interface RenderOptions {
   pixelRatio?: number;
   /** Snapshot source for boxed elements (default: the shared `boxSnapshots`). */
   snapshots?: BoxSnapshotCache;
+  /** PDF page bitmaps prepared for this paint, by `pdfPageKey` (exports, thumbnails); else the live tile cache. */
+  pdfTiles?: ReadonlyMap<string, PdfBitmap>;
 }
 
 export interface ElementRenderer {

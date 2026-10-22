@@ -7,7 +7,7 @@ import { preparePdfPages } from "../pdf/render";
 import { prepareTextSnapshots } from "../overlay/snapshot";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
-import { renderToCanvas } from "./renderToCanvas";
+import { canvasExportLayout, renderToCanvas } from "./renderToCanvas";
 import { renderToSvg } from "./renderToSvg";
 import type { ExportOptions } from "./scene";
 
@@ -63,11 +63,14 @@ export async function exportPage(
   // Text boxes are drawn from bitmaps rendered asynchronously: have them ready for the PNG.
   if (format === "png") await prepareTextSnapshots(elements, opts.theme, opts.scale);
   await prepareImages(elements, format === "svg");
-  // PDF pages: rendered at the export scale for PNG; embedded as 2× PNGs in SVG.
-  await preparePdfPages(elements, format === "svg" ? 2 : opts.scale, format === "svg");
-  const bytes =
-    format === "png"
-      ? await canvasToPng(renderToCanvas(elements, page, opts))
-      : new TextEncoder().encode(renderToSvg(elements, page, { ...opts, scale: 1 }));
+  let bytes: Uint8Array;
+  if (format === "png") {
+    // PDF pages at the scale the canvas is actually painted at, held by this export until it is drawn.
+    const pdfTiles = await preparePdfPages(elements, canvasExportLayout(elements, page, opts.scale).scale, { keep: true });
+    bytes = await canvasToPng(renderToCanvas(elements, page, opts, pdfTiles));
+  } else {
+    await preparePdfPages(elements, 2, { embed: true }); // embedded as 2× PNGs
+    bytes = new TextEncoder().encode(renderToSvg(elements, page, { ...opts, scale: 1 }));
+  }
   return writeExportFile(pageExportFilename(page.title, format), bytes);
 }

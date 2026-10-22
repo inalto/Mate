@@ -10,7 +10,7 @@ import { dataUrlOf, getImage, naturalSize } from "../images/load";
 import { isDarkTheme } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import { contentOf, type ImageContent } from "../model/content";
-import { getPdfTile, pdfDataUrlOf, zoomBucketFor } from "../pdf/render";
+import { getPdfTile, pdfDataUrlOf, pdfPageKey, zoomBucketFor } from "../pdf/render";
 import type { Element } from "../model/types";
 import { useSettingsStore } from "../stores/settings";
 import { boxRect } from "../tools/spatialIndex";
@@ -49,7 +49,7 @@ function pdfPageOf(el: Element): { assetId: string; page: number } | null {
 function drawPdfPage(ctx: CanvasRenderingContext2D, el: Element, pdf: { assetId: string; page: number }, o: RenderOptions): void {
   const r = boxRect(el);
   const bucket = zoomBucketFor(o.zoomBucket * (o.pixelRatio ?? 1));
-  const tile = getPdfTile(pdf.assetId, pdf.page, bucket, r.width);
+  const tile = o.pdfTiles?.get(pdfPageKey(pdf.assetId, pdf.page)) ?? getPdfTile(pdf.assetId, pdf.page, bucket, r.width);
   if (!tile) return drawBoxBitmap(ctx, el, null, o);
   ctx.save();
   if (shouldInvert(el, o.theme)) ctx.filter = INVERT_FILTER;

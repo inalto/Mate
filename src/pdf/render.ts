@@ -112,39 +112,80 @@ interface HasPdf {
   content?: unknown;
 }
 
-/** PDF placements among `elements`: asset id, page index and box width. */
+/** Key of a PDF page in a prepared tile set (`asset|page`). */
+export const pdfPageKey = (assetId: string, page: number): string => `${assetId}|${page}`;
+
+/** Tiles prepared for one synchronous paint, by `pdfPageKey` (see RenderOptions.pdfTiles). */
+export type PdfTileSet = ReadonlyMap<string, PdfBitmap>;
+
+/** Renders `preparePdfPages` runs at once (each allocates its whole canvas up front). */
+export const PREPARE_CONCURRENCY = 3;
+
+/** Distinct PDF pages shown by `elements` (first box width wins), in element order. */
 function placements(elements: Iterable<HasPdf>): Array<{ assetId: string; page: number; boxWidth: number }> {
-  const out: Array<{ assetId: string; page: number; boxWidth: number }> = [];
+  const out = new Map<string, { assetId: string; page: number; boxWidth: number }>();
   for (const el of elements) {
     if (el.type !== "image" || !el.content || typeof el.content !== "object") continue;
     const c = el.content as { pdfSourceKey?: unknown; pdfPageIndex?: unknown };
     if (typeof c.pdfSourceKey !== "string") continue;
     const page = typeof c.pdfPageIndex === "number" && c.pdfPageIndex >= 1 ? Math.floor(c.pdfPageIndex) : 1;
-    out.push({ assetId: c.pdfSourceKey, page, boxWidth: el.width });
+    const key = pdfPageKey(c.pdfSourceKey, page);
+    if (!out.has(key)) out.set(key, { assetId: c.pdfSourceKey, page, boxWidth: el.width });
   }
-  return out;
+  return [...out.values()];
+}
+
+/** Render one page for an export without touching the on-screen LRU (a cached tile is reused). */
+async function renderUncached(assetId: string, page: number, bucket: number, boxWidth: number): Promise<PdfBitmap | null> {
+  const key = keyOf(assetId, page, bucket);
+  const hit = tiles.get(key) ?? (await pending.get(key));
+  if (hit) return hit;
+  try {
+    const src = await getPdfSource(assetId);
+    const size = await src.pageSize(page);
+    return await src.render(page, (bucket * boxWidth) / Math.max(1, size.width));
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Render the PDF pages of `elements` at `scale` (export / thumbnail output pixels per page unit) so a
- * synchronous paint finds them; with `embed`, also keep PNG data URLs for SVG (`pdfDataUrlOf`).
+ * Render the PDF pages of `elements` at `scale` (output pixels per page unit) for one synchronous
+ * paint: at most 3 renders at a time, in element order, never through the on-screen tile LRU (an
+ * export of a long PDF must neither evict what the canvas shows nor lose its own tiles to eviction).
+ * With `keep` the bitmaps are returned, to be passed to the paint as `pdfTiles`; with `embed` each
+ * page becomes a PNG data URL for SVG (`pdfDataUrlOf`) as soon as it is rendered, and its canvas is
+ * let go.
  */
-export async function preparePdfPages(elements: Iterable<HasPdf>, scale: number, embed = false): Promise<void> {
+export async function preparePdfPages(
+  elements: Iterable<HasPdf>,
+  scale: number,
+  opts: { keep?: boolean; embed?: boolean } = {},
+): Promise<Map<string, PdfBitmap>> {
   const bucket = zoomBucketFor(scale);
-  if (embed) dataUrls.clear(); // only the export being prepared needs them
-  await Promise.all(
-    placements(elements).map(async ({ assetId, page, boxWidth }) => {
-      const bmp = await renderPdfTile(assetId, page, bucket, boxWidth);
-      if (bmp && embed && !dataUrls.has(`${assetId}|${page}`)) {
+  const kept = new Map<string, PdfBitmap>();
+  if (opts.embed) dataUrls.clear(); // only the export being prepared needs them
+  const queue = placements(elements);
+  let next = 0;
+  const worker = async () => {
+    while (next < queue.length) {
+      const { assetId, page, boxWidth } = queue[next++];
+      const bmp = await renderUncached(assetId, page, bucket, boxWidth);
+      if (!bmp) continue;
+      const key = pdfPageKey(assetId, page);
+      if (opts.keep) kept.set(key, bmp);
+      if (opts.embed) {
         try {
-          dataUrls.set(`${assetId}|${page}`, bmp.toDataURL("image/png"));
+          dataUrls.set(key, bmp.toDataURL("image/png"));
         } catch {
           /* exported as a frame */
         }
       }
-    }),
-  );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(PREPARE_CONCURRENCY, queue.length) }, worker));
+  return kept;
 }
 
-/** PNG data URL of a PDF page prepared by `preparePdfPages(..., embed)`, if any. */
-export const pdfDataUrlOf = (assetId: string, page: number): string | undefined => dataUrls.get(`${assetId}|${page}`);
+/** PNG data URL of a PDF page prepared by `preparePdfPages(.., { embed: true })`, if any. */
+export const pdfDataUrlOf = (assetId: string, page: number): string | undefined => dataUrls.get(pdfPageKey(assetId, page));

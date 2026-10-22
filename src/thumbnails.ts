@@ -7,6 +7,7 @@ import { saveThumbnail } from "./ipc/thumbnails";
 import type { Element, Page } from "./model/types";
 import { prepareImages } from "./images/load";
 import { preparePdfPages } from "./pdf/render";
+import { elementBounds, rectsOverlap } from "./tools/spatialIndex";
 import { prepareTextSnapshots } from "./overlay/snapshot";
 import { editorForPane, getFocusedEditor } from "./stores/focusedEditor";
 import type { EditorStore } from "./stores/editor";
@@ -41,7 +42,12 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   const scale = THUMB_WIDTH / region.width;
   await prepareTextSnapshots(list, "light", scale);
   await prepareImages(list);
-  await preparePdfPages(list, scale);
+  // Only the PDF pages inside the thumbnail (page mode shows the first sheet only).
+  const pdfTiles = await preparePdfPages(
+    list.filter((e) => rectsOverlap(elementBounds(e), region)),
+    scale,
+    { keep: true },
+  );
   const height = Math.min(THUMB_MAX_HEIGHT, Math.max(1, Math.round(region.height * scale)));
   const canvas = document.createElement("canvas");
   canvas.width = THUMB_WIDTH;
@@ -54,7 +60,7 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   ctx.translate(-region.x, -region.y);
   const clip: Rect = { x: region.x, y: region.y, width: region.width, height: height / scale };
   const sheet = { mode: page.mode, ...sheetSize(page, aspect), count: 1 };
-  paintScene(ctx, page, list, clip, sheet, { theme: "light", background: "plain", pageFrame: true, zoomBucket: scale });
+  paintScene(ctx, page, list, clip, sheet, { theme: "light", background: "plain", pageFrame: true, zoomBucket: scale, pdfTiles });
   return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("thumbnail encoding failed"))), "image/webp", THUMB_QUALITY),
   ).catch((e: unknown) => {

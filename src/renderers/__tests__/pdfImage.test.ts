@@ -81,7 +81,7 @@ describe("image renderer: PDF pages", () => {
 
   it("svg embeds the prepared page as a PNG data URL", async () => {
     expect(elementSvg(placement, { theme: "light", zoomBucket: 1 })).not.toContain("<image");
-    await preparePdfPages([placement], 2, true);
+    await preparePdfPages([placement], 2, { embed: true });
     expect(render).toHaveBeenCalledWith(2, (2 * 1080) / 612);
     const svg = elementSvg(placement, { theme: "light", zoomBucket: 1 });
     expect(svg).toContain('href="data:image/png;base64,QUJD"');

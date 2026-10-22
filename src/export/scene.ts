@@ -8,7 +8,7 @@ import type { ThemeName } from "../ink/types";
 import { PAGE_GAP } from "../model/constants";
 import type { Element, Page } from "../model/types";
 import "../renderers/builtins";
-import { drawElement } from "../renderers/registry";
+import { drawElement, type RenderOptions } from "../renderers/registry";
 import { elementBounds } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 
@@ -81,13 +81,13 @@ export function paintScene(
   elements: Iterable<Element>,
   clip: Rect,
   sheet: BackgroundPage,
-  opts: Omit<ExportOptions, "scale"> & { zoomBucket: number },
+  opts: Omit<ExportOptions, "scale"> & { zoomBucket: number; pdfTiles?: RenderOptions["pdfTiles"] },
 ): void {
   if (opts.background === "plain") {
     const surface = surfaceFor(opts.theme);
     if (!opts.pageFrame) surface.desk = surface.paper;
     paintBackground(ctx, page.backgroundConfig, clip, sheet, opts.theme, surface);
   }
-  const ropts = { theme: opts.theme, zoomBucket: opts.zoomBucket };
+  const ropts = { theme: opts.theme, zoomBucket: opts.zoomBucket, pdfTiles: opts.pdfTiles };
   for (const el of renderOrder(elements)) drawElement(ctx, el, ropts);
 }
