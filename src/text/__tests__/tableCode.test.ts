@@ -37,6 +37,19 @@ describe("tableCode", () => {
     expect(codeOf({ content: { code: 4, language: "cobol" } })).toEqual({ code: "", language: "plain" });
   });
 
+  it("imported_tables_are_clamped_to_the_cell_limit", () => {
+    // 1000 × 100 = 100 000 cells (e.g. from an archive): cut to MAX_TABLE_CELLS.
+    const big = Array.from({ length: 1000 }, (_, r) => Array.from({ length: 100 }, (_, c) => `${r}:${c}`));
+    const rows = tableRowsOf({ content: { subtype: "table", tableData: { rows: big } } });
+    expect(rows.length * rows[0].length).toBeLessThanOrEqual(MAX_TABLE_CELLS);
+    expect(rows[0]).toHaveLength(100);
+    expect(rows).toHaveLength(500);
+    expect(rows[499][99]).toBe("499:99");
+    // One very wide row keeps at most MAX_TABLE_CELLS columns.
+    const wide = tableRowsOf({ content: { subtype: "table", tableData: { rows: [Array.from({ length: MAX_TABLE_CELLS + 5 }, () => "x")] } } });
+    expect(wide[0]).toHaveLength(MAX_TABLE_CELLS);
+  });
+
   it("row_and_column_ops", () => {
     const r = [["a", "b"], ["c", "d"]];
     expect(addRow(r, 1)).toEqual([["a", "b"], ["", ""], ["c", "d"]]);

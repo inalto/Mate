@@ -27,13 +27,22 @@ export type Rows = string[][];
 
 const grid = (rows: number, cols: number): Rows => Array.from({ length: rows }, () => Array.from({ length: cols }, () => ""));
 
-/** The stored rows as a non-empty rectangular grid of strings (3×3 when missing or malformed), without XML-invalid control characters. */
+/** Widest row of stored `raw` rows (at least 1). */
+const widthOf = (raw: unknown[]): number => raw.reduce<number>((w, r) => Math.max(w, Array.isArray(r) ? r.length : 0), 1);
+
+/**
+ * The stored rows as a non-empty rectangular grid of strings (3×3 when missing or malformed), cut
+ * to MAX_TABLE_CELLS (clampRows) and without XML-invalid control characters.
+ */
 export function tableRowsOf(el: Pick<Element, "content">): Rows {
   const raw = contentOf<TableContent>(el).tableData?.rows;
   if (!Array.isArray(raw) || raw.length === 0) return grid(DEFAULT_ROWS, DEFAULT_COLS);
-  const rows = raw.map((r) => (Array.isArray(r) ? r.map((c) => (typeof c === "string" ? stripControlChars(c) : "")) : []));
-  const cols = Math.max(1, ...rows.map((r) => r.length));
-  return rows.map((r) => [...r, ...Array.from({ length: cols - r.length }, () => "")]);
+  // Stored tables (imports, archives) may exceed MAX_TABLE_CELLS: only the part kept is read.
+  const cols = Math.min(MAX_TABLE_CELLS, widthOf(raw));
+  const rows = raw
+    .slice(0, Math.max(1, Math.floor(MAX_TABLE_CELLS / cols)))
+    .map((r) => (Array.isArray(r) ? r.slice(0, cols).map((c) => (typeof c === "string" ? stripControlChars(c) : "")) : []));
+  return clampRows(rows.map((r) => [...r, ...Array.from({ length: cols - r.length }, () => "")]));
 }
 
 /** The stored code (without XML-invalid control characters) and language (empty plain text when missing or unknown). */
@@ -45,10 +54,11 @@ export function codeOf(el: Pick<Element, "content">): { code: string; language: 
   };
 }
 
-/** Number of cells in the table `el`. */
+/** Number of cells stored in the table `el` (before tableRowsOf's clamp; 9 when malformed). */
 export const tableCells = (el: Pick<Element, "content">): number => {
-  const rows = tableRowsOf(el);
-  return rows.length * rows[0].length;
+  const raw = contentOf<TableContent>(el).tableData?.rows;
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_ROWS * DEFAULT_COLS;
+  return raw.length * widthOf(raw);
 };
 
 /** `rows` cut to at most MAX_TABLE_CELLS cells (extra columns, then extra rows, dropped). */
