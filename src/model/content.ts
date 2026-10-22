@@ -1,5 +1,6 @@
 // Typed views of `Element.content` per element type (phase 2 rich content), and the boxed-type set.
 // `content` is untyped JSON from storage: read it through `contentOf`, never by casting directly.
+import type { GraphData } from "../graph/data";
 import type { Element, ElementType } from "./types";
 
 /** Metadata any element's content may carry (see spatialIndex.contentMeta). */
@@ -36,9 +37,10 @@ export interface CodespaceContent extends ContentMeta {
   language: string;
 }
 
+/** graph (`boxWidth/boxHeight` top-level). Read `graphData` through graph/data `graphDataOf`. */
 export interface GraphContent extends ContentMeta {
   subtype: "graph";
-  graphData: unknown;
+  graphData: GraphData;
 }
 
 /** image (`imageUrl, width, height` top-level). */
