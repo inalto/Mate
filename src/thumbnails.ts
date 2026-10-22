@@ -51,11 +51,11 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   );
 }
 
-/** Capture and store a page's thumbnail, then refresh the tree so cards pick up the new version. */
+/** Capture and store a page's thumbnail, then patch its version so cards pick up the new file. */
 export async function updateThumbnail(pageId: string, elements: Iterable<Element>, page: Page): Promise<void> {
   const blob = await captureThumbnail(pageId, elements, page);
-  await saveThumbnail(pageId, new Uint8Array(await blob.arrayBuffer()));
-  await useNotebookStore.getState().load();
+  const { version } = await saveThumbnail(pageId, new Uint8Array(await blob.arrayBuffer()));
+  useNotebookStore.getState().setThumbnailVersion(pageId, version);
 }
 
 /**

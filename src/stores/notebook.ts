@@ -31,6 +31,8 @@ interface NotebookState {
   rename: (kind: EntityKind, id: string, title: string) => Promise<void>;
   setColor: (kind: EntityKind, id: string, color: string) => Promise<void>;
   toggleFavourite: (kind: EntityKind, id: string) => Promise<void>;
+  /** Adopt a page's new thumbnail version locally (the backend already bumped it). */
+  setThumbnailVersion: (pageId: string, version: number) => void;
   /** Persist an edited page record (settings dialog, icon). */
   updatePage: (page: Page) => Promise<void>;
   /** Move a page one place up/down among its siblings. */
@@ -232,6 +234,12 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
     rename: (kind, id, title) => patch(kind, id, { title }),
     setColor: (kind, id, color) => patch(kind, id, { color }),
     toggleFavourite: (kind, id) => patch(kind, id, { toggleFavourite: true }),
+
+    setThumbnailVersion: (pageId, version) => {
+      const page = tree().pages.find((p) => p.id === pageId);
+      if (!page || page.thumbnailVersion >= version) return; // never regress (out-of-order saves)
+      setTree({ pages: upsertById(tree().pages, { ...page, thumbnailVersion: version }) });
+    },
 
     updatePage: (page) => savePage({ ...page, updatedAt: now() }),
 

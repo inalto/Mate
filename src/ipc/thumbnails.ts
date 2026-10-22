@@ -2,8 +2,14 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { appDataDir, join } from "@tauri-apps/api/path";
 import { useEffect, useState } from "react";
 
+export interface ThumbnailSaved {
+  path: string;
+  /** The page's thumbnail version after the bump. */
+  version: number;
+}
+
 /** Write `<app_data_dir>/thumbnails/<pageId>.webp` and bump the page's thumbnail version. */
-export const saveThumbnail = (pageId: string, bytes: Uint8Array): Promise<string> =>
+export const saveThumbnail = (pageId: string, bytes: Uint8Array): Promise<ThumbnailSaved> =>
   invoke("save_thumbnail", { pageId, bytes: Array.from(bytes) });
 
 let thumbDir: Promise<string> | null = null;

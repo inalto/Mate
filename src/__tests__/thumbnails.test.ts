@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
 vi.mock("../ipc/notebook", () => ({}));
-vi.mock("../ipc/thumbnails", () => ({ saveThumbnail: vi.fn() }));
+vi.mock("../ipc/thumbnails", () => ({ saveThumbnail: vi.fn(async () => ({ path: "x", version: 3 })) }));
 
 import type { Element, Page } from "../model/types";
-import { thumbnailRegion } from "../thumbnails";
+import { useNotebookStore } from "../stores/notebook";
+import { thumbnailRegion, updateThumbnail } from "../thumbnails";
 
 const page = (mode: Page["mode"]): Page => ({
   id: "p", sectionId: "s", title: "t", isExpanded: true, isFavourite: false, depth: 0, mode,
@@ -57,6 +58,23 @@ describe("watchThumbnails", () => {
     expect(saveThumbnail).toHaveBeenCalledTimes(1);
     expect(vi.mocked(saveThumbnail).mock.calls[0][0]).toBe("A");
     vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+});
+
+describe("updateThumbnail", () => {
+  it("patches_thumbnail_version_without_reloading_tree", async () => {
+    const p = { ...page("canvas"), id: "P1", thumbnailVersion: 2 };
+    const other = { ...page("canvas"), id: "P2", thumbnailVersion: 5 };
+    useNotebookStore.setState({ loaded: true, tree: { bookshelves: [], units: [], sections: [], pages: [p, other] } });
+    const load = vi.spyOn(useNotebookStore.getState(), "load");
+    const canvas = { width: 0, height: 0, getContext: () => ({ fillRect() {}, scale() {}, translate() {}, save() {}, restore() {}, beginPath() {}, rect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {}, arc() {}, roundRect() {} }), toBlob: (cb: (b: Blob) => void) => cb(new Blob([new Uint8Array([1])])) };
+    vi.spyOn(document, "createElement").mockReturnValue(canvas as unknown as HTMLElement);
+    await updateThumbnail("P1", [], p);
+    const pages = useNotebookStore.getState().tree.pages;
+    expect(pages.find((x) => x.id === "P1")!.thumbnailVersion).toBe(3);
+    expect(pages.find((x) => x.id === "P2")).toBe(other);
+    expect(load).not.toHaveBeenCalled();
     vi.restoreAllMocks();
   });
 });

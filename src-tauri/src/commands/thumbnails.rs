@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use serde::Serialize;
 use tauri::State;
 
 use crate::state::AppState;
@@ -32,20 +33,28 @@ fn write_thumbnail(dir: &Path, page_id: &str, bytes: &[u8]) -> Result<String, St
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Result of `save_thumbnail`: the file and the page's new `thumbnail_version`, so the frontend can
+/// patch its tree instead of reloading it.
+#[derive(Serialize)]
+pub struct ThumbnailSaved {
+    pub path: String,
+    pub version: i64,
+}
+
 #[tauri::command]
 pub fn save_thumbnail(
     state: State<'_, AppState>,
     page_id: String,
     bytes: Vec<u8>,
-) -> Result<String, String> {
+) -> Result<ThumbnailSaved, String> {
     let path = write_thumbnail(&state.data_dir.join("thumbnails"), &page_id, &bytes)?;
-    state
+    let version = state
         .storage
         .lock()
         .map_err(|e| e.to_string())?
         .bump_thumbnail_version(&page_id)
         .map_err(|e| e.to_string())?;
-    Ok(path)
+    Ok(ThumbnailSaved { path, version })
 }
 
 #[cfg(test)]
@@ -61,6 +70,15 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), b"two");
         assert!(!dir.join("abc-123.webp.tmp").exists());
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn saved_thumbnail_serializes_path_and_version() {
+        let saved = ThumbnailSaved { path: "t/p.webp".into(), version: 4 };
+        assert_eq!(
+            serde_json::to_value(&saved).unwrap(),
+            serde_json::json!({ "path": "t/p.webp", "version": 4 })
+        );
     }
 
     #[test]
