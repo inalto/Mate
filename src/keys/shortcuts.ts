@@ -124,6 +124,8 @@ export function isTypingTarget(t: EventTarget | null): boolean {
   if (typeof HTMLElement === "undefined" || !(t instanceof HTMLElement)) return false;
   if (t instanceof HTMLInputElement) return TEXT_INPUT_TYPES.has((t.getAttribute("type") ?? "").toLowerCase());
   if (t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return true;
+  // MathLive's <math-field> keeps its editable surface in a shadow root: events arrive retargeted.
+  if (t.localName === "math-field" || t.closest("math-field")) return true;
   const ce = t.closest("[contenteditable]");
   return t.isContentEditable || (ce !== null && ce.getAttribute("contenteditable") !== "false");
 }

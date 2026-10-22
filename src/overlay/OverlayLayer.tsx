@@ -3,6 +3,7 @@
 // element and the editor slot (`data-editor-for`) of the element being edited. The layer itself
 // lets pointer events through to the canvas; only its frames, handles and editors take them.
 import { createElement, type CSSProperties } from "react";
+import { contentOf } from "../model/content";
 import type { Element } from "../model/types";
 import type { EditorStore } from "../stores/editor";
 import { boxRect, contentMeta, isBoxed } from "../tools/spatialIndex";
@@ -30,7 +31,7 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
       <div className="overlay-layer" data-testid="overlay-layer" style={layerStyle}>
         {editing && (
           <div className="box-editor" data-editor-for={editing.id} data-editor-type={editing.type} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
-            {createElement(editorFor(editing.type), { el: editing, store })}
+            {createElement(editorFor(editing.type, contentOf<{ subtype?: string }>(editing).subtype), { el: editing, store })}
           </div>
         )}
         {framed.map((el) => (

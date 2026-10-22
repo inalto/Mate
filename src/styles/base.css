@@ -1299,3 +1299,25 @@ button.card:hover {
   gap: 12px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }
+
+/* Typed math: the MathLive field fills the box while editing; the global katex.css styles the rest. */
+.math-editor {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.math-editor-host {
+  width: 100%;
+}
+.math-editor math-field {
+  display: block;
+  width: 100%;
+  font-size: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px dashed var(--color-primary, #6b8e73);
+  border-radius: 4px;
+  padding: 0 4px;
+  --hue: 150;
+}

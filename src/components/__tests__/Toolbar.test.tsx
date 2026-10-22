@@ -56,6 +56,14 @@ describe("Toolbar", () => {
     expect(addCodespace).toHaveBeenCalledTimes(1);
   });
 
+  it("insert_equation_button", () => {
+    const addMathBox = vi.fn();
+    useEditorStore.setState({ addMathBox });
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Insert equation" }));
+    expect(addMathBox).toHaveBeenCalledTimes(1);
+  });
+
   it("text_tool_button", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Text (T)" }));

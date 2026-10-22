@@ -1,12 +1,13 @@
 // Static, sanitised HTML of the boxed types that render through the foreignObject -> bitmap path
-// (text boxes, tables, code blocks). One dispatch gives the snapshot cache its appearance key and
+// (text boxes, typed math, tables, code blocks). One dispatch gives the snapshot cache its appearance key and
 // SVG export its `<foreignObject>`, so the canvas, PNG, thumbnails and SVG agree.
 import { esc, n } from "../export/svgUtil";
 import { mapInkColor } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import type { Element } from "../model/types";
 import type { Rect } from "../tools/spatialIndex";
-import { textBoxForeignObject } from "./foreignObject";
+import { isMathBox } from "../math/mathBox";
+import { mathForeignObject, textBoxForeignObject } from "./foreignObject";
 import { FONT_STACKS, LINE_HEIGHT } from "./style";
 import { codeOf, tableRowsOf } from "./tableCode";
 import { textContentOf } from "./textBox";
@@ -52,6 +53,14 @@ export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | nu
     case "text-box": {
       const content = textContentOf(el);
       const color = mapInkColor(content.textAttributes.color, theme);
+      if (isMathBox(el)) {
+        return {
+          key: JSON.stringify(["math", content.contentHtml, content.textAttributes, width, height, color]),
+          width,
+          height,
+          foreignObject: (r) => mathForeignObject(content, r, color),
+        };
+      }
       return {
         key: JSON.stringify([content.contentHtml, content.textAttributes, width, height, color]),
         width,

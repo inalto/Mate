@@ -16,6 +16,7 @@ import {
   Table,
   TextT,
   Code,
+  MathOperations,
 } from "@phosphor-icons/react";
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
@@ -256,6 +257,9 @@ export default function Toolbar() {
       </button>
       <button type="button" className="tb-btn" aria-label="Insert code" title="Insert code" onClick={() => s().addCodespace()}>
         <Code size={18} />
+      </button>
+      <button type="button" className="tb-btn" aria-label="Insert equation" title="Insert equation" onClick={() => s().addMathBox()}>
+        <MathOperations size={18} />
       </button>
       {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
       {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}

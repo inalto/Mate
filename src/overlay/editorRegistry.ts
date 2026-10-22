@@ -15,17 +15,26 @@ export type BoxEditor = ComponentType<BoxEditorProps>;
 /** Default editor: renders nothing. */
 export const NoEditor: BoxEditor = () => null;
 
-const editors = new Map<ElementType, BoxEditor>();
+const editors = new Map<string, BoxEditor>();
 
-/** Register the editor for `type` (replacing any previous one); returns an unregister function. */
-export function registerEditor(type: ElementType, editor: BoxEditor): () => void {
-  editors.set(type, editor);
+const keyOf = (type: ElementType, subtype?: string): string => (subtype ? `${type}:${subtype}` : type);
+
+/**
+ * Register the editor for `type` (replacing any previous one); returns an unregister function.
+ * With `subtype` (the element's `content.subtype`, e.g. "math" on a text-box) the editor serves only
+ * those elements and takes precedence over the type's own.
+ */
+export function registerEditor(type: ElementType, editor: BoxEditor, opts: { subtype?: string } = {}): () => void {
+  const key = keyOf(type, opts.subtype);
+  editors.set(key, editor);
   return () => {
-    if (editors.get(type) === editor) editors.delete(type);
+    if (editors.get(key) === editor) editors.delete(key);
   };
 }
 
-export const editorFor = (type: ElementType): BoxEditor => editors.get(type) ?? NoEditor;
+/** The editor of `type`, or of its `subtype` when one is registered; else the empty editor. */
+export const editorFor = (type: ElementType, subtype?: string): BoxEditor =>
+  (subtype ? editors.get(keyOf(type, subtype)) : undefined) ?? editors.get(type) ?? NoEditor;
 
 /** True when `type` has a real editor (the canvas then leaves the edited element to the DOM). */
 export const hasEditor = (type: ElementType): boolean => editors.has(type);

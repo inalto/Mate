@@ -11,6 +11,7 @@ import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
+import { mathElement } from "../math/mathBox";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
@@ -94,6 +95,8 @@ export interface EditorState {
   /** Insert an empty 3x3 table / code block at the viewport centre and edit it (one "Table"/"Code" entry). */
   addTable(): string | null;
   addCodespace(): string | null;
+  /** Add an empty equation box centred in the viewport and start editing it. */
+  addMathBox(): string | null;
   /**
    * Insert an image asset of `natural` pixel size at the viewport centre (or centred on `at`, in
    * page units), scaled to fit 80 % of the visible viewport; one history entry. Its id, or null.
@@ -417,6 +420,10 @@ export function createEditorStore(): EditorStore {
 
     addCodespace() {
       return insertBox("Code", codespaceElement);
+    },
+
+    addMathBox() {
+      return insertBox("Equation", mathElement);
     },
 
     addTextBox(at) {

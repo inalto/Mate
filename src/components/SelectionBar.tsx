@@ -1,16 +1,26 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
 // (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width. Hidden while a text box is being edited (its editor has its own bar).
-import { Copy, CopySimple, Stack, Trash } from "@phosphor-icons/react";
+import { Copy, CopySimple, Function as FunctionIcon, Stack, Trash } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
 import { hasFill } from "../shapes/geometry";
+import { isMathBox, latexOf } from "../math/mathBox";
 import { textAttrsOf } from "../text/textBox";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import TextFormatControls from "./TextFormatControls";
 import { useDismiss } from "./useDismiss";
+
+/** Write `text` to the clipboard; silently does nothing where the clipboard is unavailable. */
+function copyText(text: string): void {
+  try {
+    void navigator.clipboard?.writeText(text)?.catch(() => {});
+  } catch {
+    /* no clipboard access */
+  }
+}
 
 const BAR_GAP = 12;
 const BAR_HEIGHT = 44;
@@ -120,6 +130,7 @@ export default function SelectionBar() {
   const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape");
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
+  const math = selected.length === 1 && selected[0] && isMathBox(selected[0]) ? selected[0] : undefined;
   const textBox = selected.length === 1 && selected[0]?.type === "text-box" ? selected[0] : undefined;
 
   return (
@@ -134,6 +145,11 @@ export default function SelectionBar() {
         <Trash size={16} />
       </button>
       <ArrangeMenu />
+      {math && (
+        <button type="button" className="tb-btn" aria-label="Copy as LaTeX" title="Copy as LaTeX" onClick={() => copyText(latexOf(math))}>
+          <FunctionIcon size={16} /> LaTeX
+        </button>
+      )}
       <span className="tb-sep" />
       {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
       {!textBox && PEN_PALETTE.map((c) => (

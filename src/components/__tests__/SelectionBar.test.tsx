@@ -62,4 +62,26 @@ describe("SelectionBar", () => {
     expect(screen.queryByRole("toolbar", { name: "Selection" })).toBeNull();
     act(() => s().endEdit());
   });
+
+  it("copies_a_selected_equation_as_latex", async () => {
+    useNotebookStore.setState({ loaded: true });
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    const s = () => useEditorStore.getState();
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const id = s().addMathBox()!;
+    const el = s().elements.get(id)!;
+    s().endEdit();
+    s().updateElements([{ ...el, content: { ...(el.content as object), latex: "x^2" } }]);
+    s().select([id]);
+    render(<SelectionBar />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy as LaTeX" }));
+    expect(writeText).toHaveBeenCalledWith("x^2");
+    // Other boxes do not offer it.
+    const t = s().addTextBox({ x: 10, y: 10 })!;
+    s().endEdit();
+    act(() => s().select([t]));
+    expect(screen.queryByRole("button", { name: "Copy as LaTeX" })).toBeNull();
+  });
 });
