@@ -49,9 +49,12 @@ export function boxRect(el: Element): Rect {
   };
 }
 
-/** True when `el` is laid out as a box (boxed type, or any element carrying boxWidth/boxHeight). */
+/**
+ * True when `el` is laid out as a box (boxed type, or any element carrying boxWidth/boxHeight).
+ * Shapes are not: they keep two anchor points and are selected and scaled on the canvas.
+ */
 export const isBoxed = (el: Element): boolean =>
-  isBoxedType(el.type) || (el.boxWidth !== undefined && el.boxHeight !== undefined);
+  el.type !== "shape" && (isBoxedType(el.type) || (el.boxWidth !== undefined && el.boxHeight !== undefined));
 
 /**
  * World bounds: a renderer's own `bounds` when registered; boxed elements span their box from the

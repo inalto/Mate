@@ -4,6 +4,7 @@ import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
 import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
+import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
 import { scaleElements, translateElements } from "../tools/lasso";
@@ -22,7 +23,7 @@ import {
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -65,6 +66,8 @@ export interface EditorState {
   /** Pen-down: false (and `limitReached` set) when the page is full, so no stroke may start. */
   beginStroke(): boolean;
   addElement(el: Element): void;
+  /** Add a shape drawn with the shape tool (one history entry); its id, or null when refused. */
+  addShape(style: ShapeStyle, drag: ShapeDrag): string | null;
   updateElements(els: Element[]): void;
   removeElements(ids: string[]): void;
   setTool(tool: ToolId): void;
@@ -86,7 +89,8 @@ export interface EditorState {
   selectAll(): void;
   moveSelection(dx: number, dy: number): void;
   scaleSelection(origin: Vec2, sx: number, sy: number): void;
-  restyleSelection(patch: { color?: string; width?: number }): void;
+  /** Stroke colour applies to all; width to strokes and shapes; fill colour to shapes only. */
+  restyleSelection(patch: { color?: string; width?: number; fillColor?: string }): void;
   deleteSelection(): void;
   duplicateSelection(): void;
   copySelection(): void;
@@ -109,7 +113,7 @@ export interface EditorState {
 }
 
 const maxY = (el: Element): number => {
-  if (isBoxed(el)) {
+  if (isBoxed(el) || el.type === "shape") {
     const b = elementBounds(el);
     return b.y + b.height;
   }
@@ -310,6 +314,15 @@ export function createEditorStore(): EditorStore {
       record("Draw", [{ type: "add", el: top > 0 && zOf(el) < top ? withMeta(el, { zIndex: top }) : el }]);
     },
 
+    addShape(style, drag) {
+      const pageId = get().pageId;
+      if (!pageId) return null;
+      const top = topZ(get().elements.values());
+      const shape = shapeElement(style, drag, pageId, crypto.randomUUID(), new Date().toISOString());
+      const el = top > 0 ? withMeta(shape, { zIndex: top }) : shape;
+      return record("Shape", [{ type: "add", el }]) ? el.id : null;
+    },
+
     updateElements(els) {
       const cur = get().elements;
       record(
@@ -328,7 +341,7 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      if (tool === "eraser") set({ tool, selection: new Set(), editingId: null });
+      if (tool === "eraser" || tool === "shape") set({ tool, selection: new Set(), editingId: null });
       else set({ tool });
     },
     setPreset: (preset) => set({ preset, tool: preset.type, selection: new Set(), editingId: null }),
@@ -406,14 +419,17 @@ export function createEditorStore(): EditorStore {
     },
     restyleSelection(patch) {
       // Consecutive width changes (a slider drag) on the same selection merge into one entry.
-      const key = patch.color === undefined ? `width:${[...get().selection].sort().join(",")}` : undefined;
+      const widthOnly = patch.color === undefined && patch.fillColor === undefined;
+      const key = widthOnly ? `width:${[...get().selection].sort().join(",")}` : undefined;
+      const sized = (el: Element) => el.type === "stroke" || el.type === "shape";
       transformSelection(
         "Style",
         (els) =>
           els.map((el) => ({
             ...el,
             ...(patch.color !== undefined ? { color: patch.color } : {}),
-            ...(patch.width !== undefined && el.type === "stroke" ? { width: patch.width } : {}),
+            ...(patch.width !== undefined && sized(el) ? { width: patch.width } : {}),
+            ...(patch.fillColor !== undefined && el.type === "shape" ? { fillColor: patch.fillColor } : {}),
           })),
         key,
       );

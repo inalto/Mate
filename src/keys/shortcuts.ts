@@ -7,6 +7,7 @@ export type ShortcutAction =
   | "tool.eraser"
   | "tool.cursor"
   | "tool.lasso"
+  | "tool.shape"
   | "preset.slot"
   | "undo"
   | "redo"
@@ -65,6 +66,7 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = [
   { action: "tool.eraser", key: "e" },
   { action: "tool.cursor", key: "v" },
   { action: "tool.lasso", key: "l" },
+  { action: "tool.shape", key: "s" },
   ...Array.from({ length: 9 }, (_, i): ShortcutBinding => ({
     action: "preset.slot",
     code: `Digit${i + 1}`,

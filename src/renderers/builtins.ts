@@ -10,6 +10,8 @@ import { boxRect, contentMeta } from "../tools/spatialIndex";
 import { n } from "../export/svgUtil";
 import { boxSnapshots, type BoxBitmap } from "./boxSnapshot";
 import { registerRenderer, type ElementRenderer, type RenderOptions } from "./registry";
+// Types with their own renderer module (registered on import).
+import "./shape";
 
 export const PLACEHOLDER_COLOR = "#9aa0a6";
 

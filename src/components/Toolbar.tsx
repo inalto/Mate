@@ -1,4 +1,5 @@
-// Editor toolbar: preset slots, add-pen menu, eraser (with options), cursor, lasso, undo/redo, zoom.
+// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options), cursor,
+// lasso, undo/redo, zoom.
 import {
   ArrowUUpLeft,
   ArrowUUpRight,
@@ -20,6 +21,8 @@ import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useSettingsStore } from "../stores/settings";
 import PresetMenu from "./PresetMenu";
+import { SHAPE_LABEL } from "../shapes/catalog";
+import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
 import { useDismiss } from "./useDismiss";
 
 const INK_LABEL: Record<InkType, string> = { pen: "Pen", "fountain-pen": "Fountain pen", highlighter: "Highlighter" };
@@ -180,6 +183,30 @@ function EraserButton() {
   );
 }
 
+function ShapeButton() {
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "shape");
+  const type = useSettingsStore((s) => s.settings.defaultShapeType);
+  useDismiss(ref, open, () => setOpen(false));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label="Shape"
+        title={`Shape: ${SHAPE_LABEL[type]} (S)`}
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("shape"))}
+      >
+        <ShapeIcon type={type} />
+      </button>
+      {open && <ShapeMenu />}
+    </div>
+  );
+}
+
 export default function Toolbar() {
   const ed = useFocusedEditor();
   const presets = useSettingsStore((s) => s.settings.toolbarPresets);
@@ -214,6 +241,7 @@ export default function Toolbar() {
       <AddPenMenu />
       <span className="tb-sep" />
       <EraserButton />
+      <ShapeButton />
       {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
       {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}
       <span className="tb-sep" />

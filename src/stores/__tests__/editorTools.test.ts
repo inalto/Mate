@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 import { LIMITS } from "../../model/constants";
 import { el } from "../../tools/__tests__/fixtures";
+import { shapeFromDrag } from "../../shapes/geometry";
 
 const queue = vi.hoisted(() => ({
   enqueueUpsert: vi.fn(),
@@ -163,5 +164,31 @@ describe("editor store tools", () => {
     s().undo(); // undoes the removal of "extra" first (LIFO) -> back at the limit
     s().undo(); // re-adding "a" would exceed: refused again
     expect(s().elements.has("a")).toBe(false);
+  });
+
+  it("add_shape_is_one_entry_and_restyle_reaches_shapes", async () => {
+    await load([a]);
+    const s = () => useEditorStore.getState();
+    s().setTool("shape");
+    expect(s().tool).toBe("shape");
+    const drag = shapeFromDrag("rectangle", { x: 10, y: 10 }, { x: 60, y: 40 }, false);
+    const id = s().addShape({ shapeType: "rectangle", color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 }, drag);
+    const added = s().elements.get(id!)!;
+    expect(added).toMatchObject({ type: "shape", shapeType: "rectangle", boxWidth: 50, boxHeight: 30, pageId: "pg" });
+    expect(added.content).toEqual({ fillOpacity: 1 });
+    expect(queue.enqueueUpsert).toHaveBeenLastCalledWith(added);
+    s().select([id!, "a"]);
+    s().restyleSelection({ fillColor: "#C62828" });
+    expect(s().elements.get(id!)!.fillColor).toBe("#C62828");
+    expect(s().elements.get("a")!.fillColor).toBeUndefined(); // strokes have no fill
+    s().restyleSelection({ width: 5 });
+    expect(s().elements.get(id!)!.width).toBe(5);
+    expect(s().elements.get("a")!.width).toBe(5);
+    s().undo();
+    s().undo();
+    expect(s().elements.get(id!)!.fillColor).toBe("transparent");
+    s().undo();
+    expect(s().elements.has(id!)).toBe(false);
+    expect(s().canUndo).toBe(false);
   });
 });

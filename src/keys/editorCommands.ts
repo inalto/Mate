@@ -85,6 +85,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.setTool("cursor");
     case "tool.lasso":
       return s.setTool("lasso");
+    case "tool.shape":
+      return s.setTool("shape");
     case "preset.slot":
       return detail.slot !== undefined ? s.selectSlot(detail.slot) : undefined;
     case "undo":

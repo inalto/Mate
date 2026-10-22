@@ -1,6 +1,7 @@
 // Lasso selection and selection transforms (pure).
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
+import { isClosedShape, normalizeShape, shapeRectOf } from "../shapes/geometry";
 import { boxRect, contentMeta, elementBounds, isBoxed, withMeta, type Rect, type SpatialIndex } from "./spatialIndex";
 
 /** Even-odd ray-casting point-in-polygon test. */
@@ -83,9 +84,10 @@ export function translateElements(els: readonly Element[], dx: number, dy: numbe
 }
 
 /**
- * Scale about `origin`. Strokes and shapes: points map, width scales by the geometric mean. Boxed
- * elements: the box maps (normalised, so a mirrored drag keeps a top-left anchor); images keep
- * their aspect (geometric-mean factor) with the corner nearest `origin` fixed.
+ * Scale about `origin`. Strokes and shapes: points map, width scales by the geometric mean (shape
+ * anchors are re-normalised, see shapes/geometry). Boxed elements: the box maps (normalised, so a
+ * mirrored drag keeps a top-left anchor); images keep their aspect (geometric-mean factor) with
+ * the corner nearest `origin` fixed.
  */
 export function scaleElements(els: readonly Element[], origin: Vec2, sx: number, sy: number): Element[] {
   const k = Math.sqrt(Math.abs(sx * sy));
@@ -95,7 +97,7 @@ export function scaleElements(els: readonly Element[], origin: Vec2, sx: number,
     if (isBoxed(el)) return scaleBox(el, mx, my, origin, k);
     const out = mapPoints(el, (p) => ({ x: mx(p.x), y: my(p.y) }));
     out.width = el.width * k;
-    return out;
+    return el.type === "shape" ? normalizeShape(out) : out;
   });
 }
 
@@ -133,11 +135,23 @@ export function withBoxRect(el: Element, r: Rect): Element {
   return out;
 }
 
-/** Rotate points about `centre`; boxed elements also accumulate `content.rotation`. */
+/**
+ * Rotate points about `centre`; boxed elements also accumulate `content.rotation`. Box-like shapes
+ * move their box centre and accumulate `content.rotation` (lines and arrows rotate their points).
+ */
 export function rotateElements(els: readonly Element[], centre: Vec2, rad: number): Element[] {
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
   return els.map((el) => {
+    if (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle")) {
+      const b = shapeRectOf(el);
+      const cx = b.x + b.width / 2 - centre.x;
+      const cy = b.y + b.height / 2 - centre.y;
+      const dx = centre.x + cx * cos - cy * sin - (b.x + b.width / 2);
+      const dy = centre.y + cx * sin + cy * cos - (b.y + b.height / 2);
+      const moved = mapPoints(el, (p) => ({ x: p.x + dx, y: p.y + dy }));
+      return withMeta(moved, { rotation: (contentMeta(el).rotation ?? 0) + rad });
+    }
     const out = mapPoints(el, (p) => {
       const x = p.x - centre.x;
       const y = p.y - centre.y;

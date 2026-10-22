@@ -768,6 +768,33 @@ button.card:hover {
   width: 240px;
 }
 
+.shape-menu,
+.fill-menu {
+  width: 248px;
+}
+
+.shape-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-1);
+}
+
+.tb-label {
+  color: var(--color-text-muted);
+  font-size: 0.8em;
+}
+
+/* "No fill" swatch: a red diagonal through white. */
+.tb-swatch.no-fill {
+  background: linear-gradient(
+    to top right,
+    #ffffff calc(50% - 1px),
+    #c62828 calc(50% - 1px),
+    #c62828 calc(50% + 1px),
+    #ffffff calc(50% + 1px)
+  );
+}
+
 .hue-strip {
   width: 100%;
   height: 12px;

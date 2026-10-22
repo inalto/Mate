@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
 
+import { setSettings } from "../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { useEditorStore } from "../../stores/editor";
 import { useSettingsStore } from "../../stores/settings";
@@ -33,5 +34,34 @@ describe("Toolbar", () => {
     expect(useSettingsStore.getState().settings.toolbarPresets.map((p) => p.id)).not.toContain("preset-4");
     expect(screen.queryByRole("button", { name: "Highlighter #FDE047" })).toBeNull();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
+  });
+
+  it("shape_tool_menu_sets_and_persists_shape_defaults", () => {
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Shape" }));
+    expect(useEditorStore.getState().tool).toBe("shape");
+    expect(screen.queryByRole("dialog", { name: "Shape options" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Shape" })); // second click opens the menu
+    const menu = screen.getByRole("dialog", { name: "Shape options" });
+    expect(within(menu).getAllByRole("radio")).toHaveLength(11);
+    fireEvent.click(within(menu).getByRole("radio", { name: "Star" }));
+    fireEvent.click(within(menu).getByRole("button", { name: "Stroke #C62828" }));
+    fireEvent.click(within(menu).getByRole("button", { name: "Fill #1565C0" }));
+    fireEvent.change(within(menu).getByRole("slider", { name: "Fill opacity" }), { target: { value: "0.25" } });
+    fireEvent.change(within(menu).getByRole("slider", { name: "Stroke width" }), { target: { value: "6.5" } });
+    const cfg = () => useSettingsStore.getState().settings;
+    expect(cfg()).toMatchObject({
+      defaultShapeType: "star",
+      defaultShapeStrokeColor: "#C62828",
+      defaultShapeFillColor: "#1565C0",
+      defaultShapeFillOpacity: 0.25,
+      defaultShapeStrokeWidth: 6.5,
+    });
+    fireEvent.click(within(menu).getByRole("button", { name: "No fill" }));
+    expect(cfg().defaultShapeFillColor).toBe("transparent");
+    expect(setSettings).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Shape" })); // closes and saves
+    expect(screen.queryByRole("dialog", { name: "Shape options" })).toBeNull();
+    expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ defaultShapeType: "star", defaultShapeStrokeWidth: 6.5 }));
   });
 });

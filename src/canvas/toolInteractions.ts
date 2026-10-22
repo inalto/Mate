@@ -1,9 +1,10 @@
 // Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon),
 // selection drag-move and corner-handle scaling, click/double-click on boxed elements (select /
-// open the editor). Geometry is pure; `createToolController` wires it
+// open the editor), shape tool (drag a box, Shift constrains, live preview). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
+import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
@@ -19,6 +20,8 @@ export const HANDLE_PX = 5;
 const HIT_SLOP_PX = 8;
 const MIN_SCALE = 0.05;
 const LASSO_STEP_PX = 3;
+/** A shape drag shorter than this (screen px) is a click and adds nothing. */
+const MIN_SHAPE_DRAG_PX = 3;
 /** Second click within this time (ms) and distance (screen px) on the same element is a double-click. */
 export const DOUBLE_TAP_MS = 400;
 const DOUBLE_TAP_PX = 8;
@@ -59,11 +62,15 @@ export function scaleFromDrag(b: Rect, corner: Corner, p: Vec2, uniform: boolean
   return { origin, sx, sy };
 }
 
-/** Topmost element under `p` (strokes by distance, others by bounds). */
+/** Topmost element under `p` (strokes by distance, shapes by outline or interior, others by bounds). */
 export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number): string | null {
   const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
   const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e)).filter((el) =>
-    el.type === "stroke" ? polylineTouches(el.points, p, el.width / 2 + tol) : rectContains(elementBounds(el), p, tol),
+    el.type === "stroke"
+      ? polylineTouches(el.points, p, el.width / 2 + tol)
+      : el.type === "shape"
+        ? shapeHit(el, p, tol)
+        : rectContains(elementBounds(el), p, tol),
   );
   return hits.length > 0 ? hits[hits.length - 1].id : null;
 }
@@ -100,6 +107,7 @@ type Gesture =
   | { kind: "idle" }
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
+  | { kind: "shape"; start: Vec2; end: Vec2 }
   | { kind: "move"; start: Vec2; delta: Vec2; orig: Element[]; lifted: boolean }
   | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } };
 
@@ -158,6 +166,13 @@ export function createToolController(deps: ToolDeps) {
     deps.invalidate();
   };
 
+  /** The shape being dragged, as an element (for the live preview). */
+  const shapePreview = (start: Vec2, end: Vec2): Element[] => {
+    const style = shapeStyleOf(deps.getSettings());
+    const drag = shapeFromDrag(style.shapeType, start, end, shift);
+    return [shapeElement(style, drag, st().pageId ?? "", "shape-preview", "")];
+  };
+
   const eraseAlong = (from: Vec2, to: Vec2) => {
     const s = st();
     const step = Math.max(0.5, deps.getSettings().defaultEraserWidth / 4 / s.camera.z);
@@ -170,6 +185,9 @@ export function createToolController(deps: ToolDeps) {
     if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
+    } else if (tool === "shape") {
+      g = { kind: "shape", start: p, end: p };
+      preview = [];
     } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
       g = { kind: "idle" };
     } else if (tool === "cursor" || tool === "lasso") {
@@ -213,6 +231,10 @@ export function createToolController(deps: ToolDeps) {
           if (Math.hypot(q.x - last.x, q.y - last.y) * z >= LASSO_STEP_PX) g.points.push(q);
         }
         break;
+      case "shape":
+        g.end = p;
+        preview = shapePreview(g.start, g.end);
+        break;
       case "move":
         g.delta = { x: p.x - g.start.x, y: p.y - g.start.y };
         if (!g.lifted && (g.delta.x !== 0 || g.delta.y !== 0)) {
@@ -235,6 +257,13 @@ export function createToolController(deps: ToolDeps) {
       case "erase":
         s.endEraser();
         break;
+      case "shape": {
+        drop();
+        const style = shapeStyleOf(deps.getSettings());
+        const drag = shapeFromDrag(style.shapeType, g.start, g.end, shift);
+        if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addShape(style, drag);
+        break;
+      }
       case "lasso":
         if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points));
         break;
@@ -315,7 +344,12 @@ export function createToolController(deps: ToolDeps) {
     deps.requestLive();
   };
   const onKey = (e: KeyboardEvent) => {
+    if (shift === e.shiftKey) return;
     shift = e.shiftKey;
+    if (g.kind === "shape" && preview.length > 0) {
+      preview = shapePreview(g.start, g.end);
+      deps.requestLive();
+    }
   };
   deps.el.addEventListener("pointermove", onHover);
   deps.el.addEventListener("pointerleave", onLeave);
