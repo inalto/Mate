@@ -22,6 +22,7 @@ interface NotebookState {
   trashItems: TrashItem[];
   load: () => Promise<void>;
   loadTrash: () => Promise<void>;
+  createBookshelf: (title: string) => Promise<Bookshelf>;
   createUnit: (title: string, bookshelfId?: string) => Promise<Unit>;
   createSection: (unitId: string, title: string) => Promise<Section>;
   createPage: (sectionId: string, title: string, parentId?: string) => Promise<Page>;
@@ -132,6 +133,21 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
     },
     loadTrash: async () => {
       set({ trashItems: await ipc.listTrash() });
+    },
+
+    createBookshelf: async (title) => {
+      const stamp = now();
+      const shelf: Bookshelf = {
+        id: crypto.randomUUID(),
+        title,
+        order: tree().bookshelves.length,
+        isExpanded: true,
+        createdAt: stamp,
+        updatedAt: stamp,
+        version: 0,
+      };
+      await saveShelf(shelf);
+      return shelf;
     },
 
     createUnit: async (title, bookshelfId) => {

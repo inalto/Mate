@@ -21,13 +21,16 @@ export default function Trash() {
   const [query, setQuery] = useState("");
   const [confirming, setConfirming] = useState(false);
 
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+
   useEffect(() => {
-    const { trashRetentionDays } = useSettingsStore.getState().settings;
+    // Never prune with a setting that has not been loaded from disk yet.
+    if (!settingsLoaded) return;
     void (async () => {
-      if (trashRetentionDays > 0) await purgeTrashOlderThan(trashRetentionDays);
+      if (retention > 0) await purgeTrashOlderThan(retention);
       await useNotebookStore.getState().loadTrash();
     })();
-  }, []);
+  }, [settingsLoaded, retention]);
 
   const store = useNotebookStore.getState();
   const shown = [...items]

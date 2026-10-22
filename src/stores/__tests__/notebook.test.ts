@@ -97,4 +97,49 @@ describe("notebook store", () => {
     expect(groups.map((g) => g.shelf?.id ?? null)).toEqual(["s1", "s2", null]);
     expect(groups[2].units.map((u) => u.id)).toEqual(["loose"]);
   });
+
+  it("unitsByRecent_rolls_up_page_activity", () => {
+    setTree({
+      units: [unit("a", "2026-03-01T00:00:00Z"), unit("b", "2026-01-01T00:00:00Z")],
+      sections: [
+        {
+          id: "sb",
+          unitId: "b",
+          title: "Notes",
+          color: "#4a5d4e",
+          orderIndex: 0,
+          isExpanded: true,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+          version: 0,
+        },
+      ],
+      pages: [
+        {
+          id: "p",
+          sectionId: "sb",
+          title: "P",
+          isExpanded: true,
+          isFavourite: false,
+          depth: 0,
+          mode: "canvas",
+          backgroundConfig: { type: "ruled", spacing: 40, dotRadius: 1.5 },
+          thumbnailVersion: 0,
+          orderIndex: 0,
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-06-01T00:00:00Z",
+          version: 0,
+        },
+      ],
+    });
+    expect(useNotebookStore.getState().unitsByRecent().map((u) => u.id)).toEqual(["b", "a"]);
+  });
+
+  it("createBookshelf_uses_shelf_count_as_order", async () => {
+    setTree({ bookshelves: [shelf("s1", 0)] });
+    const b = await useNotebookStore.getState().createBookshelf("Science");
+    expect(b.order).toBe(1);
+    expect(ipc.upsertBookshelf).toHaveBeenCalledTimes(1);
+    expect(useNotebookStore.getState().tree.bookshelves).toHaveLength(2);
+  });
 });

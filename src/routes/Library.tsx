@@ -2,13 +2,18 @@ import { Plus } from "@phosphor-icons/react";
 import { useState } from "react";
 import BookCard from "../components/BookCard";
 import type { Unit } from "../model/types";
+import ShelfSection from "../components/ShelfSection";
 import { useNotebookStore } from "../stores/notebook";
+import { useSettingsStore } from "../stores/settings";
 
 type View = "recent" | "az" | "shelves";
 
 export default function Library() {
   const tree = useNotebookStore((s) => s.tree);
-  const [view, setView] = useState<View>("recent");
+  const libraryView = useSettingsStore((s) => s.settings.libraryView);
+  const view: View = libraryView === "az" || libraryView === "shelves" ? libraryView : "recent";
+  const setView = (v: View) => void useSettingsStore.getState().update({ libraryView: v });
+  const [newShelf, setNewShelf] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   // Reading `tree` above subscribes us; selectors read the same state.
@@ -71,20 +76,31 @@ export default function Library() {
       {view === "az" && grid(store.unitsAZ())}
       {view === "shelves" && (
         <>
-          {store.unitsByShelf().map((g) => {
-            const units = g.units.filter(match);
-            if (units.length === 0 && g.shelf) return null;
-            return (
-              <section key={g.shelf?.id ?? "none"}>
-                <h2 className="section-title">{g.shelf?.title ?? "Unshelved"}</h2>
-                <div className="grid">
-                  {units.map((u) => (
-                    <BookCard key={u.id} unit={u} />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+          {store.unitsByShelf().map((g) => (
+            <ShelfSection key={g.shelf?.id ?? "none"} shelf={g.shelf} units={g.units.filter(match)} />
+          ))}
+          {newShelf === null ? (
+            <div>
+              <button type="button" className="btn" onClick={() => setNewShelf("")}>New shelf</button>
+            </div>
+          ) : (
+            <input
+              className="input"
+              aria-label="New shelf name"
+              placeholder="Shelf name"
+              autoFocus
+              value={newShelf}
+              onChange={(e) => setNewShelf(e.target.value)}
+              onBlur={() => setNewShelf(null)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setNewShelf(null);
+                if (e.key === "Enter" && newShelf.trim()) {
+                  void store.createBookshelf(newShelf.trim());
+                  setNewShelf(null);
+                }
+              }}
+            />
+          )}
           <div className="grid">{tile}</div>
         </>
       )}

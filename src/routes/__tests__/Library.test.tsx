@@ -71,4 +71,26 @@ describe("Library", () => {
     expect(screen.queryByText("Physics")).toBeNull();
     expect(screen.getByText("Chemistry")).toBeTruthy();
   });
+
+  it("shows empty shelves and creates a new shelf in Shelves view", async () => {
+    useNotebookStore.setState({
+      tree: {
+        bookshelves: [
+          { id: "s1", title: "Empty shelf", order: 0, isExpanded: true, createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", version: 0 },
+        ],
+        units: [],
+        sections: [],
+        pages: [],
+      },
+      loaded: true,
+    });
+    renderLibrary();
+    fireEvent.click(screen.getByText("Shelves"));
+    expect(await screen.findByText("Empty shelf")).toBeTruthy();
+    fireEvent.click(screen.getByText("New shelf"));
+    const input = screen.getByLabelText("New shelf name");
+    fireEvent.change(input, { target: { value: "Maths" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(await screen.findByText("Maths")).toBeTruthy();
+  });
 });
