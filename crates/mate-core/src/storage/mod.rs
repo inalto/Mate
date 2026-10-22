@@ -1,6 +1,6 @@
 //! SQLite persistence for the notebook tree and page elements.
 
-mod elements;
+pub(crate) mod elements;
 mod notebook;
 
 use std::path::Path;

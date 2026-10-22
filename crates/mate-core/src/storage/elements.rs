@@ -10,9 +10,9 @@ use super::{
 use crate::model::{Element, now_iso};
 
 /// Maximum live elements on one page.
-const MAX_ELEMENTS_PER_PAGE: i64 = 5000;
+pub(crate) const MAX_ELEMENTS_PER_PAGE: i64 = 5000;
 /// Maximum points in one element.
-const MAX_POINTS_PER_STROKE: usize = 50_000;
+pub(crate) const MAX_POINTS_PER_STROKE: usize = 50_000;
 
 const ELEMENT_COLS: &str = "id, page_id, type, points, color, width, height, is_highlighter, \
      pen_style, image_url, shape_type, fill_color, box_width, box_height, content, \
