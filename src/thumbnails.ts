@@ -2,6 +2,7 @@
 // export WebP. Always drawn with the light theme so cards look the same in every app theme.
 import type { Rect } from "./canvas/background";
 import { sheetSize } from "./canvas/camera";
+import { readyGraphs } from "./export/readyGraphs";
 import { contentRegion, paintScene } from "./export/scene";
 import { saveThumbnail } from "./ipc/thumbnails";
 import type { Element, Page } from "./model/types";
@@ -40,6 +41,7 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   const list = [...elements].filter((e) => e.pageId === pageId);
   const region = thumbnailRegion(page, list, aspect);
   const scale = THUMB_WIDTH / region.width;
+  await readyGraphs(list); // no "Loading…" graph frames in thumbnails
   await prepareTextSnapshots(list, "light", scale);
   await prepareImages(list);
   // Only the PDF pages inside the thumbnail (page mode shows the first sheet only).

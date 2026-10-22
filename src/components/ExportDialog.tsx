@@ -1,21 +1,24 @@
-// Export the current page as PNG/SVG, or its book as a `.mate` archive.
+// Export the current page as PNG, SVG, PDF or LaTeX, or its book as a `.mate` archive.
 import { useState } from "react";
 import { exportPage } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 
-type Format = "png" | "svg" | "mate";
+type Format = "png" | "svg" | "pdf" | "latex" | "mate";
 
 const FORMATS: [Format, string][] = [
   ["png", "PNG"],
   ["svg", "SVG"],
+  ["pdf", "PDF"],
+  ["latex", "LaTeX"],
   ["mate", "Mate archive"],
 ];
 const SCALES = [1, 2, 3];
 
-/** The settings' default format; PDF arrives in Phase 2 and falls back to PNG until then. */
-const initialFormat = (setting: string): Format => (setting === "svg" || setting === "mate" ? setting : "png");
+/** The settings' default format (unknown values fall back to PDF). */
+const initialFormat = (setting: string): Format =>
+  FORMATS.some(([f]) => f === setting) ? (setting as Format) : "pdf";
 
 export default function ExportDialog({ pageId, onClose }: { pageId: string; onClose(): void }) {
   const defaultFormat = useSettingsStore((s) => s.settings.defaultExportFormat);
@@ -27,6 +30,9 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [background, setBackground] = useState<"plain" | "transparent">("plain");
   const [scale, setScale] = useState(2);
+  const [pages, setPages] = useState<"all" | "current">("all");
+  const [searchable, setSearchable] = useState(true);
+  const pageMode = useNotebookStore((s) => s.tree.pages.find((p) => p.id === pageId)?.mode === "page");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,6 +43,10 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
       if (format === "mate") {
         if (!unitId) throw new Error("This page is not in a book");
         await exportUnitArchive(unitId);
+      } else if (format === "latex") {
+        await exportPage(pageId, "latex", {});
+      } else if (format === "pdf") {
+        await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable });
       } else {
         await exportPage(pageId, format, format === "png" ? { theme, background, scale } : { theme, background });
       }
@@ -63,13 +73,21 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
       <div className="card dialog" role="dialog" aria-modal="true" aria-label="Export">
         <h2>Export</h2>
         {seg("Format", FORMATS, format, setFormat)}
-        {format !== "mate" && (
+        {format !== "mate" && format !== "latex" && (
           <>
             {seg<"light" | "dark">("Paper", [["light", "Light"], ["dark", "Dark"]], theme, setTheme)}
             {seg<"plain" | "transparent">("Background", [["plain", "Plain"], ["transparent", "Transparent"]], background, setBackground)}
           </>
         )}
         {format === "png" && seg("Scale", SCALES.map((s): [number, string] => [s, `${s}×`]), scale, setScale)}
+        {format === "pdf" && pageMode && seg<"all" | "current">("Pages", [["all", "All sheets"], ["current", "Current sheet"]], pages, setPages)}
+        {format === "pdf" && (
+          <label className="field">
+            <span className="field-label">Searchable text</span>
+            <input type="checkbox" checked={searchable} onChange={(e) => setSearchable(e.target.checked)} />
+          </label>
+        )}
+        {format === "latex" && <p className="field-hint">Saves a .tex file; pictures become image placeholders.</p>}
         {format === "mate" && <p className="field-hint">Exports the whole book this page belongs to.</p>}
         {error && <p role="alert" className="form-error">Export failed: {error}</p>}
         <div className="dialog-actions">

@@ -51,17 +51,46 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("ExportDialog", () => {
-  it("defaults pdf to PNG and offers scale only for PNG", () => {
+  it("defaults to PDF and offers scale only for PNG", () => {
     render(<ExportDialog pageId="p1" onClose={onClose} />);
-    expect(pressed("PNG")).toBe("true");
+    expect(pressed("PDF")).toBe("true");
+    expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Searchable text" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "PNG" }));
     expect(screen.getByRole("group", { name: "Scale" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "SVG" }));
     expect(screen.queryByRole("group", { name: "Scale" })).toBeNull();
     expect(screen.getByRole("group", { name: "Paper" })).toBeTruthy();
   });
 
+  it("exports a PDF with the page range and text layer options", async () => {
+    useNotebookStore.setState({ tree: { bookshelves: [], units: [], sections: [section], pages: [{ ...page, mode: "page" }] } });
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    expect(pressed("All sheets")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Current sheet" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Searchable text" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(exportPage).toHaveBeenCalledWith("p1", "pdf", { theme: "light", background: "plain", pages: "current", searchable: false });
+  });
+
+  it("offers page range only for page-mode pages", () => {
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    expect(screen.queryByRole("group", { name: "Pages" })).toBeNull();
+  });
+
+  it("exports LaTeX without paper options", async () => {
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "LaTeX" }));
+    expect(screen.queryByRole("group", { name: "Paper" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(exportPage).toHaveBeenCalledWith("p1", "latex", {});
+  });
+
   it("exports the page with the chosen options", async () => {
     render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "PNG" }));
     fireEvent.click(screen.getByRole("button", { name: "Dark" }));
     fireEvent.click(screen.getByRole("button", { name: "Transparent" }));
     fireEvent.click(screen.getByRole("button", { name: "3×" }));
