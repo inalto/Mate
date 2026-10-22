@@ -9,7 +9,7 @@ import { drawElement } from "../../renderers/registry";
 import { textBoxForeignObject } from "../../text/foreignObject";
 import { el } from "../../tools/__tests__/fixtures";
 import { setHtmlRasterizer, type HtmlRasterizer } from "../htmlToBitmap";
-import { clearTextSnapshots, prepareTextSnapshots, renderTextSnapshot, snapshotScale } from "../snapshot";
+import { clearTextSnapshots, prepareTextSnapshots, renderTextSnapshot, snapshotScale, textSnapshotFor } from "../snapshot";
 
 const STAMP = "2026-01-01T00:00:00.000Z";
 const page: Page = {
@@ -173,6 +173,28 @@ describe("text box rendering", () => {
     // A rasterizer that never answers does not hang the export.
     setHtmlRasterizer(() => new Promise(() => {}));
     await expect(prepareTextSnapshots([tb("c", "<p>c</p>")], "light", 1, 10)).resolves.toBeUndefined();
+  });
+
+  it("thumbnail_render_does_not_publish_or_evict_canvas_snapshot", async () => {
+    const b = tb("b", "<p>x</p>", { content: { ...content("<p>x</p>"), textAttributes: { fontFamily: "sans", fontSize: 20, color: "#000000", align: "left" } } });
+    // The canvas (dark theme) renders and publishes its bitmap.
+    drawElement(recordingCtx().ctx, b, { theme: "dark", zoomBucket: 1 });
+    await settle();
+    const dark = boxSnapshots.get(b);
+    expect(dark).not.toBeNull();
+    // A light thumbnail render keeps its own bitmap and leaves the element's snapshot alone.
+    await prepareTextSnapshots([b], "light", 1);
+    expect(stub.calls).toHaveLength(2);
+    expect(boxSnapshots.get(b)).toBe(dark);
+    expect(textSnapshotFor(b, "dark")?.bitmap).toBe(dark);
+    expect(textSnapshotFor(b, "light")?.bitmap).not.toBe(dark);
+    // Both themes now draw without new renders.
+    const r = recordingCtx();
+    drawElement(r.ctx, b, { theme: "dark", zoomBucket: 1 });
+    expect(r.calls.find((c) => c.name === "drawImage")?.args[0]).toBe(dark);
+    await prepareTextSnapshots([b], "light", 1);
+    await settle();
+    expect(stub.calls).toHaveLength(2);
   });
 
   it("svg_export_embeds_foreign_object", () => {

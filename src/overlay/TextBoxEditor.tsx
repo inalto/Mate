@@ -16,6 +16,7 @@ import { contentOf, type TextAttributes, type TextBoxContent } from "../model/co
 import type { Element } from "../model/types";
 import { useSettingsStore } from "../stores/settings";
 import { boxHeightFor } from "../text/measure";
+import { sanitizeHtml } from "../text/sanitize";
 import { boxCss, CONTENT_CLASS, CONTENT_CSS } from "../text/style";
 import { textContentOf } from "../text/textBox";
 import { registerEditor, type BoxEditorProps } from "./editorRegistry";
@@ -72,9 +73,14 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
     latest.current.measured = dom?.scrollHeight ?? 0;
   }, []);
 
-  /** `cur` with the session's content, attributes and measured height. */
+  /**
+   * `cur` with the session's content, attributes and measured height; `cur` itself when neither the
+   * HTML nor the attributes changed (its height stays, e.g. after a scale or with fallback fonts).
+   */
   const edited = useCallback((cur: Element): Element => {
     const { html, attrs: a, measured } = latest.current;
+    const stored = textContentOf(cur);
+    if (sanitizeHtml(html) === stored.contentHtml && JSON.stringify(a) === JSON.stringify(stored.textAttributes)) return cur;
     const content: TextBoxContent = { ...contentOf<TextBoxContent>(cur), contentHtml: html, rawContent: "", textAttributes: a };
     return { ...cur, content, boxHeight: boxHeightFor(measured, a.fontSize, cur.boxHeight ?? 0) };
   }, []);

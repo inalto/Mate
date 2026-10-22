@@ -57,6 +57,10 @@ const STYLE_VALUE: Record<string, RegExp> = {
 /** Anything that can fetch or run code inside a CSS value. */
 const UNSAFE_VALUE = /url\s*\(|expression|javascript:|data:|[\\<>@{}]/i;
 
+/** True for a CSS colour value the sanitiser accepts (hex, rgb()/rgba(), a named colour). */
+export const isSafeColor = (v: unknown): v is string =>
+  typeof v === "string" && !UNSAFE_VALUE.test(v) && STYLE_VALUE.color.test(v.trim());
+
 /** Allowed declarations of a style attribute, canonicalised as `prop: value;` joined by spaces. */
 function cleanStyle(style: string, drop?: string): string {
   const out: string[] = [];

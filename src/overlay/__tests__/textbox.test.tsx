@@ -210,6 +210,39 @@ describe("TextBoxEditor", () => {
     }
   });
 
+  it("unchanged_session_keeps_height_and_records_nothing", async () => {
+    // A box scaled below one line of its font (e.g. by a corner-handle scale).
+    const box: Element = {
+      id: "tb",
+      pageId: "pg",
+      type: "text-box",
+      points: [{ x: 0, y: 0, pressure: 0.5, timestamp: 0 }],
+      color: "#000000",
+      width: 1,
+      isHighlighter: false,
+      boxWidth: 320,
+      boxHeight: 10,
+      content: {
+        contentHtml: "<p>hi</p>",
+        rawContent: "hi",
+        textAttributes: { fontFamily: "sans", fontSize: 20, color: "#000000", align: "left" },
+      },
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      version: 0,
+    };
+    await load([box]);
+    render(<OverlayLayer store={store} />);
+    act(() => s().beginEdit("tb"));
+    act(() => s().endEdit());
+    expect(s().elements.get("tb")!.boxHeight).toBe(10);
+    expect(s().elements.get("tb")!.updatedAt).toBe(box.updatedAt);
+    expect(s().canUndo).toBe(false);
+    await act(() => new Promise((r) => setTimeout(r, 0))); // the unmount fallback commit
+    expect(s().canUndo).toBe(false);
+    expect(s().elements.get("tb")!.boxHeight).toBe(10);
+  });
+
   it("sanitises_stored_html_on_load", async () => {
     const box: Element = {
       id: "tb",

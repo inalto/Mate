@@ -5,7 +5,12 @@ import { DEFAULT_SETTINGS } from "../model/constants";
 import { contentOf, type TextAttributes, type TextBoxContent } from "../model/content";
 import type { Element } from "../model/types";
 import { defaultBoxSize } from "./measure";
-import { sanitizeHtml } from "./sanitize";
+import { isSafeColor, sanitizeHtml } from "./sanitize";
+import { FONT_KEYS, type FontKey } from "./style";
+
+/** Font sizes (page units) a stored box may use. */
+const MIN_FONT_SIZE = 4;
+const MAX_FONT_SIZE = 400;
 
 const ALIGNS: readonly TextAttributes["align"][] = ["left", "center", "right", "justify"];
 
@@ -16,14 +21,21 @@ export const defaultTextAttributes = (color = DEFAULT_SETTINGS.defaultTextColor,
   align: "left",
 });
 
-/** Box-level attributes of `el`, each falling back to the default when missing or malformed. */
+/**
+ * Box-level attributes of `el`, each falling back to the default when missing or malformed. They
+ * end up in CSS (editor, snapshot, SVG export), so only known fonts, sane sizes and colours the
+ * sanitiser accepts get through.
+ */
 export function textAttrsOf(el: Pick<Element, "content">): TextAttributes {
   const a = (contentOf<TextBoxContent>(el).textAttributes ?? {}) as Partial<TextAttributes>;
   const d = defaultTextAttributes();
   return {
-    fontFamily: typeof a.fontFamily === "string" && a.fontFamily ? a.fontFamily : d.fontFamily,
-    fontSize: typeof a.fontSize === "number" && a.fontSize > 0 && Number.isFinite(a.fontSize) ? a.fontSize : d.fontSize,
-    color: typeof a.color === "string" && a.color ? a.color : d.color,
+    fontFamily: FONT_KEYS.includes(a.fontFamily as FontKey) ? (a.fontFamily as string) : d.fontFamily,
+    fontSize:
+      typeof a.fontSize === "number" && Number.isFinite(a.fontSize) && a.fontSize >= MIN_FONT_SIZE && a.fontSize <= MAX_FONT_SIZE
+        ? a.fontSize
+        : d.fontSize,
+    color: isSafeColor(a.color) ? a.color.trim() : d.color,
     align: ALIGNS.includes(a.align as TextAttributes["align"]) ? (a.align as TextAttributes["align"]) : d.align,
   };
 }

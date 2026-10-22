@@ -20,7 +20,7 @@ export function publishBoxSnapshot(el: Pick<Element, "id" | "updatedAt">, bitmap
 /** Drop the snapshot of element `id` (e.g. its editor failed to render); the placeholder returns. */
 export function dropBoxSnapshot(id: string): void {
   boxSnapshots.invalidate(id);
-  textMemo.delete(id);
+  for (const k of [...textMemo.keys()]) if (k.startsWith(`${id}|`)) textMemo.delete(k);
 }
 
 // ---- text boxes ----
@@ -39,8 +39,10 @@ interface Rendered {
   bitmap: BoxBitmap;
 }
 
+/** Remembered bitmaps and renders in flight, per element and theme (`memoKey`). */
 const textMemo = new Map<string, Rendered>();
 const inflight = new Map<string, { key: string; scale: number; done: Promise<void> }>();
+const memoKey = (id: string, theme: ThemeName) => `${id}|${theme}`;
 const failed = new Set<string>();
 
 /** Power-of-two bitmap scale ≥ `pxPerUnit` (1…8), capped so neither side exceeds 4096 px. */
@@ -62,13 +64,13 @@ function appearance(el: Element, theme: ThemeName) {
 
 /** Remembered bitmap of `el` as it looks now (any revision), with its scale; else null. */
 export function textSnapshotFor(el: Element, theme: ThemeName): { bitmap: BoxBitmap; scale: number } | null {
-  const m = textMemo.get(el.id);
+  const m = textMemo.get(memoKey(el.id, theme));
   return m && m.key === appearance(el, theme).key ? m : null;
 }
 
-function remember(id: string, r: Rendered): void {
-  textMemo.delete(id);
-  textMemo.set(id, r);
+function remember(slot: string, r: Rendered): void {
+  textMemo.delete(slot);
+  textMemo.set(slot, r);
   if (textMemo.size > MAX_MEMO) textMemo.delete(textMemo.keys().next().value!);
 }
 
@@ -79,29 +81,30 @@ function remember(id: string, r: Rendered): void {
  */
 export function renderTextSnapshot(el: Element, theme: ThemeName, scale: number, publish = true): Promise<void> {
   const a = appearance(el, theme);
-  const have = textMemo.get(el.id);
+  const slot = memoKey(el.id, theme);
+  const have = textMemo.get(slot);
   if (have && have.key === a.key && have.scale >= scale) {
     if (publish && boxSnapshots.get(el) !== have.bitmap) publishBoxSnapshot(el, have.bitmap);
     return Promise.resolve();
   }
   const attempt = `${el.id}|${scale}|${a.key}`;
   if (failed.has(attempt) || a.width <= 0 || a.height <= 0) return Promise.resolve();
-  const running = inflight.get(el.id);
+  const running = inflight.get(slot);
   if (running && running.key === a.key && running.scale >= scale) return running.done;
   const done: Promise<void> = htmlToBitmap(a.content, a.width, a.height, a.color, scale).then(
     (bitmap) => {
-      if (inflight.get(el.id)?.done === done) inflight.delete(el.id);
-      const cur = textMemo.get(el.id);
+      if (inflight.get(slot)?.done === done) inflight.delete(slot);
+      const cur = textMemo.get(slot);
       if (cur && cur.key === a.key && cur.scale > scale) return; // a sharper one arrived first
-      remember(el.id, { key: a.key, scale, bitmap });
+      remember(slot, { key: a.key, scale, bitmap });
       if (publish) publishBoxSnapshot(el, bitmap);
     },
     () => {
-      if (inflight.get(el.id)?.done === done) inflight.delete(el.id);
+      if (inflight.get(slot)?.done === done) inflight.delete(slot);
       failed.add(attempt);
     },
   );
-  inflight.set(el.id, { key: a.key, scale, done });
+  inflight.set(slot, { key: a.key, scale, done });
   return done;
 }
 
@@ -110,7 +113,10 @@ export function requestTextSnapshot(el: Element, theme: ThemeName, scale: number
   void renderTextSnapshot(el, theme, scale);
 }
 
-/** Render the text boxes among `els` at `pxPerUnit` before a synchronous paint (PNG, thumbnails). */
+/**
+ * Render the text boxes among `els` at `pxPerUnit` before a synchronous paint (PNG, thumbnails).
+ * Kept per theme and not published: the export's theme may differ from the canvas's.
+ */
 export async function prepareTextSnapshots(
   els: Iterable<Element>,
   theme: ThemeName,
@@ -120,7 +126,7 @@ export async function prepareTextSnapshots(
   const jobs: Promise<void>[] = [];
   for (const el of els) {
     if (el.type !== "text-box" || el.deletedAt) continue;
-    jobs.push(renderTextSnapshot(el, theme, snapshotScale(pxPerUnit, el.boxWidth ?? 0, el.boxHeight ?? 0)));
+    jobs.push(renderTextSnapshot(el, theme, snapshotScale(pxPerUnit, el.boxWidth ?? 0, el.boxHeight ?? 0), false));
   }
   if (jobs.length === 0) return;
   let timer: ReturnType<typeof setTimeout> | undefined;
