@@ -71,3 +71,25 @@ fn limit_points_per_stroke() {
     assert!(matches!(err, StorageError::Limit(_)), "got {err:?}");
     assert_eq!(st.count_elements("p1").unwrap(), 0, "nothing written");
 }
+
+#[test]
+fn referenced_asset_ids_include_images_pdf_keys_and_soft_deleted() {
+    let mut st = seeded();
+    let mut img = stroke("i1", "p1", 0);
+    img.r#type = ElementType::Image;
+    img.image_url = Some("asset-a".into());
+    let mut pdf = stroke("i2", "p1", 0);
+    pdf.r#type = ElementType::Image;
+    pdf.image_url = Some("asset-b".into());
+    pdf.content = Some(serde_json::json!({ "pdfSourceKey": "asset-pdf" }));
+    let mut gone = stroke("i3", "p1", 0);
+    gone.r#type = ElementType::Image;
+    gone.image_url = Some("asset-trashed".into());
+    st.upsert_elements(&[img, pdf, gone, stroke("s", "p1", 2)]).unwrap();
+    st.delete_elements(&["i3".to_string()]).unwrap();
+
+    let ids = st.referenced_asset_ids().unwrap();
+    let want: std::collections::HashSet<String> =
+        ["asset-a", "asset-b", "asset-pdf", "asset-trashed"].iter().map(|s| s.to_string()).collect();
+    assert_eq!(ids, want);
+}

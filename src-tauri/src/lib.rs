@@ -1,7 +1,7 @@
 mod commands;
 mod state;
 
-use commands::{archive, elements, export, lifecycle, notebook, settings, thumbnails};
+use commands::{archive, assets, elements, export, lifecycle, notebook, settings, thumbnails};
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -48,6 +48,12 @@ pub fn run() {
       settings::get_settings,
       settings::set_settings,
       thumbnails::save_thumbnail,
+      assets::save_asset,
+      assets::save_asset_from_path,
+      assets::asset_info,
+      assets::delete_asset,
+      assets::read_asset,
+      assets::gc_assets,
       export::write_export_file,
       archive::export_unit_archive,
       archive::import_unit_archive,

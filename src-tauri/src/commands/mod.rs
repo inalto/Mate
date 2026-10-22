@@ -1,4 +1,5 @@
 pub mod archive;
+pub mod assets;
 pub mod elements;
 pub mod export;
 pub mod lifecycle;

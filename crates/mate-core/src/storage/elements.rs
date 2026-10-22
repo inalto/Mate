@@ -165,6 +165,27 @@ impl Storage {
         Ok(())
     }
 
+    /// Every asset id referenced by any element row (`image_url` and `content.pdfSourceKey`),
+    /// including soft-deleted rows: the trash can be restored. Purged rows are gone.
+    pub fn referenced_asset_ids(&self) -> Result<std::collections::HashSet<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT image_url, content FROM elements              WHERE image_url IS NOT NULL OR (content IS NOT NULL AND content LIKE '%pdfSourceKey%')",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)))?;
+        let mut ids = std::collections::HashSet::new();
+        for row in rows {
+            let (url, content) = row?;
+            ids.extend(url);
+            if let Some(key) = content
+                .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+                .and_then(|v| v.get("pdfSourceKey").and_then(|k| k.as_str()).map(str::to_owned))
+            {
+                ids.insert(key);
+            }
+        }
+        Ok(ids)
+    }
+
     /// Soft-deletes elements by id (stamps `deleted_at`, bumps `version`).
     pub fn delete_elements(&mut self, ids: &[String]) -> Result<()> {
         let now = now_iso();
