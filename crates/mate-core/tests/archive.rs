@@ -5,7 +5,7 @@ use std::io::{Cursor, Write};
 use std::path::PathBuf;
 
 use common::{page, section, stroke, unit};
-use mate_core::archive::{export_unit, import_archive};
+use mate_core::archive::{ImportLimits, export_unit, import_archive, import_archive_with_limits};
 use mate_core::assets;
 use mate_core::storage::{Storage, StorageError};
 
@@ -306,6 +306,137 @@ fn import_tolerates_missing_asset() {
     let image = els.iter().find_map(|e| e.image_url.clone()).unwrap();
     assert_ne!(image, img_id);
     assert!(assets::asset_path(&dst_dir, &image).is_some());
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+/// Asset files in `dir` (ignores a missing directory).
+fn asset_files(dir: &std::path::Path) -> usize {
+    fs::read_dir(dir).map(|d| d.count()).unwrap_or(0)
+}
+
+/// Unit `u1` / `s` / `p` with `n` image elements, each referencing its own `bytes`-long PNG.
+fn source_with_images(dir: &std::path::Path, n: usize, bytes: usize) -> Storage {
+    let mut st = Storage::open_in_memory().unwrap();
+    st.upsert_unit(&unit("u1", None)).unwrap();
+    st.upsert_section(&section("s", "u1")).unwrap();
+    st.upsert_page(&page("p", "s", None)).unwrap();
+    let mut els = Vec::new();
+    for i in 0..n {
+        let mut data = PNG.to_vec();
+        data.resize(bytes, 0);
+        data[bytes - 1] = i as u8; // distinct files
+        let info = assets::save_sniffed(dir, &data).unwrap();
+        let mut image = stroke(&format!("img{i}"), "p", 2);
+        image.r#type = mate_core::model::ElementType::Image;
+        image.image_url = Some(info.id);
+        els.push(image);
+    }
+    st.upsert_elements(&els).unwrap();
+    st
+}
+
+#[test]
+fn import_rejects_decompressed_assets_over_cap() {
+    // Scaled down: three 200 KiB assets against a 512 KiB cap (the default cap is 512 MiB, with
+    // 64 MiB per entry, so the same arithmetic at full size would need >8 entries of ~64 MiB).
+    let src_dir = tmp("cap-src");
+    let src = source_with_images(&src_dir, 3, 200 * 1024);
+    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+
+    let dst_dir = tmp("cap-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let limits = ImportLimits {
+        total_asset_bytes: 512 * 1024,
+        ..ImportLimits::default()
+    };
+    match import_archive_with_limits(&mut dst, &bytes, &dst_dir, limits) {
+        Err(StorageError::Limit(msg)) => assert!(msg.contains("assets"), "{msg}"),
+        other => panic!("expected Limit error, got {other:?}"),
+    }
+    assert!(
+        dst.list_tree().unwrap().units.is_empty(),
+        "unit rolled back"
+    );
+    assert_eq!(
+        asset_files(&dst_dir),
+        0,
+        "assets already written are removed"
+    );
+
+    // Within the cap the same archive imports.
+    let ok = ImportLimits {
+        total_asset_bytes: 1024 * 1024,
+        ..ImportLimits::default()
+    };
+    assert_eq!(
+        import_archive_with_limits(&mut dst, &bytes, &dst_dir, ok)
+            .unwrap()
+            .elements,
+        3
+    );
+    assert_eq!(asset_files(&dst_dir), 3);
+    assert_eq!(ImportLimits::default().total_asset_bytes, 512 * 1024 * 1024);
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn import_rejects_too_many_assets() {
+    let src_dir = tmp("count-src");
+    let src = source_with_images(&src_dir, 3, 64);
+    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let dst_dir = tmp("count-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let limits = ImportLimits {
+        max_assets: 2,
+        ..ImportLimits::default()
+    };
+    assert!(matches!(
+        import_archive_with_limits(&mut dst, &bytes, &dst_dir, limits),
+        Err(StorageError::Limit(_))
+    ));
+    assert!(dst.list_tree().unwrap().units.is_empty());
+    assert_eq!(ImportLimits::default().max_assets, 2000);
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn import_skips_asset_kind_mismatch() {
+    let src_dir = tmp("kind-src");
+    let img = assets::save_sniffed(&src_dir, PNG).unwrap();
+    let pdf = assets::save_sniffed(&src_dir, PDF).unwrap();
+    let mut src = Storage::open_in_memory().unwrap();
+    src.upsert_unit(&unit("u1", None)).unwrap();
+    src.upsert_section(&section("s", "u1")).unwrap();
+    src.upsert_page(&page("p", "s", None)).unwrap();
+    // Swapped: the image points at the PDF and the PDF page at the PNG.
+    let mut image = stroke("img", "p", 2);
+    image.r#type = mate_core::model::ElementType::Image;
+    image.image_url = Some(pdf.id.clone());
+    let mut pdf_page = stroke("pdfp", "p", 2);
+    pdf_page.r#type = mate_core::model::ElementType::Image;
+    pdf_page.content = Some(serde_json::json!({ "pdfSourceKey": img.id }));
+    src.upsert_elements(&[image, pdf_page]).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+
+    let dst_dir = tmp("kind-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    assert_eq!(report.elements, 2, "elements kept");
+    let els = imported_elements(&dst, &report.unit_id);
+    assert!(
+        els.iter()
+            .any(|e| e.image_url.as_deref() == Some(pdf.id.as_str())),
+        "left dangling"
+    );
+    assert!(els.iter().any(|e| {
+        e.content
+            .as_ref()
+            .is_some_and(|c| c["pdfSourceKey"] == img.id.as_str())
+    }));
+    assert_eq!(asset_files(&dst_dir), 0, "nothing imported");
     let _ = fs::remove_dir_all(&src_dir);
     let _ = fs::remove_dir_all(&dst_dir);
 }

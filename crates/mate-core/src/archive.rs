@@ -26,6 +26,26 @@ pub const ARCHIVE_SCHEMA_VERSION: u32 = 1;
 pub const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
 /// Largest single (uncompressed) entry accepted for import.
 pub const MAX_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
+/// Most `assets/` entries an archive may carry.
+pub const MAX_ARCHIVE_ASSETS: usize = 2000;
+
+/// Bounds on what an import may write to the asset store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImportLimits {
+    /// Total decompressed bytes of all asset entries read (default [`MAX_ARCHIVE_BYTES`]).
+    pub total_asset_bytes: u64,
+    /// Most `assets/` entries (default [`MAX_ARCHIVE_ASSETS`]).
+    pub max_assets: usize,
+}
+
+impl Default for ImportLimits {
+    fn default() -> Self {
+        ImportLimits {
+            total_asset_bytes: MAX_ARCHIVE_BYTES as u64,
+            max_assets: MAX_ARCHIVE_ASSETS,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -197,6 +217,18 @@ pub fn import_archive(
     bytes: &[u8],
     assets_dir: &Path,
 ) -> Result<ImportReport> {
+    import_archive_with_limits(storage, bytes, assets_dir, ImportLimits::default())
+}
+
+/// [`import_archive`] with explicit asset limits: the import fails (and is rolled back) once the
+/// asset entries read decompress to more than `limits.total_asset_bytes`, or when the archive
+/// carries more than `limits.max_assets` asset entries.
+pub fn import_archive_with_limits(
+    storage: &mut Storage,
+    bytes: &[u8],
+    assets_dir: &Path,
+    limits: ImportLimits,
+) -> Result<ImportReport> {
     if bytes.len() > MAX_ARCHIVE_BYTES {
         return Err(limit("archive is larger than 512 MiB"));
     }
@@ -219,7 +251,7 @@ pub fn import_archive(
 
     let order_index = storage.list_tree()?.units.len() as i64;
     let new_unit_id = new_id();
-    let mut imported = AssetImport::new(&zip, assets_dir);
+    let mut imported = AssetImport::new(&zip, assets_dir, limits)?;
     let result = write_unit(
         storage,
         &mut zip,
@@ -244,11 +276,27 @@ struct AssetImport<'a> {
     entries: HashMap<String, String>,
     /// Old asset id -> new id (`None`: absent or unusable, the old id is kept).
     minted: HashMap<String, Option<String>>,
+    limits: ImportLimits,
+    /// Decompressed bytes of the asset entries read so far.
+    total: u64,
+}
+
+/// What a reference may point at: `image_url` an image, `pdfSourceKey` a PDF.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Want {
+    Image,
+    Pdf,
+}
+
+impl Want {
+    fn accepts(self, kind: assets::AssetKind) -> bool {
+        (kind == assets::AssetKind::Pdf) == (self == Want::Pdf)
+    }
 }
 
 impl<'a> AssetImport<'a> {
-    fn new(zip: &ZipArchive<Cursor<&[u8]>>, dir: &'a Path) -> Self {
-        let entries = zip
+    fn new(zip: &ZipArchive<Cursor<&[u8]>>, dir: &'a Path, limits: ImportLimits) -> Result<Self> {
+        let entries: HashMap<String, String> = zip
             .file_names()
             .filter_map(|name| {
                 let file = name.strip_prefix("assets/")?;
@@ -257,24 +305,46 @@ impl<'a> AssetImport<'a> {
                     .then(|| (stem.to_owned(), name.to_owned()))
             })
             .collect();
-        AssetImport {
+        if entries.len() > limits.max_assets {
+            return Err(limit(format!(
+                "archive carries more than {} assets",
+                limits.max_assets
+            )));
+        }
+        Ok(AssetImport {
             dir,
             entries,
             minted: HashMap::new(),
-        }
+            limits,
+            total: 0,
+        })
     }
 
     /// New id for old asset `id`, importing it on first use; `None` if it cannot be imported.
-    fn map(&mut self, zip: &mut ZipArchive<Cursor<&[u8]>>, id: &str) -> Result<Option<String>> {
+    /// An asset whose content is not of the `want`ed kind counts as missing.
+    fn map(
+        &mut self,
+        zip: &mut ZipArchive<Cursor<&[u8]>>,
+        id: &str,
+        want: Want,
+    ) -> Result<Option<String>> {
         if let Some(m) = self.minted.get(id) {
             return Ok(m.clone());
         }
-        let new = match self.entries.get(id) {
-            Some(name) => read_entry(zip, name)?
-                .and_then(|data| assets::save_sniffed(self.dir, &data).ok())
-                .map(|info| info.id),
+        let data = match self.entries.get(id) {
+            Some(name) => read_entry(zip, name)?,
             None => None,
         };
+        if let Some(d) = &data {
+            self.total += d.len() as u64;
+            if self.total > self.limits.total_asset_bytes {
+                return Err(limit("archive assets exceed the import size limit"));
+            }
+        }
+        let new = data
+            .filter(|d| assets::sniff(d).is_some_and(|k| want.accepts(k)))
+            .and_then(|d| assets::save_sniffed(self.dir, &d).ok())
+            .map(|info| info.id);
         self.minted.insert(id.to_owned(), new.clone());
         Ok(new)
     }
@@ -282,7 +352,7 @@ impl<'a> AssetImport<'a> {
     /// Rewrites `e`'s asset references to the imported copies.
     fn rewrite(&mut self, zip: &mut ZipArchive<Cursor<&[u8]>>, e: &mut Element) -> Result<()> {
         if let Some(old) = e.image_url.clone()
-            && let Some(new) = self.map(zip, &old)?
+            && let Some(new) = self.map(zip, &old, Want::Image)?
         {
             e.image_url = Some(new);
         }
@@ -293,7 +363,7 @@ impl<'a> AssetImport<'a> {
             .and_then(|k| k.as_str())
             .map(str::to_owned);
         if let Some(old) = old_pdf
-            && let Some(new) = self.map(zip, &old)?
+            && let Some(new) = self.map(zip, &old, Want::Pdf)?
             && let Some(serde_json::Value::Object(c)) = e.content.as_mut()
         {
             c.insert("pdfSourceKey".into(), serde_json::Value::String(new));
