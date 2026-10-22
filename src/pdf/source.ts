@@ -1,7 +1,8 @@
 // PDF sources: an open PDF document behind a small interface (page count, page sizes, render a page
 // to a bitmap), cached per asset id (LRU of 4 open documents). The default loader uses pdf.js,
-// imported lazily so the main chunk stays small; the bytes come from the asset store over IPC (no
-// network fetch, so no CSP connect-src change). Tests inject a stub loader (jsdom cannot run pdf.js).
+// imported lazily so the main chunk stays small; the bytes come from the asset store over IPC. Its
+// cMaps, standard fonts and wasm decoders are fetched from the app's own origin (CSP connect-src
+// 'self'; the wasm needs script-src 'wasm-unsafe-eval'). Tests inject a stub loader (jsdom cannot run pdf.js).
 import { readAsset } from "../ipc/assets";
 
 /** A rendered PDF page. */
@@ -36,12 +37,24 @@ function loadPdfJs(): Promise<PdfJs> {
   return pdfjs;
 }
 
+/**
+ * pdf.js resources served by the app itself (copied from pdfjs-dist into public/pdfjs/ by
+ * scripts/copy-pdfjs-assets.mjs before dev and build): CJK cMaps, the standard 14 fonts for PDFs
+ * that do not embed them, and the JPEG 2000 / JBIG2 / colour-management decoders (wasm).
+ */
+export const PDFJS_RESOURCES = {
+  cMapUrl: "/pdfjs/cmaps/",
+  cMapPacked: true,
+  standardFontDataUrl: "/pdfjs/standard_fonts/",
+  wasmUrl: "/pdfjs/wasm/",
+} as const;
+
 /** Device-pixel ceiling for one rendered page (keeps a 4× zoom of a large page in memory bounds). */
 export const MAX_RENDER_PIXELS = 16_000_000;
 
 const pdfJsLoader: PdfLoader = async (assetId) => {
   const [lib, bytes] = await Promise.all([loadPdfJs(), readAsset(assetId)]);
-  const task = lib.getDocument({ data: bytes });
+  const task = lib.getDocument({ data: bytes, ...PDFJS_RESOURCES });
   const doc = await task.promise;
   return {
     pageCount: doc.numPages,

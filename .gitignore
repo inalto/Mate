@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Copied from pdfjs-dist by scripts/copy-pdfjs-assets.mjs (predev / prebuild).
+public/pdfjs/
 target/
 src-tauri/gen/
 *.db
