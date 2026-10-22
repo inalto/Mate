@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { esc } from "../../export/svgUtil";
 import { boxAppearance } from "../boxHtml";
 import {
   addColumn,
@@ -59,6 +60,37 @@ describe("tableCode", () => {
     expect(fc).not.toContain("<script>");
     expect(fc).toContain("&lt;/pre&gt;");
     expect(fc).toContain("<pre");
+  });
+
+  it("control_characters_are_stripped_from_box_html", () => {
+    const xmlOk = (fo: string) => {
+      const doc = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg">${fo}</svg>`, "image/svg+xml");
+      return doc.getElementsByTagName("parsererror").length === 0;
+    };
+    const control = /[\x00-\x08\x0B\x0C\x0E-\x1F]/;
+    const c = codespaceElement("pg", "c", NOW, { x: 0, y: 0 }, "#000000");
+    c.content = { subtype: "codespace", code: "\x1b[31mred\x1b[0m\tok\n", language: "plain" };
+    expect(codeOf(c).code).toBe("[31mred[0m\tok\n");
+    const fc = boxAppearance(c, "light")!.foreignObject(R(480, 200));
+    expect(fc).not.toMatch(control);
+    expect(xmlOk(fc)).toBe(true);
+    const t = tableElement("pg", "t", NOW, { x: 0, y: 0 }, "#000000");
+    t.content = { subtype: "table", tableData: { rows: [["a\vb", "\x00c"]] } };
+    expect(tableRowsOf(t)).toEqual([["ab", "c"]]);
+    const ft = boxAppearance(t, "light")!.foreignObject(R(400, 200));
+    expect(ft).not.toMatch(control);
+    expect(xmlOk(ft)).toBe(true);
+    // Text boxes: the sanitiser drops them from text nodes, and the shared escaper from any string.
+    const tb = {
+      ...t,
+      id: "tb",
+      type: "text-box" as const,
+      content: { contentHtml: "<p>x\x07y\x1bz</p>", rawContent: "", textAttributes: { fontFamily: "sans", fontSize: 20, color: "#000000", align: "left" } },
+    };
+    const fx = boxAppearance(tb, "light")!.foreignObject(R(400, 200));
+    expect(fx).toContain("<p>xyz</p>");
+    expect(xmlOk(fx)).toBe(true);
+    expect(esc("a\x0Cb")).toBe("ab");
   });
 
   it("limit_constant", () => expect(MAX_TABLE_CELLS).toBe(50000));

@@ -114,6 +114,12 @@ const STYLE_VALUE: Record<string, RegExp> = {
   position: /^(relative|absolute)$/i,
 };
 
+/** C0 control characters other than tab, LF and CR: not allowed in XML (foreignObject, SVG export). */
+const CONTROL_CHARS = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
+
+/** `s` without the control characters XML rejects. */
+export const stripControlChars = (s: string): string => s.replace(CONTROL_CHARS, "");
+
 /** Anything that can fetch or run code inside a CSS value. */
 const UNSAFE_VALUE = /url\s*\(|expression|javascript:|data:|[\\<>@{}]/i;
 
@@ -145,7 +151,7 @@ function parse(html: string): HTMLElement {
 function copyClean(src: Node, dst: Node, doc: Document, dropStyle?: string, math = false): void {
   for (const child of Array.from(src.childNodes)) {
     if (child.nodeType === Node.TEXT_NODE) {
-      dst.appendChild(doc.createTextNode(child.textContent ?? ""));
+      dst.appendChild(doc.createTextNode(stripControlChars(child.textContent ?? "")));
       continue;
     }
     if (child.nodeType !== Node.ELEMENT_NODE) continue; // comments, processing instructions

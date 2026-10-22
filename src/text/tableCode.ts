@@ -3,6 +3,7 @@
 import type { Vec2 } from "../canvas/camera";
 import { contentOf, type CodespaceContent, type TableContent } from "../model/content";
 import type { Element } from "../model/types";
+import { stripControlChars } from "./sanitize";
 
 /** Largest table (rows × columns) a table may grow to. */
 export const MAX_TABLE_CELLS = 50000;
@@ -26,20 +27,20 @@ export type Rows = string[][];
 
 const grid = (rows: number, cols: number): Rows => Array.from({ length: rows }, () => Array.from({ length: cols }, () => ""));
 
-/** The stored rows as a non-empty rectangular grid of strings (3×3 when missing or malformed). */
+/** The stored rows as a non-empty rectangular grid of strings (3×3 when missing or malformed), without XML-invalid control characters. */
 export function tableRowsOf(el: Pick<Element, "content">): Rows {
   const raw = contentOf<TableContent>(el).tableData?.rows;
   if (!Array.isArray(raw) || raw.length === 0) return grid(DEFAULT_ROWS, DEFAULT_COLS);
-  const rows = raw.map((r) => (Array.isArray(r) ? r.map((c) => (typeof c === "string" ? c : "")) : []));
+  const rows = raw.map((r) => (Array.isArray(r) ? r.map((c) => (typeof c === "string" ? stripControlChars(c) : "")) : []));
   const cols = Math.max(1, ...rows.map((r) => r.length));
   return rows.map((r) => [...r, ...Array.from({ length: cols - r.length }, () => "")]);
 }
 
-/** The stored code and language (empty plain text when missing or unknown). */
+/** The stored code (without XML-invalid control characters) and language (empty plain text when missing or unknown). */
 export function codeOf(el: Pick<Element, "content">): { code: string; language: CodeLanguage } {
   const c = contentOf<CodespaceContent>(el);
   return {
-    code: typeof c.code === "string" ? c.code : "",
+    code: typeof c.code === "string" ? stripControlChars(c.code) : "",
     language: CODE_LANGUAGES.includes(c.language as CodeLanguage) ? (c.language as CodeLanguage) : "plain",
   };
 }
