@@ -10,7 +10,7 @@ import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "..
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
-import { defaultGraphData, graphElement } from "../graph/data";
+import { defaultGraphData, graphElement, inferGraphKind } from "../graph/data";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
 import { isMathBox, latexOf, mathElement } from "../math/mathBox";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
@@ -676,7 +676,9 @@ export function createEditorStore(): EditorStore {
       const top = topZ(s.elements.values());
       const base = graphElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), { x: b.x, y: b.y + b.height + DUPLICATE_OFFSET }, math.color);
       const data = defaultGraphData();
-      data.expressions = [{ ...data.expressions[0], latex: latexOf(math) }];
+      const latex = latexOf(math);
+      data.kind = inferGraphKind(latex);
+      data.expressions = [{ ...data.expressions[0], latex }];
       const graph = { ...base, content: { ...(base.content as object), graphData: data } };
       const el = top > 0 ? withMeta(graph, { zIndex: top + 1 }) : graph;
       if (!record("Graph", [{ type: "add", el }])) return null;

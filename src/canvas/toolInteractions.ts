@@ -251,6 +251,12 @@ export function createToolController(deps: ToolDeps) {
         const all = [...s.elements.values()];
         const shifted = shiftBelow(all, g.lineY, g.dy, { cutImages: s.spaceCutImages });
         const moved = shifted.filter((e, i) => e !== all[i]);
+        if (g.dy === 0) {
+          // Back at the line: show the originals again (nothing is shifted).
+          drop();
+          g.lifted = false;
+          break;
+        }
         if (!g.lifted && moved.length > 0) {
           g.lifted = true;
           lift(moved);

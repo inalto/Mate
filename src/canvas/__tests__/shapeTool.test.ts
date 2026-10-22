@@ -89,3 +89,27 @@ describe("shape tool", () => {
     expect(matchShortcut(DEFAULT_SHORTCUTS, e, false)?.action).toBe("tool.shape");
   });
 });
+
+describe("insert-space tool", () => {
+  it("space_drag_back_to_zero_keeps_elements_visible", async () => {
+    await ready();
+    const s = useEditorStore.getState();
+    const id = s.addTextBox({ x: 0, y: 100 })!;
+    s.endEdit();
+    useEditorStore.setState({ spaceMode: "insert", spaceCutImages: false });
+    const host = document.createElement("div");
+    const { tools } = (() => {
+      const t = createToolController({ store: useEditorStore, el: host, requestLive: () => {}, invalidate: () => {}, renderElement: () => {}, getSettings: () => DEFAULT_SETTINGS });
+      return { tools: t };
+    })();
+    const undoBefore = useEditorStore.getState().canUndo;
+    tools.down({ x: 0, y: 50 }, "insert-space");
+    tools.move([{ x: 0, y: 90 }]);
+    expect(tools.hidden.has(id)).toBe(true);
+    tools.move([{ x: 0, y: 50 }]);
+    expect(tools.hidden.size).toBe(0);
+    tools.up();
+    expect(useEditorStore.getState().canUndo).toBe(undoBefore);
+    tools.dispose();
+  });
+});
