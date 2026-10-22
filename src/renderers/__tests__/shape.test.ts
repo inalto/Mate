@@ -128,6 +128,14 @@ describe("shape renderer", () => {
     expect(calls.filter((c) => c[0] === "stroke").length).toBeGreaterThanOrEqual(1);
   });
 
+  it("unsafe_colours_fall_back", () => {
+    const bad = "red; background: url(http://x/)";
+    const svg = elementSvg(shape("rectangle", [[0, 0], [10, 10]], { color: bad, fillColor: "url(#x)" }), { theme: "light", zoomBucket: 1 });
+    expect(svg).not.toContain("url(");
+    expect(svg).toContain('stroke="#000000"');
+    expect(svg).toContain('fill="none"');
+  });
+
   it("shape_svg_has_fill_and_stroke", () => {
     const svg = elementSvg(rect, opts);
     expect(svg).toMatch(/^<path /);
@@ -147,8 +155,10 @@ describe("shape renderer", () => {
     const arrow = elementSvg({ ...rect, shapeType: "arrow" }, opts);
     expect(arrow).toContain("<line ");
     expect(arrow).toMatch(/<path d="M100 50L[^"]+Z" fill="#000000"/);
-    // Colours are escaped.
-    expect(elementSvg({ ...rect, color: '"><x' }, opts)).toContain("&quot;&gt;&lt;x");
+    // Unsafe colours never reach the markup (black stroke instead).
+    const odd = elementSvg({ ...rect, color: '"><x' }, opts);
+    expect(odd).not.toContain("&lt;x");
+    expect(odd).toContain('stroke="#000000"');
   });
 
   it("rotated_shapes_rotate_in_svg_and_bounds", () => {

@@ -124,3 +124,14 @@ describe("buildPlotScene", () => {
     expect(formatTick(2e6, 5e5)).toBe("2.0e6");
   });
 });
+
+describe("graph data colours", () => {
+  it("unsafe_expression_colours_fall_back_to_the_palette", async () => {
+    const { graphDataOf, GRAPH_PALETTE } = await import("../data");
+    const g = graphDataOf({
+      content: { subtype: "graph", graphData: { expressions: [{ id: "a", latex: "x", color: "red;background:url(x)" }, { id: "b", latex: "x", color: "#ff0000" }] } },
+    });
+    expect(g.expressions[0].color).toBe(GRAPH_PALETTE[0]);
+    expect(g.expressions[1].color).toBe("#ff0000");
+  });
+});

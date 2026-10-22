@@ -8,6 +8,8 @@ import type { Vec2 } from "../canvas/camera";
 import type { Element } from "../model/types";
 import { contentMeta } from "../tools/spatialIndex";
 import { fillOpacityOf, hasFill, isClosedShape, shapeBounds, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
+import { FALLBACK_INK } from "../text/boxHtml";
+import { isSafeColor, safeColor } from "../text/sanitize";
 import { registerRenderer, type RenderOptions } from "./registry";
 
 interface Paint {
@@ -20,8 +22,9 @@ interface Paint {
 function paintOf(el: Element, o: RenderOptions): Paint {
   const closed = isClosedShape(el.shapeType ?? "rectangle");
   const opacity = fillOpacityOf(el);
-  const fill = closed && hasFill(el.fillColor) && opacity > 0 ? mapInkColor(el.fillColor, o.theme) : null;
-  return { stroke: mapInkColor(el.color, o.theme), fill, opacity };
+  // Stored colours reach SVG/CSS: an unsafe stroke falls back to black, an unsafe fill to none.
+  const fill = closed && hasFill(el.fillColor) && isSafeColor(el.fillColor) && opacity > 0 ? mapInkColor(el.fillColor.trim(), o.theme) : null;
+  return { stroke: mapInkColor(safeColor(el.color, FALLBACK_INK), o.theme), fill, opacity };
 }
 
 function trace(ctx: CanvasRenderingContext2D, poly: Vec2[], closed: boolean): void {

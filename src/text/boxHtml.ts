@@ -8,6 +8,7 @@ import type { Element } from "../model/types";
 import type { Rect } from "../tools/spatialIndex";
 import { isMathBox } from "../math/mathBox";
 import { mathForeignObject, textBoxForeignObject } from "./foreignObject";
+import { safeColor } from "./sanitize";
 import { FONT_STACKS, LINE_HEIGHT } from "./style";
 import { codeOf, tableRowsOf } from "./tableCode";
 import { textContentOf } from "./textBox";
@@ -45,6 +46,11 @@ function codeFo(code: string, color: string, r: Rect): string {
   return wrap(r, style, `<pre style="margin: 0; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit;">${esc(code)}</pre>`);
 }
 
+/** Ink colour used when a stored colour is not a safe CSS colour. */
+export const FALLBACK_INK = "#000000";
+/** The element's colour when safe for CSS, else black. */
+const inkOf = (el: Pick<Element, "color">): string => safeColor(el.color, FALLBACK_INK);
+
 /** Appearance of a text box, table or code block; null for other types. */
 export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | null {
   const width = el.boxWidth ?? 0;
@@ -52,7 +58,7 @@ export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | nu
   switch (el.type) {
     case "text-box": {
       const content = textContentOf(el);
-      const color = mapInkColor(content.textAttributes.color, theme);
+      const color = mapInkColor(safeColor(content.textAttributes.color, inkOf(el)), theme);
       if (isMathBox(el)) {
         return {
           key: JSON.stringify(["math", content.contentHtml, content.textAttributes, width, height, color]),
@@ -70,12 +76,12 @@ export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | nu
     }
     case "table": {
       const rows = tableRowsOf(el);
-      const color = mapInkColor(el.color, theme);
+      const color = mapInkColor(inkOf(el), theme);
       return { key: JSON.stringify(["table", rows, width, height, color]), width, height, foreignObject: (r) => tableFo(rows, color, r) };
     }
     case "codespace": {
       const { code, language } = codeOf(el);
-      const color = mapInkColor(el.color, theme);
+      const color = mapInkColor(inkOf(el), theme);
       return { key: JSON.stringify(["code", code, language, width, height, color]), width, height, foreignObject: (r) => codeFo(code, color, r) };
     }
     default:

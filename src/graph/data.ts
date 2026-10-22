@@ -3,6 +3,7 @@
 import type { Vec2 } from "../canvas/camera";
 import { contentOf, type GraphContent } from "../model/content";
 import type { Element } from "../model/types";
+import { safeColor } from "../text/sanitize";
 
 export type GraphKind = "2d-function" | "2d-polar" | "2d-parametric";
 
@@ -112,7 +113,7 @@ export function graphDataOf(el: Pick<Element, "content">): GraphData {
         {
           id: typeof o.id === "string" && o.id ? o.id : `expr-${i}`,
           latex: typeof o.latex === "string" ? o.latex : "",
-          color: typeof o.color === "string" && o.color ? o.color : GRAPH_PALETTE[i % GRAPH_PALETTE.length],
+          color: safeColor(o.color, GRAPH_PALETTE[i % GRAPH_PALETTE.length]), // reaches SVG and canvas styles
           visible: o.visible !== false,
         },
       ];

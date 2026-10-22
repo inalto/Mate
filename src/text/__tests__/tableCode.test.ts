@@ -93,5 +93,21 @@ describe("tableCode", () => {
     expect(esc("a\x0Cb")).toBe("ab");
   });
 
+  it("unsafe_colours_fall_back_in_box_html", () => {
+    const bad = "red; background: url(http://x/)";
+    const t = tableElement("pg", "t", NOW, { x: 0, y: 0 }, bad);
+    const ft = boxAppearance(t, "light")!.foreignObject(R(400, 200));
+    expect(ft).not.toContain("url(");
+    expect(ft).toContain("color: #000000;");
+    const tb = {
+      ...t,
+      color: "#123456",
+      type: "text-box" as const,
+      content: { contentHtml: "<p>x</p>", rawContent: "", textAttributes: { fontFamily: "sans", fontSize: 20, color: bad, align: "left" } },
+    };
+    const fx = boxAppearance(tb, "light")!.foreignObject(R(400, 200));
+    expect(fx).not.toContain("url(");
+  });
+
   it("limit_constant", () => expect(MAX_TABLE_CELLS).toBe(50000));
 });

@@ -127,6 +127,9 @@ const UNSAFE_VALUE = /url\s*\(|expression|javascript:|data:|[\\<>@{}]/i;
 export const isSafeColor = (v: unknown): v is string =>
   typeof v === "string" && !UNSAFE_VALUE.test(v) && STYLE_VALUE.color.test(v.trim());
 
+/** `v` when it is a safe CSS colour (isSafeColor), else `fallback`: stored colours reach CSS and SVG. */
+export const safeColor = (v: unknown, fallback: string): string => (isSafeColor(v) ? v.trim() : fallback);
+
 /** Allowed declarations of a style attribute, canonicalised as `prop: value;` joined by spaces. */
 function cleanStyle(style: string, drop?: string, math = false): string {
   const out: string[] = [];
