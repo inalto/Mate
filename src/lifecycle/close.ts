@@ -3,6 +3,7 @@
 import { showToast } from "../components/Toast";
 import { elementsQueue } from "../ipc/elementsQueue";
 import * as lifecycle from "../ipc/lifecycle";
+import { endAllEdits } from "../overlay/useEditSession";
 import { flushSettings } from "../stores/settings";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 
@@ -54,6 +55,8 @@ export function installCloseHandler(): void {
   let current: number | null = null;
 
   window.__mateFlushAndClose = async (id) => {
+    // Open box editors hold their edits locally until the session ends: commit them into the queue.
+    endAllEdits();
     try {
       if (!(await lifecycle.closeAttemptStarted(id))) return;
     } catch {
@@ -126,6 +129,7 @@ export function installCloseHandler(): void {
 
   // Best-effort flush on reload / navigation away (e.g. dev reloads).
   const bestEffort = () => {
+    endAllEdits();
     void elementsQueue.flushAll();
     flushSettings().catch((err) => console.error("saving settings failed", err));
   };

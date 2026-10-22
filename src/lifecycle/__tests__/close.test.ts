@@ -23,6 +23,19 @@ vi.mock("../../ipc/elementsQueue", () => ({
 vi.mock("../../stores/settings", () => ({
   flushSettings: vi.fn(async () => void calls.push("settings")),
 }));
+// Pane stores: pane 0 has an open text edit session whose commit enqueues the edited element.
+const openSession = { id: null as string | null };
+const paneStore = (pane: number) => ({
+  getState: () => ({
+    editingId: pane === 0 ? openSession.id : null,
+    endEdit: () => {
+      if (pane !== 0 || openSession.id === null) return;
+      calls.push(`commit:${openSession.id}`);
+      openSession.id = null;
+    },
+  }),
+});
+vi.mock("../../stores/focusedEditor", () => ({ editorForPane: (i: number) => paneStore(i) }));
 const showToast = vi.fn();
 vi.mock("../../components/Toast", () => ({ showToast: (...a: unknown[]) => showToast(...a) }));
 let startedResult = true;
@@ -37,6 +50,7 @@ beforeEach(() => {
   calls.length = 0;
   failedCount = 0;
   startedResult = true;
+  openSession.id = null;
   showToast.mockClear();
   vi.mocked(ipc.completeCloseAttempt).mockClear();
   localStorage.clear();
@@ -48,6 +62,19 @@ describe("close handler", () => {
     window.dispatchEvent(new Event("beforeunload"));
     await Promise.resolve();
     expect(calls).toContain("settings");
+  });
+
+  it("close_while_editing_persists_text", async () => {
+    openSession.id = "t1";
+    await w.__mateFlushAndClose!(9);
+    // The session commits (enqueueing the text) before the queue is flushed.
+    expect(calls).toEqual(["commit:t1", "started:9", "flush", "settings", "complete:9"]);
+  });
+
+  it("ends_edit_sessions_on_beforeunload", async () => {
+    openSession.id = "t2";
+    window.dispatchEvent(new Event("beforeunload"));
+    expect(calls.slice(0, 2)).toEqual(["commit:t2", "flush"]);
   });
 
   it("completes_when_queue_flushes", async () => {

@@ -5,6 +5,22 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import type { Element } from "../model/types";
 import type { EditorStore } from "../stores/editor";
+import { editorForPane } from "../stores/focusedEditor";
+
+/**
+ * End the edit session of every pane. Each editor's commit runs synchronously inside `endEdit`
+ * (the store's closeEdit), so the edited element is already in elementsQueue when this returns:
+ * call it before flushing the queue (window close) or reading the elements (export).
+ */
+export function endAllEdits(): void {
+  for (const i of [0, 1] as const) {
+    try {
+      editorForPane(i).getState().endEdit();
+    } catch (err) {
+      console.error("ending the edit session failed", err);
+    }
+  }
+}
 
 /**
  * `change(cur)` returns the edited element, or `cur`/null when nothing changed. `rootRef` is the

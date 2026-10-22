@@ -14,6 +14,7 @@ import { loadElements } from "../../ipc/elements";
 import { writeExportFile } from "../../ipc/export";
 import type { Element, Page } from "../../model/types";
 import { prepareTextSnapshots } from "../../overlay/snapshot";
+import { editorForPane } from "../../stores/focusedEditor";
 import { useNotebookStore } from "../../stores/notebook";
 import { exportPage, pageExportFilename } from "../exportPage";
 
@@ -108,5 +109,25 @@ describe("exportPage", () => {
     vi.mocked(loadElements).mockResolvedValue([]);
     await exportPage("p1", "pdf", { theme: "dark" });
     expect(vi.mocked(prepareTextSnapshots).mock.calls.map((c) => c[1])).toEqual(["dark"]);
+  });
+
+  it("export_ends_open_edit_sessions_first", async () => {
+    const code: Element = { ...graph, id: "c1", type: "codespace", content: { subtype: "codespace", code: "old", language: "plain" } };
+    const store = editorForPane(0);
+    store.setState({ loadedPageId: "p1", pageId: "p1", elements: new Map([["c1", code]]), editingId: "c1" });
+    // The open code editor holds "edited" locally; its commit lands in the store when the session ends.
+    const unbind = store.getState().bindEditSession(() => {
+      store.setState({ elements: new Map([["c1", { ...code, content: { subtype: "codespace", code: "edited", language: "plain" } }]]) });
+    });
+    try {
+      await exportPage("p1", "latex");
+      const tex = new TextDecoder().decode(vi.mocked(writeExportFile).mock.calls[0][1]);
+      expect(tex).toContain("edited");
+      expect(tex).not.toContain("old");
+      expect(store.getState().editingId).toBeNull();
+    } finally {
+      unbind();
+      store.setState({ loadedPageId: null, pageId: null, elements: new Map(), editingId: null });
+    }
   });
 });

@@ -10,6 +10,7 @@ import { isPdfPlacement } from "../model/content";
 import type { Element } from "../model/types";
 import { preparePdfPages } from "../pdf/render";
 import { prepareTextSnapshots } from "../overlay/snapshot";
+import { endAllEdits } from "../overlay/useEditSession";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
@@ -82,6 +83,8 @@ export async function exportPage(
 ): Promise<string | null> {
   const page = useNotebookStore.getState().tree.pages.find((p) => p.id === pageId);
   if (!page) throw new Error("page not found");
+  // An open box editor keeps its edits locally until the session ends: commit them first.
+  endAllEdits();
   const elements = await elementsOf(pageId);
   const filename = pageExportFilename(page.title, EXTENSIONS[format]);
   if (format === "latex") {
