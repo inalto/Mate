@@ -238,8 +238,12 @@ const ISO_MILLIS: &[FormatItem<'static>] =
 
 /// Current UTC time as RFC 3339 with millisecond precision, e.g. `2026-10-22T13:05:07.123Z`.
 pub fn now_iso() -> String {
-    OffsetDateTime::now_utc()
-        .format(ISO_MILLIS)
+    format_iso(OffsetDateTime::now_utc())
+}
+
+/// Formats a UTC instant exactly like [`now_iso`], so the strings compare chronologically.
+pub(crate) fn format_iso(at: OffsetDateTime) -> String {
+    at.format(ISO_MILLIS)
         .expect("formatting a UTC timestamp cannot fail")
 }
 
