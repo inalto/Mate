@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
-import { DEFAULT_SETTINGS } from "../model/constants";
+import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
 import { scaleElements, translateElements } from "../tools/lasso";
@@ -53,6 +53,9 @@ export interface EditorState {
   panHold: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  /** True after a change was refused because the page would exceed LIMITS.MAX_ELEMENTS_PER_PAGE
+   * (cleared by the next accepted change); UI may surface it. */
+  limitReached: boolean;
   loadPage(pageId: string): Promise<void>;
   addElement(el: Element): void;
   updateElements(els: Element[]): void;
@@ -215,6 +218,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   panHold: false,
   canUndo: false,
   canRedo: false,
+  limitReached: false,
 
   async loadPage(pageId) {
     const token = ++loadToken;
@@ -314,12 +318,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       eraseShapes: cfg.eraserEraseShapes,
       eraseImages: cfg.eraserEraseImages,
     });
-    const actions: Action[] = r.removed.map((id) => ({ type: "delete", el: s.elements.get(id)! }));
+    let actions: Action[] = r.removed.map((id) => ({ type: "delete", el: s.elements.get(id)! }));
     for (const { removedId, parts } of r.replaced) {
       actions.push({ type: "delete", el: s.elements.get(removedId)! });
       for (const el of parts) actions.push({ type: "add", el });
     }
     if (actions.length === 0) return;
+    if (exceedsLimit(actions)) {
+      // Splitting would push the page past the element limit: erase the touched strokes whole.
+      actions = [...r.removed, ...r.replaced.map((x) => x.removedId)].map(
+        (id): Action => ({ type: "delete", el: s.elements.get(id)! }),
+      );
+    }
     appendCompact(eraseBatch, actions);
     applyActions(actions);
   },
@@ -384,12 +394,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   undo() {
     flushEraseBatch();
+    const peek = history.peekUndo();
+    if (peek && exceedsLimit(peek)) {
+      set({ limitReached: true }); // leave the entry on the stack
+      return;
+    }
     const actions = history.undo();
     if (actions) applyActions(actions);
     syncHistoryFlags();
   },
   redo() {
     flushEraseBatch();
+    const peek = history.peekRedo();
+    if (peek && exceedsLimit(peek)) {
+      set({ limitReached: true });
+      return;
+    }
     const actions = history.redo();
     if (actions) applyActions(actions);
     syncHistoryFlags();
@@ -504,12 +524,39 @@ function flushEraseBatch(): void {
   syncHistoryFlags();
 }
 
-/** Apply `actions` and push them as one history entry. */
-function record(label: string, actions: Action[], mergeKey?: string): void {
-  if (actions.length === 0) return;
+/** Live element count after applying `actions` to the current page. */
+function countAfter(actions: Action[]): number {
+  const els = S().elements;
+  const live = new Map<string, boolean>();
+  let n = els.size;
+  for (const a of actions) {
+    const id = a.type === "update" ? a.after.id : a.el.id;
+    const was = live.get(id) ?? els.has(id);
+    const now = a.type !== "delete";
+    n += Number(now) - Number(was);
+    live.set(id, now);
+  }
+  return n;
+}
+
+/** True when applying `actions` would grow the page past the backend element limit. */
+function exceedsLimit(actions: Action[]): boolean {
+  const n = countAfter(actions);
+  return n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size;
+}
+
+/** Apply `actions` and push them as one history entry; refused (false) past the element limit. */
+function record(label: string, actions: Action[], mergeKey?: string): boolean {
+  if (actions.length === 0) return false;
+  if (exceedsLimit(actions)) {
+    useEditorStore.setState({ limitReached: true });
+    return false;
+  }
   flushEraseBatch();
   history.push({ label, actions, mergeKey });
   applyActions(actions);
+  if (S().limitReached) useEditorStore.setState({ limitReached: false });
+  return true;
 }
 
 function selectedElements(): Element[] {
@@ -539,8 +586,9 @@ function pasteElements(src: Element[], offset: number, label: string): void {
     const copy: Element = { ...el, id: crypto.randomUUID(), pageId, createdAt: now, updatedAt: now, version: 0 };
     return top > 0 ? withMeta(copy, { zIndex: top + 1 + i }) : copy;
   });
-  record(label, copies.map((el): Action => ({ type: "add", el })));
-  useEditorStore.setState({ selection: new Set(copies.map((c) => c.id)) });
+  if (record(label, copies.map((el): Action => ({ type: "add", el })))) {
+    useEditorStore.setState({ selection: new Set(copies.map((c) => c.id)) });
+  }
 }
 
 function arrange(op: ZOp): void {

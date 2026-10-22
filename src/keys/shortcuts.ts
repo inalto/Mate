@@ -92,13 +92,16 @@ export function isMacPlatform(): boolean {
   return /mac|iphone|ipad/i.test(uad?.platform || navigator.platform || "");
 }
 
-/** True for events aimed at text entry (inputs, textareas, selects, contenteditable). */
+/** Input types that take typed text; sliders, checkboxes, radios, colour pickers and buttons do not. */
+const TEXT_INPUT_TYPES = new Set(["", "text", "search", "email", "url", "tel", "password", "number"]);
+
+/** True for events aimed at text entry (text-like inputs, textareas, selects, contenteditable). */
 export function isTypingTarget(t: EventTarget | null): boolean {
-  return (
-    typeof HTMLElement !== "undefined" &&
-    t instanceof HTMLElement &&
-    (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
-  );
+  if (typeof HTMLElement === "undefined" || !(t instanceof HTMLElement)) return false;
+  if (t instanceof HTMLInputElement) return TEXT_INPUT_TYPES.has((t.getAttribute("type") ?? "").toLowerCase());
+  if (t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return true;
+  const ce = t.closest("[contenteditable]");
+  return t.isContentEditable || (ce !== null && ce.getAttribute("contenteditable") !== "false");
 }
 
 export function matchShortcut(map: ShortcutMap, e: KeyboardEvent, mac: boolean): ShortcutBinding | null {

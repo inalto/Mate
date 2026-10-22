@@ -92,6 +92,18 @@ export class History {
     return s.entry.actions.map(invertAction).reverse();
   }
 
+  /** What `undo()` would return, without changing the stacks. */
+  peekUndo(): Action[] | null {
+    const s = this.undoStack[this.undoStack.length - 1];
+    return s ? s.entry.actions.map(invertAction).reverse() : null;
+  }
+
+  /** What `redo()` would return, without changing the stacks. */
+  peekRedo(): Action[] | null {
+    const s = this.redoStack[this.redoStack.length - 1];
+    return s ? [...s.entry.actions] : null;
+  }
+
   /** Actions of the most recently undone entry, or null. */
   redo(): Action[] | null {
     const s = this.redoStack.pop();

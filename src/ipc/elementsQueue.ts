@@ -76,15 +76,17 @@ export function createElementsQueue(
     const deletes: [string, Op][] = [];
     for (const entry of batch) (entry[1].kind === "upsert" ? upserts : deletes).push(entry);
     try {
-      if (upserts.length > 0) {
-        const els = upserts.map(([, op]) => (op as { el: Element }).el);
-        if (await attempt(() => io.upsertElements(els))) upserts.forEach(([id]) => failedIds.delete(id));
-        else requeue(upserts);
-      }
+      // Deletes first: a net-neutral batch at the per-page element limit (partial erase: delete 1,
+      // add 2) must not transiently exceed it in the backend count.
       if (deletes.length > 0) {
         const ids = deletes.map(([id]) => id);
         if (await attempt(() => io.deleteElements(ids))) ids.forEach((id) => failedIds.delete(id));
         else requeue(deletes);
+      }
+      if (upserts.length > 0) {
+        const els = upserts.map(([, op]) => (op as { el: Element }).el);
+        if (await attempt(() => io.upsertElements(els))) upserts.forEach(([id]) => failedIds.delete(id));
+        else requeue(upserts);
       }
     } finally {
       inFlight = 0;

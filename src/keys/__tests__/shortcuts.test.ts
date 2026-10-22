@@ -62,4 +62,41 @@ describe("shortcuts", () => {
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0][0]).toBe("undo");
   });
+
+  it("shortcuts_fire_when_range_input_focused", () => {
+    setPlatform("Win32");
+    const dispatch = vi.fn();
+    unbind = bindShortcuts(DEFAULT_SHORTCUTS, dispatch);
+    for (const type of ["range", "checkbox", "radio", "color", "button"]) {
+      const input = document.createElement("input");
+      input.type = type;
+      document.body.appendChild(input);
+      press({ key: "z", code: "KeyZ", ctrlKey: true }, input);
+    }
+    expect(dispatch).toHaveBeenCalledTimes(5);
+    expect(dispatch.mock.calls.every((c) => c[0] === "undo")).toBe(true);
+  });
+
+  it("shortcuts_ignored_when_text_input_focused", () => {
+    setPlatform("Win32");
+    const dispatch = vi.fn();
+    unbind = bindShortcuts(DEFAULT_SHORTCUTS, dispatch);
+    const targets: HTMLElement[] = ["text", "search", "email", "url", "tel", "password", "number"].map((type) => {
+      const input = document.createElement("input");
+      input.type = type;
+      return input;
+    });
+    targets.push(document.createElement("input")); // no type attribute
+    targets.push(document.createElement("textarea"));
+    targets.push(document.createElement("select"));
+    const editable = document.createElement("div");
+    editable.setAttribute("contenteditable", "true"); // jsdom lacks the contentEditable setter
+    targets.push(editable);
+    for (const t of targets) {
+      document.body.appendChild(t);
+      press({ key: "e", code: "KeyE" }, t);
+      press({ key: "z", code: "KeyZ", ctrlKey: true }, t);
+    }
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });

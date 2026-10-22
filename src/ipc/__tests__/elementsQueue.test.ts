@@ -113,6 +113,24 @@ describe("elementsQueue", () => {
     expect(q.pending()).toBe(0);
     expect(q.failed()).toBe(0);
   });
+
+  it("partial_erase_at_boundary_persists", async () => {
+    // Partial erase at the element limit: delete 1 + add 2 must reach the backend deletes-first so
+    // the live count never transiently exceeds the limit.
+    const order: string[] = [];
+    const upsert = vi.fn(async (els: Element[]) => {
+      order.push(`upsert:${els.map((e) => e.id).join(",")}`);
+    });
+    const del = vi.fn(async (ids: string[]) => {
+      order.push(`delete:${ids.join(",")}`);
+    });
+    const q = createElementsQueue({ upsertElements: upsert, deleteElements: del });
+    q.enqueueDelete("a");
+    q.enqueueUpsert(stroke("a1"));
+    q.enqueueUpsert(stroke("a2"));
+    await q.flushAll();
+    expect(order).toEqual(["delete:a", "upsert:a1,a2"]);
+  });
 });
 
 describe("CanvasView snapshot", () => {

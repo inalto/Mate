@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
+import { LIMITS } from "../../model/constants";
 import { el } from "../../tools/__tests__/fixtures";
 
 const queue = vi.hoisted(() => ({
@@ -90,5 +91,47 @@ describe("editor store tools", () => {
     expect((s().elements.get("a")!.content as { zIndex: number }).zIndex).toBe(1);
     s().undo();
     expect(s().elements.get("a")!.content).toBeUndefined();
+  });
+
+  it("paste_refused_at_limit", async () => {
+    const fill = Array.from({ length: LIMITS.MAX_ELEMENTS_PER_PAGE - 1 }, (_, i) => el(`f${i}`, [[i, 1000], [i, 1001]]));
+    await load([a, b, ...fill.slice(1)]); // exactly MAX - 1 + 1 = MAX elements
+    const s = () => useEditorStore.getState();
+    expect(s().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE);
+    s().select(["a"]);
+    s().copySelection();
+    s().paste();
+    expect(s().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE);
+    expect(s().limitReached).toBe(true);
+    s().duplicateSelection();
+    expect(s().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE);
+    expect(s().canUndo).toBe(false);
+    expect(queue.enqueueUpsert).not.toHaveBeenCalled();
+    // A partial erase that would split a stroke at the limit removes it whole instead.
+    s().eraser({ x: 100, y: 0 });
+    s().endEraser();
+    expect(s().elements.has("a")).toBe(false);
+    expect(s().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE - 1);
+    expect(queue.enqueueUpsert).not.toHaveBeenCalled();
+  });
+
+  it("undo_refused_when_it_would_exceed_limit", async () => {
+    const fill = Array.from({ length: LIMITS.MAX_ELEMENTS_PER_PAGE - 2 }, (_, i) => el(`f${i}`, [[i, 1000], [i, 1001]]));
+    await load([a, b, ...fill]);
+    const s = () => useEditorStore.getState();
+    s().select(["a"]);
+    s().deleteSelection();
+    // An element arriving outside the history (e.g. a future sync) fills the page back up.
+    const extra = el("extra", [[0, 2000], [5, 2000]]);
+    useEditorStore.setState({ elements: new Map(s().elements).set("extra", extra) });
+    s().undo();
+    expect(s().elements.has("a")).toBe(false);
+    expect(s().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE);
+    expect(s().limitReached).toBe(true);
+    expect(s().canUndo).toBe(true); // the entry stays on the stack
+    useEditorStore.getState().removeElements(["extra"]);
+    s().undo(); // undoes the removal of "extra" first (LIFO) -> back at the limit
+    s().undo(); // re-adding "a" would exceed: refused again
+    expect(s().elements.has("a")).toBe(false);
   });
 });
