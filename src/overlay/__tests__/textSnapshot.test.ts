@@ -198,6 +198,16 @@ describe("text box rendering", () => {
     await expect(prepareTextSnapshots([tb("c", "<p>c</p>")], "light", 1)).rejects.toThrow(/c/);
   });
 
+  it("export_with_more_than_400_boxes_succeeds", async () => {
+    // More boxes than the remembered-bitmap cache holds (400): the export keeps every bitmap itself.
+    const boxes = Array.from({ length: 450 }, (_, i) => tb(`b${i}`, `<p>${i}</p>`));
+    const map = await prepareTextSnapshots(boxes, "light", 1);
+    expect(map.size).toBe(450);
+    expect(map.get("b0|light")).toBeTruthy();
+    expect(map.get("b449|light")).toBeTruthy();
+    expect(stub.calls).toHaveLength(450);
+  });
+
   it("export_never_uses_other_theme_bitmap", async () => {
     const b = tb("b");
     // The canvas published a dark bitmap; the light export has none of its own.

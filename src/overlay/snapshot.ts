@@ -40,7 +40,7 @@ interface Rendered {
 
 /** Remembered bitmaps and renders in flight, per element and theme (`memoKey`). */
 const textMemo = new Map<string, Rendered>();
-const inflight = new Map<string, { key: string; scale: number; done: Promise<void> }>();
+const inflight = new Map<string, { key: string; scale: number; done: Promise<BoxBitmap | null> }>();
 const memoKey = (id: string, theme: ThemeName) => `${id}|${theme}`;
 const failed = new Set<string>();
 
@@ -70,32 +70,35 @@ function remember(slot: string, r: Rendered): void {
 /**
  * Render `el` at `scale` and remember it; `publish` also sets it as the element's snapshot (which
  * redraws the canvas). Concurrent requests for the same appearance share one render; a failed
- * appearance is not retried (the placeholder stays).
+ * appearance is not retried (the placeholder stays). Resolves with the bitmap (null when none could
+ * be rendered), so callers need not read it back from the bounded memo.
  */
-export function renderTextSnapshot(el: Element, theme: ThemeName, scale: number, publish = true): Promise<void> {
+export function renderTextSnapshot(el: Element, theme: ThemeName, scale: number, publish = true): Promise<BoxBitmap | null> {
   const a = appearance(el, theme);
-  if (!a) return Promise.resolve();
+  if (!a) return Promise.resolve(null);
   const slot = memoKey(el.id, theme);
   const have = textMemo.get(slot);
   if (have && have.key === a.key && have.scale >= scale) {
     if (publish && boxSnapshots.get(el) !== have.bitmap) publishBoxSnapshot(el, have.bitmap);
-    return Promise.resolve();
+    return Promise.resolve(have.bitmap);
   }
   const attempt = `${el.id}|${scale}|${a.key}`;
-  if (failed.has(attempt) || a.width <= 0 || a.height <= 0) return Promise.resolve();
+  if (failed.has(attempt) || a.width <= 0 || a.height <= 0) return Promise.resolve(null);
   const running = inflight.get(slot);
   if (running && running.key === a.key && running.scale >= scale) return running.done;
-  const done: Promise<void> = htmlToBitmap(a.foreignObject, a.width, a.height, scale).then(
+  const done: Promise<BoxBitmap | null> = htmlToBitmap(a.foreignObject, a.width, a.height, scale).then(
     (bitmap) => {
       if (inflight.get(slot)?.done === done) inflight.delete(slot);
       const cur = textMemo.get(slot);
-      if (cur && cur.key === a.key && cur.scale > scale) return; // a sharper one arrived first
+      if (cur && cur.key === a.key && cur.scale > scale) return cur.bitmap; // a sharper one arrived first
       remember(slot, { key: a.key, scale, bitmap });
       if (publish) publishBoxSnapshot(el, bitmap);
+      return bitmap;
     },
     () => {
       if (inflight.get(slot)?.done === done) inflight.delete(slot);
       failed.add(attempt);
+      return null;
     },
   );
   inflight.set(slot, { key: a.key, scale, done });
@@ -129,12 +132,20 @@ export async function prepareTextSnapshots(
   pxPerUnit: number,
   { timeoutMs }: { timeoutMs?: number } = {},
 ): Promise<Map<string, BoxBitmap>> {
+  // Bitmaps are collected as each render resolves: the memo is a bounded cache (MAX_MEMO), not the
+  // source of truth, so a page with more boxes than it holds still exports every one.
+  const out = new Map<string, BoxBitmap>();
   const boxes: Element[] = [];
   const jobs: Promise<void>[] = [];
   for (const el of els) {
     if (!isHtmlBox(el) || el.deletedAt) continue;
     boxes.push(el);
-    jobs.push(renderTextSnapshot(el, theme, snapshotScale(pxPerUnit, el.boxWidth ?? 0, el.boxHeight ?? 0), false));
+    const scale = snapshotScale(pxPerUnit, el.boxWidth ?? 0, el.boxHeight ?? 0);
+    jobs.push(
+      renderTextSnapshot(el, theme, scale, false).then((bmp) => {
+        if (bmp) out.set(memoKey(el.id, theme), bmp);
+      }),
+    );
   }
   if (jobs.length > 0) {
     if (timeoutMs === undefined) {
@@ -148,15 +159,15 @@ export async function prepareTextSnapshots(
       clearTimeout(timer);
     }
   }
-  const out = new Map<string, BoxBitmap>();
-  for (const el of boxes) {
-    const memo = textSnapshotFor(el, theme);
-    if (memo) out.set(memoKey(el.id, theme), memo.bitmap);
-    else if (timeoutMs === undefined && (el.boxWidth ?? 0) > 0 && (el.boxHeight ?? 0) > 0) {
-      throw new Error(`Could not render the content of box ${el.id} for export.`);
+  if (timeoutMs === undefined) {
+    for (const el of boxes) {
+      if (!out.has(memoKey(el.id, theme)) && (el.boxWidth ?? 0) > 0 && (el.boxHeight ?? 0) > 0) {
+        throw new Error(`Could not render the content of box ${el.id} for export.`);
+      }
     }
   }
-  return out;
+  // Thumbnails: whatever finished in time (a copy, so late renders do not change it afterwards).
+  return timeoutMs === undefined ? out : new Map(out);
 }
 
 /** Forget every remembered text bitmap and failure (tests, memory pressure). */
