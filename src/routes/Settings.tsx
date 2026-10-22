@@ -1,0 +1,179 @@
+import type { ReactNode } from "react";
+import type { BackgroundType, PageMode, Theme } from "../model/types";
+import { useSettingsStore } from "../stores/settings";
+
+const THEMES: Array<{ id: Theme; label: string }> = [
+  { id: "light", label: "Light" },
+  { id: "dark", label: "Dark" },
+  { id: "sepia", label: "Sepia" },
+  { id: "high-contrast", label: "High contrast" },
+];
+
+const BACKGROUNDS: Array<{ id: BackgroundType; label: string }> = [
+  { id: "blank", label: "Blank" },
+  { id: "ruled", label: "Ruled" },
+  { id: "ruled-no-margin", label: "Ruled (no margin)" },
+  { id: "grid", label: "Grid" },
+  { id: "grid-uniform", label: "Uniform grid" },
+  { id: "dot-grid", label: "Dot grid" },
+];
+
+const ASPECTS = [
+  { id: "a4", label: "A4" },
+  { id: "letter", label: "Letter" },
+  { id: "16:9", label: "16:9" },
+  { id: "4:3", label: "4:3" },
+  { id: "square", label: "Square" },
+];
+
+const RETENTION = [7, 14, 30, 60, 90, 0];
+
+function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
+  return (
+    <div className="field">
+      {htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <span className="field-label">{label}</span>}
+      {children}
+    </div>
+  );
+}
+
+export default function Settings() {
+  const settings = useSettingsStore((s) => s.settings);
+  const update = useSettingsStore((s) => s.update);
+
+  return (
+    <div className="screen">
+      <div className="screen-header">
+        <h1>Settings</h1>
+      </div>
+
+      <section className="settings-group">
+        <h2 className="section-title">Theme</h2>
+        <div className="theme-cards" role="radiogroup" aria-label="Theme">
+          {THEMES.map((t) => (
+            <label key={t.id} className="card theme-card">
+              <input
+                type="radio"
+                name="theme"
+                value={t.id}
+                checked={settings.theme === t.id}
+                onChange={() => void update({ theme: t.id })}
+              />
+              {t.label}
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section-title">Paper &amp; layout defaults</h2>
+        <Field label="Page mode" htmlFor="set-mode">
+          <select
+            id="set-mode"
+            className="input"
+            value={settings.defaultPageMode}
+            onChange={(e) => void update({ defaultPageMode: e.target.value as PageMode })}
+          >
+            <option value="canvas">Infinite</option>
+            <option value="page">Paper</option>
+          </select>
+        </Field>
+        <Field label="Background" htmlFor="set-bg">
+          <select
+            id="set-bg"
+            className="input"
+            value={settings.defaultBackground}
+            onChange={(e) => void update({ defaultBackground: e.target.value as BackgroundType })}
+          >
+            {BACKGROUNDS.map((b) => (
+              <option key={b.id} value={b.id}>{b.label}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Page size" htmlFor="set-aspect">
+          <select
+            id="set-aspect"
+            className="input"
+            value={settings.defaultPageAspectRatio}
+            onChange={(e) => void update({ defaultPageAspectRatio: e.target.value })}
+          >
+            {ASPECTS.map((a) => (
+              <option key={a.id} value={a.id}>{a.label}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Orientation" htmlFor="set-orient">
+          <select
+            id="set-orient"
+            className="input"
+            value={settings.defaultPageOrientation}
+            onChange={(e) => void update({ defaultPageOrientation: e.target.value })}
+          >
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </Field>
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section-title">Pen &amp; stylus defaults</h2>
+        <Field label="Pen colour" htmlFor="set-pen-colour">
+          <input
+            id="set-pen-colour"
+            type="color"
+            value={settings.defaultPenColor}
+            onChange={(e) => void update({ defaultPenColor: e.target.value })}
+          />
+        </Field>
+        <Field label="Pen width" htmlFor="set-pen-width">
+          <input
+            id="set-pen-width"
+            type="range"
+            min={0.5}
+            max={15.4}
+            step={0.1}
+            value={settings.defaultPenWidth}
+            onChange={(e) => void update({ defaultPenWidth: Number(e.target.value) })}
+          />
+          <span className="muted">{settings.defaultPenWidth.toFixed(1)}</span>
+        </Field>
+        <Field label="Highlighter colour" htmlFor="set-hl-colour">
+          <input
+            id="set-hl-colour"
+            type="color"
+            value={settings.defaultHighlighterColor}
+            onChange={(e) => void update({ defaultHighlighterColor: e.target.value })}
+          />
+        </Field>
+        <Field label="Highlighter width" htmlFor="set-hl-width">
+          <input
+            id="set-hl-width"
+            type="range"
+            min={5}
+            max={40}
+            step={0.1}
+            value={settings.defaultHighlighterWidth}
+            onChange={(e) => void update({ defaultHighlighterWidth: Number(e.target.value) })}
+          />
+          <span className="muted">{settings.defaultHighlighterWidth.toFixed(1)}</span>
+        </Field>
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section-title">Trash</h2>
+        <Field label="Keep deleted items for" htmlFor="set-retention">
+          <select
+            id="set-retention"
+            className="input"
+            value={settings.trashRetentionDays}
+            onChange={(e) => void update({ trashRetentionDays: Number(e.target.value) })}
+          >
+            {RETENTION.map((d) => (
+              <option key={d} value={d}>{d === 0 ? "Forever" : `${d} days`}</option>
+            ))}
+          </select>
+        </Field>
+      </section>
+    </div>
+  );
+}
