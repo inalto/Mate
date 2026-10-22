@@ -2113,7 +2113,7 @@ dependencies = [
 
 [[package]]
 name = "mate"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "log",
  "mate-core",
@@ -2130,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "mate-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "infer 0.19.0",
  "rusqlite",
