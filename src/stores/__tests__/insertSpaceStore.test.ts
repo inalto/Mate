@@ -84,7 +84,7 @@ describe("editor insert space and alignment", () => {
 
   it("graph_from_equation_uses_inferred_kind", () => {
     const m = mathElement("pg", "m2", new Date().toISOString(), { x: 40, y: 40 }, "#000000");
-    useEditorStore.setState({ elements: new Map(s().elements).set("m2", { ...m, content: { ...(m.content as object), latex: "r=2\cos\theta" } }) });
+    useEditorStore.setState({ elements: new Map(s().elements).set("m2", { ...m, content: { ...(m.content as object), latex: String.raw`\sin(2\theta)` } }) });
     s().select(["m2"]);
     const id = s().graphFromSelectedEquation()!;
     expect(graphDataOf(s().elements.get(id)!).kind).toBe("2d-polar");

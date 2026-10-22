@@ -142,9 +142,9 @@ export const graphElement = (pageId: string, id: string, now: string, at: Vec2, 
 /** Guess the graph kind for a typed equation: polar (`r = ...`), parametric (pair / only `t`), else function. */
 export function inferGraphKind(latex: string): GraphKind {
   const src = latex.trim();
-  const vars = src.replace(/\[a-zA-Z]+/g, " "); // drop commands such as \theta, \sin
+  const vars = src.replace(/\\[a-zA-Z]+/g, " "); // drop commands such as \theta, \sin
   if (/^r\s*=/.test(src)) return "2d-polar";
-  if (/\theta/.test(src) && !/[xy]/.test(vars)) return "2d-polar";
+  if (/\\theta/.test(src) && !/[xy]/.test(vars)) return "2d-polar";
   if (/x\s*=.*,\s*y\s*=/.test(src)) return "2d-parametric";
   if (/t/.test(vars) && !/[xy]/.test(vars)) return "2d-parametric";
   if (/^\([^,()]+,[^()]+\)$/.test(src)) return "2d-parametric";
