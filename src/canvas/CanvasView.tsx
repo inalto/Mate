@@ -4,6 +4,7 @@
 // DOM events, the editor store and rendering together.
 import { useEffect, useRef } from "react";
 import { renderStroke } from "../ink/render";
+import { isScribbleGesture, scribbleHits } from "../ink/scribble";
 import type { ThemeName } from "../ink/types";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Point, Settings } from "../model/types";
@@ -19,8 +20,13 @@ import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
+import { createInkSnap, drawSnapFlash, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
+import type { RecognizedShape } from "../shapes/recognize";
 import { createToolController, pointerTool } from "./toolInteractions";
+
+/** Ink-to-shape flash colour (the tools' overlay accent). */
+const SNAP_FLASH_COLOR = "#4a5d4e";
 
 /** Quiet period after the last camera change before the snapshot is re-rasterised. */
 const RASTER_DEBOUNCE_MS = 150;
@@ -67,6 +73,11 @@ function createEngine(
   let mode: "none" | "draw" | "pan" | "tool" = "none";
   let builder: StrokeBuilder | null = null;
   let liveEl: Element | null = null;
+  /** Ink to shape for the stroke in progress, and the shape it snapped to (shown instead of it). */
+  let snap: InkSnap | null = null;
+  let snapShape: Element | null = null;
+  let flash: { shape: RecognizedShape; until: number } | null = null;
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
   let lastPan: Vec2 = { x: 0, y: 0 };
   let pinchStart: PinchStart | null = null;
   /** True while our own commit updates the store (the element is already in the snapshot). */
@@ -140,8 +151,10 @@ function createEngine(
     const c = st().camera;
     if (liveEl) {
       lctx.setTransform(dpr * c.z, 0, 0, dpr * c.z, dpr * c.x, dpr * c.y);
-      renderStroke(lctx, liveEl, theme(), c.z);
+      if (liveEl.type === "shape") drawElement(lctx, liveEl, { theme: theme(), zoomBucket: c.z });
+      else renderStroke(lctx, liveEl, theme(), c.z);
     }
+    if (flash && performance.now() < flash.until) drawSnapFlash(lctx, flash.shape, c, dpr, SNAP_FLASH_COLOR);
     if (tools.draw(lctx, c, dpr)) requestLive(); // marching ants animate while selected
   };
   const requestLive = () => {
@@ -151,7 +164,7 @@ function createEngine(
   };
   const setLive = (points: Point[] | null) => {
     const s = st();
-    liveEl = points && points.length > 0 ? strokeElement(points, { pageId, preset: s.preset }, "live", "") : null;
+    liveEl = snapShape ?? (points && points.length > 0 ? strokeElement(points, { pageId, preset: s.preset }, "live", "") : null);
     requestLive();
   };
 
@@ -183,15 +196,50 @@ function createEngine(
     requestLive();
   };
 
-  const commit = (el: Element) => {
-    cache.append((ctx) => renderStroke(asCtx(ctx), el, theme(), st().camera.z));
+  /** Append `el` to the snapshot and add it through `apply` (default: as a new element). */
+  const commit = (el: Element, apply: () => void = () => st().addElement(el)) => {
+    cache.append((ctx) =>
+      el.type === "stroke"
+        ? renderStroke(asCtx(ctx), el, theme(), st().camera.z)
+        : drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: st().camera.z }),
+    );
     committing = true;
     try {
-      st().addElement(el);
+      apply();
     } finally {
       committing = false;
     }
     requestStatic();
+  };
+
+  const onSnap = (r: RecognizedShape) => {
+    snapShape = snapShapeElement(r, st().preset, pageId, "live", "");
+    flash = { shape: r, until: performance.now() + SNAP_FLASH_MS };
+    if (flashTimer !== null) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+      flashTimer = null;
+      flash = null;
+      requestLive();
+    }, SNAP_FLASH_MS);
+    setLive(null);
+  };
+
+  /** Scribble to erase: when the finished pen stroke is a scribble over ink, erase that instead. */
+  const scribbleErased = (raw: readonly Point[]): boolean => {
+    const s = st();
+    const cfg = getSettings();
+    if (!cfg.scribbleToErase || s.preset.type === "highlighter") return false;
+    if (!isScribbleGesture(raw, s.camera.z, cfg.scribbleEraseSensitivity).scribble) return false;
+    const hits = scribbleHits(s.elements, store.spatialIndex(), raw, s.camera.z);
+    if (hits.length === 0) return false; // over empty paper it is just ink
+    s.scribbleErase(hits);
+    return true;
+  };
+
+  const endStroke = () => {
+    snap?.cancel();
+    snap = null;
+    snapShape = null;
   };
 
   const adapter = createPointerAdapter(
@@ -226,7 +274,17 @@ function createEngine(
           stabilization: set.strokeStabilization,
           nibFlatness: set.fountainPenNibFlatness,
         });
+        snap = inkSnapAllowed(s.preset.type, set)
+          ? createInkSnap({
+              dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
+              snapsOnRelease: set.inkToShapeSnapsOnRelease,
+              zoom: s.camera.z,
+              points: () => builder?.points() ?? [],
+              onSnap,
+            })
+          : null;
         setLive(builder.push([p]));
+        snap?.down(p);
       },
       onMove(points, predicted) {
         if (mode === "pan") {
@@ -236,15 +294,25 @@ function createEngine(
           lastPan = scr;
         } else if (mode === "draw" && builder) {
           builder.push(points);
-          setLive(builder.preview(predicted));
+          if (points.length > 0) snap?.move(points[points.length - 1]);
+          if (!snapShape) setLive(builder.preview(predicted));
         } else if (mode === "tool") tools.move(points);
       },
       onUp(p) {
         if (mode === "draw" && builder) {
           builder.push([p]);
+          const shape = snap?.up() ?? null;
+          const raw = builder.points();
           const pts = builder.finish();
-          if (pts.length > 0) commit(strokeElement(pts, { pageId, preset: st().preset }));
+          if (pts.length > 0) {
+            const stroke = strokeElement(pts, { pageId, preset: st().preset });
+            if (shape) {
+              const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());
+              commit(el, () => st().replaceStrokeWithShape(stroke, el));
+            } else if (!scribbleErased(raw)) commit(stroke);
+          }
         } else if (mode === "tool") tools.up();
+        endStroke();
         builder = null;
         mode = "none";
         st().popTempTool();
@@ -253,6 +321,7 @@ function createEngine(
       onCancel() {
         if (mode === "tool") tools.cancel();
         st().popTempTool();
+        endStroke();
         builder = null;
         mode = "none";
         setLive(null);
@@ -341,6 +410,8 @@ function createEngine(
       host.removeEventListener("wheel", onWheel);
       if (rasterTimer !== null) clearTimeout(rasterTimer);
       if (snapTimer !== null) clearTimeout(snapTimer);
+      if (flashTimer !== null) clearTimeout(flashTimer);
+      snap?.cancel();
       void elementsQueue.flushAll();
     },
     stats: cache.stats,

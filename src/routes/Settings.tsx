@@ -160,6 +160,60 @@ export default function Settings() {
       </section>
 
       <section className="settings-group">
+        <h2 className="section-title">Ink</h2>
+        <Field label="Ink to shape" htmlFor="set-ink-shape">
+          <input
+            id="set-ink-shape"
+            type="checkbox"
+            checked={settings.inkToShape}
+            onChange={(e) => void update({ inkToShape: e.target.checked })}
+          />
+          <span className="muted">Hold the pen still at the end of a stroke to turn it into a shape</span>
+        </Field>
+        <Field label="Snap when lifting the pen" htmlFor="set-ink-shape-release">
+          <input
+            id="set-ink-shape-release"
+            type="checkbox"
+            checked={settings.inkToShapeSnapsOnRelease}
+            onChange={(e) => void update({ inkToShapeSnapsOnRelease: e.target.checked })}
+          />
+        </Field>
+        <Field label="Hold time" htmlFor="set-ink-shape-dwell">
+          <input
+            id="set-ink-shape-dwell"
+            type="range"
+            min={300}
+            max={2000}
+            step={50}
+            value={settings.inkToShapeDwellMs}
+            onChange={(e) => void update({ inkToShapeDwellMs: Number(e.target.value) })}
+          />
+          <span className="muted">{settings.inkToShapeDwellMs} ms</span>
+        </Field>
+        <Field label="Scribble to erase" htmlFor="set-scribble">
+          <input
+            id="set-scribble"
+            type="checkbox"
+            checked={settings.scribbleToErase}
+            onChange={(e) => void update({ scribbleToErase: e.target.checked })}
+          />
+          <span className="muted">Scribble quickly over pen ink to erase it</span>
+        </Field>
+        <Field label="Scribble sensitivity" htmlFor="set-scribble-sensitivity">
+          <select
+            id="set-scribble-sensitivity"
+            className="input"
+            value={settings.scribbleEraseSensitivity}
+            onChange={(e) => void update({ scribbleEraseSensitivity: e.target.value })}
+          >
+            <option value="less">Less</option>
+            <option value="standard">Standard</option>
+            <option value="more">More</option>
+          </select>
+        </Field>
+      </section>
+
+      <section className="settings-group">
         <h2 className="section-title">Trash</h2>
         <Field label="Keep deleted items for" htmlFor="set-retention">
           <select

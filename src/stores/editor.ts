@@ -68,6 +68,13 @@ export interface EditorState {
   addElement(el: Element): void;
   /** Add a shape drawn with the shape tool (one history entry); its id, or null when refused. */
   addShape(style: ShapeStyle, drag: ShapeDrag): string | null;
+  /**
+   * Ink to shape: commit `shape` in place of the uncommitted `stroke` as one history entry "Ink to
+   * shape". Undo removes the shape and restores the original stroke; redo swaps them back.
+   */
+  replaceStrokeWithShape(stroke: Element, shape: Element): boolean;
+  /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
+  scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
   removeElements(ids: string[]): void;
   setTool(tool: ToolId): void;
@@ -321,6 +328,21 @@ export function createEditorStore(): EditorStore {
       const shape = shapeElement(style, drag, pageId, crypto.randomUUID(), new Date().toISOString());
       const el = top > 0 ? withMeta(shape, { zIndex: top }) : shape;
       return record("Shape", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    replaceStrokeWithShape(stroke, shape) {
+      const top = topZ(get().elements.values());
+      const onTop = (el: Element) => (top > 0 && zOf(el) < top ? withMeta(el, { zIndex: top }) : el);
+      const added = onTop(shape);
+      // The stroke was never committed: the entry records it (so undo can restore it) but only the
+      // shape is applied now.
+      const actions: Action[] = [{ type: "delete", el: onTop(stroke) }, { type: "add", el: added }];
+      return record("Ink to shape", actions, undefined, [{ type: "add", el: added }]);
+    },
+
+    scribbleErase(ids) {
+      const cur = get().elements;
+      record("Scribble erase", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
     updateElements(els) {
@@ -619,16 +641,20 @@ export function createEditorStore(): EditorStore {
     return n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size;
   }
 
-  /** Apply `actions` and push them as one history entry; refused (false) past the element limit. */
-  function record(label: string, actions: Action[], mergeKey?: string): boolean {
+  /**
+   * Apply `actions` and push them as one history entry; refused (false) past the element limit.
+   * `applied` (default `actions`) is what changes now, when the entry also records a state that was
+   * never committed (ink to shape: the stroke replaced before it was added).
+   */
+  function record(label: string, actions: Action[], mergeKey?: string, applied: Action[] = actions): boolean {
     if (actions.length === 0) return false;
-    if (exceedsLimit(actions)) {
+    if (exceedsLimit(applied)) {
       store.setState({ limitReached: true });
       return false;
     }
     flushEraseBatch();
     history.push({ label, actions, mergeKey });
-    applyActions(actions);
+    applyActions(applied);
     return true;
   }
 
