@@ -29,6 +29,9 @@ export function thumbnailRegion(page: Page, elements: Iterable<Element>, default
   return { ...r, width: Math.max(r.width, 320), height: Math.max(r.height, 240) };
 }
 
+/** Pages whose tainted-canvas failure was already reported. */
+const warnedTainted = new Set<string>();
+
 /** Render `elements` of `page` to a WebP blob, 320 px wide. */
 export async function captureThumbnail(pageId: string, elements: Iterable<Element>, page: Page): Promise<Blob> {
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
@@ -50,9 +53,15 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   const clip: Rect = { x: region.x, y: region.y, width: region.width, height: height / scale };
   const sheet = { mode: page.mode, ...sheetSize(page, aspect), count: 1 };
   paintScene(ctx, page, list, clip, sheet, { theme: "light", background: "plain", pageFrame: true, zoomBucket: scale });
-  return new Promise((resolve, reject) =>
+  return new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("thumbnail encoding failed"))), "image/webp", THUMB_QUALITY),
-  );
+  ).catch((e: unknown) => {
+    if (e instanceof Error && e.name === "SecurityError" && !warnedTainted.has(pageId)) {
+      warnedTainted.add(pageId);
+      console.warn(`thumbnail for page ${pageId} skipped: canvas is tainted by a cross-origin image`);
+    }
+    throw e;
+  });
 }
 
 /** Capture and store a page's thumbnail, then patch its version so cards pick up the new file. */

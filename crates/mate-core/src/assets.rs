@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 use serde::Serialize;
 use uuid::Uuid;
@@ -167,9 +168,18 @@ pub fn delete_asset(dir: &Path, id: &str) -> bool {
     asset_path(dir, id).is_some_and(|p| fs::remove_file(p).is_ok())
 }
 
-/// Removes every stored asset whose id is not in `referenced`; returns how many were removed.
-pub fn gc_unreferenced(dir: &Path, referenced: &HashSet<String>) -> usize {
-    let doomed: Vec<_> = entries(dir).filter(|(id, _, _)| !referenced.contains(id)).collect();
+/// Removes every stored asset whose id is not in `referenced`, except files modified within `grace`
+/// (a just-inserted image may not have its element row in the database yet); returns how many
+/// were removed.
+pub fn gc_unreferenced(dir: &Path, referenced: &HashSet<String>, grace: Duration) -> usize {
+    let recent = |p: &Path| {
+        fs::metadata(p)
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| SystemTime::now().duration_since(t).is_ok_and(|age| age < grace))
+    };
+    let doomed: Vec<_> = entries(dir)
+        .filter(|(id, _, p)| !referenced.contains(id) && !recent(p))
+        .collect();
     doomed.into_iter().filter(|(_, _, p)| fs::remove_file(p).is_ok()).count()
 }
 
@@ -222,13 +232,24 @@ mod tests {
     }
 
     #[test]
+    fn gc_skips_recent_files() {
+        let dir = tmp("gc-recent");
+        let fresh = save_sniffed(&dir, PNG).unwrap();
+        let refs = HashSet::new();
+        assert_eq!(gc_unreferenced(&dir, &refs, Duration::from_secs(3600)), 0);
+        assert!(fresh.path.exists());
+        assert_eq!(gc_unreferenced(&dir, &refs, Duration::ZERO), 1);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn gc_removes_only_unreferenced() {
         let dir = tmp("gc");
         let keep = save_sniffed(&dir, PNG).unwrap();
         let drop = save_sniffed(&dir, PNG).unwrap();
         fs::write(dir.join("notes.txt"), b"x").unwrap();
         let refs: HashSet<String> = [keep.id.clone()].into();
-        assert_eq!(gc_unreferenced(&dir, &refs), 1);
+        assert_eq!(gc_unreferenced(&dir, &refs, Duration::ZERO), 1);
         assert!(keep.path.exists());
         assert!(!drop.path.exists());
         assert!(dir.join("notes.txt").exists());

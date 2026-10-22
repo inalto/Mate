@@ -9,25 +9,59 @@ export type DecodedImage = CanvasImageSource & { naturalWidth?: number; naturalH
 export type ImageDecoder = (url: string) => Promise<DecodedImage>;
 export type UrlResolver = (assetId: string) => Promise<string | null>;
 
-export const IMAGE_CACHE_LIMIT = 128;
+export const IMAGE_CACHE_LIMIT = 512;
 
-const defaultDecoder: ImageDecoder = (url) =>
-  new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("image failed to decode"));
-    img.src = url;
-  });
+let cacheLimit = IMAGE_CACHE_LIMIT;
+
+/**
+ * Decoder using `ImageCtor`. Assets are served from `http://asset.localhost`, cross-origin to the
+ * app: without `crossOrigin` they would taint the canvas and break PNG export and thumbnails.
+ */
+export const createDecoder =
+  (ImageCtor: new () => HTMLImageElement = Image): ImageDecoder =>
+  (url) =>
+    new Promise((resolve, reject) => {
+      const img = new ImageCtor();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("image failed to decode"));
+      img.crossOrigin = "anonymous"; // must precede src
+      img.src = url;
+    });
+
+const defaultDecoder: ImageDecoder = (url) => createDecoder()(url);
 
 let decoder: ImageDecoder = defaultDecoder;
 let resolver: UrlResolver = assetUrl;
 
-const cache = new Map<string, DecodedImage>();
+interface Entry {
+  img: DecodedImage;
+  /** Generation (raster pass) in which the entry was last requested or stored. */
+  gen: number;
+}
+
+const cache = new Map<string, Entry>();
+/** Generation of the last request per asset id (pruned to the last few generations). */
+const requested = new Map<string, number>();
+// A raster pass runs synchronously, so the generation advances on a microtask after the first
+// request of a pass. Entries touched in the current generation are never evicted: a pass that
+// needs more images than the cap would otherwise evict what it just drew and never settle.
+let gen = 0;
+let advancing = false;
+function touchGeneration(): void {
+  if (advancing) return;
+  advancing = true;
+  queueMicrotask(() => {
+    advancing = false;
+    gen++;
+    for (const [id, g] of requested) if (g < gen - 2) requested.delete(id);
+  });
+}
 const pending = new Map<string, Promise<DecodedImage | null>>();
 const failed = new Set<string>();
 
 /** Replace the decoder / URL resolver (tests); call with no arguments to restore the defaults. */
-export function configureImageLoader(opts: { decoder?: ImageDecoder; resolver?: UrlResolver } = {}): void {
+export function configureImageLoader(opts: { decoder?: ImageDecoder; resolver?: UrlResolver; cacheLimit?: number } = {}): void {
+  cacheLimit = opts.cacheLimit ?? IMAGE_CACHE_LIMIT;
   decoder = opts.decoder ?? defaultDecoder;
   resolver = opts.resolver ?? assetUrl;
   clearImageCache();
@@ -35,22 +69,26 @@ export function configureImageLoader(opts: { decoder?: ImageDecoder; resolver?: 
 
 export function clearImageCache(): void {
   cache.clear();
+  requested.clear();
   pending.clear();
   failed.clear();
 }
 
 function store(id: string, img: DecodedImage): void {
-  cache.set(id, img);
-  while (cache.size > IMAGE_CACHE_LIMIT) {
-    const oldest = cache.keys().next().value as string;
-    cache.delete(oldest);
+  cache.set(id, { img, gen });
+  for (const [k, e] of cache) {
+    if (cache.size <= cacheLimit) break;
+    if (e.gen < gen) cache.delete(k);
   }
 }
+
+/** Ids currently cached (tests). */
+export const cachedImageIds = (): string[] => [...cache.keys()];
 
 /** Load (once) and cache the image of asset `id`; null when it is missing or undecodable. */
 export function loadImage(id: string): Promise<DecodedImage | null> {
   const hit = cache.get(id);
-  if (hit) return Promise.resolve(hit);
+  if (hit) return Promise.resolve(hit.img);
   let p = pending.get(id);
   if (!p) {
     p = resolver(id)
@@ -72,13 +110,21 @@ export function loadImage(id: string): Promise<DecodedImage | null> {
 
 /** The decoded image if cached; otherwise starts loading and returns null. */
 export function getImage(id: string): DecodedImage | null {
+  touchGeneration();
+  requested.set(id, gen);
   const hit = cache.get(id);
   if (hit) {
     cache.delete(id); // refresh LRU position
+    hit.gen = gen;
     cache.set(id, hit);
-    return hit;
+    return hit.img;
   }
-  if (!failed.has(id) && !pending.has(id)) void loadImage(id).then((img) => img && boxSnapshots.notify(id));
+  if (!failed.has(id) && !pending.has(id)) {
+    void loadImage(id).then((img) => {
+      // Tell the canvas only if a recent raster still wants this image.
+      if (img && gen - (requested.get(id) ?? -10) <= 2) boxSnapshots.notify(id);
+    });
+  }
   return null;
 }
 

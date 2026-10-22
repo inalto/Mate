@@ -1,11 +1,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use mate_core::assets::{self, AssetInfo, MAX_PDF_BYTES};
 use tauri::State;
 use tauri::ipc::{InvokeBody, Request, Response};
 
 use crate::state::AppState;
+
+/// Files younger than this are never collected: their element rows may still be queued.
+const GC_GRACE: Duration = Duration::from_secs(3600);
 
 fn assets_dir(state: &AppState) -> PathBuf {
     state.data_dir.join("assets")
@@ -63,7 +67,7 @@ pub fn gc_assets(state: State<'_, AppState>) -> Result<usize, String> {
         .map_err(|e| e.to_string())?
         .referenced_asset_ids()
         .map_err(|e| e.to_string())?;
-    Ok(assets::gc_unreferenced(&assets_dir(&state), &referenced))
+    Ok(assets::gc_unreferenced(&assets_dir(&state), &referenced, GC_GRACE))
 }
 
 #[cfg(test)]

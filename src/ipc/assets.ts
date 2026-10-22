@@ -2,6 +2,7 @@
 // `saveAssetFromPath` (picked/dropped files); elements persist only the asset id. The webview
 // shows an asset through its `asset:` URL, resolved from the file path via an id→path cache.
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { elementsQueue } from "./elementsQueue";
 
 export interface AssetInfo {
   id: string;
@@ -35,7 +36,10 @@ export const deleteAsset = (id: string): Promise<boolean> => {
 };
 
 /** Remove assets no element references; resolves to how many were removed. */
-export const gcAssets = (): Promise<number> => invoke<number>("gc_assets");
+export const gcAssets = async (): Promise<number> => {
+  await elementsQueue.flushAll(); // pending inserts must reach the database before references are read
+  return invoke<number>("gc_assets");
+};
 
 /** The stored file's bytes. */
 export const readAsset = async (id: string): Promise<Uint8Array> =>
