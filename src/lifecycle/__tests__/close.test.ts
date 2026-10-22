@@ -25,7 +25,7 @@ vi.mock("../../components/Toast", () => ({ showToast: (...a: unknown[]) => showT
 let startedResult = true;
 
 import * as ipc from "../../ipc/lifecycle";
-import { CLEAN_EXIT_KEY, SAFE_CLOSE_TOAST, installCloseHandler } from "../close";
+import { CLEAN_EXIT_KEY, SAFE_CLOSE_TOAST, STILL_SAVING_TOAST, installCloseHandler } from "../close";
 
 type W = { __mateFlushAndClose?: (id: number) => Promise<void>; __mateCloseAttemptCancelled?: (id: number) => void };
 const w = window as unknown as W;
@@ -60,6 +60,27 @@ describe("close handler", () => {
     const json = JSON.parse(vi.mocked(ipc.writeRecoveryArtifact).mock.calls[0][1]);
     expect(json.app).toBe("Mate");
     expect(json.failed).toEqual([{ op: "delete", id: "e1" }]);
+    expect(showToast).toHaveBeenCalledWith(
+      `${SAFE_CLOSE_TOAST} Saved a recovery file: p`,
+      expect.objectContaining({ label: "Close anyway" }),
+    );
+  });
+
+  it("close_anyway_completes_after_recovery_written", async () => {
+    failedCount = 1;
+    await w.__mateFlushAndClose!(7);
+    const action = showToast.mock.calls[0][1] as { label: string; onClick: () => void };
+    expect(ipc.completeCloseAttempt).not.toHaveBeenCalled();
+    action.onClick();
+    expect(ipc.completeCloseAttempt).toHaveBeenCalledWith(7, true);
+    expect(localStorage.getItem(CLEAN_EXIT_KEY)).toBe("0");
+  });
+
+  it("keeps cancel behaviour without close-anyway when the recovery file cannot be written", async () => {
+    failedCount = 1;
+    vi.mocked(ipc.writeRecoveryArtifact).mockRejectedValueOnce(new Error("disk"));
+    await w.__mateFlushAndClose!(8);
+    expect(calls).toContain("cancel:8");
     expect(showToast).toHaveBeenCalledWith(SAFE_CLOSE_TOAST);
   });
 
@@ -80,7 +101,7 @@ describe("close handler", () => {
     w.__mateCloseAttemptCancelled!(4);
     expect(showToast).not.toHaveBeenCalled();
     w.__mateCloseAttemptCancelled!(5);
-    expect(showToast).toHaveBeenCalledWith(SAFE_CLOSE_TOAST);
+    expect(showToast).toHaveBeenCalledWith(STILL_SAVING_TOAST);
     release();
     await run;
     expect(ipc.completeCloseAttempt).not.toHaveBeenCalled();

@@ -9,6 +9,8 @@ export const CLEAN_EXIT_KEY = "mate_clean_exit_v1";
 export const SAFE_CLOSE_TOAST =
   "Could not close safely — Your notes are not fully saved. Keep Mate open and try again.";
 
+export const STILL_SAVING_TOAST = "Mate is still saving — try closing again in a moment.";
+
 declare global {
   interface Window {
     __mateFlushAndClose?: (attemptId: number) => Promise<void>;
@@ -63,8 +65,13 @@ export function installCloseHandler(): void {
       const { pending, failed } = elementsQueue.snapshot();
       const savedAt = new Date().toISOString();
       const contents = JSON.stringify({ app: "Mate", schemaVersion: 1, savedAt, pending, failed }, null, 2);
+      let recoveryPath: string | null = null;
       try {
-        await lifecycle.writeRecoveryArtifact(`mate-recovery-${savedAt.replace(/[:.]/g, "-")}.json`, contents);
+        const written = await lifecycle.writeRecoveryArtifact(
+          `mate-recovery-${savedAt.replace(/[:.]/g, "-")}.json`,
+          contents,
+        );
+        recoveryPath = written.path;
       } catch (err) {
         console.error("could not write recovery artifact", err);
       }
@@ -75,7 +82,17 @@ export function installCloseHandler(): void {
         } catch {
           // Rust's watchdog clears the attempt anyway.
         }
-        showToast(SAFE_CLOSE_TOAST);
+        if (recoveryPath === null) {
+          showToast(SAFE_CLOSE_TOAST);
+        } else {
+          showToast(`${SAFE_CLOSE_TOAST} Saved a recovery file: ${recoveryPath}`, {
+            label: "Close anyway",
+            onClick: () => {
+              safeSet(CLEAN_EXIT_KEY, "0"); // not a clean exit: the recovery card shows next launch
+              void lifecycle.completeCloseAttempt(id, true).catch((err) => console.error("close anyway failed", err));
+            },
+          });
+        }
       }
       return;
     }
@@ -96,7 +113,7 @@ export function installCloseHandler(): void {
   window.__mateCloseAttemptCancelled = (id) => {
     if (current !== id) return;
     current = null;
-    showToast(SAFE_CLOSE_TOAST);
+    showToast(STILL_SAVING_TOAST);
   };
 
   // Best-effort flush on reload / navigation away (e.g. dev reloads).

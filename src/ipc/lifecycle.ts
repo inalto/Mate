@@ -7,9 +7,9 @@ export const closeAttemptStarted = (attemptId: number): Promise<boolean> =>
 export const cancelCloseAttempt = (attemptId: number): Promise<void> =>
   invoke("cancel_close_attempt", { attemptId });
 
-/** Destroys the window if `attemptId` is still current. */
-export const completeCloseAttempt = (attemptId: number): Promise<void> =>
-  invoke("complete_close_attempt", { attemptId });
+/** Destroys the window if `attemptId` is still current (or unconditionally with `force`). */
+export const completeCloseAttempt = (attemptId: number, force = false): Promise<void> =>
+  invoke("complete_close_attempt", { attemptId, force });
 
 /** Write `<app_data_dir>/recovery/<suggestedName>`; resolves with the written path and size. */
 export const writeRecoveryArtifact = (

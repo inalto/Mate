@@ -13,8 +13,10 @@ pub fn run() {
     .plugin(tauri_plugin_window_state::Builder::default().build())
     .on_window_event(|window, event| {
       if let WindowEvent::CloseRequested { api, .. } = event {
-        api.prevent_close();
-        lifecycle::start_close_attempt(window);
+        // Fail open: if the frontend never acknowledged the previous attempt, let the window close.
+        if lifecycle::start_close_attempt(window) {
+          api.prevent_close();
+        }
       }
     })
     .setup(|app| {

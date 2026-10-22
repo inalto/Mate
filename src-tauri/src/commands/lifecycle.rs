@@ -1,7 +1,5 @@
 use std::fs;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -13,28 +11,74 @@ use crate::state::AppState;
 const WATCHDOG: Duration = Duration::from_secs(8);
 const MAX_RECOVERY_BYTES: usize = 64 * 1024 * 1024;
 
-/// Mints a new attempt id (monotonic from 1), superseding any earlier attempt.
-pub fn begin_attempt(current: &Mutex<Option<u64>>, counter: &AtomicU64) -> u64 {
-    let mut cur = current.lock().unwrap_or_else(|e| e.into_inner());
-    let id = counter.fetch_add(1, Ordering::SeqCst) + 1;
-    *cur = Some(id);
-    id
+/// Close-attempt state machine (pure, so it is testable without a window).
+#[derive(Default)]
+pub struct CloseGate {
+    counter: u64,
+    /// Current attempt id and whether the frontend acknowledged it.
+    current: Option<(u64, bool)>,
 }
 
-/// True if `id` is the current attempt.
-pub fn is_current(current: &Mutex<Option<u64>>, id: u64) -> bool {
-    *current.lock().unwrap_or_else(|e| e.into_inner()) == Some(id)
+#[derive(Debug, PartialEq, Eq)]
+pub enum Expiry {
+    Stale,
+    /// The frontend never answered; the attempt is kept so the next close request goes through.
+    Unacknowledged,
+    /// The frontend was busy; the attempt is cleared and should be told it was cancelled.
+    Acknowledged,
 }
 
-/// Clears the attempt if it is still `id`; returns whether it was.
-pub fn clear_if_current(current: &Mutex<Option<u64>>, id: u64) -> bool {
-    let mut cur = current.lock().unwrap_or_else(|e| e.into_inner());
-    if *cur == Some(id) {
-        *cur = None;
-        true
-    } else {
-        false
+impl CloseGate {
+    /// A close was requested. `None` = let the window close (the previous attempt was never
+    /// acknowledged, so the frontend is unresponsive); otherwise the new, superseding attempt id.
+    pub fn on_close_requested(&mut self) -> Option<u64> {
+        if matches!(self.current, Some((_, false))) {
+            return None;
+        }
+        self.counter += 1;
+        self.current = Some((self.counter, false));
+        Some(self.counter)
     }
+
+    /// The frontend acknowledged `id`; false if stale.
+    pub fn acknowledge(&mut self, id: u64) -> bool {
+        match self.current {
+            Some((cur, _)) if cur == id => {
+                self.current = Some((id, true));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn is_current(&self, id: u64) -> bool {
+        matches!(self.current, Some((cur, _)) if cur == id)
+    }
+
+    /// Clears the attempt if it is still `id`; returns whether it was.
+    pub fn clear_if_current(&mut self, id: u64) -> bool {
+        if self.is_current(id) {
+            self.current = None;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn expire(&mut self, id: u64) -> Expiry {
+        match self.current {
+            Some((cur, true)) if cur == id => {
+                self.current = None;
+                Expiry::Acknowledged
+            }
+            Some((cur, false)) if cur == id => Expiry::Unacknowledged,
+            _ => Expiry::Stale,
+        }
+    }
+}
+
+fn gate(state: &AppState) -> std::sync::MutexGuard<'_, CloseGate> {
+    state.close_attempt.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 fn eval_js(window: &Window, js: String) {
@@ -43,10 +87,13 @@ fn eval_js(window: &Window, js: String) {
     }
 }
 
-/// Handles `CloseRequested`: the caller has already prevented the close.
-pub fn start_close_attempt(window: &Window) {
+/// Handles `CloseRequested`. Returns true if the close was prevented (the frontend flushes first);
+/// false if the window should close now.
+pub fn start_close_attempt(window: &Window) -> bool {
     let state = window.state::<AppState>();
-    let id = begin_attempt(&state.close_attempt, &state.close_counter);
+    let Some(id) = gate(&state).on_close_requested() else {
+        return false;
+    };
     eval_js(window, format!(
         "window.__mateFlushAndClose && window.__mateFlushAndClose({id})"
     ));
@@ -54,23 +101,25 @@ pub fn start_close_attempt(window: &Window) {
     std::thread::spawn(move || {
         std::thread::sleep(WATCHDOG);
         let state = window.state::<AppState>();
-        if clear_if_current(&state.close_attempt, id) {
+        let expiry = gate(&state).expire(id);
+        if expiry == Expiry::Acknowledged {
             // Mate is still saving: tell the frontend to surface it.
             eval_js(&window, format!(
                 "window.__mateCloseAttemptCancelled && window.__mateCloseAttemptCancelled({id})"
             ));
         }
     });
+    true
 }
 
 #[tauri::command]
 pub fn close_attempt_started(state: State<'_, AppState>, attempt_id: u64) -> bool {
-    is_current(&state.close_attempt, attempt_id)
+    gate(&state).acknowledge(attempt_id)
 }
 
 #[tauri::command]
 pub fn cancel_close_attempt(state: State<'_, AppState>, attempt_id: u64) {
-    clear_if_current(&state.close_attempt, attempt_id);
+    gate(&state).clear_if_current(attempt_id);
 }
 
 #[tauri::command]
@@ -78,8 +127,12 @@ pub fn complete_close_attempt(
     window: Window,
     state: State<'_, AppState>,
     attempt_id: u64,
+    force: Option<bool>,
 ) -> Result<(), String> {
-    if !clear_if_current(&state.close_attempt, attempt_id) {
+    // `force` is the user's explicit "Close anyway" after a recovery file was written; the attempt
+    // was already cancelled at that point, so it is no longer current.
+    let current = gate(&state).clear_if_current(attempt_id);
+    if !current && force != Some(true) {
         return Err("stale close attempt".into());
     }
     window.destroy().map_err(|e| e.to_string())
@@ -140,17 +193,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn second_attempt_supersedes_first() {
-        let cur = Mutex::new(None);
-        let counter = AtomicU64::new(0);
-        let a = begin_attempt(&cur, &counter);
-        let b = begin_attempt(&cur, &counter);
+    fn acknowledged_attempt_is_superseded() {
+        let mut g = CloseGate::default();
+        let a = g.on_close_requested().unwrap();
+        assert!(g.acknowledge(a));
+        let b = g.on_close_requested().unwrap();
         assert!(b > a);
-        assert!(!is_current(&cur, a));
-        assert!(is_current(&cur, b));
-        assert!(!clear_if_current(&cur, a));
-        assert!(clear_if_current(&cur, b));
-        assert!(!is_current(&cur, b));
+        assert!(!g.is_current(a));
+        assert!(!g.acknowledge(a));
+        assert!(g.is_current(b));
+        assert!(!g.clear_if_current(a));
+        assert!(g.clear_if_current(b));
+    }
+
+    #[test]
+    fn unacknowledged_attempt_lets_next_close_through() {
+        let mut g = CloseGate::default();
+        let a = g.on_close_requested().unwrap();
+        assert_eq!(g.on_close_requested(), None);
+        // Still lets through after the watchdog expires without acknowledgement.
+        assert_eq!(g.expire(a), Expiry::Unacknowledged);
+        assert_eq!(g.on_close_requested(), None);
+    }
+
+    #[test]
+    fn acknowledged_expiry_clears_and_allows_new_attempt() {
+        let mut g = CloseGate::default();
+        let a = g.on_close_requested().unwrap();
+        g.acknowledge(a);
+        assert_eq!(g.expire(a), Expiry::Acknowledged);
+        assert_eq!(g.expire(a), Expiry::Stale);
+        assert!(g.on_close_requested().is_some());
     }
 
     #[test]
