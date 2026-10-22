@@ -2,13 +2,16 @@
 // the box, constant screen size) lists the expressions (colour dot cycling through the palette,
 // LaTeX input, show/hide, delete; parse errors inline under the row, never blocking), the domain
 // inputs and the grid toggle; the plot area fills the box, with wheel zoom about the cursor and
-// drag to pan. Esc ends editing. The session commits once (useEditSession). Registered for
+// drag to pan. The plot is rebuilt at most once per animation frame (latest state wins); an
+// expression cut short by the plot's time budget shows a warning under its row. The math engine
+// is loaded on mount. Esc ends editing. The session commits once (useEditSession). Registered for
 // "graph" on import.
 import { Eye, EyeSlash, X } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphData, type GraphDomain, type GraphExpression, type GraphKind } from "../graph/data";
-import { expressionError, parseExpression } from "../graph/expressions";
-import { buildPlotScene } from "../graph/plot";
+import { loadEngine, engineSync } from "../graph/engine";
+import { expressionError, parseExpressionSync } from "../graph/expressions";
+import { buildPlotScene, type PlotScene } from "../graph/plot";
 import { mapInkColor } from "../ink/theme";
 import { contentOf, type GraphContent } from "../model/content";
 import type { Element } from "../model/types";
@@ -23,8 +26,8 @@ const ZOOM_PER_PX = 0.001;
 /** The kind stored with the data: that of the first expression that parses. */
 function kindOf(exprs: GraphExpression[], fallback: GraphKind): GraphKind {
   for (const e of exprs) {
-    const p = parseExpression(e.latex);
-    if ("error" in p) continue;
+    const p = parseExpressionSync(e.latex);
+    if ("error" in p || "pending" in p) continue;
     return p.kind === "polar" ? "2d-polar" : p.kind === "parametric" ? "2d-parametric" : "2d-function";
   }
   return fallback;
@@ -90,23 +93,56 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     rootRef.current?.querySelector<HTMLInputElement>(".graph-expr-input")?.focus();
   }, []);
 
-  // Draw the plot (box units scaled to device pixels at the current zoom).
+  // Load the math engine; re-plot once it is there.
+  const [engineReady, setEngineReady] = useState(() => engineSync() !== null);
+  useEffect(() => {
+    if (engineReady) return;
+    let alive = true;
+    loadEngine()
+      .then(() => alive && setEngineReady(true))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [engineReady]);
+
+  // Rebuild and draw the plot at most once per frame (box units scaled to device pixels at the zoom).
+  const [warnings, setWarnings] = useState<PlotScene["warnings"]>([]);
+  const frame = useRef<number | null>(null);
+  const plotArgs = useRef({ data, theme, w, h, zoom });
   useLayoutEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const scale = Math.min(4, Math.max(0.25, zoom)) * (window.devicePixelRatio || 1);
-    canvas.width = Math.max(1, Math.round(w * scale));
-    canvas.height = Math.max(1, Math.round(h * scale));
-    let ctx: CanvasRenderingContext2D | null = null;
-    try {
-      ctx = canvas.getContext("2d");
-    } catch {
-      ctx = null; // no canvas support (tests)
-    }
-    if (!ctx) return;
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    drawPlotScene(ctx, buildPlotScene(data, { w, h }, theme));
-  }, [data, theme, w, h, zoom]);
+    plotArgs.current = { data, theme, w, h, zoom };
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      const a = plotArgs.current;
+      const scene = buildPlotScene(a.data, { w: a.w, h: a.h }, a.theme);
+      setWarnings((prev) => (JSON.stringify(prev) === JSON.stringify(scene.warnings) ? prev : scene.warnings));
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const scale = Math.min(4, Math.max(0.25, a.zoom)) * (window.devicePixelRatio || 1);
+      const cw = Math.max(1, Math.round(a.w * scale));
+      const ch = Math.max(1, Math.round(a.h * scale));
+      if (canvas.width !== cw) canvas.width = cw;
+      if (canvas.height !== ch) canvas.height = ch;
+      let ctx: CanvasRenderingContext2D | null = null;
+      try {
+        ctx = canvas.getContext("2d");
+      } catch {
+        ctx = null; // no canvas support
+      }
+      if (!ctx) return;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      drawPlotScene(ctx, scene);
+    });
+  }, [data, theme, w, h, zoom, engineReady]);
+  useEffect(
+    () => () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
+    },
+    [],
+  );
 
   // Wheel zoom about the cursor (a native, non-passive listener so the page does not zoom too).
   useEffect(() => {
@@ -169,6 +205,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
           {data.expressions.map((ex, i) => {
             const n = i + 1;
             const err = expressionError(ex.latex);
+            const slow = warnings.some((wn) => wn.id === ex.id);
             return (
               <li key={ex.id} className="graph-expr" data-expr-id={ex.id}>
                 <div className="graph-expr-row">
@@ -208,6 +245,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
                   </button>
                 </div>
                 {err && <div className="graph-expr-error">{err}</div>}
+                {!err && slow && <div className="graph-expr-error graph-expr-warning">Too slow to plot fully</div>}
               </li>
             );
           })}

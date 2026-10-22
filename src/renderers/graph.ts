@@ -1,15 +1,19 @@
 // Graph renderer: draws a graph element's PlotScene (graph/plot) straight to the canvas and as
 // vector SVG (`<line>`, `<polyline>`, `<text>`), so a graph is vector everywhere and never uses a
 // bitmap snapshot. Scenes are cached per element object and theme (elements are immutable: an
-// edit is a new object). Registered for "graph" on import (see ./builtins).
+// edit is a new object). Until the lazy math engine has loaded, a graph shows its axes and a
+// "Loading…" label; once it loads, `boxSnapshots.notify` asks the canvas to re-raster those graphs.
+// Registered for "graph" on import (see ./builtins).
 import { esc, n } from "../export/svgUtil";
 import { graphDataOf } from "../graph/data";
+import { loadEngine } from "../graph/engine";
 import { buildPlotScene, type PlotScene, type Text } from "../graph/plot";
 import type { ThemeName } from "../ink/types";
 import type { Element } from "../model/types";
 import { FONT_STACKS } from "../text/style";
 import { boxRect, contentMeta } from "../tools/spatialIndex";
 import { rotatedSvg } from "./boxDraw";
+import { boxSnapshots } from "./boxSnapshot";
 import { registerRenderer } from "./registry";
 
 export const GRAPH_FONT = `11px ${FONT_STACKS.mono}`;
@@ -18,6 +22,21 @@ const AXIS_WIDTH = 1.25;
 const CURVE_WIDTH = 2;
 
 const scenes = new WeakMap<Element, Map<ThemeName, PlotScene>>();
+/** Graphs drawn while the engine was loading: re-rastered once it has. */
+const waiting = new Set<string>();
+
+function redrawWhenLoaded(id: string): void {
+  if (waiting.has(id)) return;
+  waiting.add(id);
+  if (waiting.size > 1) return;
+  void loadEngine()
+    .then(() => {
+      const ids = [...waiting];
+      waiting.clear();
+      for (const g of ids) boxSnapshots.notify(g);
+    })
+    .catch(() => waiting.clear());
+}
 
 /** The plot scene of graph `el` in `theme` (cached). */
 export function graphScene(el: Element, theme: ThemeName): PlotScene {
@@ -27,7 +46,8 @@ export function graphScene(el: Element, theme: ThemeName): PlotScene {
   if (!scene) {
     const r = boxRect(el);
     scene = buildPlotScene(graphDataOf(el), { w: r.width, h: r.height }, theme);
-    byTheme.set(theme, scene);
+    if (scene.pending) redrawWhenLoaded(el.id);
+    else byTheme.set(theme, scene);
   }
   return scene;
 }

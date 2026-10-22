@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { defaultGraphData, GRAPH_PALETTE, graphElement, type GraphData } from "../../graph/data";
+import { loadEngine } from "../../graph/engine";
 import type { Element } from "../../model/types";
 import "../builtins";
 import { drawElement, elementSvg } from "../registry";
@@ -72,6 +73,10 @@ function graph(latex: string[], extra: Partial<GraphData> = {}): Element {
 const opts = { theme: "light" as const, zoomBucket: 1 };
 
 describe("graph renderer", () => {
+  beforeAll(async () => {
+    await loadEngine();
+  });
+
   it("draws_the_plot_directly_in_its_box", () => {
     const { ctx, calls } = stubCtx();
     drawElement(ctx, graph(["\\sin(x)"]), opts);

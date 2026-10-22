@@ -1,13 +1,23 @@
-import { describe, expect, it } from "vitest";
-import { parseExpression, type ParsedExpr } from "../expressions";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import { loadEngine } from "../engine";
+import { parseExpression, parseExpressionSync, TOO_EXPENSIVE, type ParsedExpr, type ParseResult } from "../expressions";
 
+const parse = (latex: string): ParseResult => {
+  const p = parseExpressionSync(latex);
+  if ("pending" in p) throw new Error("engine not loaded");
+  return p;
+};
 const ok = (latex: string): ParsedExpr => {
-  const p = parseExpression(latex);
+  const p = parse(latex);
   if ("error" in p) throw new Error(`unexpected error for ${latex}: ${p.error}`);
   return p;
 };
 
 describe("parseExpression", () => {
+  beforeAll(async () => {
+    await loadEngine();
+  });
+
   it("classifies_y_of_x", () => {
     const a = ok("y = \\sin(x)");
     expect(a.kind).toBe("of-x");
@@ -45,11 +55,36 @@ describe("parseExpression", () => {
 
   it("reports_errors_without_throwing", () => {
     for (const bad of ["\\sqrt{", "y=", "", "   ", "x + a", "\\frac{"]) {
-      const p = parseExpression(bad);
+      const p = parse(bad);
       expect("error" in p).toBe(true);
       if ("error" in p) expect(typeof p.error).toBe("string");
     }
     // Junk input of any kind never throws.
-    for (const junk of ["\\\\", "}{", "((", "=", "x=y=z", "\\begin{matrix}"]) expect(() => parseExpression(junk)).not.toThrow();
+    for (const junk of ["\\\\", "}{", "((", "=", "x=y=z", "\\begin{matrix}"]) expect(() => parseExpressionSync(junk)).not.toThrow();
+  });
+
+  it("rejects_unbounded_sum", () => {
+    const warn = vi.spyOn(console, "warn");
+    for (const src of [
+      "\\sum_{n=1}^{10^{9}} x",
+      "\\sum_{n=1}^{\\infty} \\frac{x}{n^2}",
+      "\\prod_{k=1}^{5000} x",
+      "\\sum_{n=1}^{x} n",
+      "\\sum_{n=1}^{5}\\sum_{m=1}^{5} x",
+      "\\int_0^{\\infty} e^{-t x}\\,dt",
+    ]) {
+      expect(parse(src)).toEqual({ error: TOO_EXPENSIVE });
+    }
+    // Short finite sums and finite integrals still plot.
+    const s10 = ok("\\sum_{n=1}^{10} n x");
+    if (s10.kind === "of-x") expect(s10.f(1)).toBeCloseTo(55);
+    expect(ok("\\int_0^x t\\,dt").kind).toBe("of-x");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("uncompilable_is_an_error_not_a_slow_fallback", async () => {
+    const p = await parseExpression("\\sum_{n=1}^{N} x");
+    expect("error" in p).toBe(true);
   });
 });

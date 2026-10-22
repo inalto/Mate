@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 
 const queue = vi.hoisted(() => ({
@@ -13,9 +13,21 @@ const loaded = vi.hoisted(() => ({ els: [] as Element[] }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.els) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+const builds = vi.hoisted(() => ({ count: 0 }));
+vi.mock("../../graph/plot", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../graph/plot")>();
+  return {
+    ...real,
+    buildPlotScene: (...args: Parameters<typeof real.buildPlotScene>) => {
+      builds.count++;
+      return real.buildPlotScene(...args);
+    },
+  };
+});
 
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { DEFAULT_DOMAIN, GRAPH_PALETTE, graphDataOf } from "../../graph/data";
+import { loadEngine } from "../../graph/engine";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
@@ -64,9 +76,22 @@ function recordingContext() {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, strokes };
 }
 let canvasCtx: ReturnType<typeof recordingContext>;
+let frames: FrameRequestCallback[] = [];
+/** Run the pending animation frames. */
+const flushFrames = () =>
+  act(() => {
+    for (const f of frames.splice(0)) f(0);
+  });
 
 describe("GraphEditor", () => {
+  beforeAll(async () => {
+    await loadEngine();
+  });
+
   beforeEach(async () => {
+    frames = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => frames.push(cb));
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
     canvasCtx = recordingContext();
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => canvasCtx.ctx) as never);
     store = createEditorStore();
@@ -174,7 +199,23 @@ describe("GraphEditor", () => {
     const { ui } = insert();
     expect(canvasCtx.strokes).not.toContain(GRAPH_PALETTE[0]);
     act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "y = 2x" } }));
+    expect(canvasCtx.strokes).not.toContain(GRAPH_PALETTE[0]); // drawn on the next frame
+    flushFrames();
     expect(canvasCtx.strokes).toContain(GRAPH_PALETTE[0]);
+  });
+
+  it("editor_rebuilds_scene_at_most_once_per_frame", () => {
+    const { ui } = insert();
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "\\sin(x)" } }));
+    flushFrames();
+    const plot = plotOf(ui);
+    builds.count = 0;
+    for (let i = 0; i < 10; i++) act(() => void fireEvent.wheel(plot, { deltaY: -20, clientX: 240, clientY: 180 }));
+    expect(builds.count).toBe(0);
+    flushFrames();
+    expect(builds.count).toBe(1);
+    flushFrames();
+    expect(builds.count).toBe(1);
   });
 
   it("unchanged_session_records_nothing", () => {

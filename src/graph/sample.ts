@@ -18,6 +18,8 @@ export interface SampleOptions {
   yRange: number;
   /** Visible x span (parametric curves; defaults to `yRange`). */
   xRange?: number;
+  /** Polled before each evaluation: once true, sampling stops (no more evaluations, no refinement). */
+  stop?: () => boolean;
 }
 
 interface Sample extends Point2 {
@@ -38,7 +40,11 @@ export function sampleParametric(fx: (t: number) => number, fy: (t: number) => n
   const xRange = Math.abs(opts.xRange ?? opts.yRange) || 1;
   if (!Number.isFinite(t0) || !Number.isFinite(t1) || t0 === t1) return [];
 
+  const stop = opts.stop ?? (() => false);
+  let stopped = false;
+  const halted = (): boolean => (stopped ||= stop());
   const at = (t: number): Sample => {
+    if (halted()) return { t, x: NaN, y: NaN };
     let x = NaN;
     let y = NaN;
     try {
@@ -76,9 +82,9 @@ export function sampleParametric(fx: (t: number) => number, fy: (t: number) => n
     for (let i = 0; i + 1 < pts.length; i++) {
       const a = pts[i];
       const b = pts[i + 1];
-      if (!settled[i] && count < max) {
+      if (!settled[i] && count < max && !halted()) {
         const m = mids[i] ?? at((a.t + b.t) / 2);
-        if (deviates(a, m, b)) {
+        if (!(stopped && !finite(m)) && deviates(a, m, b)) {
           nextPts.push(m, b);
           nextMids.push(null, null);
           nextSettled.push(false, false);
@@ -117,8 +123,8 @@ export function sampleParametric(fx: (t: number) => number, fy: (t: number) => n
       const jumpX = Math.abs(p.x - a.x) > xRange;
       const jumpY = Math.abs(p.y - a.y) > yRange;
       if (jumpX || jumpY) {
-        const m = mids[i - 1] ?? at((a.t + p.t) / 2);
-        const continuous = finite(m) && (!jumpX || between(m.x, a.x, p.x)) && (!jumpY || between(m.y, a.y, p.y));
+        const m = mids[i - 1] ?? (halted() ? null : at((a.t + p.t) / 2));
+        const continuous = m === null || (finite(m) && (!jumpX || between(m.x, a.x, p.x)) && (!jumpY || between(m.y, a.y, p.y)));
         if (!continuous) flush();
       }
     }

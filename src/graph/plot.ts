@@ -1,11 +1,13 @@
 // Plot scene (pure): a graph's axes, grid, ticks, tick labels and sampled curves laid out in
 // box-local units (origin top-left, y down) for a box of `w`×`h`, clipped to the box. Ticks follow
 // a 1-2-5 ladder with at most 11 per axis; axes stay pinned to the box edge when the origin is out
-// of view. The canvas and SVG renderers draw a scene as is.
+// of view. The canvas and SVG renderers draw a scene as is. Each expression gets a wall-clock
+// budget: past it its evaluator answers NaN (the curve is cut short) and the scene carries a
+// "too slow" warning for it. While the math engine loads, curves are left out (`pending`).
 import type { ThemeName } from "../ink/types";
 import { mapInkColor } from "../ink/theme";
 import type { GraphData } from "./data";
-import { parseExpression } from "./expressions";
+import { parseExpressionSync, type Pending, type ParseResult } from "./expressions";
 import { sampleCurve, sampleParametric, type Point2 } from "./sample";
 
 export type { Point2 };
@@ -46,7 +48,24 @@ export interface PlotScene {
   ticks: Tick[];
   curves: { color: string; polyline: Point2[] }[];
   labels: Text[];
+  /** Per-expression problems found while plotting (e.g. "too slow"). */
+  warnings: { id: string; message: string }[];
+  /** True while the math engine is loading: curves are missing and a "Loading…" label is shown. */
+  pending: boolean;
 }
+
+export interface PlotOptions {
+  /** Expression parser (default parseExpressionSync; tests inject slow evaluators). */
+  parse?: (latex: string) => ParseResult | Pending;
+  /** Wall-clock budget per expression, ms (default PLOT_BUDGET_MS). */
+  budgetMs?: number;
+}
+
+/** Time one expression may spend being sampled before its curve is cut short. */
+export const PLOT_BUDGET_MS = 50;
+export const TOO_SLOW = "too slow";
+
+const now = (): number => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 /** Parametric parameter (t) and polar angle (θ) range. */
 export const PARAM_RANGE = { from: 0, to: 2 * Math.PI };
@@ -154,7 +173,7 @@ export function clipPolyline(poly: Point2[], w: number, h: number): Point2[][] {
 }
 
 /** The scene of `data` in a `box.w`×`box.h` box. Never throws (bad expressions are skipped). */
-export function buildPlotScene(data: GraphData, box: { w: number; h: number }, theme: ThemeName): PlotScene {
+export function buildPlotScene(data: GraphData, box: { w: number; h: number }, theme: ThemeName, opts: PlotOptions = {}): PlotScene {
   const w = Math.max(1, box.w);
   const h = Math.max(1, box.h);
   const { xMin, xMax, yMin, yMax } = data.domain;
@@ -202,36 +221,63 @@ export function buildPlotScene(data: GraphData, box: { w: number; h: number }, t
   if (originShown) labels.push({ x: clamp(ax - 4, 0, w), y: clamp(ay + 4, 0, h), text: "0", align: "right", baseline: "top" });
 
   const curves: PlotScene["curves"] = [];
+  const warnings: PlotScene["warnings"] = [];
+  const parse = opts.parse ?? parseExpressionSync;
+  const budget = opts.budgetMs ?? PLOT_BUDGET_MS;
+  let pending = false;
   for (const e of data.expressions) {
     if (!e.visible || e.latex.trim() === "") continue;
-    const p = parseExpression(e.latex);
+    const p = parse(e.latex);
+    if ("pending" in p) {
+      pending = true;
+      continue;
+    }
     if ("error" in p) continue;
+    // Past the deadline every evaluator of this expression answers NaN.
+    const deadline = now() + budget;
+    let late = false;
+    const timed =
+      (fn: (v: number) => number) =>
+      (v: number): number => {
+        if (late || now() > deadline) {
+          late = true;
+          return NaN;
+        }
+        return fn(v);
+      };
+    const stop = (): boolean => (late ||= now() > deadline);
     let branches: Point2[][];
     switch (p.kind) {
       case "of-x":
-        branches = sampleCurve(p.f, xMin, xMax, { yRange });
+        branches = sampleCurve(timed(p.f), xMin, xMax, { yRange, stop });
         break;
       case "of-y":
-        branches = sampleCurve(p.f, yMin, yMax, { yRange: xRange }).map((b) => b.map((q) => ({ x: q.y, y: q.x })));
+        branches = sampleCurve(timed(p.f), yMin, yMax, { yRange: xRange, stop }).map((b) => b.map((q) => ({ x: q.y, y: q.x })));
         break;
       case "polar": {
-        const r = p.r;
+        // The sampler asks for x then y at the same angle: evaluate r once per angle.
+        const r = timed(p.r);
+        let lastT = NaN;
+        let lastR = NaN;
+        const rAt = (t: number): number => (t === lastT ? lastR : ((lastT = t), (lastR = r(t))));
         branches = sampleParametric(
-          (t) => r(t) * Math.cos(t),
-          (t) => r(t) * Math.sin(t),
+          (t) => rAt(t) * Math.cos(t),
+          (t) => rAt(t) * Math.sin(t),
           PARAM_RANGE.from,
           PARAM_RANGE.to,
-          { xRange, yRange },
+          { xRange, yRange, stop },
         );
         break;
       }
       case "parametric":
-        branches = sampleParametric(p.x, p.y, PARAM_RANGE.from, PARAM_RANGE.to, { xRange, yRange });
+        branches = sampleParametric(timed(p.x), timed(p.y), PARAM_RANGE.from, PARAM_RANGE.to, { xRange, yRange, stop });
         break;
     }
+    if (late) warnings.push({ id: e.id, message: TOO_SLOW });
     const color = mapInkColor(e.color, theme);
     for (const b of branches) for (const polyline of clipPolyline(b.map(toBox), w, h)) curves.push({ color, polyline });
   }
+  if (pending) labels.push({ x: Math.min(6, w), y: Math.min(6, h), text: "Loading…", align: "left", baseline: "top" });
 
-  return { w, h, colors: plotColors(theme), axes, grid, ticks, curves, labels };
+  return { w, h, colors: plotColors(theme), axes, grid, ticks, curves, labels, warnings, pending };
 }

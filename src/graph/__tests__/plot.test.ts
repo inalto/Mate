@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { defaultGraphData, GRAPH_PALETTE, type GraphData } from "../data";
-import { buildPlotScene, formatTick, niceStep } from "../plot";
+import { loadEngine } from "../engine";
+import type { ParseResult } from "../expressions";
+import { buildPlotScene, formatTick, niceStep, TOO_SLOW } from "../plot";
 
 const box = { w: 480, h: 360 };
 const inBox = (p: { x: number; y: number }) => p.x >= -1e-9 && p.x <= box.w + 1e-9 && p.y >= -1e-9 && p.y <= box.h + 1e-9;
@@ -14,6 +16,49 @@ function data(latex: string[], domain = { xMin: -10, xMax: 10, yMin: -10, yMax: 
 }
 
 describe("buildPlotScene", () => {
+  beforeAll(async () => {
+    await loadEngine();
+  });
+
+  it("slow_expression_is_bounded", () => {
+    const slow = (x: number) => {
+      const until = performance.now() + 1;
+      while (performance.now() < until) {
+        // busy: 1 ms per evaluation, 2048+ evaluations would take seconds
+      }
+      return Math.sin(x);
+    };
+    const parse = (latex: string): ParseResult => (latex === "slow" ? { kind: "of-x", f: slow } : { error: "no" });
+    const t0 = performance.now();
+    const scene = buildPlotScene(data(["slow"]), box, "light", { parse });
+    expect(performance.now() - t0).toBeLessThan(200);
+    expect(scene.warnings).toEqual([{ id: "e0", message: TOO_SLOW }]);
+    expect(scene.curves.length).toBeGreaterThan(0); // the part sampled in time is still drawn
+    expect(buildPlotScene(data(["x"]), box, "light").warnings).toEqual([]);
+  });
+
+  it("pending_engine_draws_axes_and_a_loading_label", () => {
+    const scene = buildPlotScene(data(["x"]), box, "light", { parse: () => ({ pending: true }) });
+    expect(scene.pending).toBe(true);
+    expect(scene.curves).toEqual([]);
+    expect(scene.axes.length).toBeGreaterThanOrEqual(2);
+    expect(scene.labels.map((l) => l.text)).toContain("Loading…");
+  });
+
+  it("polar_evaluates_r_once_per_angle", () => {
+    let calls = 0;
+    const r = () => {
+      calls++;
+      return 2;
+    };
+    const parse = (): ParseResult => ({ kind: "polar", r });
+    const scene = buildPlotScene(data(["circle"]), box, "light", { parse });
+    const points = scene.curves.reduce((n, c) => n + c.polyline.length, 0);
+    expect(points).toBeGreaterThan(0);
+    // One evaluation per sample (x and y share it), plus at most one cached midpoint per interval.
+    expect(calls).toBeLessThan(points * 2);
+  });
+
   it("axes_and_ticks_within_box", () => {
     for (const domain of [
       { xMin: -10, xMax: 10, yMin: -10, yMax: 10 },
