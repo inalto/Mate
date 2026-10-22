@@ -43,11 +43,13 @@ import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
 import { boxAppearance } from "../../text/boxHtml";
-import { editorFor, hasEditor } from "../editorRegistry";
+import { editorFor, hasEditor, registerEditor } from "../editorRegistry";
 import OverlayLayer from "../OverlayLayer";
 import TextBoxEditor from "../TextBoxEditor";
 import MathEditor from "../MathEditor";
-import "../MathEditor";
+
+registerEditor("text-box", TextBoxEditor);
+registerEditor("text-box", MathEditor, { subtype: "math" });
 
 let store: EditorStore;
 const s = () => store.getState();

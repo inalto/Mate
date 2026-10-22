@@ -1,7 +1,7 @@
 // DOM editor of code blocks (CodeMirror 6), mounted by OverlayLayer in the edited block's slot:
 // line numbers, a language select, a theme that follows the app theme (dark and high-contrast use
 // One Dark), Esc ends editing. The session commits the code and language once (useEditSession).
-// Registered for "codespace" on import.
+// Registered lazily for "codespace" by ./boxEditors.
 import { cpp } from "@codemirror/lang-cpp";
 import { javascript } from "@codemirror/lang-javascript";
 import { python } from "@codemirror/lang-python";
@@ -16,7 +16,7 @@ import { contentOf, type CodespaceContent } from "../model/content";
 import type { Element } from "../model/types";
 import { useSettingsStore } from "../stores/settings";
 import { CODE_LANGUAGES, codeOf, LANGUAGE_LABELS, type CodeLanguage } from "../text/tableCode";
-import { registerEditor, type BoxEditorProps } from "./editorRegistry";
+import type { BoxEditorProps } from "./editorRegistry";
 import { useEditSession } from "./useEditSession";
 
 /** CodeMirror language support for a stored language key. */
@@ -117,4 +117,3 @@ export default function CodeEditor({ el, store }: BoxEditorProps) {
   );
 }
 
-registerEditor("codespace", CodeEditor);

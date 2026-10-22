@@ -21,9 +21,11 @@ import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
 import { isTypingTarget } from "../../keys/shortcuts";
 import { codeOf } from "../../text/tableCode";
-import { hasEditor } from "../editorRegistry";
+import { hasEditor, registerEditor } from "../editorRegistry";
 import OverlayLayer from "../OverlayLayer";
-import "../CodeEditor";
+import CodeEditor from "../CodeEditor";
+
+registerEditor("codespace", CodeEditor);
 
 let store: EditorStore;
 const s = () => store.getState();

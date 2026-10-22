@@ -32,9 +32,11 @@ import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
 import { isTypingTarget } from "../../keys/shortcuts";
-import { hasEditor } from "../editorRegistry";
+import { hasEditor, registerEditor } from "../editorRegistry";
 import OverlayLayer from "../OverlayLayer";
-import "../GraphEditor";
+import GraphEditor from "../GraphEditor";
+
+registerEditor("graph", GraphEditor);
 
 let store: EditorStore;
 const s = () => store.getState();

@@ -3,7 +3,7 @@
 // on); the session then commits once through `store.commitTextEdit`: sanitised HTML, plain text,
 // box attributes and the measured height. While typing, the draft is rendered to a bitmap (150 ms
 // after the last change) so the canvas can show the committed box at once; the commit renders (or
-// publishes) the final one. Registered for "text-box" on import.
+// publishes) the final one. Registered lazily for "text-box" by ./boxEditors.
 import Color from "@tiptap/extension-color";
 import { FontFamily, FontSize, TextStyle } from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
@@ -19,7 +19,7 @@ import { boxHeightFor } from "../text/measure";
 import { sanitizeHtml } from "../text/sanitize";
 import { boxCss, CONTENT_CLASS, CONTENT_CSS } from "../text/style";
 import { textContentOf } from "../text/textBox";
-import { registerEditor, type BoxEditorProps } from "./editorRegistry";
+import type { BoxEditorProps } from "./editorRegistry";
 import { renderTextSnapshot, snapshotScale } from "./snapshot";
 
 /** Quiet period after a change before the draft is rendered to a bitmap. */
@@ -192,4 +192,3 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
   );
 }
 
-registerEditor("text-box", TextBoxEditor);

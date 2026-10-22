@@ -3,7 +3,7 @@
 // outside, or the store moving editingId on); the session then commits once through
 // useEditSession as ONE history entry: the LaTeX, its KaTeX HTML (regenerated, sanitised) and the
 // box grown to the rendered size. Nothing is recorded when the LaTeX is unchanged.
-// Registered for the "math" subtype of "text-box" on import.
+// Registered lazily for the "math" subtype of "text-box" by ./boxEditors.
 import { MathfieldElement } from "mathlive";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { mapInkColor } from "../ink/theme";
@@ -13,7 +13,7 @@ import { latexOf, mathContent, measureMathSize } from "../math/mathBox";
 import { useSettingsStore } from "../stores/settings";
 import { boxCss } from "../text/style";
 import { textAttrsOf } from "../text/textBox";
-import { registerEditor, type BoxEditorProps } from "./editorRegistry";
+import type { BoxEditorProps } from "./editorRegistry";
 import { useEditSession } from "./useEditSession";
 
 /** Where MathLive finds its fonts (copied from the package into public/). */
@@ -86,4 +86,3 @@ export default function MathEditor({ el, store }: BoxEditorProps) {
   );
 }
 
-registerEditor("text-box", MathEditor, { subtype: "math" });

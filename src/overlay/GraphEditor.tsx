@@ -4,8 +4,8 @@
 // inputs and the grid toggle; the plot area fills the box, with wheel zoom about the cursor and
 // drag to pan. The plot is rebuilt at most once per animation frame (latest state wins); an
 // expression cut short by the plot's time budget shows a warning under its row. The math engine
-// is loaded on mount. Esc ends editing. The session commits once (useEditSession). Registered for
-// "graph" on import.
+// is loaded on mount. Esc ends editing. The session commits once (useEditSession). Registered
+// lazily for "graph" by ./boxEditors.
 import { Eye, EyeSlash, X } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphData, type GraphDomain, type GraphExpression, type GraphKind } from "../graph/data";
@@ -17,7 +17,7 @@ import { contentOf, type GraphContent } from "../model/content";
 import type { Element } from "../model/types";
 import { drawPlotScene } from "../renderers/graph";
 import { useSettingsStore } from "../stores/settings";
-import { registerEditor, type BoxEditorProps } from "./editorRegistry";
+import type { BoxEditorProps } from "./editorRegistry";
 import { useEditSession } from "./useEditSession";
 
 /** Wheel zoom: domain scale per pixel of wheel delta. */
@@ -284,4 +284,3 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
   );
 }
 
-registerEditor("graph", GraphEditor);

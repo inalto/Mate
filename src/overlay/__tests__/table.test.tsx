@@ -21,9 +21,11 @@ import { useSettingsStore } from "../../stores/settings";
 import { TABLE_LIMIT_TOAST } from "../../stores/pageLimit";
 import { addColumn, addRow, canAddColumn, canAddRow, deleteRow, MAX_TABLE_CELLS, tableElement, tableRowsOf } from "../../text/tableCode";
 import { isTypingTarget } from "../../keys/shortcuts";
-import { hasEditor } from "../editorRegistry";
+import { hasEditor, registerEditor } from "../editorRegistry";
 import OverlayLayer from "../OverlayLayer";
-import "../TableEditor";
+import TableEditor from "../TableEditor";
+
+registerEditor("table", TableEditor);
 
 let store: EditorStore;
 const s = () => store.getState();

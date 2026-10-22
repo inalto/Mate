@@ -23,11 +23,13 @@ import { useSettingsStore } from "../../stores/settings";
 import { boxSnapshots } from "../../renderers/boxSnapshot";
 import "../../renderers/builtins";
 import { drawElement } from "../../renderers/registry";
-import { hasEditor } from "../editorRegistry";
+import { hasEditor, registerEditor } from "../editorRegistry";
 import { setHtmlRasterizer, type HtmlRasterizer } from "../htmlToBitmap";
 import { clearTextSnapshots } from "../snapshot";
 import OverlayLayer from "../OverlayLayer";
-import "../TextBoxEditor";
+import TextBoxEditor from "../TextBoxEditor";
+
+registerEditor("text-box", TextBoxEditor);
 
 // jsdom has no layout: ProseMirror's deferred scroll-into-view (after autofocus) asks ranges for
 // their rectangles.

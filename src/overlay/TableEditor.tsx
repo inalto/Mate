@@ -2,7 +2,7 @@
 // contenteditable cells. Tab / Shift+Tab move across cells (wrapping), Enter moves down, Esc ends
 // editing; a small bar adds and deletes rows and columns (growth is capped by MAX_TABLE_CELLS).
 // Cells are uncontrolled while typing; the session commits once (see useEditSession). Registered
-// for "table" on import.
+// lazily for "table" by ./boxEditors.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { mapInkColor } from "../ink/theme";
 import { contentOf, type TableContent } from "../model/content";
@@ -11,7 +11,7 @@ import { useSettingsStore } from "../stores/settings";
 import { TABLE_FONT_SIZE } from "../text/boxHtml";
 import { FONT_STACKS, LINE_HEIGHT } from "../text/style";
 import { addColumn, addRow, canAddColumn, canAddRow, deleteColumn, deleteRow, tableRowsOf, type Rows } from "../text/tableCode";
-import { registerEditor, type BoxEditorProps } from "./editorRegistry";
+import type { BoxEditorProps } from "./editorRegistry";
 import { useEditSession } from "./useEditSession";
 
 const copy = (rows: Rows): Rows => rows.map((r) => [...r]);
@@ -130,4 +130,3 @@ export default function TableEditor({ el, store }: BoxEditorProps) {
   );
 }
 
-registerEditor("table", TableEditor);

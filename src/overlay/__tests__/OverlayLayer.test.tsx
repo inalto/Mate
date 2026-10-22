@@ -18,7 +18,7 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { resizeBox } from "../boxGeometry";
-import { registerEditor } from "../editorRegistry";
+import { lazyEditor, registerEditor } from "../editorRegistry";
 import OverlayLayer from "../OverlayLayer";
 
 const box = el("box", [[100, 100]], { type: "text-box", boxWidth: 200, boxHeight: 80, width: 1 });
@@ -77,6 +77,22 @@ describe("OverlayLayer", () => {
     // Types without an editor get an empty slot (no-op default).
     act(() => s().beginEdit("img"));
     expect(container.querySelector('[data-editor-for="img"]')!.childElementCount).toBe(0);
+    unregister();
+  });
+
+  it("lazy_editor_loads_on_first_use_and_keeps_its_identity", async () => {
+    const Real = ({ el: e }: { el: Element }) => <span data-testid="lazy-editor">{e.id}</span>;
+    let release!: () => void;
+    const load = vi.fn(() => new Promise<{ default: typeof Real }>((r) => (release = () => r({ default: Real }))));
+    const Lazy = lazyEditor(load);
+    const unregister = registerEditor("text-box", Lazy);
+    const { queryByTestId } = render(<OverlayLayer store={store} />);
+    expect(load).not.toHaveBeenCalled(); // nothing loaded until an edit starts
+    act(() => s().beginEdit("box"));
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(queryByTestId("lazy-editor")).toBeNull();
+    await act(async () => release());
+    expect(queryByTestId("lazy-editor")?.textContent).toBe("box");
     unregister();
   });
 
