@@ -196,3 +196,51 @@ fn reopen_file_db_keeps_data() {
         let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
     }
 }
+
+#[test]
+fn delete_bookshelf_detaches_units() {
+    let mut st = seeded();
+    let before = st.list_tree().unwrap().units[0].version;
+    st.soft_delete(EntityKind::Bookshelf, "s1").unwrap();
+
+    let tree = st.list_tree().unwrap();
+    assert!(tree.bookshelves.is_empty());
+    assert_eq!(tree.units.len(), 1);
+    assert_eq!(tree.units[0].bookshelf_id, None);
+    assert_eq!(tree.units[0].version, before + 1);
+    assert_eq!(tree.sections.len(), 1);
+    assert_eq!(tree.pages.len(), 1);
+
+    let trash = st.list_trash().unwrap();
+    assert_eq!(trash.len(), 1);
+    assert_eq!(trash[0].kind, EntityKind::Bookshelf);
+    assert_eq!(trash[0].id, "s1");
+
+    st.restore(EntityKind::Bookshelf, "s1").unwrap();
+    let tree = st.list_tree().unwrap();
+    assert_eq!(tree.bookshelves.len(), 1);
+    assert_eq!(
+        tree.units[0].bookshelf_id, None,
+        "units are not re-attached"
+    );
+}
+
+#[test]
+fn purge_bookshelf_keeps_units() {
+    let mut st = seeded();
+    st.upsert_elements(&[stroke("e1", "p1", 2)]).unwrap();
+    st.purge(EntityKind::Bookshelf, "s1").unwrap();
+
+    let tree = st.list_tree().unwrap();
+    assert!(tree.bookshelves.is_empty());
+    assert_eq!(tree.units.len(), 1);
+    assert_eq!(tree.units[0].bookshelf_id, None);
+    assert_eq!(tree.sections.len(), 1);
+    assert_eq!(tree.pages.len(), 1);
+    assert_eq!(st.count_elements("p1").unwrap(), 1);
+    assert!(st.list_trash().unwrap().is_empty());
+    assert!(matches!(
+        st.restore(EntityKind::Bookshelf, "s1"),
+        Err(mate_core::storage::StorageError::NotFound(_))
+    ));
+}

@@ -166,10 +166,8 @@ impl Subtree {
     fn collect(conn: &Connection, kind: EntityKind, id: &str) -> Result<Subtree> {
         let mut sub = Subtree::default();
         match kind {
-            EntityKind::Bookshelf => {
-                sub.bookshelves.push(id.to_owned());
-                sub.units = ids(conn, "SELECT id FROM units WHERE bookshelf_id = ?1", id)?;
-            }
+            // Bookshelves only group units: they have no descendants (see `detach_units`).
+            EntityKind::Bookshelf => sub.bookshelves.push(id.to_owned()),
             EntityKind::Unit => sub.units.push(id.to_owned()),
             EntityKind::Section => sub.sections.push(id.to_owned()),
             EntityKind::Page => sub.pages = ids(conn, PAGE_SUBTREE, id)?,
@@ -208,8 +206,20 @@ fn deleted_at_of(conn: &Connection, kind: EntityKind, id: &str) -> Result<Option
     .ok_or_else(|| StorageError::NotFound(format!("{kind:?} {id}")))
 }
 
+/// Detaches every unit from bookshelf `shelf_id` (units stay live; `version` bumped).
+fn detach_units(conn: &Connection, shelf_id: &str, now: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE units SET bookshelf_id = NULL, updated_at = ?2, version = version + 1          WHERE bookshelf_id = ?1",
+        params![shelf_id, now],
+    )?;
+    Ok(())
+}
+
 fn purge_in(conn: &Connection, kind: EntityKind, id: &str) -> Result<()> {
     deleted_at_of(conn, kind, id)?;
+    if kind == EntityKind::Bookshelf {
+        detach_units(conn, id, &now_iso())?;
+    }
     let sub = Subtree::collect(conn, kind, id)?;
     for (table, key, keys) in sub.targets() {
         let mut stmt = conn.prepare(&format!("DELETE FROM {table} WHERE {key} = ?1"))?;
@@ -407,13 +417,16 @@ impl Storage {
 
     /// Moves the row and all live descendants (and their elements) to the trash with one
     /// shared timestamp. Already-deleted rows keep their own timestamp. No-op if the row is
-    /// already in the trash.
+    /// already in the trash. A bookshelf has no descendants: its units are detached instead.
     pub fn soft_delete(&mut self, kind: EntityKind, id: &str) -> Result<()> {
         let tx = self.conn.transaction()?;
         if deleted_at_of(&tx, kind, id)?.is_some() {
             return Ok(());
         }
         let stamp = now_iso();
+        if kind == EntityKind::Bookshelf {
+            detach_units(&tx, id, &stamp)?;
+        }
         let sub = Subtree::collect(&tx, kind, id)?;
         for (table, key, keys) in sub.targets() {
             let mut stmt = tx.prepare(&format!(
@@ -455,7 +468,8 @@ impl Storage {
         list_trash_in(&self.conn)
     }
 
-    /// Hard-deletes the row, all descendants and their elements.
+    /// Hard-deletes the row, all descendants and their elements. Purging a bookshelf detaches
+    /// its units and never deletes them.
     pub fn purge(&mut self, kind: EntityKind, id: &str) -> Result<()> {
         let tx = self.conn.transaction()?;
         purge_in(&tx, kind, id)?;
