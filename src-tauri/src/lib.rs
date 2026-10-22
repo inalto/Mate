@@ -1,9 +1,9 @@
 mod commands;
 mod state;
 
-use commands::{archive, elements, export, notebook, settings, thumbnails};
+use commands::{archive, elements, export, lifecycle, notebook, settings, thumbnails};
 use state::AppState;
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -11,6 +11,12 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
+    .on_window_event(|window, event| {
+      if let WindowEvent::CloseRequested { api, .. } = event {
+        api.prevent_close();
+        lifecycle::start_close_attempt(window);
+      }
+    })
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -43,6 +49,10 @@ pub fn run() {
       export::write_export_file,
       archive::export_unit_archive,
       archive::import_unit_archive,
+      lifecycle::close_attempt_started,
+      lifecycle::cancel_close_attempt,
+      lifecycle::complete_close_attempt,
+      lifecycle::write_recovery_artifact,
     ])
     .run(tauri::generate_context!())
     .expect("error while building tauri application");

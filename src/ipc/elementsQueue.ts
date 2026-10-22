@@ -8,6 +8,8 @@ export interface ElementsIpc {
   deleteElements(ids: string[]): Promise<void>;
 }
 
+export type QueuedOp = { op: "upsert"; element: Element } | { op: "delete"; id: string };
+
 export interface ElementsQueue {
   enqueueUpsert(el: Element): void;
   enqueueDelete(id: string): void;
@@ -17,6 +19,8 @@ export interface ElementsQueue {
   pending(): number;
   /** Items whose write and retry both failed; they stay queued for the next flush. */
   failed(): number;
+  /** Unwritten ops: `failed` are those whose write and retry both failed, `pending` the rest. */
+  snapshot(): { pending: QueuedOp[]; failed: QueuedOp[] };
 }
 
 type Op = { kind: "upsert"; el: Element } | { kind: "delete" };
@@ -120,6 +124,15 @@ export function createElementsQueue(
     flushAll: () => flush(),
     pending: () => queued.size + inFlight,
     failed: () => failedIds.size,
+    snapshot() {
+      const pending: QueuedOp[] = [];
+      const failed: QueuedOp[] = [];
+      for (const [id, o] of queued) {
+        const item: QueuedOp = o.kind === "upsert" ? { op: "upsert", element: o.el } : { op: "delete", id };
+        (failedIds.has(id) ? failed : pending).push(item);
+      }
+      return { pending, failed };
+    },
   };
 }
 

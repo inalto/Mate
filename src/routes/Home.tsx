@@ -1,7 +1,9 @@
 import { FilePlus, Notebook } from "@phosphor-icons/react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
+import { dismissRecovery, getRecoveryPageId } from "../lifecycle/close";
 import type { Page } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
 
@@ -22,6 +24,12 @@ export default function Home() {
   const navigate = useNavigate();
   const tree = useNotebookStore((s) => s.tree);
   const store = useNotebookStore.getState();
+  const [recoveryId, setRecoveryId] = useState(getRecoveryPageId);
+  const recoveryPage = recoveryId ? tree.pages.find((p) => p.id === recoveryId) : undefined;
+  const closeRecovery = () => {
+    dismissRecovery();
+    setRecoveryId(null);
+  };
 
   const newBook = () => {
     void store.createUnit("Untitled book");
@@ -51,6 +59,25 @@ export default function Home() {
       <div className="screen-header">
         <h1>Home</h1>
       </div>
+
+      {recoveryPage && (
+        <div className="card row" role="status">
+          <span className="grow">
+            Mate restarted while this page was open <span className="muted">({recoveryPage.title})</span>
+          </span>
+          <button type="button" className="btn" onClick={closeRecovery}>Not now</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              closeRecovery();
+              navigate(`/edit/${recoveryPage.id}`);
+            }}
+          >
+            Open page
+          </button>
+        </div>
+      )}
 
       <div className="action-cards">
         <button type="button" className="card" onClick={newBook}>

@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
 use mate_core::settings::Settings;
@@ -11,6 +12,10 @@ pub struct AppState {
     pub storage: Mutex<Storage>,
     pub settings: Mutex<Settings>,
     pub data_dir: PathBuf,
+    /// Id of the in-flight window-close attempt, if any.
+    pub close_attempt: Mutex<Option<u64>>,
+    /// Monotonic source of close attempt ids.
+    pub close_counter: AtomicU64,
 }
 
 impl AppState {
@@ -28,6 +33,8 @@ impl AppState {
             storage: Mutex::new(storage),
             settings: Mutex::new(settings),
             data_dir,
+            close_attempt: Mutex::new(None),
+            close_counter: AtomicU64::new(0),
         })
     }
 }
