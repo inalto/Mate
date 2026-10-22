@@ -4,13 +4,13 @@ import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
 import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
-import { contentOf, type TextAttributes, type TextBoxContent } from "../model/content";
+import { contentOf, type TableContent, type TextAttributes, type TextBoxContent } from "../model/content";
 import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
-import { codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement } from "../text/tableCode";
+import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
@@ -68,6 +68,8 @@ export interface EditorState {
    * LIMITS.MAX_ELEMENTS_PER_PAGE; cleared when the count drops below the limit or a page loads.
    * The editor route surfaces it as a toast (stores/pageLimit.ts). */
   limitReached: boolean;
+  /** What limitReached refers to: the page item limit or a table cell limit. */
+  limitKind: "page" | "table";
   loadPage(pageId: string): Promise<void>;
   /** Adopt an edited page record (mode, sheet size, background) without reloading elements. */
   refreshPage(page: Page): void;
@@ -296,6 +298,7 @@ export function createEditorStore(): EditorStore {
     canUndo: false,
     canRedo: false,
     limitReached: false,
+    limitKind: "page",
 
     async loadPage(pageId) {
       closeEdit();
@@ -358,7 +361,7 @@ export function createEditorStore(): EditorStore {
 
     beginStroke() {
       if (get().elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE) return true;
-      if (!get().limitReached) set({ limitReached: true });
+      if (!get().limitReached) set({ limitReached: true, limitKind: "page" });
       return false;
     },
 
@@ -394,13 +397,26 @@ export function createEditorStore(): EditorStore {
 
     updateElements(els) {
       const cur = get().elements;
+      let clamped = false;
+      // A table never grows past MAX_TABLE_CELLS: an over-limit one is cut to the limit and flagged.
+      const fit = (e: Element): Element => {
+        if (e.type !== "table" || tableCells(e) <= MAX_TABLE_CELLS) return e;
+        clamped = true;
+        return { ...e, content: { ...contentOf<TableContent>(e), subtype: "table", tableData: { rows: clampRows(tableRowsOf(e)) } } };
+      };
       record(
         "Edit",
-        // A table never grows past MAX_TABLE_CELLS: such an update is refused.
-        els
-          .filter((e) => cur.has(e.id) && !(e.type === "table" && tableCells(e) > MAX_TABLE_CELLS))
-          .map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
+        els.filter((e) => cur.has(e.id)).map((e) => fit(e)).map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
       );
+      if (clamped) set({ limitReached: true, limitKind: "table" });
+    },
+
+    addTable() {
+      return insertBox("Table", tableElement);
+    },
+
+    addCodespace() {
+      return insertBox("Code", codespaceElement);
     },
 
     addTextBox(at) {
@@ -417,14 +433,6 @@ export function createEditorStore(): EditorStore {
       freshText = el.id;
       set({ selection: new Set([el.id]), editingId: el.id });
       return el.id;
-    },
-
-    addTable() {
-      return insertBox("Table", tableElement);
-    },
-
-    addCodespace() {
-      return insertBox("Code", codespaceElement);
     },
 
     addImage(assetId, natural, at) {
@@ -635,7 +643,7 @@ export function createEditorStore(): EditorStore {
       flushEraseBatch();
       const peek = history.peekUndo();
       if (peek && exceedsLimit(peek)) {
-        set({ limitReached: true }); // leave the entry on the stack
+        set({ limitReached: true, limitKind: "page" }); // leave the entry on the stack
         return;
       }
       const actions = history.undo();
@@ -646,7 +654,7 @@ export function createEditorStore(): EditorStore {
       flushEraseBatch();
       const peek = history.peekRedo();
       if (peek && exceedsLimit(peek)) {
-        set({ limitReached: true });
+        set({ limitReached: true, limitKind: "page" });
         return;
       }
       const actions = history.redo();
@@ -801,7 +809,7 @@ export function createEditorStore(): EditorStore {
   function record(label: string, actions: Action[], mergeKey?: string, applied: Action[] = actions): boolean {
     if (actions.length === 0) return false;
     if (exceedsLimit(applied)) {
-      store.setState({ limitReached: true });
+      store.setState({ limitReached: true, limitKind: "page" });
       return false;
     }
     flushEraseBatch();

@@ -18,7 +18,8 @@ import { DEFAULT_SETTINGS } from "../../model/constants";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
-import { MAX_TABLE_CELLS, tableElement, tableRowsOf } from "../../text/tableCode";
+import { TABLE_LIMIT_TOAST } from "../../stores/pageLimit";
+import { addColumn, addRow, canAddColumn, canAddRow, deleteRow, MAX_TABLE_CELLS, tableElement, tableRowsOf } from "../../text/tableCode";
 import { isTypingTarget } from "../../keys/shortcuts";
 import { hasEditor } from "../editorRegistry";
 import OverlayLayer from "../OverlayLayer";
@@ -133,24 +134,29 @@ describe("TableEditor", () => {
   });
 
   it("cell_limit_enforced", () => {
-    const big = tableElement("pg", "big", "2026-01-01T00:00:00.000Z", { x: 0, y: 0 }, "#000000");
     const wide = MAX_TABLE_CELLS / 250;
     const rows = Array.from({ length: 250 }, () => Array.from({ length: wide }, () => ""));
-    big.content = { subtype: "table", tableData: { rows } };
-    act(() => {
-      store.setState({ elements: new Map([["big", big]]), editingId: "big" });
-    });
-    // UI: at the limit Add row / Add column are disabled, deleting is not.
-    const { getByLabelText } = render(<OverlayLayer store={store} />);
-    expect((getByLabelText("Add row") as HTMLButtonElement).disabled).toBe(true);
-    expect((getByLabelText("Add column") as HTMLButtonElement).disabled).toBe(true);
-    expect((getByLabelText("Delete row") as HTMLButtonElement).disabled).toBe(false);
-    cleanup();
-    act(() => store.setState({ editingId: null }));
-    // Store: an update past the limit is refused.
-    const over = { ...big, content: { subtype: "table", tableData: { rows: [...rows, new Array<string>(wide).fill("")] } } } as Element;
+    expect(canAddRow(rows)).toBe(false);
+    expect(canAddColumn(rows)).toBe(false);
+    expect(addRow(rows, 0)).toBeNull();
+    expect(addColumn(rows, 0)).toBeNull();
+    expect(deleteRow(rows, 0)).not.toBeNull();
+    expect(canAddRow(rows.slice(1))).toBe(true);
+  });
+
+  it("over_limit_table_update_is_clamped_and_flagged", () => {
+    const t = tableElement("pg", "big", "2026-01-01T00:00:00.000Z", { x: 0, y: 0 }, "#000000");
+    act(() => store.setState({ elements: new Map([["big", t]]) }));
+    const wide = MAX_TABLE_CELLS / 250;
+    const rows = Array.from({ length: 251 }, (_, r) => Array.from({ length: wide }, () => String(r)));
+    const over = { ...t, content: { subtype: "table", tableData: { rows } } } as Element;
     act(() => s().updateElements([over]));
-    expect(rowsOf("big")).toHaveLength(250);
-    expect(s().canUndo).toBe(false);
-  }, 60000);
+    const got = rowsOf("big");
+    expect(got).toHaveLength(250);
+    expect(got[0]).toHaveLength(wide);
+    expect(got[249][0]).toBe("249");
+    expect(s().limitReached).toBe(true);
+    expect(s().limitKind).toBe("table");
+    expect(TABLE_LIMIT_TOAST).toBe("Table is at its size limit (50 000 cells)");
+  });
 });

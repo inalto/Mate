@@ -50,6 +50,13 @@ export const tableCells = (el: Pick<Element, "content">): number => {
   return rows.length * rows[0].length;
 };
 
+/** `rows` cut to at most MAX_TABLE_CELLS cells (extra columns, then extra rows, dropped). */
+export function clampRows(rows: Rows): Rows {
+  const cols = Math.min(rows[0]?.length ?? 1, MAX_TABLE_CELLS);
+  const keep = Math.max(1, Math.min(rows.length, Math.floor(MAX_TABLE_CELLS / cols)));
+  return rows.slice(0, keep).map((r) => r.slice(0, cols));
+}
+
 /** True when a table of `rows` could take one more row / column within MAX_TABLE_CELLS. */
 export const canAddRow = (rows: Rows): boolean => (rows.length + 1) * (rows[0]?.length ?? 0) <= MAX_TABLE_CELLS;
 export const canAddColumn = (rows: Rows): boolean => rows.length * ((rows[0]?.length ?? 0) + 1) <= MAX_TABLE_CELLS;
