@@ -9,6 +9,7 @@ import type {
   Unit,
 } from "../model/types";
 import * as ipc from "../ipc/notebook";
+import { loadElements, upsertElements } from "../ipc/elements";
 import { useSettingsStore } from "./settings";
 
 export interface ShelfGroup {
@@ -29,6 +30,14 @@ interface NotebookState {
   rename: (kind: EntityKind, id: string, title: string) => Promise<void>;
   setColor: (kind: EntityKind, id: string, color: string) => Promise<void>;
   toggleFavourite: (kind: EntityKind, id: string) => Promise<void>;
+  /** Persist an edited page record (settings dialog, icon). */
+  updatePage: (page: Page) => Promise<void>;
+  /** Move a page one place up/down among its siblings. */
+  movePage: (id: string, dir: -1 | 1) => Promise<void>;
+  /** Demote (+1: become a child of the previous sibling) or promote (-1: become a sibling of the parent). */
+  indentPage: (id: string, dir: -1 | 1) => Promise<void>;
+  /** Copy a page and its elements; the copy follows the original. Resolves to the copy. */
+  duplicatePage: (id: string) => Promise<Page | null>;
   moveUnitToBookshelf: (unitId: string, bookshelfId: string | null) => Promise<void>;
   reorder: (kind: EntityKind, parentId: string | null, orderedIds: string[]) => Promise<void>;
   trash: (kind: EntityKind, id: string) => Promise<void>;
@@ -111,6 +120,12 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
       await saveShelf({ ...e, title: c.title ?? e.title, color: c.color ?? e.color, updatedAt });
     }
   };
+
+  /** Pages with the same section and parent as `page`, in display order (includes `page`). */
+  const siblingsOf = (page: Page): Page[] =>
+    tree()
+      .pages.filter((p) => p.sectionId === page.sectionId && p.parentId === page.parentId)
+      .sort((a, b) => a.orderIndex - b.orderIndex);
 
   /** Latest activity of a unit: the unit itself or any of its pages. */
   const unitActivity = (u: Unit): string => {
@@ -216,6 +231,86 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
     rename: (kind, id, title) => patch(kind, id, { title }),
     setColor: (kind, id, color) => patch(kind, id, { color }),
     toggleFavourite: (kind, id) => patch(kind, id, { toggleFavourite: true }),
+
+    updatePage: (page) => savePage({ ...page, updatedAt: now() }),
+
+    movePage: async (id, dir) => {
+      const page = tree().pages.find((p) => p.id === id);
+      if (!page) return;
+      const ids = siblingsOf(page).map((p) => p.id);
+      const i = ids.indexOf(id);
+      const j = i + dir;
+      if (j < 0 || j >= ids.length) return;
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+      await get().reorder("page", page.parentId ?? null, ids);
+    },
+
+    indentPage: async (id, dir) => {
+      const page = tree().pages.find((p) => p.id === id);
+      if (!page) return;
+      const sibs = siblingsOf(page);
+      let parentId: string | undefined;
+      let depth: number;
+      let before: Page[]; // new siblings, in order, with the page inserted below
+      if (dir === 1) {
+        const prev = sibs[sibs.findIndex((p) => p.id === id) - 1];
+        if (!prev) return;
+        parentId = prev.id;
+        depth = prev.depth + 1;
+        before = siblingsOf({ ...page, parentId });
+      } else {
+        const parent = tree().pages.find((p) => p.id === page.parentId);
+        if (!parent) return;
+        parentId = parent.parentId;
+        depth = parent.depth;
+        before = siblingsOf({ ...page, parentId });
+        before.splice(before.findIndex((p) => p.id === parent.id) + 1, 0, page);
+      }
+      const delta = depth - page.depth;
+      const moved = new Map<string, Page>([[id, { ...page, parentId, depth, updatedAt: now() }]]);
+      // Descendants keep their parents but shift depth with the page.
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const p of tree().pages) {
+          if (!moved.has(p.id) && p.parentId && moved.has(p.parentId)) {
+            moved.set(p.id, { ...p, depth: p.depth + delta, updatedAt: now() });
+            grew = true;
+          }
+        }
+      }
+      const order = dir === 1 ? [...before.filter((p) => p.id !== id), page] : before;
+      order.forEach((p, index) => {
+        const m = moved.get(p.id) ?? p;
+        if (m.orderIndex !== index || moved.has(p.id)) moved.set(p.id, { ...m, orderIndex: index });
+      });
+      for (const p of moved.values()) await savePage(p);
+    },
+
+    duplicatePage: async (id) => {
+      const src = tree().pages.find((p) => p.id === id);
+      if (!src) return null;
+      const stamp = now();
+      const copy: Page = {
+        ...src,
+        id: crypto.randomUUID(),
+        title: `${src.title} copy`,
+        thumbnailVersion: 0,
+        orderIndex: src.orderIndex + 1,
+        createdAt: stamp,
+        updatedAt: stamp,
+        version: 0,
+      };
+      const later = siblingsOf(src).filter((p) => p.orderIndex > src.orderIndex);
+      for (const p of later) await savePage({ ...p, orderIndex: p.orderIndex + 1 });
+      await savePage(copy);
+      const els = await loadElements(src.id);
+      if (els.length > 0) {
+        await upsertElements(
+          els.map((e) => ({ ...e, id: crypto.randomUUID(), pageId: copy.id, createdAt: stamp, updatedAt: stamp, version: 0 })),
+        );
+      }
+      return copy;
+    },
 
     moveUnitToBookshelf: async (unitId, bookshelfId) => {
       const u = tree().units.find((x) => x.id === unitId);

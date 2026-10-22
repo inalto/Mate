@@ -1,12 +1,14 @@
 import { Books, Gear, House, Trash } from "@phosphor-icons/react";
 import { useEffect } from "react";
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useLocation } from "react-router";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 
 const link = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-link active" : "nav-link");
 
 export default function Shell() {
+  // The editor has its own chrome (top bar, sidebar), so the app rail steps aside there.
+  const inEditor = useLocation().pathname.startsWith("/edit/");
   useEffect(() => {
     void useSettingsStore.getState().load();
     void useNotebookStore.getState().load();
@@ -14,6 +16,7 @@ export default function Shell() {
 
   return (
     <div className="shell">
+      {!inEditor && (
       <nav className="nav-rail" aria-label="Main">
         <NavLink to="/" end className={link} aria-label="Home" title="Home">
           <House size={22} />
@@ -29,6 +32,7 @@ export default function Shell() {
           <Gear size={22} />
         </NavLink>
       </nav>
+      )}
       <main className="shell-main">
         <Outlet />
       </main>

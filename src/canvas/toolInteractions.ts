@@ -2,10 +2,10 @@
 // selection drag-move and corner-handle scaling. Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
-import { useEditorStore, spatialIndex, type TempTool, type ToolId } from "../stores/editor";
+import type { EditorStore, TempTool, ToolId } from "../stores/editor";
 import { polylineTouches } from "../tools/eraser";
 import { lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
-import { elementBounds, type Rect } from "../tools/spatialIndex";
+import { elementBounds, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import type { PointerInfo } from "./input";
@@ -56,8 +56,8 @@ export function scaleFromDrag(b: Rect, corner: Corner, p: Vec2, uniform: boolean
 }
 
 /** Topmost element under `p` (strokes by distance, others by bounds). */
-export function hitTest(elements: ReadonlyMap<string, Element>, p: Vec2, tol: number): string | null {
-  const ids = spatialIndex().query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
+export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number): string | null {
+  const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
   const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e)).filter((el) =>
     el.type === "stroke" ? polylineTouches(el.points, p, el.width / 2 + tol) : rectContains(elementBounds(el), p, tol),
   );
@@ -81,6 +81,8 @@ type Gesture =
   | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } };
 
 export interface ToolDeps {
+  /** The editor instance (pane) this controller drives. */
+  store: EditorStore;
   el: HTMLElement;
   requestLive(): void;
   /** Re-rasterise the static layer (the hidden set changed). */
@@ -90,7 +92,7 @@ export interface ToolDeps {
 }
 
 export function createToolController(deps: ToolDeps) {
-  const st = useEditorStore.getState;
+  const st = deps.store.getState;
   /** Elements drawn on the live layer while being transformed (hidden from the snapshot). */
   const hidden = new Set<string>();
   let g: Gesture = { kind: "idle" };
@@ -132,7 +134,7 @@ export function createToolController(deps: ToolDeps) {
       } else if (b && rectContains(b, p, HIT_SLOP_PX / s.camera.z)) {
         g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false };
       } else {
-        const hit = hitTest(s.elements, p, HIT_SLOP_PX / s.camera.z);
+        const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
         if (hit) {
           s.select([hit]);
           g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig: [st().elements.get(hit)!], lifted: false };
@@ -185,7 +187,7 @@ export function createToolController(deps: ToolDeps) {
         s.endEraser();
         break;
       case "lasso":
-        if (g.points.length >= 3) s.select(lassoSelect(s.elements, spatialIndex(), g.points));
+        if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points));
         break;
       case "move":
         drop();

@@ -8,11 +8,11 @@ import type { ThemeName } from "../ink/types";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { LIMITS } from "../model/constants";
 import type { Element, Point, Settings } from "../model/types";
-import { clampToPage, isInkTool, sheetStack, useEditorStore } from "../stores/editor";
+import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
 import { paintBackground, type SurfaceColors } from "./background";
-import { worldToScreen, type Vec2 } from "./camera";
+import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
@@ -39,13 +39,15 @@ const asCtx = (ctx: SnapshotContext) => ctx as unknown as CanvasRenderingContext
 
 /** Imperative renderer + input wiring for one mounted page. Returns a handle for React effects. */
 function createEngine(
+  store: EditorStore,
   pageId: string,
   host: HTMLDivElement,
   staticCanvas: HTMLCanvasElement,
   liveCanvas: HTMLCanvasElement,
   getSettings: () => Settings,
 ) {
-  const st = useEditorStore.getState;
+  const st = store.getState;
+  const clamp = (c: Camera) => clampToPage(c, st());
   const cache = new SnapshotCache(200);
   const sctx = staticCanvas.getContext("2d");
   const lctx = liveCanvas.getContext("2d");
@@ -144,6 +146,7 @@ function createEngine(
   };
 
   const tools = createToolController({
+    store,
     el: liveCanvas,
     requestLive,
     invalidate: () => {
@@ -220,7 +223,7 @@ function createEngine(
         if (mode === "pan") {
           const s = st();
           const scr = worldToScreen(s.camera, points[points.length - 1]);
-          s.setCamera(dragPan(s.camera, scr.x - lastPan.x, scr.y - lastPan.y, (c) => clampToPage(c)));
+          s.setCamera(dragPan(s.camera, scr.x - lastPan.x, scr.y - lastPan.y, clamp));
           lastPan = scr;
         } else if (mode === "draw" && builder) {
           builder.push(points);
@@ -247,13 +250,13 @@ function createEngine(
       },
       onPan(dx, dy) {
         const s = st();
-        s.setCamera(dragPan(s.camera, dx, dy, (c) => clampToPage(c)));
+        s.setCamera(dragPan(s.camera, dx, dy, clamp));
       },
       onPinch(g) {
         const s = st();
         if (g.phase === "start") pinchStart = { camera: s.camera, mid: g.mid, dist: g.dist };
         else if (g.phase === "end") pinchStart = null;
-        else if (pinchStart) s.setCamera(clampToPage(pinchCamera(pinchStart, g.mid, g.dist)));
+        else if (pinchStart) s.setCamera(clamp(pinchCamera(pinchStart, g.mid, g.dist)));
       },
     },
     {
@@ -276,12 +279,12 @@ function createEngine(
     if (!s) return;
     const r = host.getBoundingClientRect();
     const focus = { x: e.clientX - r.left, y: e.clientY - r.top };
-    s.setCamera(applyWheel(s.camera, e, focus, getSettings().scrollBehavior, (c) => clampToPage(c)));
+    s.setCamera(applyWheel(s.camera, e, focus, getSettings().scrollBehavior, clamp));
     if (snapTimer !== null) clearTimeout(snapTimer);
-    snapTimer = setTimeout(() => st().setCamera(clampToPage(st().camera)), SNAP_BACK_MS);
+    snapTimer = setTimeout(() => st().setCamera(clamp(st().camera)), SNAP_BACK_MS);
   };
 
-  const unsubscribe = useEditorStore.subscribe((s, prev) => {
+  const unsubscribe = store.subscribe((s, prev) => {
     if (s.elements !== prev.elements || s.page !== prev.page || s.loadedPageId !== prev.loadedPageId) {
       const own = committing && s.page === prev.page;
       // A commit that adds a page-mode sheet also needs a fresh background.
@@ -329,7 +332,7 @@ function createEngine(
   };
 }
 
-export default function CanvasView({ pageId }: { pageId: string }) {
+export default function CanvasView({ pageId, store = useEditorStore }: { pageId: string; store?: EditorStore }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const staticRef = useRef<HTMLCanvasElement>(null);
   const liveRef = useRef<HTMLCanvasElement>(null);
@@ -341,13 +344,13 @@ export default function CanvasView({ pageId }: { pageId: string }) {
     const sc = staticRef.current;
     const lc = liveRef.current;
     if (!host || !sc || !lc) return;
-    const engine = createEngine(pageId, host, sc, lc, () => useSettingsStore.getState().settings);
+    const engine = createEngine(store, pageId, host, sc, lc, () => useSettingsStore.getState().settings);
     engineRef.current = engine;
     return () => {
       engine.dispose();
       engineRef.current = null;
     };
-  }, [pageId]);
+  }, [pageId, store]);
 
   useEffect(() => {
     engineRef.current?.restyle();

@@ -16,7 +16,8 @@ import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { PenPreset } from "../model/types";
-import { isInkTool, useEditorStore, type InkType } from "../stores/editor";
+import { isInkTool, type InkType } from "../stores/editor";
+import { useFocusedEditor } from "../stores/focusedEditor";
 import { useSettingsStore } from "../stores/settings";
 import PresetMenu from "./PresetMenu";
 import { useDismiss } from "./useDismiss";
@@ -29,10 +30,11 @@ function InkIcon({ type, color }: { type: InkType; color?: string }) {
 }
 
 function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number; count: number }) {
+  const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const active = useEditorStore((s) => isInkTool(s.tool) && s.preset.id === preset.id);
-  const s = useEditorStore.getState;
+  const active = ed((s) => isInkTool(s.tool) && s.preset.id === preset.id);
+  const s = ed.getState;
   return (
     <div ref={ref} className="tb-anchor">
       <button
@@ -58,6 +60,7 @@ function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number
 }
 
 function AddPenMenu() {
+  const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   useDismiss(ref, open, () => setOpen(false));
@@ -75,7 +78,7 @@ function AddPenMenu() {
               role="menuitem"
               className="tb-menu-item"
               onClick={() => {
-                useEditorStore.getState().addPreset(t);
+                ed.getState().addPreset(t);
                 setOpen(false);
               }}
             >
@@ -89,9 +92,10 @@ function AddPenMenu() {
 }
 
 function EraserButton() {
+  const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const active = useEditorStore((s) => s.tool === "eraser");
+  const active = ed((s) => s.tool === "eraser");
   const cfg = useSettingsStore((s) => s.settings);
   const local = (patch: Partial<typeof cfg>) =>
     useSettingsStore.setState((s) => ({ settings: { ...s.settings, ...patch } }));
@@ -117,7 +121,7 @@ function EraserButton() {
         aria-pressed={active}
         aria-label="Eraser"
         title="Eraser (E)"
-        onClick={() => (active ? (open ? close() : setOpen(true)) : useEditorStore.getState().setTool("eraser"))}
+        onClick={() => (active ? (open ? close() : setOpen(true)) : ed.getState().setTool("eraser"))}
       >
         <Eraser size={18} />
       </button>
@@ -177,12 +181,13 @@ function EraserButton() {
 }
 
 export default function Toolbar() {
+  const ed = useFocusedEditor();
   const presets = useSettingsStore((s) => s.settings.toolbarPresets);
-  const tool = useEditorStore((s) => s.tool);
-  const canUndo = useEditorStore((s) => s.canUndo);
-  const canRedo = useEditorStore((s) => s.canRedo);
-  const zoom = useEditorStore((s) => s.camera.z);
-  const s = useEditorStore.getState;
+  const tool = ed((s) => s.tool);
+  const canUndo = ed((s) => s.canUndo);
+  const canRedo = ed((s) => s.canRedo);
+  const zoom = ed((s) => s.camera.z);
+  const s = ed.getState;
 
   const toolBtn = (id: "cursor" | "lasso", label: string, icon: ReactNode) => (
     <button

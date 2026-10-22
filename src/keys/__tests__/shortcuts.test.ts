@@ -99,4 +99,26 @@ describe("shortcuts", () => {
     }
     expect(dispatch).not.toHaveBeenCalled();
   });
+  it("editor_chrome_shortcuts_map_to_actions", () => {
+    setPlatform("Win32");
+    const dispatch = vi.fn();
+    unbind = bindShortcuts(DEFAULT_SHORTCUTS, dispatch);
+    const cases: [KeyboardEventInit, string][] = [
+      [{ key: "t", code: "KeyT", ctrlKey: true }, "tab.new"],
+      [{ key: "w", code: "KeyW", ctrlKey: true }, "tab.close"],
+      [{ key: "ArrowLeft", code: "ArrowLeft", altKey: true, shiftKey: true }, "tab.moveLeft"],
+      [{ key: "ArrowRight", code: "ArrowRight", altKey: true, shiftKey: true }, "tab.moveRight"],
+      [{ key: "\\", code: "Backslash", ctrlKey: true }, "sidebar.toggle"],
+      [{ key: "F2", code: "F2" }, "page.rename"],
+      [{ key: "ArrowUp", code: "ArrowUp", altKey: true }, "page.moveUp"],
+      [{ key: "ArrowDown", code: "ArrowDown", altKey: true }, "page.moveDown"],
+      [{ key: "ArrowLeft", code: "ArrowLeft", altKey: true }, "page.promote"],
+      [{ key: "ArrowRight", code: "ArrowRight", altKey: true }, "page.demote"],
+    ];
+    for (const [init, action] of cases) {
+      dispatch.mockClear();
+      press(init);
+      expect(dispatch.mock.calls[0]?.[0], action).toBe(action);
+    }
+  });
 });

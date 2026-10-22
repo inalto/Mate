@@ -244,3 +244,22 @@ fn purge_bookshelf_keeps_units() {
         Err(mate_core::storage::StorageError::NotFound(_))
     ));
 }
+
+#[test]
+fn bump_thumbnail_version_increments_and_never_regresses() {
+    let mut st = seeded();
+    assert_eq!(st.bump_thumbnail_version("p1").unwrap(), 1);
+    assert_eq!(st.bump_thumbnail_version("p1").unwrap(), 2);
+    // A stale client copy of the page (thumbnail_version 0) must not move the counter back.
+    st.upsert_page(&page("p1", "sec1", None)).unwrap();
+    let tree = st.list_tree().unwrap();
+    assert_eq!(tree.pages[0].thumbnail_version, 2);
+    // Bumping does not count as an edit of the page.
+    assert_eq!(tree.pages[0].version, 2);
+}
+
+#[test]
+fn bump_thumbnail_version_unknown_page_is_not_found() {
+    let mut st = seeded();
+    assert!(st.bump_thumbnail_version("nope").is_err());
+}

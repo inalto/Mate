@@ -2,7 +2,7 @@
 import { Copy, CopySimple, Stack, Trash } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
-import { useEditorStore } from "../stores/editor";
+import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
 import { PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import { useDismiss } from "./useDismiss";
@@ -13,10 +13,11 @@ const BAR_HEIGHT = 44;
 const TOP_RESERVED = 64;
 
 function ArrangeMenu() {
+  const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   useDismiss(ref, open, () => setOpen(false));
-  const s = useEditorStore.getState;
+  const s = ed.getState;
   const item = (label: string, run: () => void) => (
     <button
       type="button"
@@ -48,13 +49,14 @@ function ArrangeMenu() {
 }
 
 export default function SelectionBar() {
-  const selection = useEditorStore((s) => s.selection);
-  const elements = useEditorStore((s) => s.elements);
-  const camera = useEditorStore((s) => s.camera);
-  const viewport = useEditorStore((s) => s.viewport);
+  const ed = useFocusedEditor();
+  const selection = ed((s) => s.selection);
+  const elements = ed((s) => s.elements);
+  const camera = ed((s) => s.camera);
+  const viewport = ed((s) => s.viewport);
   const b = selection.size > 0 ? selectionBounds(elements, selection) : null;
   if (!b) return null;
-  const s = useEditorStore.getState;
+  const s = ed.getState;
 
   const tl = worldToScreen(camera, { x: b.x, y: b.y });
   const w = b.width * camera.z;

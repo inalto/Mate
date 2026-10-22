@@ -1,6 +1,7 @@
 import { DotsThree } from "@phosphor-icons/react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
 import type { Unit } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
 
@@ -28,9 +29,16 @@ export default function BookCard({ unit }: { unit: Unit }) {
   const navigate = useNavigate();
   const tree = useNotebookStore((s) => s.tree);
   const { rename, setColor, toggleFavourite, moveUnitToBookshelf, trash } = useNotebookStore.getState();
+  const thumbsReady = useThumbnailsReady();
   const [menu, setMenu] = useState<MenuMode>("closed");
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(unit.title);
+
+  // The cover shows the thumbnail of the book's first page that has one.
+  const sectionOrder = new Map(tree.sections.filter((s) => s.unitId === unit.id).map((s) => [s.id, s.orderIndex]));
+  const cover = tree.pages
+    .filter((p) => sectionOrder.has(p.sectionId) && p.thumbnailVersion > 0)
+    .sort((a, b) => sectionOrder.get(a.sectionId)! - sectionOrder.get(b.sectionId)! || a.orderIndex - b.orderIndex)[0];
 
   const open = () => {
     const sectionIds = tree.sections
@@ -68,7 +76,11 @@ export default function BookCard({ unit }: { unit: Unit }) {
         style={{ background: coverColor(unit) }}
         aria-label={`Open ${unit.title}`}
         onClick={open}
-      />
+      >
+        {thumbsReady && cover && (
+          <img className="book-cover-thumb" alt="" src={thumbnailUrl(cover.id, cover.thumbnailVersion)} />
+        )}
+      </button>
       {renaming ? (
         <input
           className="input book-title"

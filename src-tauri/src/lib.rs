@@ -1,7 +1,7 @@
 mod commands;
 mod state;
 
-use commands::{elements, notebook, settings};
+use commands::{elements, notebook, settings, thumbnails};
 use state::AppState;
 use tauri::Manager;
 
@@ -39,6 +39,7 @@ pub fn run() {
       elements::delete_elements,
       settings::get_settings,
       settings::set_settings,
+      thumbnails::save_thumbnail,
     ])
     .run(tauri::generate_context!())
     .expect("error while building tauri application");

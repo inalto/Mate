@@ -24,7 +24,17 @@ export type ShortcutAction =
   | "zoomIn"
   | "zoomOut"
   | "zoomReset"
-  | "pan";
+  | "pan"
+  | "tab.new"
+  | "tab.close"
+  | "tab.moveLeft"
+  | "tab.moveRight"
+  | "sidebar.toggle"
+  | "page.rename"
+  | "page.moveUp"
+  | "page.moveDown"
+  | "page.promote"
+  | "page.demote";
 
 export interface ShortcutBinding {
   action: ShortcutAction;
@@ -84,6 +94,16 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = [
   { action: "zoomReset", code: "Digit0", mod: true },
   { action: "zoomReset", code: "Numpad0", mod: true },
   { action: "pan", code: "Space", hold: true },
+  { action: "tab.new", key: "t", mod: true },
+  { action: "tab.close", key: "w", mod: true },
+  { action: "tab.moveLeft", key: "ArrowLeft", alt: true, shift: true },
+  { action: "tab.moveRight", key: "ArrowRight", alt: true, shift: true },
+  { action: "sidebar.toggle", code: "Backslash", mod: true },
+  { action: "page.rename", key: "F2" },
+  { action: "page.moveUp", key: "ArrowUp", alt: true },
+  { action: "page.moveDown", key: "ArrowDown", alt: true },
+  { action: "page.promote", key: "ArrowLeft", alt: true },
+  { action: "page.demote", key: "ArrowRight", alt: true },
 ];
 
 export function isMacPlatform(): boolean {

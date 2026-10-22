@@ -4,14 +4,15 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import type { PenPreset } from "../model/types";
 import { HIGHLIGHTER_PALETTE, hslToHex, hueOf, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import { useDismiss } from "./useDismiss";
-import { useEditorStore } from "../stores/editor";
+import type { EditorStore } from "../stores/editor";
+import { useFocusedEditor } from "../stores/focusedEditor";
 import { useSettingsStore } from "../stores/settings";
 
 const MAX_RECENT = 6;
 const HEX = /^#?([0-9a-f]{6})$/i;
 
-const presetById = (id: string): PenPreset =>
-  useSettingsStore.getState().settings.toolbarPresets.find((p) => p.id === id) ?? useEditorStore.getState().preset;
+const presetById = (ed: EditorStore, id: string): PenPreset =>
+  useSettingsStore.getState().settings.toolbarPresets.find((p) => p.id === id) ?? ed.getState().preset;
 
 interface Props {
   preset: PenPreset;
@@ -24,6 +25,7 @@ interface Props {
 
 /** Changes apply to the active preset live and are persisted when the menu unmounts. */
 export default function PresetMenu({ preset, index, count, anchorRef, onClose }: Props) {
+  const ed = useFocusedEditor();
   const [draft, setDraft] = useState(preset);
   const draftRef = useRef(draft);
   const [hexText, setHexText] = useState(preset.color);
@@ -35,14 +37,14 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
     draftRef.current = next;
     setDraft(next);
     if (patch.color) setHexText(patch.color);
-    if (useEditorStore.getState().preset.id === next.id) useEditorStore.setState({ preset: next });
+    if (ed.getState().preset.id === next.id) ed.setState({ preset: next });
   };
 
   useEffect(
     () => () => {
       const d = draftRef.current;
       if (d.color === preset.color && d.width === preset.width) return;
-      useEditorStore.getState().updatePreset({ ...presetById(preset.id), color: d.color, width: d.width });
+      ed.getState().updatePreset({ ...presetById(ed, preset.id), color: d.color, width: d.width });
       const color = d.color.toUpperCase();
       if (color === preset.color.toUpperCase()) return;
       const prev = useSettingsStore.getState().settings.recentColors;
@@ -116,7 +118,7 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
           className="tb-btn"
           aria-label="Move left"
           disabled={index === 0}
-          onClick={() => useEditorStore.getState().movePreset(preset.id, -1)}
+          onClick={() => ed.getState().movePreset(preset.id, -1)}
         >
           <CaretLeft size={14} />
         </button>
@@ -125,7 +127,7 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
           className="tb-btn"
           aria-label="Move right"
           disabled={index >= count - 1}
-          onClick={() => useEditorStore.getState().movePreset(preset.id, 1)}
+          onClick={() => ed.getState().movePreset(preset.id, 1)}
         >
           <CaretRight size={14} />
         </button>

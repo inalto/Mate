@@ -376,6 +376,20 @@ impl Storage {
         Ok(())
     }
 
+    /// Increments the page's thumbnail version (a cache-buster for the stored image) and returns
+    /// it. Not an edit: `version` and `updated_at` stay untouched.
+    pub fn bump_thumbnail_version(&mut self, page_id: &str) -> Result<i64> {
+        self.conn
+            .query_row(
+                "UPDATE pages SET thumbnail_version = thumbnail_version + 1
+                 WHERE id = ?1 RETURNING thumbnail_version",
+                params![page_id],
+                |r| r.get(0),
+            )
+            .optional()?
+            .ok_or_else(|| StorageError::NotFound(format!("page {page_id}")))
+    }
+
     pub fn upsert_page(&mut self, p: &Page) -> Result<()> {
         self.conn.execute(
             &format!(
@@ -388,7 +402,8 @@ impl Storage {
                    is_favourite = excluded.is_favourite, depth = excluded.depth,
                    mode = excluded.mode, background_config = excluded.background_config,
                    page_width = excluded.page_width, page_height = excluded.page_height,
-                   thumbnail_version = excluded.thumbnail_version, icon = excluded.icon,
+                   thumbnail_version = MAX(pages.thumbnail_version, excluded.thumbnail_version),
+                   icon = excluded.icon,
                    order_index = excluded.order_index,
                    updated_at = excluded.updated_at, version = pages.version + 1"
             ),

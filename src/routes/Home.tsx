@@ -1,12 +1,17 @@
 import { FilePlus, Notebook } from "@phosphor-icons/react";
 import { Link, useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
+import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
 import type { Page } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
 
 function PageRow({ page }: { page: Page }) {
+  const ready = useThumbnailsReady();
   return (
     <Link to={`/edit/${page.id}`} className="card row link-row">
+      {ready && page.thumbnailVersion > 0 && (
+        <img className="page-thumb" alt="" src={thumbnailUrl(page.id, page.thumbnailVersion)} />
+      )}
       <span className="grow">{page.title}</span>
       <span className="muted">{new Date(page.updatedAt).toLocaleDateString()}</span>
     </Link>
