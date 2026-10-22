@@ -48,3 +48,36 @@ describe("Settings images row", () => {
     expect(cfg().invertImagesInDarkMode).toBe(false);
   });
 });
+
+describe("Settings tool defaults", () => {
+  beforeEach(() => useSettingsStore.setState({ settings: DEFAULT_SETTINGS, loaded: true }));
+  afterEach(cleanup);
+
+  it("text_shape_and_eraser_defaults_update_settings", () => {
+    render(<Settings />);
+    fireEvent.change(screen.getByLabelText("Text colour"), { target: { value: "#aa0000" } });
+    expect(cfg().defaultTextColor).toBe("#aa0000");
+    fireEvent.change(screen.getByLabelText("Text size"), { target: { value: "30" } });
+    expect(cfg().defaultTextSize).toBe(30);
+
+    fireEvent.change(screen.getByLabelText("Shape type"), { target: { value: "star" } });
+    expect(cfg().defaultShapeType).toBe("star");
+    fireEvent.change(screen.getByLabelText("Shape stroke colour"), { target: { value: "#00aa00" } });
+    expect(cfg().defaultShapeStrokeColor).toBe("#00aa00");
+    fireEvent.change(screen.getByLabelText("Shape fill colour"), { target: { value: "#0000aa" } });
+    expect(cfg().defaultShapeFillColor).toBe("#0000aa");
+    fireEvent.change(screen.getByLabelText("Shape width"), { target: { value: "6" } });
+    expect(cfg().defaultShapeStrokeWidth).toBe(6);
+    fireEvent.change(screen.getByLabelText("Shape fill opacity"), { target: { value: "0.5" } });
+    expect(cfg().defaultShapeFillOpacity).toBe(0.5);
+
+    fireEvent.change(screen.getByLabelText("Eraser type"), { target: { value: "partial" } });
+    expect(cfg().defaultEraserType).toBe("partial");
+    fireEvent.change(screen.getByLabelText("Eraser width"), { target: { value: "40" } });
+    expect(cfg().defaultEraserWidth).toBe(40);
+    fireEvent.click(screen.getByLabelText("Erase shapes"));
+    expect(cfg().eraserEraseShapes).toBe(!DEFAULT_SETTINGS.eraserEraseShapes);
+    fireEvent.click(screen.getByLabelText("Erase images"));
+    expect(cfg().eraserEraseImages).toBe(!DEFAULT_SETTINGS.eraserEraseImages);
+  });
+});

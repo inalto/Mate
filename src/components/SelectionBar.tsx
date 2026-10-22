@@ -1,7 +1,7 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
 // (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width. Hidden while a text box is being edited (its editor has its own bar).
-import { Copy, CopySimple, Function as FunctionIcon, Stack, Trash } from "@phosphor-icons/react";
+import { AlignLeft, ChartLine, Copy, CopySimple, Function as FunctionIcon, Stack, Trash } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
@@ -57,6 +57,48 @@ function ArrangeMenu() {
           {item("Bring forward", () => s().bringForward())}
           {item("Send backward", () => s().sendBackward())}
           {item("Send to back", () => s().toBack())}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Align (>= 2 selected) and distribute (>= 3 selected) menu. */
+function AlignMenu({ count }: { count: number }) {
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  const s = ed.getState;
+  const item = (label: string, run: () => void) => (
+    <button
+      key={label}
+      type="button"
+      role="menuitem"
+      className="tb-menu-item"
+      onClick={() => {
+        run();
+        setOpen(false);
+      }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <AlignLeft size={16} /> Align ▸
+      </button>
+      {open && (
+        <div className="tb-popover tb-menu" role="menu">
+          {item("Align left", () => s().alignSelection("left"))}
+          {item("Align center", () => s().alignSelection("center"))}
+          {item("Align right", () => s().alignSelection("right"))}
+          {item("Align top", () => s().alignSelection("top"))}
+          {item("Align middle", () => s().alignSelection("middle"))}
+          {item("Align bottom", () => s().alignSelection("bottom"))}
+          {count >= 3 && item("Distribute horizontally", () => s().distributeSelection("horizontal"))}
+          {count >= 3 && item("Distribute vertically", () => s().distributeSelection("vertical"))}
         </div>
       )}
     </div>
@@ -130,7 +172,8 @@ export default function SelectionBar() {
   const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape");
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
-  const math = selected.length === 1 && selected[0] && isMathBox(selected[0]) ? selected[0] : undefined;
+  const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
+  const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
   const textBox = selected.length === 1 && selected[0]?.type === "text-box" ? selected[0] : undefined;
 
   return (
@@ -146,10 +189,16 @@ export default function SelectionBar() {
       </button>
       <ArrangeMenu />
       {math && (
-        <button type="button" className="tb-btn" aria-label="Copy as LaTeX" title="Copy as LaTeX" onClick={() => copyText(latexOf(math))}>
+        <button type="button" className="tb-btn" aria-label="Copy as LaTeX" title="Copy as LaTeX" onClick={() => copyText(math.map(latexOf).join("\n"))}>
           <FunctionIcon size={16} /> LaTeX
         </button>
       )}
+      {math && math.length === 1 && (
+        <button type="button" className="tb-btn" aria-label="Graph from equation" title="Graph from equation" onClick={() => s().graphFromSelectedEquation()}>
+          <ChartLine size={16} /> Graph
+        </button>
+      )}
+      {selected.length >= 2 && <AlignMenu count={selected.length} />}
       <span className="tb-sep" />
       {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
       {!textBox && PEN_PALETTE.map((c) => (

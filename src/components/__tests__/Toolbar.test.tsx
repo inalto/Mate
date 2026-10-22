@@ -39,6 +39,17 @@ describe("Toolbar", () => {
     expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
   });
 
+  it("insert_space_button_selects_tool_and_opens_options", () => {
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Insert space" }));
+    expect(useEditorStore.getState().tool).toBe("insert-space");
+    fireEvent.click(screen.getByRole("button", { name: "Insert space" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Remove" }));
+    expect(useEditorStore.getState().spaceMode).toBe("remove");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Cut images" }));
+    expect(useEditorStore.getState().spaceCutImages).toBe(true);
+  });
+
   it("insert_image_button_opens_the_picker", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Insert image…" }));

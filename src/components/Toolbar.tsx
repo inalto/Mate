@@ -4,6 +4,7 @@ import {
   ArrowUUpLeft,
   ArrowUUpRight,
   Cursor,
+  ArrowsVertical,
   Eraser,
   Highlighter,
   House,
@@ -214,6 +215,58 @@ function ShapeButton() {
   );
 }
 
+/** Insert-space tool button; a second click opens its options (Insert / Remove, Cut images). */
+function InsertSpaceButton() {
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "insert-space");
+  const mode = ed((s) => s.spaceMode);
+  const cut = ed((s) => s.spaceCutImages);
+  useDismiss(ref, open, () => setOpen(false));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label="Insert space"
+        title="Insert space (N)"
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("insert-space"))}
+      >
+        <ArrowsVertical size={18} />
+      </button>
+      {open && (
+        <div className="tb-popover" role="dialog" aria-label="Insert space options">
+          <div className="tb-row" role="radiogroup" aria-label="Insert space mode">
+            {(
+              [
+                ["insert", "Insert"],
+                ["remove", "Remove"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={mode === v}
+                className={mode === v ? "tb-btn active" : "tb-btn"}
+                onClick={() => ed.getState().setSpaceOptions({ spaceMode: v })}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <label className="tb-row">
+            <input type="checkbox" checked={cut} onChange={(e) => ed.getState().setSpaceOptions({ spaceCutImages: e.target.checked })} />
+            Cut images
+          </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Toolbar() {
   const ed = useFocusedEditor();
   const presets = useSettingsStore((s) => s.settings.toolbarPresets);
@@ -267,6 +320,7 @@ export default function Toolbar() {
       </button>
       {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
       {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}
+      <InsertSpaceButton />
       <span className="tb-sep" />
       <button type="button" className="tb-btn" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={() => s().undo()}>
         <ArrowUUpLeft size={18} />

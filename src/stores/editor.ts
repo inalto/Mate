@@ -3,18 +3,20 @@ import { create, type StoreApi, type UseBoundStore } from "zustand";
 import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
-import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
+import { DEFAULT_SETTINGS, LIMITS, PAGE_GAP } from "../model/constants";
 import { contentOf, isPdfPlacement, type TableContent, type TextAttributes, type TextBoxContent } from "../model/content";
 import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
-import { graphElement } from "../graph/data";
+import { defaultGraphData, graphElement } from "../graph/data";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
-import { mathElement } from "../math/mathBox";
+import { isMathBox, latexOf, mathElement } from "../math/mathBox";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
+import { alignElements, distributeElements, type AlignMode, type DistributeAxis } from "../tools/align";
 import { eraseAt } from "../tools/eraser";
+import { clampShift, shiftBelow, type SpaceOptions } from "../tools/insertSpace";
 import { History, type Action } from "../tools/history";
 import { scaleElements, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, SpatialIndex, withMeta } from "../tools/spatialIndex";
@@ -25,6 +27,7 @@ import {
   screenToWorld,
   sheetCountFor,
   sheetSize,
+  stackBottom,
   type Camera,
   type SheetStack,
   type Vec2,
@@ -33,7 +36,7 @@ import {
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "text";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -52,6 +55,9 @@ export interface EditorState {
   loadError: string | null;
   elements: Map<string, Element>;
   tool: ToolId;
+  /** Insert-space tool options: "Remove" only accepts upward drags; "Cut images" moves straddling boxes. */
+  spaceMode: "insert" | "remove";
+  spaceCutImages: boolean;
   preset: PenPreset;
   camera: Camera;
   viewport: Viewport;
@@ -137,6 +143,14 @@ export interface EditorState {
   select(ids: Iterable<string>): void;
   selectAll(): void;
   moveSelection(dx: number, dy: number): void;
+  setSpaceOptions(patch: { spaceMode?: "insert" | "remove"; spaceCutImages?: boolean }): void;
+  /** Insert-space tool: shift everything below `lineY` by `dy` (clamped); one "Insert space" entry, none when it is 0. */
+  insertSpace(lineY: number, dy: number): void;
+  /** Align (>= 2 selected) or distribute (>= 3 selected) the selection; one history entry each. */
+  alignSelection(mode: AlignMode): void;
+  distributeSelection(axis: DistributeAxis): void;
+  /** Add a graph below the single selected equation, plotting its LaTeX; one "Graph" entry. */
+  graphFromSelectedEquation(): string | null;
   scaleSelection(origin: Vec2, sx: number, sy: number): void;
   /** Stroke colour applies to all; width to strokes and shapes; fill colour to shapes only. */
   restyleSelection(patch: { color?: string; width?: number; fillColor?: string }): void;
@@ -181,6 +195,21 @@ export function sheetStack(s: Pick<EditorState, "page" | "contentBottom">): Shee
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
   const size = s.page ? sheetSize(s.page, aspect) : sheetSize(fallbackPage("", "canvas"), aspect);
   return { ...size, count: sheetCountFor(s.contentBottom, size.height) };
+}
+
+/** Options for the insert-space helpers; page mode caps insertion at the stack bottom plus one sheet. */
+function spaceOptions(s: EditorState): SpaceOptions {
+  const cutImages = s.spaceCutImages;
+  if (s.page?.mode !== "page") return { cutImages };
+  const stack = sheetStack(s);
+  return { cutImages, maxBottom: stackBottom(stack) + PAGE_GAP + stack.height };
+}
+
+/** The shift the insert-space tool really applies for a drag of `dy` (mode and bounds respected). */
+export function spaceShift(s: EditorState, lineY: number, dy: number): number {
+  const d = s.spaceMode === "remove" ? Math.min(dy, 0) : dy;
+  const out = clampShift([...s.elements.values()], lineY, d, spaceOptions(s));
+  return out === 0 ? 0 : out;
 }
 
 /** Clamp a camera to the current page bounds (no overscroll). */
@@ -293,6 +322,8 @@ export function createEditorStore(): EditorStore {
     loadError: null,
     elements: new Map(),
     tool: "pen",
+    spaceMode: "insert",
+    spaceCutImages: false,
     preset: DEFAULT_SETTINGS.toolbarPresets[0],
     camera: { x: 0, y: 0, z: 1 },
     viewport: { width: 0, height: 0 },
@@ -526,7 +557,7 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      if (tool === "eraser" || tool === "shape" || tool === "text") {
+      if (tool === "eraser" || tool === "shape" || tool === "text" || tool === "insert-space") {
         closeEdit();
         set({ tool, selection: new Set(), editingId: null });
       } else set({ tool });
@@ -611,6 +642,46 @@ export function createEditorStore(): EditorStore {
     moveSelection(dx, dy) {
       if (dx === 0 && dy === 0) return;
       transformSelection("Move", (els) => translateElements(els, dx, dy));
+    },
+    setSpaceOptions(patch) {
+      set(patch);
+    },
+    insertSpace(lineY, dy) {
+      const s = get();
+      const d = spaceShift(s, lineY, dy);
+      if (d === 0) return;
+      const now = new Date().toISOString();
+      const all = [...s.elements.values()];
+      const after = shiftBelow(all, lineY, d, spaceOptions(s));
+      const actions: Action[] = [];
+      all.forEach((before, i) => {
+        if (after[i] !== before) actions.push({ type: "update", before, after: stamp(after[i], now) });
+      });
+      record("Insert space", actions);
+    },
+    alignSelection(mode) {
+      if (get().selection.size < 2) return;
+      transformSelection("Align", (els) => alignElements(els, mode));
+    },
+    distributeSelection(axis) {
+      if (get().selection.size < 3) return;
+      transformSelection("Distribute", (els) => distributeElements(els, axis));
+    },
+    graphFromSelectedEquation() {
+      const s = get();
+      const sel = selectedElements();
+      if (!s.pageId || sel.length !== 1 || !isMathBox(sel[0])) return null;
+      const math = sel[0];
+      const b = elementBounds(math);
+      const top = topZ(s.elements.values());
+      const base = graphElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), { x: b.x, y: b.y + b.height + DUPLICATE_OFFSET }, math.color);
+      const data = defaultGraphData();
+      data.expressions = [{ ...data.expressions[0], latex: latexOf(math) }];
+      const graph = { ...base, content: { ...(base.content as object), graphData: data } };
+      const el = top > 0 ? withMeta(graph, { zIndex: top + 1 }) : graph;
+      if (!record("Graph", [{ type: "add", el }])) return null;
+      set({ selection: new Set([el.id]) });
+      return el.id;
     },
     scaleSelection(origin, sx, sy) {
       if (sx === 1 && sy === 1) return;

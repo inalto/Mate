@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import type { BackgroundType, PageMode, Theme } from "../model/types";
+import type { BackgroundType, PageMode, ShapeType, Theme } from "../model/types";
+import { SHAPE_LABEL, SHAPE_TYPES } from "../shapes/catalog";
 import { useSettingsStore } from "../stores/settings";
 
 const THEMES: Array<{ id: Theme; label: string }> = [
@@ -27,6 +28,9 @@ const ASPECTS = [
 ];
 
 const RETENTION = [7, 14, 30, 60, 90, 0];
+
+/** `<input type="color">` only takes #rrggbb; anything else (e.g. "transparent") shows `fallback`. */
+const hexOr = (c: string, fallback: string): string => (/^#[0-9a-f]{6}$/i.test(c) ? c : fallback);
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
   return (
@@ -160,16 +164,7 @@ export default function Settings() {
       </section>
 
       <section className="settings-group">
-        <h2 className="section-title">Ink</h2>
-        <Field label="Invert images in dark mode" htmlFor="set-invert-images">
-          <input
-            id="set-invert-images"
-            type="checkbox"
-            checked={settings.invertImagesInDarkMode}
-            onChange={(e) => void update({ invertImagesInDarkMode: e.target.checked })}
-          />
-          <span className="muted">Black-and-white images are inverted on dark themes</span>
-        </Field>
+        <h2 className="section-title">Writing</h2>
         <Field label="Ink to shape" htmlFor="set-ink-shape">
           <input
             id="set-ink-shape"
@@ -219,6 +214,66 @@ export default function Settings() {
             <option value="standard">Standard</option>
             <option value="more">More</option>
           </select>
+        </Field>
+        <h3 className="field-subtitle">Text defaults</h3>
+        <Field label="Text colour" htmlFor="set-text-colour">
+          <input id="set-text-colour" type="color" value={settings.defaultTextColor} onChange={(e) => void update({ defaultTextColor: e.target.value })} />
+        </Field>
+        <Field label="Text size" htmlFor="set-text-size">
+          <input id="set-text-size" type="range" min={8} max={72} step={0.5} value={settings.defaultTextSize} onChange={(e) => void update({ defaultTextSize: Number(e.target.value) })} />
+          <span className="muted">{settings.defaultTextSize.toFixed(1)}</span>
+        </Field>
+        <h3 className="field-subtitle">Shape defaults</h3>
+        <Field label="Shape type" htmlFor="set-shape-type">
+          <select id="set-shape-type" className="input" value={settings.defaultShapeType} onChange={(e) => void update({ defaultShapeType: e.target.value as ShapeType })}>
+            {SHAPE_TYPES.map((t) => (
+              <option key={t} value={t}>{SHAPE_LABEL[t]}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Shape stroke colour" htmlFor="set-shape-stroke">
+          <input id="set-shape-stroke" type="color" value={settings.defaultShapeStrokeColor} onChange={(e) => void update({ defaultShapeStrokeColor: e.target.value })} />
+        </Field>
+        <Field label="Shape fill colour" htmlFor="set-shape-fill">
+          <input id="set-shape-fill" type="color" value={hexOr(settings.defaultShapeFillColor, "#ffffff")} onChange={(e) => void update({ defaultShapeFillColor: e.target.value })} />
+        </Field>
+        <Field label="Shape width" htmlFor="set-shape-width">
+          <input id="set-shape-width" type="range" min={0.5} max={20} step={0.5} value={settings.defaultShapeStrokeWidth} onChange={(e) => void update({ defaultShapeStrokeWidth: Number(e.target.value) })} />
+          <span className="muted">{settings.defaultShapeStrokeWidth.toFixed(1)}</span>
+        </Field>
+        <Field label="Shape fill opacity" htmlFor="set-shape-opacity">
+          <input id="set-shape-opacity" type="range" min={0} max={1} step={0.05} value={settings.defaultShapeFillOpacity} onChange={(e) => void update({ defaultShapeFillOpacity: Number(e.target.value) })} />
+          <span className="muted">{Math.round(settings.defaultShapeFillOpacity * 100)}%</span>
+        </Field>
+        <h3 className="field-subtitle">Eraser defaults</h3>
+        <Field label="Eraser type" htmlFor="set-eraser-type">
+          <select id="set-eraser-type" className="input" value={settings.defaultEraserType} onChange={(e) => void update({ defaultEraserType: e.target.value })}>
+            <option value="stroke">Whole stroke</option>
+            <option value="partial">Partial</option>
+          </select>
+        </Field>
+        <Field label="Eraser width" htmlFor="set-eraser-width">
+          <input id="set-eraser-width" type="range" min={4} max={100} step={1} value={settings.defaultEraserWidth} onChange={(e) => void update({ defaultEraserWidth: Number(e.target.value) })} />
+          <span className="muted">{settings.defaultEraserWidth}</span>
+        </Field>
+        <Field label="Erase shapes" htmlFor="set-erase-shapes">
+          <input id="set-erase-shapes" type="checkbox" checked={settings.eraserEraseShapes} onChange={(e) => void update({ eraserEraseShapes: e.target.checked })} />
+        </Field>
+        <Field label="Erase images" htmlFor="set-erase-images">
+          <input id="set-erase-images" type="checkbox" checked={settings.eraserEraseImages} onChange={(e) => void update({ eraserEraseImages: e.target.checked })} />
+        </Field>
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section-title">Appearance</h2>
+        <Field label="Invert images in dark mode" htmlFor="set-invert-images">
+          <input
+            id="set-invert-images"
+            type="checkbox"
+            checked={settings.invertImagesInDarkMode}
+            onChange={(e) => void update({ invertImagesInDarkMode: e.target.checked })}
+          />
+          <span className="muted">Black-and-white images are inverted on dark themes</span>
         </Field>
       </section>
 

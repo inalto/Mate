@@ -9,6 +9,8 @@ import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/g
 import { polylineTouches } from "../tools/eraser";
 import { lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
+import { shiftBelow } from "../tools/insertSpace";
+import { spaceShift } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
 import { isPdfPlacement } from "../model/content";
 import { worldToScreen, type Camera, type Vec2 } from "./camera";
@@ -109,6 +111,7 @@ type Gesture =
   | { kind: "idle" }
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
+  | { kind: "space"; lineY: number; dy: number; lifted: boolean }
   | { kind: "shape"; start: Vec2; end: Vec2 }
   | { kind: "move"; start: Vec2; delta: Vec2; orig: Element[]; lifted: boolean }
   | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } };
@@ -187,6 +190,9 @@ export function createToolController(deps: ToolDeps) {
     if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
+    } else if (tool === "insert-space") {
+      g = { kind: "space", lineY: p.y, dy: 0, lifted: false };
+      preview = [];
     } else if (tool === "shape") {
       g = { kind: "shape", start: p, end: p };
       preview = [];
@@ -239,6 +245,19 @@ export function createToolController(deps: ToolDeps) {
           if (Math.hypot(q.x - last.x, q.y - last.y) * z >= LASSO_STEP_PX) g.points.push(q);
         }
         break;
+      case "space": {
+        const s = st();
+        g.dy = spaceShift(s, g.lineY, p.y - g.lineY);
+        const all = [...s.elements.values()];
+        const shifted = shiftBelow(all, g.lineY, g.dy, { cutImages: s.spaceCutImages });
+        const moved = shifted.filter((e, i) => e !== all[i]);
+        if (!g.lifted && moved.length > 0) {
+          g.lifted = true;
+          lift(moved);
+        }
+        preview = moved;
+        break;
+      }
       case "shape":
         g.end = p;
         preview = shapePreview(g.start, g.end);
@@ -272,6 +291,10 @@ export function createToolController(deps: ToolDeps) {
         if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addShape(style, drag);
         break;
       }
+      case "space":
+        drop();
+        s.insertSpace(g.lineY, g.dy);
+        break;
       case "lasso":
         if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points));
         break;
@@ -300,11 +323,24 @@ export function createToolController(deps: ToolDeps) {
     const s = st();
     if (preview.length > 0) {
       ctx.setTransform(dpr * c.z, 0, 0, dpr * c.z, dpr * c.x, dpr * c.y);
+      if (g.kind === "space") ctx.globalAlpha = 0.55;
       for (const el of preview) deps.renderElement(ctx, el);
+      ctx.globalAlpha = 1;
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let animate = false;
-    if (g.kind === "lasso" && g.points.length > 1) {
+    if (g.kind === "space") {
+      const y = Math.round(worldToScreen(c, { x: 0, y: g.lineY }).y) + 0.5;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(deps.el.clientWidth, y);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([8, 5]);
+      ctx.strokeStyle = "#4a5d4e";
+      ctx.stroke();
+      ctx.restore();
+    } else if (g.kind === "lasso" && g.points.length > 1) {
       ctx.save();
       ctx.beginPath();
       g.points.forEach((q, i) => {

@@ -85,3 +85,38 @@ describe("SelectionBar", () => {
     expect(screen.queryByRole("button", { name: "Copy as LaTeX" })).toBeNull();
   });
 });
+
+describe("SelectionBar align and math", () => {
+  afterEach(cleanup);
+
+  const setup = async () => {
+    useNotebookStore.setState({ loaded: true });
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    return () => useEditorStore.getState();
+  };
+
+  it("align_menu_needs_two_and_distribute_needs_three", async () => {
+    const s = await setup();
+    const rect = (x: number) =>
+      s().addShape({ shapeType: "rectangle", color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 }, shapeFromDrag("rectangle", { x, y: 10 * x }, { x: x + 20, y: 10 * x + 20 }, false))!;
+    const a = rect(10);
+    s().select([a]);
+    const { unmount } = render(<SelectionBar />);
+    expect(screen.queryByRole("button", { name: /Align/ })).toBeNull();
+    unmount();
+    const b = rect(50);
+    s().select([a, b]);
+    const r2 = render(<SelectionBar />);
+    fireEvent.click(screen.getByRole("button", { name: /Align/ }));
+    expect(screen.queryByRole("menuitem", { name: "Distribute horizontally" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Align left" }));
+    expect(s().elements.get(b)!.points[0].x).toBe(s().elements.get(a)!.points[0].x);
+    r2.unmount();
+    const c = rect(90);
+    s().select([a, b, c]);
+    render(<SelectionBar />);
+    fireEvent.click(screen.getByRole("button", { name: /Align/ }));
+    expect(screen.getByRole("menuitem", { name: "Distribute vertically" })).toBeTruthy();
+  });
+});
