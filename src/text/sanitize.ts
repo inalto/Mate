@@ -75,6 +75,12 @@ const SVG_ATTRS: Record<string, Record<string, RegExp>> = {
   line: { x1: LEN, y1: LEN, x2: LEN, y2: LEN, "stroke-width": LEN },
 };
 
+/** Style properties plain text spans may carry (the rest are for KaTeX output only). */
+const TEXT_PROPS = new Set(["color", "font-size", "font-family", "font-weight", "font-style", "text-decoration"]);
+
+/** Classes that start a math subtree (KaTeX output, or the red error span). */
+const MATH_ROOTS = ["katex", "katex-display", "math-error"];
+
 /** Allowed span style properties and the values each accepts. */
 const STYLE_VALUE: Record<string, RegExp> = {
   color: /^(#[0-9a-f]{3,8}|rgba?\(\s*[\d.\s,%]+\)|[a-z]{3,20})$/i,
@@ -116,14 +122,14 @@ export const isSafeColor = (v: unknown): v is string =>
   typeof v === "string" && !UNSAFE_VALUE.test(v) && STYLE_VALUE.color.test(v.trim());
 
 /** Allowed declarations of a style attribute, canonicalised as `prop: value;` joined by spaces. */
-function cleanStyle(style: string, drop?: string): string {
+function cleanStyle(style: string, drop?: string, math = false): string {
   const out: string[] = [];
   for (const decl of style.split(";")) {
     const i = decl.indexOf(":");
     if (i < 0) continue;
     const prop = decl.slice(0, i).trim().toLowerCase();
     const value = decl.slice(i + 1).trim();
-    if (prop === drop || !(prop in STYLE_VALUE) || UNSAFE_VALUE.test(value) || !STYLE_VALUE[prop].test(value)) continue;
+    if (prop === drop || !(prop in STYLE_VALUE) || (!math && !TEXT_PROPS.has(prop)) || UNSAFE_VALUE.test(value) || !STYLE_VALUE[prop].test(value)) continue;
     out.push(`${prop}: ${value};`);
   }
   return out.join(" ");
@@ -166,11 +172,12 @@ function copyClean(src: Node, dst: Node, doc: Document, dropStyle?: string, math
     const clean = doc.createElement(tag);
     let inMath = math;
     if (tag === "span") {
-      const style = cleanStyle(elt.getAttribute("style") ?? "", dropStyle);
+      const raw = (elt.getAttribute("class") ?? "").split(/\s+/);
+      if (!inMath && raw.some((c) => MATH_ROOTS.includes(c))) inMath = true;
+      const style = cleanStyle(elt.getAttribute("style") ?? "", dropStyle, inMath);
       if (style) clean.setAttribute("style", style);
-      const cls = cleanClass(elt.getAttribute("class") ?? "");
+      const cls = inMath ? cleanClass(raw.join(" ")) : "";
       if (cls) clean.setAttribute("class", cls);
-      if (cls.split(" ").includes("katex")) inMath = true;
     }
     if (tag !== "br") copyClean(elt, clean, doc, dropStyle, inMath);
     dst.appendChild(clean);

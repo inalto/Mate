@@ -53,3 +53,29 @@ describe("KaTeX HTML and the sanitiser", () => {
     expect(out).not.toContain("#x");
   });
 });
+
+describe("embedded KaTeX css", () => {
+  it("embedded_css_has_no_external_font_urls", async () => {
+    const { getEmbeddedKatexCss } = await import("../katexCss");
+    const css = getEmbeddedKatexCss();
+    expect(css).toContain("data:font/woff2");
+    expect(css).not.toContain("url(/katex-fonts");
+    expect(css).not.toMatch(/url\((?!data:)/);
+    expect(getEmbeddedKatexCss()).toBe(css);
+  });
+});
+
+describe("sanitiser scope", () => {
+  it("plain_text_span_rejects_position_and_class", () => {
+    const out = sanitizeHtml('<p><span class="mord" style="position: relative; top: -1em; width: 5em; color: red">a</span><span class="vlist" style="margin-left: 3em">b</span></p>');
+    expect(out).toBe('<p><span style="color: red;">a</span><span>b</span></p>');
+  });
+
+  it("katex_span_keeps_layout_styles", () => {
+    const out = sanitizeHtml('<span class="katex"><span class="vlist" style="position: relative; top: -1em; margin-left: 3em">b</span></span>');
+    expect(out).toContain("position: relative;");
+    expect(out).toContain("top: -1em;");
+    expect(out).toContain("margin-left: 3em;");
+    expect(out).toContain('class="vlist"');
+  });
+});
