@@ -7,6 +7,7 @@ import Sidebar from "../components/Sidebar";
 import TabBar from "../components/TabBar";
 import Toolbar from "../components/Toolbar";
 import TopBar, { ShortcutsDialog } from "../components/TopBar";
+import OverlayLayer from "../overlay/OverlayLayer";
 import { runEditorShortcut, startNewTab } from "../keys/editorCommands";
 import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
@@ -89,6 +90,7 @@ export default function Editor() {
                 }}
               >
                 <CanvasView pageId={pane.pageId} store={editorForPane(i as PaneIndex)} />
+                <OverlayLayer store={editorForPane(i as PaneIndex)} />
               </div>
             ))}
           </div>

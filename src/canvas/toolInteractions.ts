@@ -1,11 +1,12 @@
 // Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon),
-// selection drag-move and corner-handle scaling. Geometry is pure; `createToolController` wires it
+// selection drag-move and corner-handle scaling, click/double-click on boxed elements (select /
+// open the editor). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
 import { polylineTouches } from "../tools/eraser";
 import { lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
-import { elementBounds, type Rect, type SpatialIndex } from "../tools/spatialIndex";
+import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import type { PointerInfo } from "./input";
@@ -18,6 +19,9 @@ export const HANDLE_PX = 5;
 const HIT_SLOP_PX = 8;
 const MIN_SCALE = 0.05;
 const LASSO_STEP_PX = 3;
+/** Second click within this time (ms) and distance (screen px) on the same element is a double-click. */
+export const DOUBLE_TAP_MS = 400;
+const DOUBLE_TAP_PX = 8;
 
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
 
@@ -64,6 +68,25 @@ export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Eleme
   return hits.length > 0 ? hits[hits.length - 1].id : null;
 }
 
+export interface Tap {
+  id: string;
+  t: number;
+  /** Screen px. */
+  x: number;
+  y: number;
+}
+
+/** True when `next` completes a double-click/tap started by `prev` (same element, quick, close). */
+export const isDoubleTap = (prev: Tap | null, next: Tap): boolean =>
+  !!prev && prev.id === next.id && next.t - prev.t <= DOUBLE_TAP_MS && Math.hypot(next.x - prev.x, next.y - prev.y) <= DOUBLE_TAP_PX;
+
+/** The selection is a single boxed element: the DOM overlay (BoxFrame) frames it, not the canvas. */
+export function framedByOverlay(elements: ReadonlyMap<string, Element>, selection: ReadonlySet<string>): boolean {
+  if (selection.size !== 1) return false;
+  const el = elements.get(selection.values().next().value!);
+  return !!el && isBoxed(el);
+}
+
 /** Tool for a pointer-down: space/middle button pan, pen eraser end / barrel actions, else the tool. */
 export function pointerTool(tool: ToolId, panHold: boolean, info: PointerInfo, cfg: Settings): { tool: PointerTool; temp: TempTool | null } {
   if (panHold || (info.buttons & 4) !== 0) return { tool: "pan", temp: null };
@@ -89,6 +112,8 @@ export interface ToolDeps {
   invalidate(): void;
   renderElement(ctx: CanvasRenderingContext2D, el: Element): void;
   getSettings(): Settings;
+  /** Clock for double-click detection (ms; default performance.now). */
+  now?(): number;
 }
 
 export function createToolController(deps: ToolDeps) {
@@ -99,6 +124,28 @@ export function createToolController(deps: ToolDeps) {
   let preview: Element[] = [];
   let hover: Vec2 | null = null; // screen px
   let shift = false;
+  let lastTap: Tap | null = null;
+  const now = deps.now ?? (() => performance.now());
+
+  /** Double-click on a boxed element opens its editor; returns true when it did. */
+  const tapEdit = (p: Vec2): boolean => {
+    const s = st();
+    const id = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
+    const el = id ? s.elements.get(id) : undefined;
+    if (!id || !el || !isBoxed(el)) {
+      lastTap = null;
+      return false;
+    }
+    const scr = worldToScreen(s.camera, p);
+    const tap: Tap = { id, t: now(), x: scr.x, y: scr.y };
+    if (isDoubleTap(lastTap, tap)) {
+      lastTap = null;
+      s.beginEdit(id);
+      return true;
+    }
+    lastTap = tap;
+    return false;
+  };
 
   const lift = (els: Element[]) => {
     for (const e of els) hidden.add(e.id);
@@ -123,6 +170,8 @@ export function createToolController(deps: ToolDeps) {
     if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
+    } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
+      g = { kind: "idle" };
     } else if (tool === "cursor" || tool === "lasso") {
       const b = selectionBounds(s.elements, s.selection);
       const corner = b ? hitHandle(b, p, s.camera.z) : null;
@@ -231,7 +280,7 @@ export function createToolController(deps: ToolDeps) {
       ctx.strokeStyle = "#4a5d4e";
       ctx.stroke();
       ctx.restore();
-    } else if (s.selection.size > 0) {
+    } else if (s.selection.size > 0 && !framedByOverlay(s.elements, s.selection)) {
       const b = selectionBounds(preview.length > 0 ? new Map(preview.map((e) => [e.id, e])) : s.elements, s.selection);
       if (b) {
         drawSelectionBounds(ctx, b, c);

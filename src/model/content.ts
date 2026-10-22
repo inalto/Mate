@@ -1,0 +1,69 @@
+// Typed views of `Element.content` per element type (phase 2 rich content), and the boxed-type set.
+// `content` is untyped JSON from storage: read it through `contentOf`, never by casting directly.
+import type { Element, ElementType } from "./types";
+
+/** Metadata any element's content may carry (see spatialIndex.contentMeta). */
+interface ContentMeta {
+  zIndex?: number;
+  /** Radians about the box centre. */
+  rotation?: number;
+}
+
+export interface TextAttributes {
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  align: "left" | "center" | "right" | "justify";
+}
+
+/** text-box (`boxWidth/boxHeight` top-level). Typed math is a text-box with subtype "math". */
+export interface TextBoxContent extends ContentMeta {
+  contentHtml: string;
+  rawContent: string;
+  textAttributes: TextAttributes;
+  subtype?: "math";
+  latex?: string;
+}
+
+export interface TableContent extends ContentMeta {
+  subtype: "table";
+  tableData: { rows: string[][] };
+}
+
+export interface CodespaceContent extends ContentMeta {
+  subtype: "codespace";
+  code: string;
+  language: string;
+}
+
+export interface GraphContent extends ContentMeta {
+  subtype: "graph";
+  graphData: unknown;
+}
+
+/** image (`imageUrl, width, height` top-level). */
+export interface ImageContent extends ContentMeta {
+  isBW?: boolean;
+  cropX?: number;
+  cropY?: number;
+  cropWidth?: number;
+  cropHeight?: number;
+  pdfSourceKey?: string;
+  pdfPageIndex?: number;
+}
+
+/** shape (`shapeType, fillColor, color, width, points` top-level). */
+export interface ShapeContent extends ContentMeta {
+  fillOpacity: number;
+}
+
+/** `el.content` as a partial `T` when it is a JSON object, else `{}`. Never throws. */
+export function contentOf<T>(el: Pick<Element, "content">): Partial<T> {
+  const c = el.content;
+  return c !== null && typeof c === "object" && !Array.isArray(c) ? (c as Partial<T>) : {};
+}
+
+/** Element types laid out as a box: `points[0]` is the top-left anchor (page units). */
+export const BOXED_TYPES: readonly ElementType[] = ["text-box", "table", "codespace", "graph", "image"];
+
+export const isBoxedType = (t: ElementType): boolean => BOXED_TYPES.includes(t);

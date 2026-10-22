@@ -1,7 +1,7 @@
 // Lasso selection and selection transforms (pure).
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
-import { contentMeta, elementBounds, withMeta, type Rect, type SpatialIndex } from "./spatialIndex";
+import { boxRect, contentMeta, elementBounds, isBoxed, withMeta, type Rect, type SpatialIndex } from "./spatialIndex";
 
 /** Even-odd ray-casting point-in-polygon test. */
 export function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
@@ -82,16 +82,55 @@ export function translateElements(els: readonly Element[], dx: number, dy: numbe
   return els.map((el) => mapPoints(el, (p) => ({ x: p.x + dx, y: p.y + dy })));
 }
 
-/** Scale about `origin`; stroke width scales by the geometric mean, boxes by |sx|, |sy|. */
+/**
+ * Scale about `origin`. Strokes and shapes: points map, width scales by the geometric mean. Boxed
+ * elements: the box maps (normalised, so a mirrored drag keeps a top-left anchor); images keep
+ * their aspect (geometric-mean factor) with the corner nearest `origin` fixed.
+ */
 export function scaleElements(els: readonly Element[], origin: Vec2, sx: number, sy: number): Element[] {
   const k = Math.sqrt(Math.abs(sx * sy));
+  const mx = (x: number) => origin.x + (x - origin.x) * sx;
+  const my = (y: number) => origin.y + (y - origin.y) * sy;
   return els.map((el) => {
-    const out = mapPoints(el, (p) => ({ x: origin.x + (p.x - origin.x) * sx, y: origin.y + (p.y - origin.y) * sy }));
+    if (isBoxed(el)) return scaleBox(el, mx, my, origin, k);
+    const out = mapPoints(el, (p) => ({ x: mx(p.x), y: my(p.y) }));
     out.width = el.width * k;
-    if (el.boxWidth !== undefined) out.boxWidth = el.boxWidth * Math.abs(sx);
-    if (el.boxHeight !== undefined) out.boxHeight = el.boxHeight * Math.abs(sy);
     return out;
   });
+}
+
+function scaleBox(el: Element, mx: (x: number) => number, my: (y: number) => number, origin: Vec2, k: number): Element {
+  const b = boxRect(el);
+  const x0 = Math.min(mx(b.x), mx(b.x + b.width));
+  const x1 = Math.max(mx(b.x), mx(b.x + b.width));
+  const y0 = Math.min(my(b.y), my(b.y + b.height));
+  const y1 = Math.max(my(b.y), my(b.y + b.height));
+  let r: Rect = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  if (el.type === "image") {
+    const w = b.width * k;
+    const h = b.height * k;
+    const right = Math.abs(origin.x - x1) < Math.abs(origin.x - x0);
+    const bottom = Math.abs(origin.y - y1) < Math.abs(origin.y - y0);
+    r = { x: right ? x1 - w : x0, y: bottom ? y1 - h : y0, width: w, height: h };
+  }
+  return withBoxRect(el, r);
+}
+
+/** `el` with its box moved/resized to `r` (other points follow the anchor's translation). */
+export function withBoxRect(el: Element, r: Rect): Element {
+  const a = el.points[0] ?? { x: 0, y: 0 };
+  const dx = r.x - a.x;
+  const dy = r.y - a.y;
+  const out = mapPoints(el, (p) => ({ x: p.x + dx, y: p.y + dy }));
+  if (out.points.length === 0) out.points = [{ x: r.x, y: r.y, pressure: 0.5, timestamp: 0 }];
+  if (el.type === "image") {
+    out.width = r.width;
+    out.height = r.height;
+  } else {
+    out.boxWidth = r.width;
+    out.boxHeight = r.height;
+  }
+  return out;
 }
 
 /** Rotate points about `centre`; boxed elements also accumulate `content.rotation`. */
@@ -104,6 +143,6 @@ export function rotateElements(els: readonly Element[], centre: Vec2, rad: numbe
       const y = p.y - centre.y;
       return { x: centre.x + x * cos - y * sin, y: centre.y + x * sin + y * cos };
     });
-    return el.boxWidth !== undefined ? withMeta(out, { rotation: (contentMeta(el).rotation ?? 0) + rad }) : out;
+    return isBoxed(el) ? withMeta(out, { rotation: (contentMeta(el).rotation ?? 0) + rad }) : out;
   });
 }

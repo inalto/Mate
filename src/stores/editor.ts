@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS, LIMITS } from "../model/constants";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
 import { scaleElements, translateElements } from "../tools/lasso";
-import { elementBounds, SpatialIndex, withMeta } from "../tools/spatialIndex";
+import { elementBounds, isBoxed, SpatialIndex, withMeta } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
 import {
   clampCamera,
@@ -45,6 +45,8 @@ export interface EditorState {
   camera: Camera;
   viewport: Viewport;
   selection: Set<string>;
+  /** Boxed element whose DOM editor is open (overlay layer), else null. */
+  editingId: string | null;
   /** Largest element y (world units), for the page-mode sheet count. */
   contentBottom: number;
   /** Temporary tool while a pen button / eraser end is held. */
@@ -76,6 +78,10 @@ export interface EditorState {
   /** Erase at a world point with the settings' eraser; one drag is one history entry (endEraser). */
   eraser(center: Vec2): void;
   endEraser(): void;
+  /** Select only `id` and open its editor; ignored unless it is a loaded boxed element. */
+  beginEdit(id: string): void;
+  endEdit(): void;
+  /** Selecting anything that excludes the edited element closes its editor. */
   select(ids: Iterable<string>): void;
   selectAll(): void;
   moveSelection(dx: number, dy: number): void;
@@ -103,6 +109,10 @@ export interface EditorState {
 }
 
 const maxY = (el: Element): number => {
+  if (isBoxed(el)) {
+    const b = elementBounds(el);
+    return b.y + b.height;
+  }
   let m = -Infinity;
   for (const p of el.points) if (p.y > m) m = p.y;
   return m + el.width / 2;
@@ -223,6 +233,7 @@ export function createEditorStore(): EditorStore {
     camera: { x: 0, y: 0, z: 1 },
     viewport: { width: 0, height: 0 },
     selection: new Set(),
+    editingId: null,
     contentBottom: 0,
     tempTool: null,
     panHold: false,
@@ -245,6 +256,7 @@ export function createEditorStore(): EditorStore {
         loadError: null,
         elements: new Map(),
         selection: new Set(),
+        editingId: null,
         contentBottom: 0,
         limitReached: false,
         preset,
@@ -316,9 +328,10 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      set({ tool, selection: tool === "eraser" ? new Set() : get().selection });
+      if (tool === "eraser") set({ tool, selection: new Set(), editingId: null });
+      else set({ tool });
     },
-    setPreset: (preset) => set({ preset, tool: preset.type, selection: new Set() }),
+    setPreset: (preset) => set({ preset, tool: preset.type, selection: new Set(), editingId: null }),
     setCamera: (camera) => set({ camera }),
     setViewport: (viewport) => set({ viewport }),
     resetCamera() {
@@ -365,9 +378,19 @@ export function createEditorStore(): EditorStore {
       flushEraseBatch();
     },
 
+    beginEdit(id) {
+      const el = get().elements.get(id);
+      if (!el || !isBoxed(el)) return;
+      set({ selection: new Set([id]), editingId: id });
+    },
+    endEdit() {
+      if (get().editingId !== null) set({ editingId: null });
+    },
     select(ids) {
-      const els = get().elements;
-      set({ selection: new Set([...ids].filter((id) => els.has(id))) });
+      const s = get();
+      const selection = new Set([...ids].filter((id) => s.elements.has(id)));
+      const editingId = s.editingId !== null && selection.has(s.editingId) ? s.editingId : null;
+      set({ selection, editingId });
     },
     selectAll() {
       set({ selection: new Set(get().elements.keys()) });
@@ -454,7 +477,7 @@ export function createEditorStore(): EditorStore {
     selectInk(type) {
       const s = get();
       if (s.preset.type === type) {
-        set({ tool: type, selection: new Set() });
+        set({ tool: type, selection: new Set(), editingId: null });
         return;
       }
       const found = presets().find((p) => p.type === type);
@@ -519,6 +542,7 @@ export function createEditorStore(): EditorStore {
     const s = S();
     const elements = new Map(s.elements);
     let selection = s.selection;
+    let editingId = s.editingId;
     let grewOnly = true;
     let bottom = s.contentBottom;
     for (const a of actions) {
@@ -530,6 +554,7 @@ export function createEditorStore(): EditorStore {
           selection = new Set(selection);
           selection.delete(a.el.id);
         }
+        if (editingId === a.el.id) editingId = null;
         grewOnly = false;
       } else {
         const el = a.type === "add" ? a.el : a.after;
@@ -543,6 +568,7 @@ export function createEditorStore(): EditorStore {
     store.setState({
       elements,
       selection,
+      editingId,
       contentBottom: grewOnly ? bottom : bottomOf(elements.values()),
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });

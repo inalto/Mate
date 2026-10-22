@@ -7,6 +7,10 @@ import { renderStroke } from "../ink/render";
 import type { ThemeName } from "../ink/types";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Point, Settings } from "../model/types";
+import { hasEditor } from "../overlay/editorRegistry";
+import { boxSnapshots } from "../renderers/boxSnapshot";
+import "../renderers/builtins";
+import { drawElement } from "../renderers/registry";
 import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
@@ -82,8 +86,8 @@ function createEngine(
       sheetCount = stack.count;
       const bgPage = { mode: s.page.mode, width: stack.width, height: stack.height, count: stack.count };
       paintBackground(ctx, s.page.backgroundConfig, cache.worldClip(), bgPage, theme(), colors);
-    } else if (el.type === "stroke" && !tools.hidden.has(el.id)) {
-      renderStroke(asCtx(ctx), el, theme(), s.camera.z);
+    } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
+      drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: s.camera.z });
     }
   };
 
@@ -159,9 +163,7 @@ function createEngine(
       cache.invalidate();
       requestStatic();
     },
-    renderElement: (ctx, el) => {
-      if (el.type === "stroke") renderStroke(ctx, el, theme(), st().camera.z);
-    },
+    renderElement: (ctx, el) => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z }),
     getSettings,
   });
 
@@ -292,7 +294,8 @@ function createEngine(
   };
 
   const unsubscribe = store.subscribe((s, prev) => {
-    if (s.elements !== prev.elements || s.page !== prev.page || s.loadedPageId !== prev.loadedPageId) {
+    if (s.editingId !== prev.editingId) cache.invalidate(); // the edited element is left to its DOM editor
+    if (s.elements !== prev.elements || s.page !== prev.page || s.loadedPageId !== prev.loadedPageId || s.editingId !== prev.editingId) {
       const own = committing && s.page === prev.page;
       // A commit that adds a page-mode sheet also needs a fresh background.
       if (!own || (s.page?.mode === "page" && sheetStack(s).count !== sheetCount)) cache.invalidate();
@@ -307,6 +310,10 @@ function createEngine(
     if (s.tool !== prev.tool) host.dataset.tool = s.tool;
   });
   host.dataset.tool = st().tool;
+  const unsubscribeSnapshots = boxSnapshots.subscribe(() => {
+    cache.invalidate();
+    requestStatic();
+  });
 
   host.addEventListener("wheel", onWheel, { passive: false });
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
@@ -328,6 +335,7 @@ function createEngine(
       adapter();
       tools.dispose();
       unsubscribe();
+      unsubscribeSnapshots();
       ro?.disconnect();
       window.removeEventListener("resize", resize);
       host.removeEventListener("wheel", onWheel);
