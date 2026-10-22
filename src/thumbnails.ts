@@ -79,28 +79,48 @@ export async function updateThumbnail(pageId: string, elements: Iterable<Element
  * captures run immediately on dispose, so leaving the editor right after drawing still updates it.
  */
 export function watchThumbnails(): () => void {
-  const timers = new Map<EditorStore, ReturnType<typeof setTimeout>>();
-  const capture = (store: EditorStore) => {
-    const t = timers.get(store);
-    if (t !== undefined) clearTimeout(t);
-    timers.delete(store);
-    const s = store.getState();
-    if (!s.page || !s.pageId || s.loadedPageId !== s.pageId) return;
-    updateThumbnail(s.pageId, s.elements.values(), s.page).catch((err) => console.error("thumbnail capture failed", err));
+  interface Pending {
+    timer: ReturnType<typeof setTimeout>;
+    pageId: string;
+    elements: Map<string, Element>;
+    page: Page;
+  }
+  const pending = new Map<EditorStore, Pending>();
+  /** Capture the recorded snapshot (not whatever the store holds now) and clear the timer. */
+  const flush = (store: EditorStore) => {
+    const p = pending.get(store);
+    if (!p) return;
+    clearTimeout(p.timer);
+    pending.delete(store);
+    updateThumbnail(p.pageId, p.elements.values(), p.page).catch((err) => console.error("thumbnail capture failed", err));
   };
   const unsubs = ([0, 1] as const).map((i) => {
     const store = editorForPane(i);
     return store.subscribe((s, prev) => {
+      // The store moved on to another page: capture the old one from its previous state now.
+      const p = pending.get(store);
+      if (p && s.pageId !== p.pageId) {
+        if (prev.pageId === p.pageId && prev.page && prev.loadedPageId === p.pageId) {
+          p.elements = prev.elements;
+          p.page = prev.page;
+        }
+        flush(store);
+        return;
+      }
       const sameLoad = s.loadedPageId !== null && s.loadedPageId === prev.loadedPageId;
       const changed = s.elements !== prev.elements || (s.page !== prev.page && s.page?.id === prev.page?.id);
-      if (!sameLoad || !changed || getFocusedEditor() !== store) return;
-      const t = timers.get(store);
-      if (t !== undefined) clearTimeout(t);
-      timers.set(store, setTimeout(() => capture(store), THUMB_DEBOUNCE_MS));
+      if (!sameLoad || !changed || !s.page || !s.pageId || getFocusedEditor() !== store) return;
+      if (p) clearTimeout(p.timer);
+      pending.set(store, {
+        timer: setTimeout(() => flush(store), THUMB_DEBOUNCE_MS),
+        pageId: s.pageId,
+        elements: s.elements,
+        page: s.page,
+      });
     });
   });
   return () => {
     unsubs.forEach((u) => u());
-    for (const store of [...timers.keys()]) capture(store);
+    for (const store of [...pending.keys()]) flush(store);
   };
 }

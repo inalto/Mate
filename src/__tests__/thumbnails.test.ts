@@ -33,3 +33,30 @@ describe("thumbnailRegion", () => {
     expect(thumbnailRegion(page("canvas"), [], "a4").width).toBeGreaterThan(0);
   });
 });
+
+describe("watchThumbnails", () => {
+  it("thumbnail_captured_for_previous_page_on_switch_within_debounce", async () => {
+    vi.useFakeTimers();
+    const { saveThumbnail } = await import("../ipc/thumbnails");
+    const { useEditorStore } = await import("../stores/editor");
+    const { watchThumbnails } = await import("../thumbnails");
+    const blob = new Blob([new Uint8Array([1])]);
+    const canvas = { width: 0, height: 0, getContext: () => ({ fillRect() {}, scale() {}, translate() {}, save() {}, restore() {}, beginPath() {}, rect() {}, fill() {}, stroke() {}, moveTo() {}, lineTo() {}, arc() {}, roundRect() {} }), toBlob: (cb: (b: Blob) => void) => cb(blob) };
+    vi.spyOn(document, "createElement").mockReturnValue(canvas as unknown as HTMLElement);
+    const pa = { ...page("canvas"), id: "A" };
+    const pb = { ...page("canvas"), id: "B" };
+    useEditorStore.setState({ pageId: "A", loadedPageId: "A", page: pa, elements: new Map() });
+    const stop = watchThumbnails();
+    useEditorStore.setState({ elements: new Map([["e", stroke(0, 0)]]) });
+    vi.advanceTimersByTime(500);
+    useEditorStore.setState({ pageId: "B", loadedPageId: null, page: pa, elements: new Map() });
+    await vi.runAllTimersAsync();
+    useEditorStore.setState({ loadedPageId: "B", page: pb });
+    await vi.advanceTimersByTimeAsync(3000);
+    stop();
+    expect(saveThumbnail).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(saveThumbnail).mock.calls[0][0]).toBe("A");
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+});

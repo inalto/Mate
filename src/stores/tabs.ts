@@ -96,7 +96,9 @@ export const useTabsStore = create<TabsState>((set, get) => {
       const { tabs, activeTabId } = get();
       const wantNewTab = !!opts?.newTab || get().pendingNewTab;
       if (get().pendingNewTab) set({ pendingNewTab: false });
-      const showing = tabs.find((t) => t.panes.some((p) => p.pageId === pageId));
+      const shows = (t: Tab) => t.panes.some((p) => p.pageId === pageId);
+      // Prefer the active tab so focusing a pane never jumps to another tab showing the same page.
+      const showing = tabs.find((t) => t.id === activeTabId && shows(t)) ?? tabs.find(shows);
       if (showing) {
         const i = showing.panes.findIndex((p) => p.pageId === pageId) as PaneIndex;
         commit(tabs.map((t) => (t.id === showing.id ? { ...t, focusedPaneIndex: i } : t)), showing.id);

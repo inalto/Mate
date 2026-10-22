@@ -15,7 +15,7 @@ export interface PageTreeContext {
   open(pageId: string, newTab: boolean): void;
 }
 
-function PageMenu({ page, at, onClose, open }: { page: Page; at: { x: number; y: number }; onClose(): void; open: PageTreeContext["open"] }) {
+function PageMenu({ page, at, onClose }: { page: Page; at: { x: number; y: number }; onClose(): void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [icons, setIcons] = useState(false);
   useDismiss(ref, true, onClose);
@@ -28,7 +28,6 @@ function PageMenu({ page, at, onClose, open }: { page: Page; at: { x: number; y:
     const tabs = useTabsStore.getState();
     if (!tabs.activeTabId) return;
     tabs.split(tabs.activeTabId, page.id);
-    open(page.id, false); // the split focuses the new pane; the URL follows
   };
   const item = (label: string, fn: () => unknown, hint?: string) => (
     <button key={label} role="menuitem" onClick={run(fn)}>
@@ -116,7 +115,7 @@ export default function PageNode({ page, level, ctx }: { page: Page; level: numb
           </button>
         )}
       </div>
-      {menuAt && <PageMenu page={page} at={menuAt} open={ctx.open} onClose={() => setMenuAt(null)} />}
+      {menuAt && <PageMenu page={page} at={menuAt} onClose={() => setMenuAt(null)} />}
       {children.length > 0 && page.isExpanded && (
         <ul role="group">
           {children.map((c) => <PageNode key={c.id} page={c} level={level + 1} ctx={ctx} />)}

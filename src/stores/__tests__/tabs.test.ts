@@ -81,4 +81,18 @@ describe("tabs store", () => {
     expect(JSON.parse(localStorage.getItem(TABS_STORAGE_KEY)!).tabs).toHaveLength(1);
     expect(s().activeTabId).toBe(s().tabs[0].id);
   });
+
+  it("focusPane_keeps_active_tab_when_page_open_in_another_tab", () => {
+    s().openPage("b");
+    const x = s().activeTabId!;
+    s().openPage("a", { newTab: true });
+    const y = s().activeTabId!;
+    s().split(y, "b"); // b is now in tab X and in split tab Y
+    s().focusPane(y, 0);
+    s().focusPane(y, 1);
+    s().openPage("b"); // what the URL sync does
+    expect(s().activeTabId).toBe(y);
+    expect(s().activeTabId).not.toBe(x);
+    expect(s().tabs.find((t) => t.id === y)!.focusedPaneIndex).toBe(1);
+  });
 });
