@@ -20,9 +20,9 @@ import { useNotebookStore } from "../../stores/notebook";
 import * as ipc from "../elements";
 import { createElementsQueue } from "../elementsQueue";
 
-const stroke = (id: string, x = 0): Element => ({
+const stroke = (id: string, x = 0, pageId = "page-1"): Element => ({
   id,
-  pageId: "page-1",
+  pageId,
   type: "stroke",
   points: [
     { x, y: 0, pressure: 0.5, timestamp: 0 },
@@ -130,6 +130,102 @@ describe("elementsQueue", () => {
     q.enqueueUpsert(stroke("a2"));
     await q.flushAll();
     expect(order).toEqual(["delete:a", "upsert:a1,a2"]);
+  });
+
+  it("rejected_batch_is_retried_per_page_and_isolates_bad_element", async () => {
+    const calls: string[][] = [];
+    const upsert = vi.fn(async (els: Element[]) => {
+      calls.push(els.map((e) => e.id));
+      if (els.some((e) => e.id === "bad")) throw new Error("rejected");
+    });
+    const del = vi.fn(async (_ids: string[]) => {});
+    const q = createElementsQueue({ upsertElements: upsert, deleteElements: del });
+    q.enqueueUpsert(stroke("a", 0, "page-1"));
+    q.enqueueUpsert(stroke("bad", 0, "page-2"));
+    q.enqueueDelete("gone", "page-1");
+    await q.flushAll();
+    // Whole batch twice, then per page: page-1 lands, page-2 is parked as failed.
+    expect(calls.slice(0, 2)).toEqual([["a", "bad"], ["a", "bad"]]);
+    expect(calls).toContainEqual(["a"]);
+    expect(calls[calls.length - 1]).toEqual(["bad"]);
+    expect(del).toHaveBeenCalledWith(["gone"]);
+    expect(q.failed()).toBe(1);
+    expect(q.snapshot().failed).toEqual([{ op: "upsert", element: stroke("bad", 0, "page-2") }]);
+    // Later regular batches do not carry the failed element, so they succeed.
+    calls.length = 0;
+    q.enqueueUpsert(stroke("b", 0, "page-1"));
+    await vi.advanceTimersByTimeAsync(150);
+    expect(calls).toEqual([["b"]]);
+    expect(q.failed()).toBe(1);
+    // A newer write of the failed id supersedes it.
+    q.enqueueUpsert(stroke("bad", 5, "page-2"));
+    expect(q.failed()).toBe(0);
+  });
+
+  it("failed_items_retry_with_backoff", async () => {
+    let reject = true;
+    const upsert = vi.fn(async (_els: Element[]) => {
+      if (reject) throw new Error("rejected");
+    });
+    const q = createElementsQueue({ upsertElements: upsert, deleteElements: vi.fn(async () => {}) });
+    q.enqueueUpsert(stroke("x"));
+    await q.flushAll();
+    expect(q.failed()).toBe(1);
+    const after = upsert.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(999);
+    expect(upsert).toHaveBeenCalledTimes(after);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(upsert).toHaveBeenCalledTimes(after + 1); // 1 s
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(upsert).toHaveBeenCalledTimes(after + 1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(upsert).toHaveBeenCalledTimes(after + 2); // then 2 s
+    // flushAll retries failed items immediately too.
+    await q.flushAll();
+    expect(upsert).toHaveBeenCalledTimes(after + 3);
+    reject = false;
+    await vi.advanceTimersByTimeAsync(4000); // next backoff step
+    expect(q.failed()).toBe(0);
+    expect(q.pending()).toBe(0);
+    const settled = upsert.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(upsert).toHaveBeenCalledTimes(settled); // nothing left to retry
+  });
+
+  it("backoff_is_capped_at_60s", async () => {
+    const upsert = vi.fn(async (_els: Element[]) => {
+      throw new Error("rejected");
+    });
+    const q = createElementsQueue({ upsertElements: upsert, deleteElements: vi.fn(async () => {}) });
+    q.enqueueUpsert(stroke("x"));
+    await q.flushAll();
+    await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000 + 8000 + 16000 + 32000); // 6 retries
+    const n = upsert.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(upsert).toHaveBeenCalledTimes(n);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(upsert).toHaveBeenCalledTimes(n + 1);
+  });
+
+  it("status_callback_reports_failed_count", async () => {
+    let reject = true;
+    const upsert = vi.fn(async (_els: Element[]) => {
+      if (reject) throw new Error("rejected");
+    });
+    const q = createElementsQueue({ upsertElements: upsert, deleteElements: vi.fn(async () => {}) });
+    const seen: { pending: number; failed: number }[] = [];
+    const off = q.onStatus((s) => seen.push(s));
+    q.enqueueUpsert(stroke("x"));
+    expect(seen[seen.length - 1]).toEqual({ pending: 1, failed: 0 });
+    await q.flushAll();
+    expect(seen[seen.length - 1]).toEqual({ pending: 1, failed: 1 });
+    reject = false;
+    await q.flushAll();
+    expect(seen[seen.length - 1]).toEqual({ pending: 0, failed: 0 });
+    off();
+    const count = seen.length;
+    q.enqueueUpsert(stroke("y"));
+    expect(seen).toHaveLength(count);
   });
 });
 

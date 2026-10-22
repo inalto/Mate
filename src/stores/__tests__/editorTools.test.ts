@@ -46,7 +46,7 @@ describe("editor store tools", () => {
     expect(s().elements.size).toBe(3);
     s().eraser({ x: 10, y: 0 }); // cuts into the first part
     s().endEraser();
-    expect(queue.enqueueDelete).toHaveBeenCalledWith("a");
+    expect(queue.enqueueDelete).toHaveBeenCalledWith("a", "pg");
     expect(s().canUndo).toBe(true);
 
     s().undo();

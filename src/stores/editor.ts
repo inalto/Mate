@@ -515,7 +515,7 @@ export function createEditorStore(): EditorStore {
       if (a.type === "delete") {
         elements.delete(a.el.id);
         index.remove(a.el.id);
-        elementsQueue.enqueueDelete(a.el.id);
+        elementsQueue.enqueueDelete(a.el.id, a.el.pageId);
         if (selection.has(a.el.id)) {
           selection = new Set(selection);
           selection.delete(a.el.id);

@@ -5,9 +5,11 @@ import "./styles/themes.css";
 import "./styles/base.css";
 import App from "./App.tsx";
 import { initRecovery, installCloseHandler } from "./lifecycle/close";
+import { watchSaveFailures } from "./lifecycle/saveStatus";
 
 initRecovery();
 installCloseHandler();
+watchSaveFailures();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
