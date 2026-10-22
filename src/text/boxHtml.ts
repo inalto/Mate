@@ -26,8 +26,13 @@ export interface BoxAppearance {
   key: string;
   width: number;
   height: number;
-  /** `<foreignObject>` laying the box out in `r`. */
-  foreignObject(r: Rect): string;
+  /**
+   * `<foreignObject>` laying the box out in `r`. With `sharedCss` the stylesheet named by
+   * `sharedCss` below is left out (the SVG export embeds it once in `<defs>`).
+   */
+  foreignObject(r: Rect, opts?: { sharedCss?: boolean }): string;
+  /** Document-wide stylesheet the box needs ("katex" for math boxes). */
+  sharedCss?: "katex";
 }
 
 const wrap = (r: Rect, style: string, body: string): string =>
@@ -64,7 +69,8 @@ export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | nu
           key: JSON.stringify(["math", content.contentHtml, content.textAttributes, width, height, color]),
           width,
           height,
-          foreignObject: (r) => mathForeignObject(content, r, color),
+          foreignObject: (r, o) => mathForeignObject(content, r, color, o?.sharedCss ?? false),
+          sharedCss: "katex",
         };
       }
       return {

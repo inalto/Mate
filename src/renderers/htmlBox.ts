@@ -29,6 +29,9 @@ export const htmlBoxRenderer: ElementRenderer = {
   },
   svg(el, o) {
     const a = boxAppearance(el, o.theme);
-    return a ? rotatedSvg(el, a.foreignObject(boxRect(el))) : "";
+    if (!a) return "";
+    const shared = !!(o.svgStyles && a.sharedCss);
+    if (shared) o.svgStyles!.add(a.sharedCss!);
+    return rotatedSvg(el, a.foreignObject(boxRect(el), { sharedCss: shared }));
   },
 };

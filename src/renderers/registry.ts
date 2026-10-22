@@ -23,6 +23,11 @@ export interface RenderOptions {
    * one throws instead of drawing the placeholder.
    */
   textBitmaps?: ReadonlyMap<string, BoxBitmap>;
+  /**
+   * SVG export: collects the document-wide stylesheets the emitted markup needs (e.g. "katex"),
+   * embedded once in `<defs>` instead of in every element.
+   */
+  svgStyles?: Set<string>;
 }
 
 export interface ElementRenderer {

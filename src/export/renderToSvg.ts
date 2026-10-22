@@ -3,6 +3,7 @@
 import { buildBackgroundPattern, type BackgroundPage, type Rect } from "../canvas/background";
 import { PAGE_BORDER_RADIUS, PAGE_GAP } from "../model/constants";
 import type { Element, Page } from "../model/types";
+import { getEmbeddedKatexCss } from "../math/katexCss";
 import { elementSvg } from "../renderers/registry";
 import { useSettingsStore } from "../stores/settings";
 import { renderOrder } from "../tools/zorder";
@@ -38,13 +39,17 @@ export function renderToSvg(elements: Iterable<Element>, page: Page, opts: Expor
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
   const list = pageElements(page, elements);
   const { region, sheet } = exportRegion(page, list, aspect);
-  const ropts = { theme: opts.theme, zoomBucket: opts.scale };
+  const svgStyles = new Set<string>();
+  const ropts = { theme: opts.theme, zoomBucket: opts.scale, svgStyles };
   const ink = renderOrder(list)
     .map((el) => elementSvg(el, ropts))
     .join("");
+  // katex.css (fonts embedded) once for every math box: it applies across the SVG document.
+  const defs = svgStyles.has("katex") ? `<defs><style><![CDATA[${getEmbeddedKatexCss()}]]></style></defs>` : "";
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${n(region.width * opts.scale)}" height="${n(region.height * opts.scale)}" ` +
     `viewBox="${n(region.x)} ${n(region.y)} ${n(region.width)} ${n(region.height)}">` +
+    defs +
     backgroundSvg(page, region, sheet, opts) +
     ink +
     `</svg>`

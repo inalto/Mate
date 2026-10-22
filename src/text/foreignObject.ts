@@ -18,16 +18,20 @@ export function textBoxForeignObject(content: TextBoxContent, r: Rect, color: st
   );
 }
 
-/** CSS of a math box: katex.css plus a zero margin on the display wrapper. */
-const mathCss = (): string => `${getEmbeddedKatexCss()} .katex-display{margin:0}`;
+/** Box-local CSS of a math box: a zero margin on the display wrapper. */
+const MATH_BOX_CSS = ".katex-display{margin:0}";
 
-/** `<foreignObject>` for a typed-math box: the sanitised KaTeX HTML with katex.css inlined. */
-export function mathForeignObject(content: TextBoxContent, r: Rect, color: string): string {
+/**
+ * `<foreignObject>` for a typed-math box: the sanitised KaTeX HTML with katex.css inlined, or, with
+ * `sharedCss`, only the box-local rule: the caller (SVG export) then embeds katex.css once for the
+ * whole document (a `<style>` in an SVG document applies to its foreignObject content too).
+ */
+export function mathForeignObject(content: TextBoxContent, r: Rect, color: string, sharedCss = false): string {
   const style = `${cssText(boxCss(content.textAttributes, color))} width: ${n(r.width)}px; height: ${n(r.height)}px; overflow: hidden;`;
   const body = toXhtml(content.contentHtml);
   return (
     `<foreignObject x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}">` +
     `<div xmlns="http://www.w3.org/1999/xhtml" class="math-box" style="${esc(style)}">` +
-    `<style>${mathCss()}</style>${body}</div></foreignObject>`
+    `<style>${sharedCss ? MATH_BOX_CSS : `${getEmbeddedKatexCss()} ${MATH_BOX_CSS}`}</style>${body}</div></foreignObject>`
   );
 }
