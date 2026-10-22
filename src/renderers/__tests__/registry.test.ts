@@ -5,6 +5,7 @@ import { el } from "../../tools/__tests__/fixtures";
 import { paintScene } from "../../export/scene";
 import { renderToSvg } from "../../export/renderToSvg";
 import { BoxSnapshotCache, boxSnapshots } from "../boxSnapshot";
+import { boxedRenderer } from "../builtins";
 import { drawElement, elementSvg, registerRenderer, rendererFor } from "../registry";
 
 const STAMP = "2026-01-01T00:00:00.000Z";
@@ -96,10 +97,13 @@ describe("renderer registry", () => {
   });
 
   it("svg_export_includes_boxed_placeholder", () => {
-    // Text boxes, tables and code blocks export as <foreignObject> (see overlay/__tests__/textSnapshot); other boxed types
-    // without a snapshot export their placeholder.
+    // Text boxes, tables and code blocks export as <foreignObject> (see overlay/__tests__/textSnapshot) and graphs as
+    // vector (renderers/__tests__/graph); the shared boxed renderer exports a placeholder without a snapshot.
+    expect(boxedRenderer.svg(box("b", { type: "graph" }), { ...opts, zoomBucket: 1 })).toContain(
+      '<rect x="10" y="20" width="100" height="50" fill="none" stroke="#9aa0a6"',
+    );
     const svg = renderToSvg([box("b", { type: "graph" }), el("s", [[0, 0], [50, 50]])], page, { ...opts, scale: 1 });
-    expect(svg).toContain('<rect x="10" y="20" width="100" height="50" fill="none" stroke="#9aa0a6"');
+    expect(svg).toContain('<g transform="translate(10 20)">');
     expect(svg).toContain("<path");
   });
 });

@@ -83,6 +83,21 @@ export function validDomain(d: unknown): GraphDomain {
   return { ...DEFAULT_DOMAIN };
 }
 
+const MIN_SPAN = 1e-9;
+const MAX_SPAN = 1e9;
+
+/** `d` zoomed by `factor` (< 1 zooms in) about the domain point (ax, ay); unchanged when that would degenerate. */
+export function zoomDomain(d: GraphDomain, factor: number, ax: number, ay: number): GraphDomain {
+  const next = {
+    xMin: ax - (ax - d.xMin) * factor,
+    xMax: ax + (d.xMax - ax) * factor,
+    yMin: ay - (ay - d.yMin) * factor,
+    yMax: ay + (d.yMax - ay) * factor,
+  };
+  const ok = (lo: number, hi: number) => Number.isFinite(lo) && Number.isFinite(hi) && hi - lo > MIN_SPAN && hi - lo < MAX_SPAN;
+  return ok(next.xMin, next.xMax) && ok(next.yMin, next.yMax) ? next : d;
+}
+
 /** `graphData` of a stored graph element, normalised (missing or malformed fields get defaults). Never throws. */
 export function graphDataOf(el: Pick<Element, "content">): GraphData {
   const g = obj(contentOf<GraphContent>(el).graphData);

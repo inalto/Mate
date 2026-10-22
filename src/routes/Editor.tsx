@@ -9,6 +9,7 @@ import Toolbar from "../components/Toolbar";
 import TopBar, { ShortcutsDialog } from "../components/TopBar";
 import OverlayLayer from "../overlay/OverlayLayer";
 import "../overlay/CodeEditor";
+import "../overlay/GraphEditor";
 import "../overlay/MathEditor";
 import "../overlay/TableEditor";
 import "../overlay/TextBoxEditor";
