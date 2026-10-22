@@ -96,7 +96,9 @@ describe("renderer registry", () => {
   });
 
   it("svg_export_includes_boxed_placeholder", () => {
-    const svg = renderToSvg([box("b"), el("s", [[0, 0], [50, 50]])], page, { ...opts, scale: 1 });
+    // Text boxes export as <foreignObject> (see overlay/__tests__/textSnapshot); other boxed types
+    // without a snapshot export their placeholder.
+    const svg = renderToSvg([box("b", { type: "table" }), el("s", [[0, 0], [50, 50]])], page, { ...opts, scale: 1 });
     expect(svg).toContain('<rect x="10" y="20" width="100" height="50" fill="none" stroke="#9aa0a6"');
     expect(svg).toContain("<path");
   });

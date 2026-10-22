@@ -8,8 +8,10 @@ import type { BoxSnapshotCache } from "./boxSnapshot";
 
 export interface RenderOptions {
   theme: ThemeName;
-  /** Output scale (device pixels per page unit). */
+  /** Output scale (device pixels per page unit; the live canvas passes the camera zoom). */
   zoomBucket: number;
+  /** Device pixels per CSS pixel of the live canvas (default 1: exports already include it). */
+  pixelRatio?: number;
   /** Snapshot source for boxed elements (default: the shared `boxSnapshots`). */
   snapshots?: BoxSnapshotCache;
 }

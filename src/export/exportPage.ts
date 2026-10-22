@@ -2,6 +2,7 @@
 import { loadElements } from "../ipc/elements";
 import { writeExportFile } from "../ipc/export";
 import type { Element } from "../model/types";
+import { prepareTextSnapshots } from "../overlay/snapshot";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { renderToCanvas } from "./renderToCanvas";
@@ -57,6 +58,8 @@ export async function exportPage(
     pageFrame: page.mode === "page",
     ...options,
   };
+  // Text boxes are drawn from bitmaps rendered asynchronously: have them ready for the PNG.
+  if (format === "png") await prepareTextSnapshots(elements, opts.theme, opts.scale);
   const bytes =
     format === "png"
       ? await canvasToPng(renderToCanvas(elements, page, opts))

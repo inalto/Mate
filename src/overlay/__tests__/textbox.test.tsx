@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import type { Editor } from "@tiptap/core";
+import type { Editor } from "@tiptap/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 
@@ -20,9 +20,23 @@ import { contentOf, type TextBoxContent } from "../../model/content";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
+import { boxSnapshots } from "../../renderers/boxSnapshot";
+import "../../renderers/builtins";
+import { drawElement } from "../../renderers/registry";
 import { hasEditor } from "../editorRegistry";
+import { setHtmlRasterizer, type HtmlRasterizer } from "../htmlToBitmap";
+import { clearTextSnapshots } from "../snapshot";
 import OverlayLayer from "../OverlayLayer";
 import "../TextBoxEditor";
+
+// jsdom has no layout: ProseMirror's deferred scroll-into-view (after autofocus) asks ranges for
+// their rectangles.
+if (!("getClientRects" in Range.prototype)) {
+  Object.assign(Range.prototype, {
+    getClientRects: () => [] as unknown as DOMRectList,
+    getBoundingClientRect: () => new DOMRect(),
+  });
+}
 
 let store: EditorStore;
 const s = () => store.getState();
@@ -157,6 +171,43 @@ describe("TextBoxEditor", () => {
     act(() => s().endEdit());
     expect(text(id).contentHtml).toBe("<p><strong>abc</strong></p>");
     expect(text(id).textAttributes).toEqual({ fontFamily: "hand", fontSize: 24, color: "#C62828", align: "center" });
+  });
+
+  it("renders_snapshots_while_typing_and_on_commit", async () => {
+    const svgs: string[] = [];
+    const raster: HtmlRasterizer = async (svg, width, height) => {
+      svgs.push(svg);
+      return { width, height } as unknown as HTMLCanvasElement;
+    };
+    setHtmlRasterizer(raster);
+    try {
+      const { container } = render(<OverlayLayer store={store} />);
+      let id = "";
+      act(() => {
+        id = s().addTextBox({ x: 0, y: 0 })!;
+      });
+      act(() => {
+        editorIn(container).commands.setContent("<p>draft</p>", { emitUpdate: true });
+      });
+      expect(svgs).toHaveLength(0); // debounced
+      await act(() => new Promise((r) => setTimeout(r, 200)));
+      expect(svgs).toHaveLength(1);
+      expect(svgs[0]).toContain("<p>draft</p>");
+      // The commit publishes the matching draft bitmap for the new revision without re-rendering.
+      act(() => s().endEdit());
+      await act(() => new Promise((r) => setTimeout(r, 0)));
+      const box = s().elements.get(id)!;
+      expect(boxSnapshots.get(box)).not.toBeNull();
+      expect(svgs).toHaveLength(1);
+      const calls: string[] = [];
+      const ctx = new Proxy({}, { get: (_t, k: string) => (k in _t ? undefined : () => calls.push(k)), set: () => true });
+      drawElement(ctx as unknown as CanvasRenderingContext2D, box, { theme: "light", zoomBucket: 1 });
+      expect(calls).toContain("drawImage");
+    } finally {
+      setHtmlRasterizer(null);
+      clearTextSnapshots();
+      boxSnapshots.clear();
+    }
   });
 
   it("sanitises_stored_html_on_load", async () => {

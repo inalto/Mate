@@ -1,7 +1,9 @@
 // DOM editor of text boxes (TipTap), mounted by OverlayLayer in the edited box's slot. Edits stay
 // local until the session ends (Esc, a click outside, or anything that moves the store's editingId
 // on); the session then commits once through `store.commitTextEdit`: sanitised HTML, plain text,
-// box attributes and the measured height. Registered for "text-box" on import.
+// box attributes and the measured height. While typing, the draft is rendered to a bitmap (150 ms
+// after the last change) so the canvas can show the committed box at once; the commit renders (or
+// publishes) the final one. Registered for "text-box" on import.
 import Color from "@tiptap/extension-color";
 import { FontFamily, FontSize, TextStyle } from "@tiptap/extension-text-style";
 import Underline from "@tiptap/extension-underline";
@@ -17,6 +19,10 @@ import { boxHeightFor } from "../text/measure";
 import { boxCss, CONTENT_CLASS, CONTENT_CSS } from "../text/style";
 import { textContentOf } from "../text/textBox";
 import { registerEditor, type BoxEditorProps } from "./editorRegistry";
+import { renderTextSnapshot, snapshotScale } from "./snapshot";
+
+/** Quiet period after a change before the draft is rendered to a bitmap. */
+export const DRAFT_SNAPSHOT_MS = 150;
 
 const EXTENSIONS = [
   StarterKit.configure({
@@ -66,6 +72,39 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
     latest.current.measured = dom?.scrollHeight ?? 0;
   }, []);
 
+  /** `cur` with the session's content, attributes and measured height. */
+  const edited = useCallback((cur: Element): Element => {
+    const { html, attrs: a, measured } = latest.current;
+    const content: TextBoxContent = { ...contentOf<TextBoxContent>(cur), contentHtml: html, rawContent: "", textAttributes: a };
+    return { ...cur, content, boxHeight: boxHeightFor(measured, a.fontSize, cur.boxHeight ?? 0) };
+  }, []);
+
+  /** Render `box` at the pane's current zoom; `publish` makes it the element's snapshot. */
+  const snapshot = useCallback(
+    (box: Element, publish: boolean) => {
+      const z = store.getState().camera.z * (window.devicePixelRatio || 1);
+      const scale = snapshotScale(z, box.boxWidth ?? 0, box.boxHeight ?? 0);
+      void renderTextSnapshot(box, useSettingsStore.getState().settings.theme, scale, publish);
+    },
+    [store],
+  );
+
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleDraft = useCallback(() => {
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      draftTimer.current = null;
+      const cur = store.getState().elements.get(el.id);
+      if (cur) snapshot(edited(cur), false);
+    }, DRAFT_SNAPSHOT_MS);
+  }, [edited, el.id, snapshot, store]);
+  useEffect(
+    () => () => {
+      if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+    },
+    [],
+  );
+
   const editor = useEditor({
     extensions: EXTENSIONS,
     content: initial.contentHtml,
@@ -82,29 +121,33 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
     onUpdate({ editor: ed }) {
       latest.current.html = ed.getHTML();
       measure();
+      scheduleDraft();
     },
   });
   // Re-render the bar when marks or the selection change.
   useEditorState({ editor, selector: (ctx) => ctx.editor?.state });
 
+  const firstAttrs = useRef(attrs);
   useLayoutEffect(() => {
     latest.current.attrs = attrs;
     measure();
-  }, [attrs, measure]);
+    if (attrs !== firstAttrs.current) scheduleDraft();
+  }, [attrs, measure, scheduleDraft]);
 
   /** Commit the session (once). */
   const done = useRef(false);
   const commit = useCallback(() => {
     if (done.current) return;
     done.current = true;
+    if (draftTimer.current !== null) clearTimeout(draftTimer.current);
+    draftTimer.current = null;
     const s = store.getState();
     const cur = s.elements.get(el.id);
     if (!cur) return;
-    const { html, attrs: a, measured } = latest.current;
-    const content: TextBoxContent = { ...contentOf<TextBoxContent>(cur), contentHtml: html, rawContent: "", textAttributes: a };
-    const after: Element = { ...cur, content, boxHeight: boxHeightFor(measured, a.fontSize, cur.boxHeight ?? 0) };
-    s.commitTextEdit(after);
-  }, [el.id, store]);
+    s.commitTextEdit(edited(cur));
+    const committed = store.getState().elements.get(el.id);
+    if (committed) snapshot(committed, true);
+  }, [edited, el.id, snapshot, store]);
 
   // The store ends the session (closeEdit) before it moves on; an unmount that is not followed by
   // a remount (StrictMode re-runs effects) also commits, e.g. when the pane goes away.

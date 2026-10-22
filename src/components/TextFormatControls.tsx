@@ -15,7 +15,7 @@ import {
   TextStrikethrough,
   TextUnderline,
 } from "@phosphor-icons/react";
-import type { Editor } from "@tiptap/core";
+import type { Editor } from "@tiptap/react";
 import type { MouseEvent, ReactNode } from "react";
 import type { TextAttributes } from "../model/content";
 import { FONT_KEYS, FONT_LABELS, FONT_STACKS, stepFontSize, type FontKey } from "../text/style";

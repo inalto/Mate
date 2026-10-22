@@ -1,10 +1,11 @@
-// Page thumbnails: render the page (background + strokes) into an offscreen canvas 320 px wide and
+// Page thumbnails: render the page (background + elements) into an offscreen canvas 320 px wide and
 // export WebP. Always drawn with the light theme so cards look the same in every app theme.
 import type { Rect } from "./canvas/background";
 import { sheetSize } from "./canvas/camera";
 import { contentRegion, paintScene } from "./export/scene";
 import { saveThumbnail } from "./ipc/thumbnails";
 import type { Element, Page } from "./model/types";
+import { prepareTextSnapshots } from "./overlay/snapshot";
 import { editorForPane, getFocusedEditor } from "./stores/focusedEditor";
 import type { EditorStore } from "./stores/editor";
 import { useNotebookStore } from "./stores/notebook";
@@ -33,6 +34,7 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   const list = [...elements].filter((e) => e.pageId === pageId);
   const region = thumbnailRegion(page, list, aspect);
   const scale = THUMB_WIDTH / region.width;
+  await prepareTextSnapshots(list, "light", scale);
   const height = Math.min(THUMB_MAX_HEIGHT, Math.max(1, Math.round(region.height * scale)));
   const canvas = document.createElement("canvas");
   canvas.width = THUMB_WIDTH;
