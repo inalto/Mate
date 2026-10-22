@@ -1,8 +1,9 @@
 //! PDF import plumbing: validating and storing a PDF picked, dropped or opened through the `.pdf`
 //! file association, and the pending-open-file handshake with the frontend.
 //!
-//! A PDF opened from the OS arrives as a path in `argv` at startup (Windows/Linux: every open
-//! starts a new process) or as `RunEvent::Opened` (macOS). Until the frontend asks for it
+//! A PDF opened from the OS arrives as a path in `argv` at startup, as the argv of a second
+//! instance forwarded by the single-instance plugin while running (Windows/Linux: every open starts
+//! a new process), or as `RunEvent::Opened` (macOS). Until the frontend asks for it
 //! (`take_pending_open_file`) the path is parked; after that, later opens are emitted as the
 //! `incoming-file-open` event instead.
 
@@ -22,7 +23,6 @@ pub const TOO_LARGE: &str = "PDF is larger than 50 MiB.";
 pub const NOT_A_PDF: &str = "That file is not a PDF.";
 
 /// Event carrying the path of a PDF opened while the app is running.
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))] // opens arrive as events on macOS only
 pub const INCOMING_FILE_OPEN: &str = "incoming-file-open";
 
 /// A PDF path waiting for the frontend, and whether the frontend has started asking.
@@ -44,7 +44,6 @@ impl PendingOpenFile {
     }
 
     /// Park `path` unless the frontend is already listening; true when it should be emitted instead.
-    #[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))] // opens arrive as events on macOS only
     pub fn offer(&self, path: String) -> bool {
         let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if g.1 {
@@ -60,9 +59,12 @@ fn is_pdf_path(path: &str) -> bool {
     Path::new(path).extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"))
 }
 
-/// The first `.pdf` argument after the program name.
-pub fn pdf_from_args(args: impl IntoIterator<Item = String>) -> Option<String> {
-    args.into_iter().skip(1).find(|a| is_pdf_path(a))
+/// The first `.pdf` argument after the program name, made absolute against `cwd` (the working
+/// directory of the process that received the arguments) when relative.
+pub fn pdf_from_args(args: impl IntoIterator<Item = String>, cwd: &Path) -> Option<String> {
+    let arg = args.into_iter().skip(1).find(|a| is_pdf_path(a))?;
+    let path = Path::new(&arg);
+    Some(if path.is_absolute() { arg } else { cwd.join(path).to_string_lossy().into_owned() })
 }
 
 /// Validates the PDF at `path` (size before reading, then content sniffing) and stores it in `dir`.
@@ -94,7 +96,6 @@ pub fn take_pending_open_file(pending: State<'_, PendingOpenFile>) -> Option<Str
 }
 
 /// Hand a PDF opened while running to the frontend (parked if it is not listening yet).
-#[cfg_attr(not(any(target_os = "macos", target_os = "ios")), allow(dead_code))] // opens arrive as events on macOS only
 pub fn file_opened(app: &AppHandle, path: String) {
     if !is_pdf_path(&path) {
         return;
@@ -148,9 +149,21 @@ mod tests {
     #[test]
     fn picks_the_pdf_argument() {
         let args = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(pdf_from_args(args(&["mate.exe", "C:\\x\\Doc.PDF"])), Some("C:\\x\\Doc.PDF".into()));
-        assert_eq!(pdf_from_args(args(&["mate.pdf"])), None);
-        assert_eq!(pdf_from_args(args(&["mate", "--flag", "notes.txt"])), None);
+        let cwd = std::env::temp_dir();
+        let abs = cwd.join("x").join("Doc.PDF").to_string_lossy().into_owned();
+        assert_eq!(pdf_from_args(args(&["mate.exe", &abs]), &cwd), Some(abs.clone()));
+        assert_eq!(pdf_from_args(args(&["mate.pdf"]), &cwd), None);
+        assert_eq!(pdf_from_args(args(&["mate", "--flag", "notes.txt"]), &cwd), None);
+    }
+
+    #[test]
+    fn resolves_a_relative_pdf_argument_against_the_cwd() {
+        // A second instance started from a shell hands over its own working directory.
+        let args = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let cwd = std::env::temp_dir().join("docs");
+        let want = cwd.join("sub").join("Notes.pdf").to_string_lossy().into_owned();
+        let rel = Path::new("sub").join("Notes.pdf").to_string_lossy().into_owned();
+        assert_eq!(pdf_from_args(args(&["mate.exe", &rel]), &cwd), Some(want));
     }
 
     #[test]
