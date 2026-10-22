@@ -7,6 +7,7 @@ import {
   Eraser,
   Highlighter,
   House,
+  ImageSquare,
   Lasso,
   Minus,
   Pen,
@@ -16,6 +17,7 @@ import {
 } from "@phosphor-icons/react";
 import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import { pickAndInsertImage } from "../images/insert";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { PenPreset } from "../model/types";
 import { isInkTool, type InkType } from "../stores/editor";
@@ -244,6 +246,9 @@ export default function Toolbar() {
       <EraserButton />
       <ShapeButton />
       {toolBtn("text", "Text (T)", <TextT size={18} />)}
+      <button type="button" className="tb-btn" aria-label="Insert image…" title="Insert image…" onClick={() => void pickAndInsertImage()}>
+        <ImageSquare size={18} />
+      </button>
       {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
       {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}
       <span className="tb-sep" />

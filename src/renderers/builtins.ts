@@ -15,6 +15,7 @@ import { registerRenderer, type ElementRenderer, type RenderOptions } from "./re
 import { textBoxRenderer } from "./textBox";
 // Types with their own renderer module (registered on import).
 import "./shape";
+import "./image";
 
 export { PLACEHOLDER_COLOR };
 
@@ -40,5 +41,5 @@ export const boxedRenderer: ElementRenderer = {
   },
 };
 
-for (const t of BOXED_TYPES) registerRenderer(t, boxedRenderer);
+for (const t of BOXED_TYPES) if (t !== "image") registerRenderer(t, boxedRenderer);
 registerRenderer("text-box", textBoxRenderer);

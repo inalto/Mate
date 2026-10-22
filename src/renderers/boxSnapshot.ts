@@ -43,6 +43,11 @@ export class BoxSnapshotCache {
     for (const id of [...this.entries.keys()]) this.invalidate(id);
   }
 
+  /** Tell subscribers that `id` changed appearance without a new snapshot (e.g. its image loaded). */
+  notify(id: string): void {
+    this.emit(id);
+  }
+
   /** Called with the id whenever a snapshot is set or dropped; returns an unsubscribe function. */
   subscribe(fn: (id: string) => void): () => void {
     this.listeners.add(fn);

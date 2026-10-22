@@ -5,6 +5,7 @@ import { sheetSize } from "./canvas/camera";
 import { contentRegion, paintScene } from "./export/scene";
 import { saveThumbnail } from "./ipc/thumbnails";
 import type { Element, Page } from "./model/types";
+import { prepareImages } from "./images/load";
 import { prepareTextSnapshots } from "./overlay/snapshot";
 import { editorForPane, getFocusedEditor } from "./stores/focusedEditor";
 import type { EditorStore } from "./stores/editor";
@@ -35,6 +36,7 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   const region = thumbnailRegion(page, list, aspect);
   const scale = THUMB_WIDTH / region.width;
   await prepareTextSnapshots(list, "light", scale);
+  await prepareImages(list);
   const height = Math.min(THUMB_MAX_HEIGHT, Math.max(1, Math.round(region.height * scale)));
   const canvas = document.createElement("canvas");
   canvas.width = THUMB_WIDTH;

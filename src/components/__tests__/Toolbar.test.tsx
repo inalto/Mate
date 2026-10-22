@@ -5,6 +5,9 @@ import { MemoryRouter } from "react-router";
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
 
+const pick = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock("../../images/insert", () => ({ pickAndInsertImage: pick }));
+
 import { setSettings } from "../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { useEditorStore } from "../../stores/editor";
@@ -34,6 +37,12 @@ describe("Toolbar", () => {
     expect(useSettingsStore.getState().settings.toolbarPresets.map((p) => p.id)).not.toContain("preset-4");
     expect(screen.queryByRole("button", { name: "Highlighter #FDE047" })).toBeNull();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
+  });
+
+  it("insert_image_button_opens_the_picker", () => {
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Insert image…" }));
+    expect(pick).toHaveBeenCalledTimes(1);
   });
 
   it("text_tool_button", () => {

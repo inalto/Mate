@@ -161,6 +161,15 @@ export default function Settings() {
 
       <section className="settings-group">
         <h2 className="section-title">Ink</h2>
+        <Field label="Invert images in dark mode" htmlFor="set-invert-images">
+          <input
+            id="set-invert-images"
+            type="checkbox"
+            checked={settings.invertImagesInDarkMode}
+            onChange={(e) => void update({ invertImagesInDarkMode: e.target.checked })}
+          />
+          <span className="muted">Black-and-white images are inverted on dark themes</span>
+        </Field>
         <Field label="Ink to shape" htmlFor="set-ink-shape">
           <input
             id="set-ink-shape"

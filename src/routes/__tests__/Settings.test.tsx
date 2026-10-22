@@ -35,3 +35,16 @@ describe("Settings ink rows", () => {
     expect(cfg().scribbleEraseSensitivity).toBe("more");
   });
 });
+
+describe("Settings images row", () => {
+  beforeEach(() => useSettingsStore.setState({ settings: DEFAULT_SETTINGS, loaded: true }));
+  afterEach(cleanup);
+
+  it("invert_images_toggle_updates_setting", () => {
+    render(<Settings />);
+    const box = screen.getByLabelText("Invert images in dark mode") as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    expect(cfg().invertImagesInDarkMode).toBe(false);
+  });
+});

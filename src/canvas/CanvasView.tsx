@@ -24,6 +24,7 @@ import { createInkSnap, drawSnapFlash, inkSnapAllowed, snapShapeElement, SNAP_FL
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
 import { createToolController, pointerTool } from "./toolInteractions";
+import { attachDropPaste } from "./dropPaste";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
@@ -424,6 +425,7 @@ export default function CanvasView({ pageId, store = useEditorStore }: { pageId:
   const liveRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<ReturnType<typeof createEngine> | null>(null);
   const theme = useSettingsStore((s) => s.settings.theme);
+  const invertImages = useSettingsStore((s) => s.settings.invertImagesInDarkMode);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -432,7 +434,9 @@ export default function CanvasView({ pageId, store = useEditorStore }: { pageId:
     if (!host || !sc || !lc) return;
     const engine = createEngine(store, pageId, host, sc, lc, () => useSettingsStore.getState().settings);
     engineRef.current = engine;
+    const detachDropPaste = attachDropPaste(host, store);
     return () => {
+      detachDropPaste();
       engine.dispose();
       engineRef.current = null;
     };
@@ -440,7 +444,7 @@ export default function CanvasView({ pageId, store = useEditorStore }: { pageId:
 
   useEffect(() => {
     engineRef.current?.restyle();
-  }, [theme]);
+  }, [theme, invertImages]);
 
   return (
     <div ref={hostRef} className="canvas-view" data-testid="canvas-view">

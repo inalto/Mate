@@ -1,4 +1,5 @@
 // Page export: render the page to PNG or SVG and save it through the native save dialog.
+import { prepareImages } from "../images/load";
 import { loadElements } from "../ipc/elements";
 import { writeExportFile } from "../ipc/export";
 import type { Element } from "../model/types";
@@ -60,6 +61,7 @@ export async function exportPage(
   };
   // Text boxes are drawn from bitmaps rendered asynchronously: have them ready for the PNG.
   if (format === "png") await prepareTextSnapshots(elements, opts.theme, opts.scale);
+  await prepareImages(elements, format === "svg");
   const bytes =
     format === "png"
       ? await canvasToPng(renderToCanvas(elements, page, opts))

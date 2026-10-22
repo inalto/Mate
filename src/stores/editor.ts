@@ -8,6 +8,8 @@ import { contentOf, type TextAttributes, type TextBoxContent } from "../model/co
 import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
+import { fitImage } from "../images/fit";
+import { imageElement } from "../images/element";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
 import { eraseAt } from "../tools/eraser";
 import { History, type Action } from "../tools/history";
@@ -17,6 +19,7 @@ import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
 import {
   clampCamera,
   initialCamera,
+  screenToWorld,
   sheetCountFor,
   sheetSize,
   type Camera,
@@ -85,6 +88,11 @@ export interface EditorState {
    * setting is on) and open its editor; its id, or null when refused.
    */
   addTextBox(at: Vec2): string | null;
+  /**
+   * Insert an image asset of `natural` pixel size at the viewport centre (or centred on `at`, in
+   * page units), scaled to fit 80 % of the visible viewport; one history entry. Its id, or null.
+   */
+  addImage(assetId: string, natural: { width: number; height: number }, at?: Vec2): string | null;
   /**
    * End of a text edit session: persist `after` (HTML sanitised, plain text derived) as one history
    * entry; nothing when unchanged. A new box's creation and first session are one entry; a box
@@ -401,6 +409,22 @@ export function createEditorStore(): EditorStore {
       if (!record("Text", [{ type: "add", el }], textKey(el.id))) return null;
       freshText = el.id;
       set({ selection: new Set([el.id]), editingId: el.id });
+      return el.id;
+    },
+
+    addImage(assetId, natural, at) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+      const tl = screenToWorld(s.camera, { x: 0, y: 0 });
+      const br = screenToWorld(s.camera, { x: vp.width, y: vp.height });
+      const box = fitImage(natural, { x: tl.x, y: tl.y, width: br.x - tl.x, height: br.y - tl.y }, at);
+      const top = topZ(s.elements.values());
+      const img = imageElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), assetId, box);
+      const el = top > 0 ? withMeta(img, { zIndex: top }) : img;
+      if (!record("Image", [{ type: "add", el }])) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
       return el.id;
     },
 

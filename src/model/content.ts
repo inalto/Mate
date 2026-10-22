@@ -44,10 +44,11 @@ export interface GraphContent extends ContentMeta {
 /** image (`imageUrl, width, height` top-level). */
 export interface ImageContent extends ContentMeta {
   isBW?: boolean;
-  cropX?: number;
-  cropY?: number;
-  cropWidth?: number;
-  cropHeight?: number;
+  /** Fractions (0 to 1) of the source image trimmed from each side. */
+  cropTop?: number;
+  cropBottom?: number;
+  cropLeft?: number;
+  cropRight?: number;
   pdfSourceKey?: string;
   pdfPageIndex?: number;
 }
