@@ -484,7 +484,7 @@ interface SheetContext {
   opts: PdfExportOptions;
   deps: PdfDeps;
   pdfTiles: PdfTileSet;
-  /** Bitmaps by element id (an element on two sheets is rasterised once). */
+  /** Bitmaps by `id|theme` (an element on two sheets of the same theme is rasterised once). */
   bitmaps: Map<string, HTMLCanvasElement | null>;
 }
 
@@ -507,10 +507,11 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
         paintGraph(p, el, theme);
         break;
       default: {
-        let bmp = ctx.bitmaps.get(el.id);
+        const key = `${el.id}|${theme}`; // backed sheets draw in light, others in the export theme
+        let bmp = ctx.bitmaps.get(key);
         if (bmp === undefined) {
           bmp = ctx.deps.rasterize(el, theme, ctx.pdfTiles);
-          ctx.bitmaps.set(el.id, bmp);
+          ctx.bitmaps.set(key, bmp);
         }
         if (bmp) placeBitmap(p, el, bmp, `${el.id}|${theme}`);
         else paintPlaceholder(p, el);

@@ -2,12 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../ipc/export", () => ({ writeExportFile: vi.fn(async () => "C:/out") }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
+vi.mock("../renderToPdf", () => ({ PDF_RASTER_SCALE: 2, renderToPdf: vi.fn(async () => new Uint8Array([37])) }));
+vi.mock("../../overlay/snapshot", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../overlay/snapshot")>()),
+  prepareTextSnapshots: vi.fn(async () => {}),
+}));
 vi.mock("../../graph/engine", () => ({ loadEngine: vi.fn(async () => ({})), engineSync: () => null }));
 
 import { loadEngine } from "../../graph/engine";
 import { loadElements } from "../../ipc/elements";
 import { writeExportFile } from "../../ipc/export";
 import type { Element, Page } from "../../model/types";
+import { prepareTextSnapshots } from "../../overlay/snapshot";
 import { useNotebookStore } from "../../stores/notebook";
 import { exportPage, pageExportFilename } from "../exportPage";
 
@@ -82,5 +88,25 @@ describe("exportPage", () => {
     expect(name).toBe("graphs.tex");
     expect(new TextDecoder().decode(bytes)).toContain("\\documentclass{article}");
     expect(loadEngine).not.toHaveBeenCalled();
+  });
+
+  it("prepares light snapshots for PDF-backed sheets on dark paper", async () => {
+    const placement: Element = {
+      ...graph,
+      id: "pdf0",
+      type: "image",
+      width: 1080,
+      height: 1398,
+      content: { pdfSourceKey: "a", pdfPageIndex: 1 },
+    };
+    vi.mocked(loadElements).mockResolvedValue([placement]);
+    await exportPage("p1", "pdf", { theme: "dark" });
+    const themes = vi.mocked(prepareTextSnapshots).mock.calls.map((c) => c[1]);
+    expect(themes).toEqual(["dark", "light"]);
+
+    vi.mocked(prepareTextSnapshots).mockClear();
+    vi.mocked(loadElements).mockResolvedValue([]);
+    await exportPage("p1", "pdf", { theme: "dark" });
+    expect(vi.mocked(prepareTextSnapshots).mock.calls.map((c) => c[1])).toEqual(["dark"]);
   });
 });

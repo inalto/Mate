@@ -6,6 +6,7 @@ import { prepareImages } from "../images/load";
 import { loadElements } from "../ipc/elements";
 import { writeExportFile } from "../ipc/export";
 import { PAGE_GAP } from "../model/constants";
+import { isPdfPlacement } from "../model/content";
 import type { Element } from "../model/types";
 import { preparePdfPages } from "../pdf/render";
 import { prepareTextSnapshots } from "../overlay/snapshot";
@@ -99,6 +100,8 @@ export async function exportPage(
     // jsPDF and pdf-lib are large: loaded on the first PDF export only.
     const { PDF_RASTER_SCALE, renderToPdf } = await import("./renderToPdf");
     await prepareTextSnapshots(elements, opts.theme, PDF_RASTER_SCALE);
+    // Sheets backed by an imported PDF keep the original page and are drawn in light colours.
+    if (opts.theme !== "light" && elements.some(isPdfPlacement)) await prepareTextSnapshots(elements, "light", PDF_RASTER_SCALE);
     await prepareImages(elements);
     const bytes = await renderToPdf(elements, page, {
       theme: opts.theme,

@@ -174,6 +174,27 @@ describe("renderToPdf", () => {
     }
   });
 
+  it("dark_paper_export_uses_light_snapshots_on_backed_sheets", async () => {
+    const src = await PDFDocument.create();
+    src.addPage([612, 792]);
+    const srcBytes = await src.save();
+    const attrs = { fontFamily: "sans", fontSize: 18, color: "#000000", align: "left" };
+    const tb = (id: string, y: number) => box(id, "text-box", 100, y, 300, 80, { contentHtml: "<p>x</p>", rawContent: "x", textAttributes: attrs });
+    const els = [
+      box("pdf0", "image", 0, 0, SHEET.width, SHEET.height, { pdfSourceKey: "a", pdfPageIndex: 1 }),
+      tb("onPdf", 100),
+      tb("both", SHEET.height - 40), // spans the backed sheet 0 and the plain sheet 1
+      tb("plain", STRIDE + 400),
+    ];
+    const calls: string[] = [];
+    const rasterize = (el: Element, theme: string) => {
+      calls.push(`${el.id}|${theme}`);
+      return null;
+    };
+    await renderToPdf(els, sheets(), { ...OPTS, theme: "dark" }, deps({ readPdfBytes: async () => srcBytes, rasterize }));
+    expect(calls.sort()).toEqual(["both|dark", "both|light", "onPdf|light", "plain|dark"]);
+  });
+
   it("falls back to a raster page when the source PDF cannot be read", async () => {
     const rasterPdfPages = vi.fn(async () => new Map());
     const els = [box("pdf0", "image", 0, 0, SHEET.width, SHEET.height, { pdfSourceKey: "gone", pdfPageIndex: 1 })];
