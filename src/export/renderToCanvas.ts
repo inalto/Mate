@@ -2,6 +2,7 @@
 import type { Element, Page } from "../model/types";
 import { useSettingsStore } from "../stores/settings";
 import type { PdfTileSet } from "../pdf/render";
+import type { TextBitmapSet } from "../overlay/snapshot";
 import { exportRegion, pageElements, paintScene, type ExportOptions } from "./scene";
 
 /** Browser canvas limits (Chromium/WebView2): per-side and total pixel area. */
@@ -21,8 +22,17 @@ export function canvasExportLayout(elements: Iterable<Element>, page: Page, scal
   return { list, region, sheet, scale: fitScale(region.width, region.height, scale) };
 }
 
-/** Draw `page` into a new canvas; `pdfTiles` are its PDF pages prepared at the layout's scale. */
-export function renderToCanvas(elements: Iterable<Element>, page: Page, opts: ExportOptions, pdfTiles?: PdfTileSet): HTMLCanvasElement {
+/**
+ * Draw `page` into a new canvas; `pdfTiles` are its PDF pages prepared at the layout's scale and
+ * `textBitmaps` its text boxes, tables and code blocks (prepareTextSnapshots, export theme).
+ */
+export function renderToCanvas(
+  elements: Iterable<Element>,
+  page: Page,
+  opts: ExportOptions,
+  pdfTiles?: PdfTileSet,
+  textBitmaps?: TextBitmapSet,
+): HTMLCanvasElement {
   const { list, region, sheet, scale } = canvasExportLayout(elements, page, opts.scale);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(region.width * scale));
@@ -31,6 +41,6 @@ export function renderToCanvas(elements: Iterable<Element>, page: Page, opts: Ex
   if (!ctx) throw new Error("2d canvas unavailable");
   ctx.scale(scale, scale);
   ctx.translate(-region.x, -region.y);
-  paintScene(ctx, page, list, region, sheet, { ...opts, zoomBucket: scale, pdfTiles });
+  paintScene(ctx, page, list, region, sheet, { ...opts, zoomBucket: scale, pdfTiles, textBitmaps });
   return canvas;
 }

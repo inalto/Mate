@@ -5,7 +5,7 @@ import type { ThemeName } from "../ink/types";
 import type { PdfBitmap } from "../pdf/source";
 import type { Element, ElementType } from "../model/types";
 import type { Rect } from "../tools/spatialIndex";
-import type { BoxSnapshotCache } from "./boxSnapshot";
+import type { BoxBitmap, BoxSnapshotCache } from "./boxSnapshot";
 
 export interface RenderOptions {
   theme: ThemeName;
@@ -17,6 +17,12 @@ export interface RenderOptions {
   snapshots?: BoxSnapshotCache;
   /** PDF page bitmaps prepared for this paint, by `pdfPageKey` (exports, thumbnails); else the live tile cache. */
   pdfTiles?: ReadonlyMap<string, PdfBitmap>;
+  /**
+   * Text-box / table / code bitmaps prepared for this paint, by `id|theme` (exports). When set, those
+   * boxes are drawn from it only: never from a bitmap published for another theme, and a missing
+   * one throws instead of drawing the placeholder.
+   */
+  textBitmaps?: ReadonlyMap<string, BoxBitmap>;
 }
 
 export interface ElementRenderer {

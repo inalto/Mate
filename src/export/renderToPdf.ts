@@ -28,6 +28,7 @@ import { readAsset } from "../ipc/assets";
 import { PAGE_GAP } from "../model/constants";
 import { contentOf, isPdfPlacement, type ImageContent } from "../model/content";
 import type { Element, Page } from "../model/types";
+import type { TextBitmapSet } from "../overlay/snapshot";
 import { preparePdfPages, type PdfTileSet } from "../pdf/render";
 import { PLACEHOLDER_COLOR } from "../renderers/boxDraw";
 import "../renderers/builtins";
@@ -59,6 +60,8 @@ export interface PdfExportOptions {
   currentSheet?: number;
   /** Add an invisible text layer from text boxes. */
   searchable: boolean;
+  /** Text-box / table / code bitmaps by `id|theme` (prepareTextSnapshots, every theme painted). */
+  textBitmaps?: TextBitmapSet;
   /** Deflate page content (default true; tests read the raw operators). */
   compress?: boolean;
 }
@@ -67,13 +70,13 @@ export interface PdfDeps {
   /** Bytes of a stored PDF asset. */
   readPdfBytes(assetId: string): Promise<Uint8Array>;
   /** `el` (unrotated) drawn into a bitmap of its box at the raster scale; null when unavailable. */
-  rasterize(el: Element, theme: ThemeName, pdfTiles: PdfTileSet): HTMLCanvasElement | null;
+  rasterize(el: Element, theme: ThemeName, pdfTiles: PdfTileSet, textBitmaps?: TextBitmapSet): HTMLCanvasElement | null;
   /** Bitmaps of the PDF placements drawn as pictures (not kept as original pages). */
   rasterPdfPages(placements: Element[]): Promise<PdfTileSet>;
 }
 
 /** `el` drawn by its renderer into a canvas covering its box (rotation dropped: applied by the PDF). */
-function rasterizeElement(el: Element, theme: ThemeName, pdfTiles: PdfTileSet): HTMLCanvasElement | null {
+function rasterizeElement(el: Element, theme: ThemeName, pdfTiles: PdfTileSet, textBitmaps?: TextBitmapSet): HTMLCanvasElement | null {
   const r = boxRect(el);
   if (!(r.width > 0 && r.height > 0)) return null;
   const scale = Math.min(PDF_RASTER_SCALE, MAX_RASTER_SIDE / Math.max(r.width, r.height));
@@ -84,7 +87,7 @@ function rasterizeElement(el: Element, theme: ThemeName, pdfTiles: PdfTileSet): 
   if (!ctx) return null;
   ctx.scale(canvas.width / r.width, canvas.height / r.height);
   ctx.translate(-r.x, -r.y);
-  drawElement(ctx, contentMeta(el).rotation ? withMeta(el, { rotation: 0 }) : el, { theme, zoomBucket: scale, pdfTiles });
+  drawElement(ctx, contentMeta(el).rotation ? withMeta(el, { rotation: 0 }) : el, { theme, zoomBucket: scale, pdfTiles, textBitmaps });
   return canvas;
 }
 
@@ -510,7 +513,7 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
         const key = `${el.id}|${theme}`; // backed sheets draw in light, others in the export theme
         let bmp = ctx.bitmaps.get(key);
         if (bmp === undefined) {
-          bmp = ctx.deps.rasterize(el, theme, ctx.pdfTiles);
+          bmp = ctx.deps.rasterize(el, theme, ctx.pdfTiles, ctx.opts.textBitmaps);
           ctx.bitmaps.set(key, bmp);
         }
         if (bmp) placeBitmap(p, el, bmp, `${el.id}|${theme}`);

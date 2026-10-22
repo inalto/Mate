@@ -81,13 +81,13 @@ export function paintScene(
   elements: Iterable<Element>,
   clip: Rect,
   sheet: BackgroundPage,
-  opts: Omit<ExportOptions, "scale"> & { zoomBucket: number; pdfTiles?: RenderOptions["pdfTiles"] },
+  opts: Omit<ExportOptions, "scale"> & { zoomBucket: number; pdfTiles?: RenderOptions["pdfTiles"]; textBitmaps?: RenderOptions["textBitmaps"] },
 ): void {
   if (opts.background === "plain") {
     const surface = surfaceFor(opts.theme);
     if (!opts.pageFrame) surface.desk = surface.paper;
     paintBackground(ctx, page.backgroundConfig, clip, sheet, opts.theme, surface);
   }
-  const ropts = { theme: opts.theme, zoomBucket: opts.zoomBucket, pdfTiles: opts.pdfTiles };
+  const ropts = { theme: opts.theme, zoomBucket: opts.zoomBucket, pdfTiles: opts.pdfTiles, textBitmaps: opts.textBitmaps };
   for (const el of renderOrder(elements)) drawElement(ctx, el, ropts);
 }

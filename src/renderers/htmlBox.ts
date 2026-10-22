@@ -2,7 +2,7 @@
 // appearance, the remembered one), asking for a sharper render when the output scale outgrows it;
 // the placeholder frame until a bitmap exists. SVG: a `<foreignObject>` with the sanitised HTML.
 import type { Element } from "../model/types";
-import { requestTextSnapshot, snapshotScale, textSnapshotFor } from "../overlay/snapshot";
+import { requestTextSnapshot, snapshotScale, textBitmapKey, textSnapshotFor } from "../overlay/snapshot";
 import { boxAppearance } from "../text/boxHtml";
 import { boxRect } from "../tools/spatialIndex";
 import { drawBoxBitmap, rotatedSvg } from "./boxDraw";
@@ -12,6 +12,16 @@ import type { ElementRenderer } from "./registry";
 export const htmlBoxRenderer: ElementRenderer = {
   draw(ctx, el: Element, o) {
     const r = boxRect(el);
+    if (o.textBitmaps) {
+      // Export: only the bitmaps prepared for this paint's theme.
+      const bmp = o.textBitmaps.get(textBitmapKey(el.id, o.theme));
+      if (!bmp) {
+        if (r.width > 0 && r.height > 0) throw new Error(`Box ${el.id} was not rendered for export.`);
+        return;
+      }
+      drawBoxBitmap(ctx, el, bmp, o);
+      return;
+    }
     const want = snapshotScale(o.zoomBucket * (o.pixelRatio ?? 1), r.width, r.height);
     const memo = textSnapshotFor(el, o.theme);
     if (!memo || memo.scale < want) requestTextSnapshot(el, o.theme, want);

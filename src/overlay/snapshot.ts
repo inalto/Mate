@@ -107,28 +107,56 @@ export function requestTextSnapshot(el: Element, theme: ThemeName, scale: number
   void renderTextSnapshot(el, theme, scale);
 }
 
+/** Text-box / table / code bitmaps prepared for one export paint, by `textBitmapKey(id, theme)`. */
+export type TextBitmapSet = ReadonlyMap<string, BoxBitmap>;
+export const textBitmapKey = memoKey;
+
+/** Time thumbnails wait for their text snapshots (exports wait for all of them). */
+export const THUMBNAIL_TEXT_TIMEOUT_MS = PREPARE_TIMEOUT_MS;
+
 /**
- * Render the text boxes, tables and code blocks among `els` at `pxPerUnit` before a synchronous paint (PNG, thumbnails).
- * Kept per theme and not published: the export's theme may differ from the canvas's.
+ * Render the text boxes, tables and code blocks among `els` at `pxPerUnit` before a synchronous
+ * paint, and return their bitmaps keyed `id|theme` (pass them as `RenderOptions.textBitmaps`). Kept
+ * per theme and not published: the export's theme may differ from the canvas's.
+ *
+ * Without `timeoutMs` (exports) every render is awaited and a box that cannot be rendered rejects,
+ * so no export is written with a placeholder. With it (thumbnails) the wait is bounded and the
+ * result holds whatever was ready.
  */
 export async function prepareTextSnapshots(
   els: Iterable<Element>,
   theme: ThemeName,
   pxPerUnit: number,
-  timeoutMs = PREPARE_TIMEOUT_MS,
-): Promise<void> {
+  { timeoutMs }: { timeoutMs?: number } = {},
+): Promise<Map<string, BoxBitmap>> {
+  const boxes: Element[] = [];
   const jobs: Promise<void>[] = [];
   for (const el of els) {
     if (!isHtmlBox(el) || el.deletedAt) continue;
+    boxes.push(el);
     jobs.push(renderTextSnapshot(el, theme, snapshotScale(pxPerUnit, el.boxWidth ?? 0, el.boxHeight ?? 0), false));
   }
-  if (jobs.length === 0) return;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<void>((resolve) => {
-    timer = setTimeout(resolve, timeoutMs);
-  });
-  await Promise.race([Promise.all(jobs).then(() => undefined), timeout]);
-  clearTimeout(timer);
+  if (jobs.length > 0) {
+    if (timeoutMs === undefined) {
+      await Promise.all(jobs);
+    } else {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      });
+      await Promise.race([Promise.all(jobs).then(() => undefined), timeout]);
+      clearTimeout(timer);
+    }
+  }
+  const out = new Map<string, BoxBitmap>();
+  for (const el of boxes) {
+    const memo = textSnapshotFor(el, theme);
+    if (memo) out.set(memoKey(el.id, theme), memo.bitmap);
+    else if (timeoutMs === undefined && (el.boxWidth ?? 0) > 0 && (el.boxHeight ?? 0) > 0) {
+      throw new Error(`Could not render the content of box ${el.id} for export.`);
+    }
+  }
+  return out;
 }
 
 /** Forget every remembered text bitmap and failure (tests, memory pressure). */

@@ -5,7 +5,7 @@ vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
 vi.mock("../renderToPdf", () => ({ PDF_RASTER_SCALE: 2, renderToPdf: vi.fn(async () => new Uint8Array([37])) }));
 vi.mock("../../overlay/snapshot", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../overlay/snapshot")>()),
-  prepareTextSnapshots: vi.fn(async () => {}),
+  prepareTextSnapshots: vi.fn(async () => new Map()),
 }));
 vi.mock("../../graph/engine", () => ({ loadEngine: vi.fn(async () => ({})), engineSync: () => null }));
 

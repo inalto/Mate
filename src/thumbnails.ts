@@ -9,7 +9,7 @@ import type { Element, Page } from "./model/types";
 import { prepareImages } from "./images/load";
 import { preparePdfPages } from "./pdf/render";
 import { elementBounds, rectsOverlap } from "./tools/spatialIndex";
-import { prepareTextSnapshots } from "./overlay/snapshot";
+import { prepareTextSnapshots, THUMBNAIL_TEXT_TIMEOUT_MS } from "./overlay/snapshot";
 import { editorForPane, getFocusedEditor } from "./stores/focusedEditor";
 import type { EditorStore } from "./stores/editor";
 import { useNotebookStore } from "./stores/notebook";
@@ -42,7 +42,7 @@ export async function captureThumbnail(pageId: string, elements: Iterable<Elemen
   const region = thumbnailRegion(page, list, aspect);
   const scale = THUMB_WIDTH / region.width;
   await readyGraphs(list); // no "Loading…" graph frames in thumbnails
-  await prepareTextSnapshots(list, "light", scale);
+  await prepareTextSnapshots(list, "light", scale, { timeoutMs: THUMBNAIL_TEXT_TIMEOUT_MS }); // bounded: best effort
   await prepareImages(list);
   // Only the PDF pages inside the thumbnail (page mode shows the first sheet only).
   const pdfTiles = await preparePdfPages(

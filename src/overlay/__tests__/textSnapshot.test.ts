@@ -172,7 +172,44 @@ describe("text box rendering", () => {
     expect(stub.calls).toHaveLength(1);
     // A rasterizer that never answers does not hang the export.
     setHtmlRasterizer(() => new Promise(() => {}));
-    await expect(prepareTextSnapshots([tb("c", "<p>c</p>")], "light", 1, 10)).resolves.toBeUndefined();
+    await expect(prepareTextSnapshots([tb("c", "<p>c</p>")], "light", 1, { timeoutMs: 10 })).resolves.toBeInstanceOf(Map);
+  });
+
+  it("export_awaits_all_text_snapshots", async () => {
+    vi.useFakeTimers();
+    try {
+      // A slow render (5 s) is awaited in full when no timeout is given.
+      setHtmlRasterizer(
+        (_svg, width, height) =>
+          new Promise((resolve) => setTimeout(() => resolve({ width, height, tag: "slow" } as unknown as HTMLCanvasElement), 5000)),
+      );
+      const b = tb("b");
+      let result: Map<string, unknown> | undefined;
+      void prepareTextSnapshots([b], "light", 1).then((m) => (result = m));
+      await vi.advanceTimersByTimeAsync(3500);
+      expect(result).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(result?.get("b|light")).toMatchObject({ tag: "slow" });
+    } finally {
+      vi.useRealTimers();
+    }
+    // A render that fails rejects the export instead of leaving a placeholder.
+    setHtmlRasterizer(vi.fn(async () => Promise.reject(new Error("no foreignObject"))));
+    await expect(prepareTextSnapshots([tb("c", "<p>c</p>")], "light", 1)).rejects.toThrow(/c/);
+  });
+
+  it("export_never_uses_other_theme_bitmap", async () => {
+    const b = tb("b");
+    // The canvas published a dark bitmap; the light export has none of its own.
+    drawElement(recordingCtx().ctx, b, { theme: "dark", zoomBucket: 1 });
+    await settle();
+    expect(boxSnapshots.get(b)).not.toBeNull();
+    expect(() => drawElement(recordingCtx().ctx, b, { theme: "light", zoomBucket: 1, textBitmaps: new Map() })).toThrow(/b/);
+    const light = await prepareTextSnapshots([b], "light", 1);
+    const r = recordingCtx();
+    drawElement(r.ctx, b, { theme: "light", zoomBucket: 1, textBitmaps: light });
+    expect(r.calls.find((c) => c.name === "drawImage")?.args[0]).toBe(light.get("b|light"));
+    expect(r.calls.find((c) => c.name === "drawImage")?.args[0]).not.toBe(boxSnapshots.get(b));
   });
 
   it("thumbnail_render_does_not_publish_or_evict_canvas_snapshot", async () => {

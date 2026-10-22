@@ -102,9 +102,12 @@ export async function exportPage(
   if (format === "pdf") {
     // jsPDF and pdf-lib are large: loaded on the first PDF export only.
     const { PDF_RASTER_SCALE, renderToPdf } = await import("./renderToPdf");
-    await prepareTextSnapshots(elements, opts.theme, PDF_RASTER_SCALE);
+    // Every box rendered before painting (no timeout): a box that cannot be rendered fails the export.
+    const textBitmaps = await prepareTextSnapshots(elements, opts.theme, PDF_RASTER_SCALE);
     // Sheets backed by an imported PDF keep the original page and are drawn in light colours.
-    if (opts.theme !== "light" && elements.some(isPdfPlacement)) await prepareTextSnapshots(elements, "light", PDF_RASTER_SCALE);
+    if (opts.theme !== "light" && elements.some(isPdfPlacement)) {
+      for (const [k, v] of await prepareTextSnapshots(elements, "light", PDF_RASTER_SCALE)) textBitmaps.set(k, v);
+    }
     await prepareImages(elements);
     const bytes = await renderToPdf(elements, page, {
       theme: opts.theme,
@@ -112,17 +115,19 @@ export async function exportPage(
       pages: options.pages ?? "all",
       currentSheet: options.pages === "current" ? currentSheetIndex(pageId) : undefined,
       searchable: options.searchable ?? true,
+      textBitmaps,
     });
     return writeExportFile(filename, bytes);
   }
-  // Text boxes are drawn from bitmaps rendered asynchronously: have them ready for the PNG.
-  if (format === "png") await prepareTextSnapshots(elements, opts.theme, opts.scale);
+  // Text boxes are drawn from bitmaps rendered asynchronously: have them all ready for the PNG (the
+  // SVG embeds their HTML as <foreignObject> instead).
+  const textBitmaps = format === "png" ? await prepareTextSnapshots(elements, opts.theme, opts.scale) : undefined;
   await prepareImages(elements, format === "svg");
   let bytes: Uint8Array;
   if (format === "png") {
     // PDF pages at the scale the canvas is actually painted at, held by this export until it is drawn.
     const pdfTiles = await preparePdfPages(elements, canvasExportLayout(elements, page, opts.scale).scale, { keep: true });
-    bytes = await canvasToPng(renderToCanvas(elements, page, opts, pdfTiles));
+    bytes = await canvasToPng(renderToCanvas(elements, page, opts, pdfTiles, textBitmaps));
   } else {
     await preparePdfPages(elements, 2, { embed: true }); // embedded as 2× PNGs
     bytes = new TextEncoder().encode(renderToSvg(elements, page, { ...opts, scale: 1 }));
