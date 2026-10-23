@@ -1,0 +1,37 @@
+.welcome {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--color-bg, var(--color-surface-1));
+}
+
+.welcome-card {
+  width: min(520px, 94vw);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.welcome-dots {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.welcome-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+.welcome-dot[aria-current="step"] {
+  background: var(--color-primary);
+}
+
+.welcome-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+}

@@ -5,8 +5,10 @@ import Home from "./routes/Home";
 import Library from "./routes/Library";
 import Settings from "./routes/Settings";
 import Trash from "./routes/Trash";
+import Welcome from "./routes/Welcome";
 
 export const router = createBrowserRouter([
+  { path: "/welcome", element: <Welcome /> },
   {
     element: <Shell />,
     children: [
