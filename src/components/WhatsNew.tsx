@@ -55,7 +55,7 @@ export default function WhatsNew({ notes, onClose }: { notes: string; onClose: (
   return (
     <div className="backdrop">
       <div className="card dialog" role="dialog" aria-modal="true" aria-label="What's new">
-        <div>{parseNotes(notes).map(renderBlock)}</div>
+        <div style={{ maxHeight: "60vh", overflowY: "auto" }}>{parseNotes(notes).map(renderBlock)}</div>
         <div className="dialog-actions">
           <button ref={ref} type="button" className="btn btn-primary" onClick={onClose}>Got it</button>
         </div>

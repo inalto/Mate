@@ -22,17 +22,21 @@ export default function Welcome() {
 
   const finish = async (openPlayground: boolean) => {
     setBusy(true);
-    try {
-      const pageId = openPlayground ? await ensurePlayground() : null;
-      await useSettingsStore.getState().update({ onboardingDone: true });
-      navigate(pageId ? `/edit/${pageId}` : "/");
-    } catch {
-      showToast("Could not create the Playground. You can try again from Settings → About.");
-      await useSettingsStore.getState().update({ onboardingDone: true }).catch(() => {});
-      navigate("/");
-    } finally {
-      setBusy(false);
+    let pageId: string | null = null;
+    if (openPlayground) {
+      try {
+        pageId = await ensurePlayground();
+      } catch {
+        showToast("Could not create the Playground page. You can try again from Settings > About.");
+      }
     }
+    try {
+      await useSettingsStore.getState().update({ onboardingDone: true });
+    } catch {
+      showToast("Could not save your settings, so the welcome may show again next time.");
+    }
+    setBusy(false);
+    navigate(pageId ? `/edit/${pageId}` : "/");
   };
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
 

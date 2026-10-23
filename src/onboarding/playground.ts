@@ -58,6 +58,7 @@ async function run(): Promise<string> {
   const section = tree.sections.find((s) => s.unitId === unit.id);
   const page = section && tree.pages.find((p) => p.sectionId === section.id);
   if (!page) throw new Error("Could not create the Playground page.");
+  await useNotebookStore.getState().rename("page", page.id, "Playground");
   await upsertElements([hintBox(page.id)]);
   await useSettingsStore.getState().update({ playgroundPageId: page.id });
   return page.id;
