@@ -13,7 +13,7 @@ Shared content, unless a format cannot express it:
 | Fixture (built by) | Task | Source page width, s | Sections / pages | Strokes per page (p1, p2, p3) | Highlighters | Texts | Images | Notes |
 |---|---|---|---|---|---|---|---|---|
 | `goodnotes_basic` (`goodnotes_fixture::build`) | 4 | 540, s = 2 | 1 / 3 | 3, 3, 0 | 1 per stroked page (alpha 0.5 < 0.6) | 1, 1, 0 | 1, 1, 0 | stroke A has 3 points after quadratic flattening; widths 4 / 6 / 24 after scaling; one stroke uses an LZ4 `bv41` block, the others `bv4-` raw |
-| `goodnotes_tombstone` | 4 | 540, s = 2 | 1 / 1 | 2 | 0 | 0 | 0 | a deletion record hides one of three strokes |
+| `goodnotes_tombstone` | 4 | 540, s = 2 | 1 / 1 | 2 | 0 | 0 | 0 | a deletion record whose id equals one stroke's 7.1 id hides it (one of three strokes) |
 | `goodnotes_truncated` | 4 | – | – | – | – | – | – | `goodnotes_basic` cut at 50 offsets: `Corrupt` error, never a panic |
 | `goodnotes_oversize` | 4 | – | – | – | – | – | – | over 100 MiB: `Limit` error |
 | `notability_basic` (`notability_fixture::build`) | 5 | 540, s = 2 | 1 / **1** (Notability is one canvas) | 3 | 1 (alpha 128 < 200) | 1 | 1 | page height 700; stroke B per-point widths 3, 4, 5, 6, stroke width 9 after scaling |
@@ -26,8 +26,10 @@ Shared content, unless a format cannot express it:
 | `freenotes_encrypted` | 7 | – | – | – | – | – | – | zip entry with the encryption flag: `Encrypted` |
 | `freenotes_backup` | 7 | 540, s = 2 | **2** / 1 each | 1 | 0 | 0 | 0 | `.freebackup` with two `*.frnote/` notes |
 | `freenotes_truncated` | 7 | – | – | – | – | – | – | cut at 50 offsets: `Corrupt`, never a panic |
-| `samsung_basic` (`samsung_fixture::build`) | 8 | 720, s = 1.5 | 1 / 3 | 3, 3, 0 | 1 per stroked page | 0 | 1, 0, 0 (best effort) | stroke A points (15, 30), (22.5, 30), (30, 30), (37.5, 30), pressures 0.125 to 0.5; widths 3 / 4.5 / 18 |
+| `samsung_basic` (`samsung_fixture::build`) | 8 | 720, s = 1.5 | 1 / 3 | 3, 3, 0 | 1 per stroked page | 0 | 1, 0, 0 (best effort) | own geometry (x step 5, because a delta step is at most 255/32): stroke A points (15, 30), (22.5, 30), (30, 30), (37.5, 30), pressures 0.125 to 0.5; widths 3 / 4.5 / 18 |
 | `samsung_truncated` | 8 | – | – | – | – | – | – | cut at 50 offsets: `Corrupt` or fewer strokes, never a panic |
-| OneNote (no encoder) | 6 | page width 1080, s = 1 | – | – | – | – | – | unit and colour tests only: 2540 HIMETRIC = 96 px, BGR 0x00FF0000 = `#0000ff`, transparency below 128 = highlighter, half-inch 2.0 = 96 px; `.one` and `MSCF` magic; a parse test against a local sample stays `#[ignore]` |
+| OneNote (no encoder) | 6 | page width 1080, s = 1 | – | – | – | – | – | unit and colour tests only: 2540 HIMETRIC = 96 px, BGR 0x00FF0000 = `#0000ff`, transparency below 128 = highlighter, pen weight 254 = width 9.6 and pen weight 10 = width 1 (floor), half-inch 2.0 = 96 px; `.one` and `MSCF` magic; a parse test against a local sample stays `#[ignore]` |
 
-Colours in every format are emitted as lower-case `#rrggbb`. Opacity is 1 for pens unless the source stores alpha (GoodNotes 0.5, Notability 128/255, Freenotes 0x80/255 for stroke C).
+Colours in every format are emitted as lower-case `#rrggbb`. Opacity rule for every format: pen strokes 1.0, highlighters 0.5, Freenotes pencil 0.39. A source alpha (GoodNotes 0.5, Notability 128, Freenotes 0x80 on stroke C) only decides whether a stroke is a highlighter; it is never carried into the opacity.
+
+GoodNotes stroke elements carry their object id at field 7.1 (inside the stroke body), and it is required: a stroke without it is skipped. The element's own field 1 is optional; when written it must equal the 7.1 id, and tombstone records match that id.
