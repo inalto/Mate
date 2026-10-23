@@ -1,0 +1,45 @@
+.shortcut-help {
+  width: min(560px, 92vw);
+  max-height: 85vh;
+}
+.shortcut-help-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.shortcut-help h3,
+.keybindings h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+.keybindings-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+.keybindings-keys {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.keybindings-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.keybindings-warning {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-danger, #c0392b);
+}
+.keybindings-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-3);
+}

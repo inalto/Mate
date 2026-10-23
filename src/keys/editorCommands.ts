@@ -1,11 +1,14 @@
 // Editor command dispatch for keyboard shortcuts (and toolbar zoom buttons).
 import { zoomBy } from "../canvas/gestures";
+import { elementsQueue } from "../ipc/elementsQueue";
 import { clampToPage } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
+import type { Page } from "../model/types";
 import type { ShortcutDispatch } from "./shortcuts";
+import { openPageInWindow } from "./windowBridge";
 
 export const ZOOM_STEP = 1.2;
 
@@ -30,6 +33,37 @@ export function startNewTab(navigate: (to: string) => void): void {
 const sidebarHasFocus = (): boolean =>
   typeof document !== "undefined" && document.activeElement?.closest(".sidebar") != null;
 
+/** Pages of the current page's section in sidebar order (depth first, siblings by orderIndex). */
+export function sectionPageOrder(pages: readonly Page[], sectionId: string): string[] {
+  const inSection = pages.filter((p) => p.sectionId === sectionId);
+  const byParent = new Map<string | null, Page[]>();
+  for (const p of inSection) {
+    const key = p.parentId && inSection.some((q) => q.id === p.parentId) ? p.parentId : null;
+    byParent.set(key, [...(byParent.get(key) ?? []), p]);
+  }
+  const out: string[] = [];
+  const walk = (parent: string | null) => {
+    for (const p of (byParent.get(parent) ?? []).sort((a, b) => a.orderIndex - b.orderIndex)) {
+      out.push(p.id);
+      walk(p.id);
+    }
+  };
+  walk(null);
+  return out;
+}
+
+/** Open the previous (-1) or next (1) page of the current section in the active tab. */
+export function stepPage(dir: -1 | 1): void {
+  const tabs = useTabsStore.getState();
+  const id = focusedPageId(tabs);
+  const pages = useNotebookStore.getState().tree.pages;
+  const cur = pages.find((p) => p.id === id);
+  if (!cur) return;
+  const order = sectionPageOrder(pages, cur.sectionId);
+  const next = order[order.indexOf(cur.id) + dir];
+  if (next) tabs.openPage(next);
+}
+
 /** Tab, sidebar and page-tree shortcuts. `tab.new` needs the router: see Editor (startNewTab). */
 function runChromeShortcut(action: string): boolean {
   const tabs = useTabsStore.getState();
@@ -39,9 +73,9 @@ function runChromeShortcut(action: string): boolean {
     case "tab.close":
       if (tabs.activeTabId) tabs.closeTab(tabs.activeTabId);
       return true;
-    case "tab.moveLeft":
-    case "tab.moveRight":
-      if (tabs.activeTabId) tabs.moveTab(tabs.activeTabId, action === "tab.moveLeft" ? -1 : 1);
+    case "tab.move.left":
+    case "tab.move.right":
+      if (tabs.activeTabId) tabs.moveTab(tabs.activeTabId, action === "tab.move.left" ? -1 : 1);
       return true;
     case "sidebar.toggle":
       useChromeStore.getState().toggleSidebar();
@@ -52,13 +86,29 @@ function runChromeShortcut(action: string): boolean {
         useChromeStore.getState().setRenaming(pageId);
       }
       return true;
-    case "page.moveUp":
-    case "page.moveDown":
-      if (pageId) void nb.movePage(pageId, action === "page.moveUp" ? -1 : 1);
+    case "page.move.up":
+    case "page.move.down":
+      if (pageId) void nb.movePage(pageId, action === "page.move.up" ? -1 : 1);
       return true;
     case "page.promote":
     case "page.demote":
       if (pageId) void nb.indentPage(pageId, action === "page.promote" ? -1 : 1);
+      return true;
+    case "page.prev":
+    case "page.next":
+      stepPage(action === "page.prev" ? -1 : 1);
+      return true;
+    case "page.duplicate":
+      if (pageId) void nb.duplicatePage(pageId);
+      return true;
+    case "window.openPage":
+      if (pageId) openPageInWindow(pageId);
+      return true;
+    case "save":
+      void elementsQueue.flushAll();
+      return true;
+    case "help.shortcuts":
+      useChromeStore.getState().setShortcutsOpen(true);
       return true;
     case "tab.new":
       return true;
@@ -73,12 +123,13 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   // While the command palette is open it owns the keyboard; only reopening it is allowed.
   if (useChromeStore.getState().paletteOpen && action !== "palette.open") return;
   if (runChromeShortcut(action)) return;
-  if (action === "duplicate" && sidebarHasFocus()) {
+  const s = getFocusedEditor().getState();
+  // Ctrl+D: the page when the sidebar has focus or nothing is selected, else the selection.
+  if (action === "duplicate" && (sidebarHasFocus() || s.selection.size === 0)) {
     const id = focusedPageId(useTabsStore.getState());
     if (id) void useNotebookStore.getState().duplicatePage(id);
     return;
   }
-  const s = getFocusedEditor().getState();
   switch (action) {
     case "tool.pen":
       return s.selectInk(s.preset.type === "fountain-pen" ? "fountain-pen" : "pen");
@@ -113,22 +164,27 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
     case "delete":
       return s.deleteSelection();
     case "escape":
+    case "deselect":
       return s.select([]);
+    case "group":
+      return s.groupSelection();
+    case "ungroup":
+      return s.ungroupSelection();
     case "selectAll":
       return s.selectAll();
-    case "bringForward":
+    case "arrange.forward":
       return s.bringForward();
-    case "sendBackward":
+    case "arrange.backward":
       return s.sendBackward();
-    case "toFront":
+    case "arrange.front":
       return s.toFront();
-    case "toBack":
+    case "arrange.back":
       return s.toBack();
-    case "zoomIn":
+    case "zoom.in":
       return zoomStep(ZOOM_STEP);
-    case "zoomOut":
+    case "zoom.out":
       return zoomStep(1 / ZOOM_STEP);
-    case "zoomReset":
+    case "zoom.reset":
       return zoomStep(null);
     case "pan":
       return s.setPanHold(detail.phase === "down");

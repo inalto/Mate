@@ -6,11 +6,11 @@ import SelectionBar from "../components/SelectionBar";
 import Sidebar from "../components/Sidebar";
 import TabBar from "../components/TabBar";
 import Toolbar from "../components/Toolbar";
-import TopBar, { ShortcutsDialog } from "../components/TopBar";
+import TopBar from "../components/TopBar";
 import OverlayLayer from "../overlay/OverlayLayer";
 import { preloadBoxEditors } from "../overlay/boxEditors";
 import { runEditorShortcut, startNewTab } from "../keys/editorCommands";
-import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
+import { bindLiveShortcuts } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
@@ -61,7 +61,7 @@ export default function Editor() {
 
   useEffect(
     () =>
-      bindShortcuts(DEFAULT_SHORTCUTS, (action, detail) =>
+      bindLiveShortcuts((action, detail) =>
         action === "tab.new" ? startNewTab(navigate) : runEditorShortcut(action, detail),
       ),
     [navigate],
@@ -107,7 +107,6 @@ export default function Editor() {
       {settingsPage && (
         <PageSettingsDialog key={settingsPage.id} page={settingsPage} onClose={() => useChromeStore.getState().openPageSettings(null)} />
       )}
-      <ShortcutsDialog />
     </div>
   );
 }

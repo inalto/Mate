@@ -1,44 +1,14 @@
+import type { ShortcutAction } from "./actions";
+import { effectiveMap, shortcutMapFor, type KeyOverride } from "./keybindings";
+import { isMacPlatform } from "./platform";
+import { useSettingsStore } from "../stores/settings";
+
+export { isMacPlatform };
+
 // Data-driven keyboard shortcuts. `mod` means Ctrl, or Cmd on macOS. Bindings match on `code`
 // (physical key: digits, brackets, =/-) or `key` (layout-aware letters, case-insensitive).
 
-export type ShortcutAction =
-  | "tool.pen"
-  | "tool.highlighter"
-  | "tool.eraser"
-  | "tool.cursor"
-  | "tool.lasso"
-  | "tool.shape"
-  | "tool.text"
-  | "tool.insertSpace"
-  | "preset.slot"
-  | "undo"
-  | "redo"
-  | "copy"
-  | "cut"
-  | "paste"
-  | "duplicate"
-  | "delete"
-  | "escape"
-  | "selectAll"
-  | "bringForward"
-  | "sendBackward"
-  | "toFront"
-  | "toBack"
-  | "zoomIn"
-  | "zoomOut"
-  | "zoomReset"
-  | "pan"
-  | "tab.new"
-  | "tab.close"
-  | "tab.moveLeft"
-  | "tab.moveRight"
-  | "sidebar.toggle"
-  | "page.rename"
-  | "page.moveUp"
-  | "page.moveDown"
-  | "page.promote"
-  | "page.demote"
-  | "palette.open";
+export type { ShortcutAction } from "./actions";
 
 export interface ShortcutBinding {
   action: ShortcutAction;
@@ -47,6 +17,8 @@ export interface ShortcutBinding {
   mod?: boolean;
   shift?: boolean;
   alt?: boolean;
+  /** Ignore Shift when matching (shifted symbols such as "?"). */
+  anyShift?: boolean;
   /** Extra payload, e.g. the preset slot number (1-based). */
   slot?: number;
   /** Held key: dispatched with phase "down" on keydown and "up" on keyup/blur. */
@@ -63,61 +35,37 @@ export interface ShortcutDetail {
 
 export type ShortcutDispatch = (action: ShortcutAction, detail: ShortcutDetail) => void;
 
-export const DEFAULT_SHORTCUTS: ShortcutMap = [
-  { action: "tool.pen", key: "p" },
-  { action: "tool.highlighter", key: "h" },
-  { action: "tool.eraser", key: "e" },
-  { action: "tool.cursor", key: "v" },
-  { action: "tool.lasso", key: "l" },
-  { action: "tool.shape", key: "s" },
-  { action: "tool.text", key: "t" },
-  { action: "tool.insertSpace", key: "n" },
-  ...Array.from({ length: 9 }, (_, i): ShortcutBinding => ({
-    action: "preset.slot",
-    code: `Digit${i + 1}`,
-    alt: true,
-    slot: i + 1,
-  })),
-  { action: "undo", key: "z", mod: true },
-  { action: "redo", key: "z", mod: true, shift: true },
-  { action: "redo", key: "y", mod: true },
-  { action: "copy", key: "c", mod: true },
-  { action: "cut", key: "x", mod: true },
-  { action: "paste", key: "v", mod: true },
-  { action: "duplicate", key: "d", mod: true },
-  { action: "delete", key: "Delete" },
-  { action: "delete", key: "Backspace" },
-  { action: "escape", key: "Escape" },
-  { action: "selectAll", key: "a", mod: true },
-  { action: "bringForward", code: "BracketRight", mod: true },
-  { action: "sendBackward", code: "BracketLeft", mod: true },
-  { action: "toFront", code: "BracketRight", mod: true, shift: true },
-  { action: "toBack", code: "BracketLeft", mod: true, shift: true },
-  { action: "zoomIn", code: "Equal", mod: true },
-  { action: "zoomIn", code: "Equal", mod: true, shift: true },
-  { action: "zoomIn", code: "NumpadAdd", mod: true },
-  { action: "zoomOut", code: "Minus", mod: true },
-  { action: "zoomOut", code: "NumpadSubtract", mod: true },
-  { action: "zoomReset", code: "Digit0", mod: true },
-  { action: "zoomReset", code: "Numpad0", mod: true },
-  { action: "pan", code: "Space", hold: true },
-  { action: "tab.new", key: "t", mod: true },
-  { action: "tab.close", key: "w", mod: true },
-  { action: "tab.moveLeft", key: "ArrowLeft", alt: true, shift: true },
-  { action: "tab.moveRight", key: "ArrowRight", alt: true, shift: true },
-  { action: "sidebar.toggle", code: "Backslash", mod: true },
-  { action: "page.rename", key: "F2" },
-  { action: "page.moveUp", key: "ArrowUp", alt: true },
-  { action: "page.moveDown", key: "ArrowDown", alt: true },
-  { action: "page.promote", key: "ArrowLeft", alt: true },
-  { action: "page.demote", key: "ArrowRight", alt: true },
-  { action: "palette.open", key: "k", mod: true },
-];
+/** The built-in bindings, generated from ACTION_META (see actions.ts). */
+export const DEFAULT_SHORTCUTS: ShortcutMap = shortcutMapFor(effectiveMap([]));
 
-export function isMacPlatform(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const uad = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
-  return /mac|iphone|ipad/i.test(uad?.platform || navigator.platform || "");
+/** Overrides from `settings.keybindings`. */
+export const readOverrides = (): KeyOverride[] => useSettingsStore.getState().settings.keybindings ?? [];
+
+/** Bindings with the user's overrides applied. */
+export const currentShortcuts = (): ShortcutMap => shortcutMapFor(effectiveMap(readOverrides()));
+
+/**
+ * Like bindShortcuts, but follows `settings.keybindings`: re-binds whenever the overrides change.
+ * `only` restricts the bound actions.
+ */
+export function bindLiveShortcuts(dispatch: ShortcutDispatch, only?: readonly ShortcutAction[]): () => void {
+  const build = () => {
+    const map = currentShortcuts();
+    return only ? map.filter((b) => only.includes(b.action)) : map;
+  };
+  let overrides = readOverrides();
+  let unbind = bindShortcuts(build(), dispatch);
+  const unsub = useSettingsStore.subscribe(() => {
+    const next = readOverrides();
+    if (next === overrides) return;
+    overrides = next;
+    unbind();
+    unbind = bindShortcuts(build(), dispatch);
+  });
+  return () => {
+    unsub();
+    unbind();
+  };
 }
 
 /** Input types that take typed text; sliders, checkboxes, radios, colour pickers and buttons do not. */
@@ -141,7 +89,7 @@ export function matchShortcut(map: ShortcutMap, e: KeyboardEvent, mac: boolean):
   for (const b of map) {
     if (b.code !== undefined ? e.code !== b.code : (e.key ?? "").toLowerCase() !== b.key?.toLowerCase()) continue;
     if (b.hold) return b; // held keys ignore modifiers
-    if (!!b.mod !== mod || !!b.shift !== e.shiftKey || !!b.alt !== e.altKey) continue;
+    if (!!b.mod !== mod || (!b.anyShift && !!b.shift !== e.shiftKey) || !!b.alt !== e.altKey) continue;
     return b;
   }
   return null;

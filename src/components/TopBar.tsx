@@ -11,20 +11,6 @@ import { focusedPageId, useTabsStore } from "../stores/tabs";
 import ExportDialog from "./ExportDialog";
 import { useDismiss } from "./useDismiss";
 
-const SHORTCUT_HELP: [string, string][] = [
-  ["Search and actions", "Ctrl+K"],
-  ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"],
-  ["New tab / Close tab", "Ctrl+T / Ctrl+W"],
-  ["Move tab", "Alt+Shift+←/→"],
-  ["Toggle sidebar", "Ctrl+\\"],
-  ["Rename page", "F2"],
-  ["Move page up/down", "Alt+↑/↓"],
-  ["Promote / demote page", "Alt+←/→"],
-  ["Duplicate (sidebar focus: page)", "Ctrl+D"],
-  ["Pen, highlighter, eraser", "P, H, E"],
-  ["Zoom in / out / reset", "Ctrl+= / Ctrl+- / Ctrl+0"],
-];
-
 function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): void }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -51,26 +37,6 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
           <button role="menuitem" onClick={pick(() => chrome().setShortcutsOpen(true))}>Keyboard shortcuts</button>
         </div>
       )}
-    </div>
-  );
-}
-
-export function ShortcutsDialog() {
-  const open = useChromeStore((s) => s.shortcutsOpen);
-  if (!open) return null;
-  return (
-    <div className="backdrop" onClick={() => useChromeStore.getState().setShortcutsOpen(false)}>
-      <div className="card dialog" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onClick={(e) => e.stopPropagation()}>
-        <h2>Keyboard shortcuts</h2>
-        <dl className="shortcut-list">
-          {SHORTCUT_HELP.map(([what, keys]) => (
-            <div key={what}><dt>{what}</dt><dd>{keys}</dd></div>
-          ))}
-        </dl>
-        <div className="dialog-actions">
-          <button type="button" className="btn btn-primary" onClick={() => useChromeStore.getState().setShortcutsOpen(false)}>Close</button>
-        </div>
-      </div>
     </div>
   );
 }
