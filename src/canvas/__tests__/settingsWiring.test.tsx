@@ -164,6 +164,31 @@ describe("canvas settings", () => {
     tools.dispose();
   });
 
+  it("snap_does_not_move_on_tap", () => {
+    set({ defaultShapeType: "rectangle", snapToGrid: false });
+    const tools = controller();
+    tools.down({ x: 13, y: 27 }, "shape"); // off-grid shape
+    tools.move([{ x: 98, y: 71 }]);
+    tools.up();
+    const el = [...useEditorStore.getState().elements.values()].at(-1)!;
+    set({ snapToGrid: true });
+    useEditorStore.getState().select([el.id]);
+    // A pen tap: pressure-only moves at (almost) the same point.
+    tools.down({ x: 50, y: 50 }, "cursor");
+    tools.move([{ x: 50, y: 50 }]);
+    tools.move([{ x: 50.5, y: 50.5 }]);
+    tools.up();
+    const after = useEditorStore.getState().elements.get(el.id)!;
+    expect(after.points.map((q) => [q.x, q.y])).toEqual([
+      [13, 27],
+      [98, 71],
+    ]);
+    // Undo removes the shape itself: the tap added no history entry.
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().elements.has(el.id)).toBe(false);
+    tools.dispose();
+  });
+
   it("zoom_indicator_shown_when_enabled", () => {
     useEditorStore.getState().setCamera({ x: 0, y: 0, z: 1.5 });
     render(<ZoomIndicator store={useEditorStore} />);

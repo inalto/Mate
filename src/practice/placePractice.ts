@@ -12,6 +12,8 @@ import type { Element, Page } from "../model/types";
 import { defaultTextAttributes } from "../text/textBox";
 import { sanitizeHtml } from "../text/sanitize";
 import { useNotebookStore } from "../stores/notebook";
+import { useSettingsStore } from "../stores/settings";
+import { sheetSizeFor } from "../canvas/camera";
 import type { EditorStore } from "../stores/editor";
 
 export const QUESTION_GAP = 24;
@@ -129,7 +131,11 @@ export async function placePractice(questions: PracticeQuestion[], opts: PlaceOp
   const title = practicePageTitle(nowD);
   const { createPage, trash } = useNotebookStore.getState();
 
-  const plan = layoutPractice(() => "pending", qs, { pageHeight: opts.pageHeight, now });
+  // Paper pages get the default sheet (see notebook.createPage); canvas pages the standard height.
+  const cfg = useSettingsStore.getState().settings;
+  const pageHeight =
+    opts.pageHeight ?? (cfg.defaultPageMode === "page" ? sheetSizeFor(cfg.defaultPageAspectRatio, cfg.defaultPageOrientation).height : undefined);
+  const plan = layoutPractice(() => "pending", qs, { pageHeight, now });
   const created: Page[] = [];
   try {
     for (let i = 0; i < plan.length; i++) {

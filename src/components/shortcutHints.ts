@@ -6,8 +6,11 @@
 //   the shortcut itself; learned hints are recorded in `dismissedHints` (persisted with the
 //   settings) and stay hidden while the mode is adaptive. Counting only happens in adaptive mode;
 //   the counters live in localStorage (best effort; memory only when storage is unavailable).
+//   Only actions with a toolbar button (HINTED_ACTIONS) are counted. Counters are cleared when
+//   `dismissedHints` is emptied (settings reset); a counter already at its limit for an action that
+//   is not dismissed (stale after a reset done outside the app) starts over.
 import { useCallback } from "react";
-import { ACTION_META, type ShortcutAction } from "../keys/actions";
+import type { ShortcutAction } from "../keys/actions";
 import { formatKeys } from "../keys/keybindings";
 import { isMacPlatform } from "../keys/platform";
 import { useKeyMap } from "../keys/useKeyMap";
@@ -15,6 +18,22 @@ import { useSettingsStore } from "../stores/settings";
 
 export const HINT_IMPRESSIONS_TO_LEARN = 3;
 export const HINT_KEY_USES_TO_LEARN = 2;
+
+/** Actions that have a hinted toolbar button (the only ones whose hints are counted). */
+export const HINTED_ACTIONS: ReadonlySet<ShortcutAction> = new Set<ShortcutAction>([
+  "preset.slot",
+  "tool.eraser",
+  "tool.shape",
+  "tool.text",
+  "tool.cursor",
+  "tool.lasso",
+  "tool.insertSpace",
+  "undo",
+  "redo",
+  "zoom.in",
+  "zoom.out",
+  "zoom.reset",
+]);
 const STORAGE_KEY = "mate.shortcutHintCounts";
 
 interface Counts {
@@ -63,7 +82,8 @@ function bump(action: ShortcutAction, field: keyof Counts, limit: number): void 
   const { shortcutHintMode, dismissedHints } = st.settings;
   if (shortcutHintMode !== "adaptive" || dismissedHints?.[action]) return;
   const all = load();
-  const c = (all[action] ??= { seen: 0, used: 0 });
+  let c = (all[action] ??= { seen: 0, used: 0 });
+  if (c.seen >= HINT_IMPRESSIONS_TO_LEARN || c.used >= HINT_KEY_USES_TO_LEARN) c = all[action] = { seen: 0, used: 0 };
   c[field] += 1;
   save();
   if (c[field] >= limit) {
@@ -78,8 +98,23 @@ export const noteHintImpression = (action: ShortcutAction): void => bump(action,
 
 /** The keyboard shortcut for `action` was used. */
 export const noteShortcutUse = (action: ShortcutAction): void => {
-  if (action in ACTION_META) bump(action, "used", HINT_KEY_USES_TO_LEARN);
+  if (HINTED_ACTIONS.has(action)) bump(action, "used", HINT_KEY_USES_TO_LEARN);
 };
+
+// A settings reset empties dismissedHints: forget the counters too.
+useSettingsStore.subscribe((state, prev) => {
+  const next = state.settings.dismissedHints;
+  const before = prev.settings.dismissedHints;
+  if (next !== before && Object.keys(next ?? {}).length === 0 && Object.keys(before ?? {}).length > 0) resetHintCounters();
+});
+
+/** A combo in `aria-keyshortcuts` syntax ("Ctrl+Shift+Z" -> "Control+Shift+Z", Meta on macOS). */
+export function ariaKeys(keys: string, mac: boolean = isMacPlatform()): string {
+  return keys
+    .split("+")
+    .map((k) => (k === "Ctrl" ? (mac ? "Meta" : "Control") : k))
+    .join("+");
+}
 
 /** Tooltip text: `label (keys)` when the hint is visible and the action has a key, else `label`. */
 export function hintTitle(label: string, keys: readonly string[] | undefined, visible: boolean, mac: boolean = isMacPlatform()): string {
@@ -100,6 +135,7 @@ export function useShortcutHint(action: ShortcutAction, label: string, opts: { s
   }, [visible, action]);
   return {
     title: hintTitle(label, keys, visible) + (opts.suffix ?? ""),
+    "aria-keyshortcuts": keys?.[0] ? ariaKeys(keys[0]) : undefined,
     onPointerEnter: onSeen,
     onFocus: onSeen,
   };

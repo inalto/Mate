@@ -120,6 +120,33 @@ describe("appearance settings", () => {
     expect(eraser().title).toBe("Eraser (E)");
   });
 
+  it("hint_counters_reset_with_dismissed_hints", () => {
+    render(
+      <MemoryRouter>
+        <Toolbar />
+      </MemoryRouter>,
+    );
+    const eraser = () => screen.getByRole("button", { name: "Eraser" });
+    expect(eraser().getAttribute("aria-keyshortcuts")).toBe("E");
+    expect(screen.getByRole("button", { name: "Undo" }).getAttribute("aria-keyshortcuts")).toMatch(/^(Control|Meta)\+Z$/);
+    set({ shortcutHintMode: "adaptive" });
+    act(() => {
+      for (let i = 0; i < 3; i++) fireEvent.pointerEnter(eraser());
+    });
+    expect(eraser().title).toBe("Eraser");
+    set({ dismissedHints: {} }); // settings reset
+    act(() => {
+      fireEvent.pointerEnter(eraser());
+    });
+    expect(eraser().title).toBe("Eraser (E)"); // counting starts over, not instantly re-learned
+    // Shortcuts without a toolbar button are not counted.
+    act(() => {
+      runEditorShortcut("selectAll", {});
+      runEditorShortcut("selectAll", {});
+    });
+    expect(useSettingsStore.getState().settings.dismissedHints.selectAll).toBeUndefined();
+  });
+
   it("new_page_uses_default_aspect", async () => {
     useNotebookStore.setState({ loaded: true, tree: { bookshelves: [], units: [unit("u", "Book")], sections: [section], pages: [] } });
     set({ defaultPageMode: "page", defaultPageAspectRatio: "letter", defaultPageOrientation: "portrait" });
