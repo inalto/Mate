@@ -2372,7 +2372,7 @@ dependencies = [
 
 [[package]]
 name = "mate"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "log",
@@ -2391,7 +2391,7 @@ dependencies = [
 
 [[package]]
 name = "mate-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "cab",
