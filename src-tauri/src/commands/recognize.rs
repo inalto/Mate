@@ -242,6 +242,18 @@ mod tests {
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
+    #[test]
+    fn provider_cache_rebuilds_on_provider_switch_and_reuses_otherwise() {
+        let cache = ProviderCache::default();
+        let a = cache.get("anthropic", "", "k");
+        assert_eq!(a.id(), "anthropic");
+        assert!(Arc::ptr_eq(&a, &cache.get("anthropic", "", "k")));
+        let o = cache.get("openai", "", "k");
+        assert_eq!(o.id(), "openai");
+        assert!(Arc::ptr_eq(&o, &cache.get("openai", "", "k")));
+        assert_eq!(cache.get("anthropic", "", "k").id(), "anthropic");
+    }
+
     fn consenting() -> Settings {
         Settings { ai_consent: Some(true), ..Settings::default() }
     }

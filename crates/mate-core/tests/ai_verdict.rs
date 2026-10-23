@@ -152,9 +152,7 @@ fn provider_factory_builds_known_providers() {
     assert_eq!(default_model("openai"), "gpt-5");
     // Construction only: no request is sent here.
     assert_eq!(provider_for("anthropic", "", "k".into()).id(), "anthropic");
-    let p = provider_for("openai", "", "k".into());
-    assert_eq!(p.id(), "openai");
-    assert!(matches!(p.recognize(&request()), Err(AiError::Disabled)));
+    assert_eq!(provider_for("openai", "", "k".into()).id(), "openai");
     assert_eq!(provider_for("mock", "", String::new()).id(), "mock");
 }
 

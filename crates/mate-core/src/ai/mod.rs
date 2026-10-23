@@ -6,12 +6,13 @@
 pub mod anthropic;
 pub mod keystore;
 pub mod mock;
+pub mod openai;
 pub mod practice;
 pub mod prompts;
 pub mod provider;
 pub mod verdict;
 
-use provider::{AiError, Provider, RecognizeRequest, TextRequest};
+use provider::{AiError, Provider};
 use verdict::Verdict;
 
 /// Provider ids accepted from settings and the UI.
@@ -31,8 +32,7 @@ pub fn default_model(provider: &str) -> &'static str {
 }
 
 /// The provider for `settings_provider`. An empty `model` means the provider's default.
-/// `"openai"` is not wired up yet and reports [`AiError::Disabled`]; `"mock"` gives an empty
-/// [`mock::MockProvider`].
+/// `"mock"` gives an empty [`mock::MockProvider`]; unknown ids fall back to Anthropic.
 pub fn provider_for(settings_provider: &str, model: &str, key: String) -> Box<dyn Provider> {
     let model = match model.trim() {
         "" => default_model(settings_provider).to_string(),
@@ -40,7 +40,7 @@ pub fn provider_for(settings_provider: &str, model: &str, key: String) -> Box<dy
     };
     match settings_provider {
         "mock" => Box::new(mock::MockProvider::new(Vec::new())),
-        "openai" => Box::new(DisabledProvider("openai")),
+        "openai" => Box::new(openai::OpenAiProvider::new(key, model, openai::DEFAULT_BASE_URL.to_string())),
         _ => Box::new(anthropic::AnthropicProvider::new(key, model, anthropic::DEFAULT_BASE_URL.to_string())),
     }
 }
@@ -65,21 +65,4 @@ pub fn parse_verdict(text: &str) -> Result<Verdict, AiError> {
         .map_err(|e| AiError::InvalidResponse(format!("unexpected fields: {e}")))?;
     verdict.validate();
     Ok(verdict)
-}
-
-/// Placeholder that refuses every call.
-struct DisabledProvider(&'static str);
-
-impl Provider for DisabledProvider {
-    fn id(&self) -> &'static str {
-        self.0
-    }
-
-    fn recognize(&self, _req: &RecognizeRequest) -> Result<Verdict, AiError> {
-        Err(AiError::Disabled)
-    }
-
-    fn complete(&self, _req: &TextRequest) -> Result<String, AiError> {
-        Err(AiError::Disabled)
-    }
 }
