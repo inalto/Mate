@@ -75,7 +75,7 @@ describe("ImportDialog", () => {
     expect(ipc.importFiles).toHaveBeenCalledWith([good.path], { kind: "new-unit", title: "Maths 101" });
     expect(screen.getByText("12 pages, 340 strokes, 5 text boxes, 2 images.")).toBeTruthy();
     expect(screen.getByText("3 pages already imported, so not added again.")).toBeTruthy();
-    expect(screen.getByText("1 table could not be imported.")).toBeTruthy();
+    expect(screen.getByText("Tables and shapes are not imported yet.")).toBeTruthy();
     expect(screen.getByText("One image could not be read.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Open book" }));
     expect(navigate).toHaveBeenCalledWith("/edit/p1");
@@ -233,6 +233,16 @@ describe("ImportDialog during an import", () => {
 });
 
 describe("copy", () => {
+  it("lists skipped tables and shapes with the exact line", async () => {
+    render(<ImportDialog />);
+    await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await screen.findByText("Import finished");
+    const skipped = screen.getByRole("list", { name: "Skipped" });
+    expect(skipped.textContent).toContain("Tables and shapes are not imported yet.");
+    expect(skipped.textContent).not.toMatch(/could not be imported/);
+  });
+
   it("never says Derive in the entry points", () => {
     const sources = import.meta.glob(
       ["../TopBar.tsx", "../BookCard.tsx", "../ImportDialog.tsx", "../../routes/Library.tsx", "../../stores/importStore.ts"],

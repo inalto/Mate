@@ -169,8 +169,7 @@ export default function ImportDialog() {
         notes.push(`${plural(total.elementsSkippedInvalid, "item")} could not be read and were skipped.`);
       if (total.elementsSkippedLimit > 0)
         notes.push(`${plural(total.elementsSkippedLimit, "item")} over the size limits were skipped.`);
-      if (total.tablesSkipped > 0) notes.push(`${plural(total.tablesSkipped, "table")} could not be imported.`);
-      if (total.shapesSkipped > 0) notes.push(`${plural(total.shapesSkipped, "shape")} could not be imported.`);
+      if (total.tablesSkipped > 0 || total.shapesSkipped > 0) notes.push("Tables and shapes are not imported yet.");
       return (
         <>
           <h2>{imported ? "Import finished" : "Nothing was imported"}</h2>

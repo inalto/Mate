@@ -35,6 +35,7 @@ jobs:
 
       - run: cargo test --workspace
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo build -p mate-core --examples
 
       - run: npm run typecheck
       - run: npm test

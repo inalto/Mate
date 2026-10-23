@@ -248,11 +248,6 @@ pub fn parse(
     }
 }
 
-/// The error a format module returns until it is implemented.
-fn not_yet(source: ImportSource) -> ImportError {
-    ImportError::Unsupported(format!("{} import is not available yet", source.display_name()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::zipsrc::tests::make_zip;
