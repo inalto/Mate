@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod archive;
 pub mod assets;
 pub mod geometry;

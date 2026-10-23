@@ -10,6 +10,9 @@ fn defaults_match_spec() {
     assert_eq!(s.stroke_stabilization, 35.0);
     assert_eq!(s.settings_version, 1);
     assert_eq!(s.toolbar_presets.len(), 5);
+    assert_eq!(s.ai_consent, None);
+    assert_eq!(s.ai_provider, "anthropic");
+    assert_eq!(s.ai_model, "");
 }
 
 #[test]

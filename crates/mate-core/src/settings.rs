@@ -109,6 +109,10 @@ pub struct Settings {
     pub tutor_verdict_change_gate: String,
     // Misc
     pub ai_consent: Option<bool>,
+    /// `"anthropic" | "openai"`.
+    pub ai_provider: String,
+    /// Empty means the provider's default model (`ai::default_model`).
+    pub ai_model: String,
     pub analytics_consent: bool,
     pub trash_retention_days: u32,
     pub default_export_format: String,
@@ -175,6 +179,8 @@ impl Default for Settings {
             tutor_hold_to_ask: true,
             tutor_verdict_change_gate: s("enforce"),
             ai_consent: None,
+            ai_provider: s("anthropic"),
+            ai_model: String::new(),
             analytics_consent: false,
             trash_retention_days: 30,
             default_export_format: s("pdf"),
