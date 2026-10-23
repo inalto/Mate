@@ -105,6 +105,13 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { id: "go.library", label: "Open library", synonyms: ["books", "notebooks"], scope: "global", run: (n) => n("/library") },
 ];
 
+/**
+ * A page window shows one page: actions that navigate elsewhere (settings, library, a new page or
+ * section) or open the page in a window again are not offered there.
+ */
+const NOT_IN_PAGE_WINDOW = new Set(["page.new", "section.new", "window.openPage", "go.settings", "go.library"]);
+export const availableInPageWindow = (a: QuickAction): boolean => !NOT_IN_PAGE_WINDOW.has(a.id);
+
 /** Hint shown on a disabled action. */
 export const DISABLED_HINT: Record<Exclude<QuickScope, "global">, string> = {
   editor: "Open a page in the editor first",

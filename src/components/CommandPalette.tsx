@@ -15,7 +15,9 @@ import { isMacPlatform } from "../keys/platform";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useKeyMap } from "../keys/useKeyMap";
 import { showToast } from "./Toast";
-import { actionScore, DISABLED_HINT, fuzzyScore, QUICK_ACTIONS, type QuickAction } from "./paletteActions";
+import { isPageWindow } from "../ipc/windows";
+import { openPageInWindow } from "../keys/windowBridge";
+import { actionScore, availableInPageWindow, DISABLED_HINT, fuzzyScore, QUICK_ACTIONS, type QuickAction } from "./paletteActions";
 
 const SEARCH_DEBOUNCE_MS = 150;
 const SEARCH_LIMIT = 20;
@@ -162,6 +164,12 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   };
 
   const openPage = (pageId: string) => {
+    if (isPageWindow()) {
+      // A page window shows one page: another page opens in its own window.
+      close();
+      if (pageId !== currentPageId) openPageInWindow(pageId);
+      return;
+    }
     close();
     navigate(`/edit/${pageId}`);
   };
@@ -221,7 +229,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
         });
     }
 
-    const quick = QUICK_ACTIONS.map((a) => ({ a, score: q ? actionScore(q, a) : 1 }))
+    const quick = QUICK_ACTIONS.filter((a) => !isPageWindow() || availableInPageWindow(a)).map((a) => ({ a, score: q ? actionScore(q, a) : 1 }))
       .filter((x) => x.score > 0)
       .sort((x, y) => y.score - x.score)
       .map(({ a, score }): { score: number; item: Item } => {
@@ -253,6 +261,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     ];
     const acts: Item[] = [];
     for (const [label, run, disabled] of actions) {
+      if (isPageWindow() && label === "Open graph") continue; // a page window shows one page
       if (!q || label.toLowerCase().includes(q)) acts.push({ key: `action:${label}`, section: "Actions", label, run, disabled });
     }
     if (acts.length) blocks.push({ score: q ? 40 : 100, items: acts });

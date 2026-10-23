@@ -75,6 +75,8 @@ struct Registry {
     /// page id -> window label (page windows only; the main window's tabs are not registered).
     pages: HashMap<String, String>,
     main_close: Option<MainClose>,
+    /// Page windows being destroyed (destroy called, `Destroyed` not seen yet): never focused.
+    dying: HashSet<String>,
 }
 
 #[derive(Default)]
@@ -94,6 +96,9 @@ impl PageWindows {
             if r.main_close.is_some() {
                 return Err("Mate is closing".into());
             }
+            if r.dying.contains(&label) {
+                return Err("This page's window is still closing. Try again in a moment.".into());
+            }
             r.pages.get(page_id).cloned()
         };
         if let Some(existing) = known.filter(|l| host.exists(l)) {
@@ -102,8 +107,12 @@ impl PageWindows {
         }
         if host.exists(&label) {
             host.focus(&label)?;
-        } else {
-            host.create(&label, &page_url(page_id), title)?;
+        } else if let Err(err) = host.create(&label, &page_url(page_id), title) {
+            // A concurrent open created it first (duplicate label): focus that one.
+            if !host.exists(&label) {
+                return Err(err);
+            }
+            host.focus(&label)?;
         }
         self.lock().pages.insert(page_id.to_owned(), label.clone());
         Ok(label)
@@ -150,10 +159,18 @@ impl PageWindows {
         for label in &pending {
             // Fail open like a single window: an unresponsive page window is closed outright.
             if !host.start_close(label, false) {
+                self.mark_dying(label);
                 host.destroy(label);
             }
         }
         true
+    }
+
+    /// `label` is being destroyed: it is not focused or reused until `Destroyed` arrives.
+    pub fn mark_dying(&self, label: &str) {
+        if is_page_window(label) {
+            self.lock().dying.insert(label.to_owned());
+        }
     }
 
     /// A window was destroyed: forget it, and start the main window's own handshake once the last
@@ -162,6 +179,7 @@ impl PageWindows {
         let close_main = {
             let mut r = self.lock();
             r.pages.retain(|_, l| l != label);
+            r.dying.remove(label);
             if label == MAIN_LABEL {
                 r.main_close = None;
                 None
@@ -266,8 +284,20 @@ pub fn request_main_close(app: &AppHandle, exit: bool) -> bool {
 }
 
 pub fn window_destroyed(app: &AppHandle, label: &str) {
+    if is_page_window(label)
+        && let Some(state) = app.try_state::<crate::state::AppState>()
+    {
+        // The main window keeps its gate: `complete_close_attempt` reads its quit flag after destroy.
+        state.close_attempt.with(label, |g| g.forget_window());
+    }
     if let Some(reg) = registry(app) {
         reg.window_destroyed(&TauriHost(app), label);
+    }
+}
+
+pub fn mark_dying(app: &AppHandle, label: &str) {
+    if let Some(reg) = registry(app) {
+        reg.mark_dying(label);
     }
 }
 
@@ -367,6 +397,9 @@ mod tests {
         let host = Fake::with(&["main"]);
         reg.open(&host, "p1", "A").unwrap();
         reg.open(&host, "p2", "B").unwrap();
+        // Its close handshake completed and destroy was called: not focused while it goes away.
+        reg.mark_dying("page-p1");
+        assert!(reg.open(&host, "p1", "A").unwrap_err().contains("still closing"));
         flushed(&reg, &host, "page-p1");
         assert_eq!(reg.list(), vec![PageWindowInfo { page_id: "p2".into(), label: "page-p2".into() }]);
         // Opening it again creates a fresh window.
@@ -425,6 +458,45 @@ mod tests {
         assert_eq!(host.log(), vec!["start page-p1 exit=false", "destroy page-p1"]);
         reg.window_destroyed(&host, "page-p1");
         assert_eq!(&host.log()[2..], ["start main exit=true", "destroy main", "exit"]);
+    }
+
+    #[test]
+    fn reopen_after_fail_open_creates_a_fresh_window() {
+        let reg = PageWindows::default();
+        let host = Fake::with(&["main"]);
+        reg.open(&host, "p1", "A").unwrap();
+        host.unresponsive.borrow_mut().insert("page-p1".into());
+        assert!(reg.request_main_close(&host, false));
+        // The main close then runs main's own handshake; the user cancels it (main stays open).
+        host.alive.borrow_mut().insert("page-p1".into()); // destroy called, Destroyed not delivered
+        assert!(reg.open(&host, "p1", "A").is_err(), "a dying window is never focused");
+        host.alive.borrow_mut().remove("page-p1");
+        reg.window_destroyed(&host, "page-p1");
+        host.log.borrow_mut().clear();
+        reg.open(&host, "p1", "A").unwrap();
+        assert_eq!(host.log(), vec!["create page-p1 /edit/p1?window=1 A"]);
+    }
+
+    #[test]
+    fn duplicate_label_on_create_focuses_it() {
+        struct Racy(Fake);
+        impl WindowHost for Racy {
+            fn exists(&self, label: &str) -> bool {
+                WindowHost::exists(&self.0, label)
+            }
+            fn focus(&self, label: &str) -> Result<(), String> {
+                WindowHost::focus(&self.0, label)
+            }
+            fn create(&self, label: &str, _url: &str, _title: &str) -> Result<(), String> {
+                // Another open won the race between our check and the create.
+                self.0.alive.borrow_mut().insert(label.to_owned());
+                Err("a window with this label already exists".into())
+            }
+        }
+        let host = Racy(Fake::with(&["main"]));
+        let reg = PageWindows::default();
+        assert_eq!(reg.open(&host, "p1", "A").unwrap(), "page-p1");
+        assert_eq!(host.0.log(), vec!["focus page-p1"]);
     }
 
     #[test]

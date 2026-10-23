@@ -9,6 +9,11 @@ vi.mock("../../ipc/recognition", async (orig) => ({
   searchRecognition: vi.fn(async () => []),
   getRecognitions: vi.fn(async () => []),
 }));
+const win = vi.hoisted(() => ({ page: false }));
+vi.mock("../../ipc/windows", () => ({
+  isPageWindow: () => win.page,
+  openPageWindow: vi.fn(async () => "page-p2"),
+}));
 vi.mock("../../ipc/semantics", () => ({
   summarizePage: vi.fn(),
   suggestTitle: vi.fn(),
@@ -18,6 +23,7 @@ vi.mock("../../ipc/semantics", () => ({
 
 import { getRecognitions, searchRecognition, SNIPPET_CLOSE, SNIPPET_OPEN } from "../../ipc/recognition";
 import { relatedPages, suggestTitle, summarizePage } from "../../ipc/semantics";
+import { openPageWindow } from "../../ipc/windows";
 import { useChromeStore } from "../../stores/chrome";
 import { useEditorStore } from "../../stores/editor";
 import { useFlashStore } from "../../stores/flash";
@@ -75,7 +81,10 @@ beforeEach(() => {
     activeTabId: "t1",
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  win.page = false;
+});
 
 describe("CommandPalette", () => {
   it("palette_shows_fts_hits", async () => {
@@ -320,6 +329,26 @@ describe("CommandPalette quick actions", () => {
     // Global actions stay enabled.
     fireEvent.change(input(), { target: { value: "settings" } });
     expect(screen.getByRole("option", { name: /Open settings/ }).getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("page_window_palette_is_single_page", () => {
+    win.page = true;
+    renderPalette();
+    open();
+    // Nothing that leaves the page: no settings/library/graph, no new page or section, no "new window".
+    for (const q of ["settings", "library", "graph", "new page", "new section", "window"]) {
+      fireEvent.change(input(), { target: { value: q } });
+      expect(screen.queryByRole("option", { name: /Open settings|Open library|Open graph|New page|New section|new window/i })).toBeNull();
+    }
+    // Page tools stay.
+    fireEvent.change(input(), { target: { value: "eraser" } });
+    expect(screen.getByRole("option", { name: /Switch to eraser/ })).toBeTruthy();
+    // Picking another page opens it in its own window; this one stays on its page.
+    fireEvent.change(input(), { target: { value: "cell" } });
+    fireEvent.click(screen.getByRole("option", { name: /Cell biology/ }));
+    expect(openPageWindow).toHaveBeenCalledWith("p2");
+    expect(screen.getByTestId("where").textContent).toBe("/edit/p1");
+    expect(useChromeStore.getState().paletteOpen).toBe(false);
   });
 
   it("empty_query_section_order", () => {

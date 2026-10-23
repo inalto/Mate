@@ -3,6 +3,7 @@ import { RouterProvider } from "react-router";
 import { attachWindowPdfDrop } from "./canvas/dropPaste";
 import { ToastHost } from "./components/Toast";
 import { installFlushOnly } from "./lifecycle/flushOnly";
+import { installCrossWindowSync } from "./lifecycle/crossWindow";
 import { StartupUpdateCheck } from "./components/UpdateSection";
 import { isPageWindow } from "./ipc/windows";
 import { installImportOpenHandler } from "./stores/importStore";
@@ -22,6 +23,8 @@ export default function App() {
   useEffect(() => attachWindowPdfDrop(), []);
   // Every window can be asked to flush before an update is installed.
   useEffect(() => installFlushOnly(), []);
+  // Notebook changes made in other windows (main and page windows) reach this one.
+  useEffect(() => installCrossWindowSync(), []);
   // Notebook files opened with Mate (file association) open the import dialog.
   useEffect(() => (isPageWindow() ? undefined : installImportOpenHandler()), []);
   return (

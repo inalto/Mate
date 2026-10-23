@@ -33,6 +33,15 @@ export const setPageWindowForTests = (value: boolean): void => {
   pageWindow = value;
 };
 
+/** This window's label ("main" or "page-<id>"); "main" outside the Tauri shell. */
+export function currentWindowLabel(): string {
+  try {
+    return getCurrentWindow().label;
+  } catch {
+    return "main";
+  }
+}
+
 /** Sets this native window's title (best effort; a no-op outside the Tauri shell). */
 export function setThisWindowTitle(title: string): void {
   try {

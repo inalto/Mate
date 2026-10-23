@@ -54,6 +54,14 @@ impl CloseGate {
         id
     }
 
+    /// The window was destroyed: a window reopened under the same label starts with no attempt
+    /// (a stale unacknowledged one would let its first close skip the flush). The counter is kept
+    /// so a late watchdog of the old window can never match a new attempt id.
+    pub fn forget_window(&mut self) {
+        self.current = None;
+        self.exit_pending = false;
+    }
+
     /// Called after the main window was destroyed: true exactly once if an app quit is pending.
     pub fn take_exit_after_destroy(&mut self) -> bool {
         std::mem::take(&mut self.exit_pending)
@@ -183,6 +191,7 @@ pub fn complete_close_attempt(
     if !current && force != Some(true) {
         return Err("stale close attempt".into());
     }
+    crate::windows::mark_dying(window.app_handle(), &label);
     window.destroy().map_err(|e| e.to_string())?;
     // A quit (Cmd+Q) was prevented to flush first. Destroying the last window usually ends the
     // app on its own (it emits ExitRequested again, which then finds no main window and is let
@@ -312,6 +321,20 @@ mod tests {
         assert!(gates.with("main", |g| g.is_current(main)));
         assert!(gates.with("page-p1", |g| g.clear_if_current(page)));
         assert_eq!(gates.with("main", |g| g.on_close_requested()), None);
+    }
+
+    #[test]
+    fn reopened_page_window_gets_a_fresh_gate() {
+        let gates = CloseGates::default();
+        // The page window never answered and was destroyed (fail open).
+        let old = gates.with("page-p1", |g| g.on_close_requested()).unwrap();
+        assert_eq!(gates.with("page-p1", |g| g.on_close_requested()), None);
+        gates.with("page-p1", |g| g.forget_window());
+        // Reopened under the same label: its first close runs the flush handshake again.
+        let new = gates.with("page-p1", |g| g.on_close_requested()).unwrap();
+        assert!(new > old, "ids never repeat, so a late watchdog cannot hit the new attempt");
+        assert_eq!(gates.with("page-p1", |g| g.expire(old)), Expiry::Stale);
+        assert!(gates.with("page-p1", |g| g.is_current(new)));
     }
 
     #[test]
