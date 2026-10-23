@@ -5,11 +5,12 @@ use std::sync::Arc;
 
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, Provider, TextRequest};
-use mate_core::ai::{default_model, is_known_provider, provider_for};
+use mate_core::ai::{default_model, is_known_provider};
 use mate_core::settings::Settings;
 use serde::Serialize;
 use tauri::State;
 
+use crate::commands::recognize::effective_model;
 use crate::state::AppState;
 
 /// What the UI may know about the AI setup. Deliberately has no key field.
@@ -109,6 +110,8 @@ pub async fn get_ai_status(state: State<'_, AppState>) -> Result<AiStatus, Strin
 pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result<(), String> {
     let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
     let store: Arc<dyn KeyStore> = state.keys.clone();
+    let cache = state.providers.clone();
+    // The provider (a blocking HTTP client) is built and used only on the blocking pool.
     tauri::async_runtime::spawn_blocking(move || {
         test_key(store.as_ref(), &provider)?;
         if settings.ai_consent != Some(true) || provider == "openai" {
@@ -116,7 +119,8 @@ pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result
         }
         let key = store.get(&provider)?.unwrap_or_default();
         let model = if settings.ai_provider == provider { settings.ai_model.clone() } else { String::new() };
-        ping(provider_for(&provider, &model, key).as_ref())
+        let model = effective_model(&provider, &model);
+        ping(cache.get(&provider, &model, &key).as_ref())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -126,7 +130,7 @@ pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result
 pub fn ping(p: &dyn Provider) -> Result<(), String> {
     let req = TextRequest { system: String::new(), user: "Reply with OK.".into(), max_tokens: 16, json_schema: None };
     match p.complete(&req) {
-        Ok(_) | Err(AiError::InvalidResponse(_)) => Ok(()),
+        Ok(_) | Err(AiError::Truncated) => Ok(()),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -175,8 +179,10 @@ mod tests {
     #[test]
     fn ping_accepts_cut_off_replies_and_reports_auth() {
         use mate_core::ai::mock::MockProvider;
-        let ok = MockProvider::new(vec![]).with_text(vec![Err(AiError::InvalidResponse("cut off".into()))]);
+        let ok = MockProvider::new(vec![]).with_text(vec![Err(AiError::Truncated)]);
         assert!(ping(&ok).is_ok());
+        let garbled = MockProvider::new(vec![]).with_text(vec![Err(AiError::InvalidResponse("x".into()))]);
+        assert!(ping(&garbled).is_err());
         let bad = MockProvider::new(vec![]).with_text(vec![Err(AiError::Auth)]);
         assert_eq!(ping(&bad).unwrap_err(), AiError::Auth.to_string());
     }

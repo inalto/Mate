@@ -1,21 +1,27 @@
 // Live tutor wiring for one editor pane: segments the page's ink, settles groups with the group
 // manager and runs the recognition pipeline on each settled group. Exposes what the overlay
 // (recognitions, in-flight groups, groups that couldn't be checked) needs to draw.
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect } from "react";
+import { create } from "zustand";
 import { getRecognitions } from "../ipc/recognition";
 import type { Recognition, Settings } from "../model/types";
 import type { EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
+import { sessionAttempts } from "./attempts";
 import { createGroupManager, type GroupManager } from "./groupManager";
-import { defaultPipelineDeps, runRecognition, sessionAttempts, type PipelineDeps, type RecognitionOutcome } from "./pipeline";
+import { defaultPipelineDeps, runRecognition, type PipelineDeps, type RecognitionOutcome, type UncheckedKind } from "./pipeline";
 import { segmentPage } from "./segmentation";
-import type { Region } from "./types";
+import type { ElementsChange, Region } from "./types";
 
 /** Recognitions in flight or waiting for a slot, per page. */
 export const MAX_PENDING_PER_PAGE = 50;
+/** Element changes are collected for this long before the page is re-segmented. */
+export const RESEGMENT_BATCH_MS = 50;
+/** A group refused because too many checks were pending is tried again after this delay. */
+export const BUSY_RETRY_MS = 5_000;
 
 export interface UncheckedGroup {
-  kind: Extract<RecognitionOutcome, { status: "unchecked" }>["kind"] | "busy";
+  kind: UncheckedKind | "busy";
   reason: string;
 }
 
@@ -31,7 +37,7 @@ export interface TutorView {
   regions: ReadonlyMap<string, Region>;
 }
 
-const EMPTY: TutorView = { pageId: null, recognitions: new Map(), inFlight: new Set(), unchecked: new Map(), regions: new Map() };
+export const EMPTY_TUTOR_VIEW: TutorView = { pageId: null, recognitions: new Map(), inFlight: new Set(), unchecked: new Map(), regions: new Map() };
 
 export interface TutorSessionDeps {
   pipeline?: PipelineDeps;
@@ -39,6 +45,7 @@ export interface TutorSessionDeps {
   loadRecognitions?: (pageId: string) => Promise<Recognition[]>;
   /** Pen events source; defaults to window pointer events on a canvas. Returns an unsubscribe. */
   watchPen?: (down: () => void, up: () => void) => () => void;
+  segment?: typeof segmentPage;
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (h: unknown) => void;
   now?: () => number;
@@ -65,17 +72,31 @@ function windowPen(down: () => void, up: () => void): () => void {
   };
 }
 
+/** Merges change batches; an id removed in a later batch is only reported as removed. */
+function mergeChanges(a: ElementsChange, b: ElementsChange): ElementsChange {
+  const removed = new Set([...a.removed, ...b.removed]);
+  const added = new Set([...a.added, ...b.added].filter((id) => !removed.has(id)));
+  const updated = new Set([...a.updated, ...b.updated].filter((id) => !removed.has(id) && !added.has(id)));
+  return { added: [...added], updated: [...updated], removed: [...removed] };
+}
+
 /** One session per editor store; follows the store's loaded page. */
 export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = {}): TutorSession {
   const pipeline = deps.pipeline ?? defaultPipelineDeps;
   const settings = deps.settings ?? (() => useSettingsStore.getState().settings);
   const load = deps.loadRecognitions ?? getRecognitions;
+  const segment = deps.segment ?? segmentPage;
+  const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+  const clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
   const listeners = new Set<() => void>();
-  let view: TutorView = EMPTY;
+  let view: TutorView = EMPTY_TUTOR_VIEW;
   let manager: GroupManager | null = null;
   let pageToken = 0;
   let penIsDown = false;
   let disposed = false;
+  let pendingChange: ElementsChange | null = null;
+  let batchTimer: unknown;
+  const retryTimers = new Map<string, unknown>();
 
   const emit = (next: Partial<TutorView>) => {
     view = { ...view, ...next };
@@ -95,9 +116,41 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   const elementsNow = () => store.getState().elements.values();
 
   function resegment(): Region[] {
-    const regions = segmentPage(elementsNow());
+    const regions = segment(elementsNow());
     emit({ regions: new Map(regions.map((r) => [r.regionId, r])) });
     return regions;
+  }
+
+  function clearTimers(): void {
+    if (batchTimer !== undefined) clearTimer(batchTimer);
+    batchTimer = undefined;
+    pendingChange = null;
+    for (const h of retryTimers.values()) clearTimer(h);
+    retryTimers.clear();
+  }
+
+  function flushChanges(): void {
+    batchTimer = undefined;
+    const change = pendingChange;
+    pendingChange = null;
+    if (!manager || disposed || !change) return;
+    manager.setRegions(resegment());
+    manager.noteElementsChanged(change);
+  }
+
+  /** Try a group again later (transient failure or too many pending), if it still exists then. */
+  function scheduleRetry(token: number, regionId: string, ms: number): void {
+    const old = retryTimers.get(regionId);
+    if (old !== undefined) clearTimer(old);
+    retryTimers.set(
+      regionId,
+      setTimer(() => {
+        retryTimers.delete(regionId);
+        if (disposed || token !== pageToken) return;
+        const region = view.regions.get(regionId);
+        if (region && !view.inFlight.has(regionId)) fire(token, region);
+      }, ms),
+    );
   }
 
   function fire(token: number, region: Region): void {
@@ -105,7 +158,8 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     if (!s.tutorEnabled || s.aiConsent !== true) return;
     if (view.inFlight.has(region.regionId)) return;
     if (view.inFlight.size >= MAX_PENDING_PER_PAGE) {
-      emit({ unchecked: withMap(view.unchecked, (m) => m.set(region.regionId, { kind: "busy", reason: "Too many checks are waiting. This note will be checked later." })) });
+      emit({ unchecked: withMap(view.unchecked, (m) => m.set(region.regionId, { kind: "busy", reason: "Too many checks are waiting. This note will be checked shortly." })) });
+      scheduleRetry(token, region.regionId, BUSY_RETRY_MS);
       return;
     }
     const m = manager;
@@ -118,14 +172,22 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       .catch((): RecognitionOutcome | null => null)
       .then((out) => {
         if (disposed || token !== pageToken) return;
-        const patch: Partial<TutorView> = { inFlight: withSet(view.inFlight, (x) => x.delete(region.regionId)) };
-        if (out?.status === "checked") {
-          patch.recognitions = withMap(view.recognitions, (x) => x.set(region.regionId, out.recognition));
-        } else if (out?.status === "unchecked") {
-          patch.unchecked = withMap(view.unchecked, (x) => x.set(region.regionId, { kind: out.kind, reason: out.reason }));
+        const id = region.regionId;
+        const patch: Partial<TutorView> = { inFlight: withSet(view.inFlight, (x) => x.delete(id)) };
+        // The group was re-segmented or erased meanwhile: its result no longer describes the page.
+        const alive = view.regions.has(id);
+        if (alive && out?.status === "checked") {
+          const members = new Set(out.recognition.elementIds);
+          patch.recognitions = withMap(view.recognitions, (x) => {
+            for (const [gid, r] of x) if (gid !== id && r.elementIds.some((e) => members.has(e))) x.delete(gid);
+            x.set(id, out.recognition);
+          });
+        } else if (alive && out?.status === "unchecked") {
+          patch.unchecked = withMap(view.unchecked, (x) => x.set(id, { kind: out.kind, reason: out.reason }));
+          if (out.retryInMs !== undefined) scheduleRetry(token, id, out.retryInMs);
         }
         emit(patch);
-        m?.markInFlight(region.regionId, false);
+        m?.markInFlight(id, false);
       });
   }
 
@@ -133,13 +195,14 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     pageToken++;
     manager?.dispose();
     manager = null;
-    emit({ ...EMPTY, pageId });
+    clearTimers();
+    emit({ ...EMPTY_TUTOR_VIEW, pageId });
     if (!pageId) return;
     const token = pageToken;
     const m = createGroupManager({
       now: deps.now ?? (() => Date.now()),
-      setTimer: deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms)),
-      clearTimer: deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>)),
+      setTimer,
+      clearTimer,
       onFire: (region) => fire(token, region),
       onInvalidate: (regionId) => {
         if (token !== pageToken) return;
@@ -163,8 +226,8 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
 
   const unsubElements = store.onElementsChanged((change) => {
     if (!manager || disposed) return;
-    manager.setRegions(resegment());
-    manager.noteElementsChanged(change);
+    pendingChange = pendingChange ? mergeChanges(pendingChange, change) : change;
+    if (batchTimer === undefined) batchTimer = setTimer(flushChanges, RESEGMENT_BATCH_MS);
   });
   const unsubStore = store.subscribe((s, prev) => {
     if (s.loadedPageId !== prev.loadedPageId) openPage(s.loadedPageId);
@@ -191,6 +254,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     dispose() {
       disposed = true;
       pageToken++;
+      clearTimers();
       manager?.dispose();
       manager = null;
       unsubElements();
@@ -201,32 +265,30 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   };
 }
 
-/** A tiny external store the hook reads; the session behind it lives in an effect. */
-function createViewHolder() {
-  let view = EMPTY;
-  const listeners = new Set<() => void>();
-  return {
-    getView: () => view,
-    subscribe(cb: () => void) {
-      listeners.add(cb);
-      return () => {
-        listeners.delete(cb);
-      };
-    },
-    set(next: TutorView) {
-      view = next;
-      for (const l of listeners) l();
-    },
-  };
+export type PaneIndex = 0 | 1;
+
+interface TutorViewsState {
+  /** The live tutor view of each editor pane (read by the overlay). */
+  views: Record<PaneIndex, TutorView>;
+  setView(pane: PaneIndex, view: TutorView): void;
 }
 
-/** The live tutor for one editor pane. */
-export function useTutor(store: EditorStore): TutorView {
-  const [holder] = useState(createViewHolder);
+/** Tutor views per pane. Components select only what they draw, so the editor does not re-render. */
+export const useTutorViews = create<TutorViewsState>((set) => ({
+  views: { 0: EMPTY_TUTOR_VIEW, 1: EMPTY_TUTOR_VIEW },
+  setView: (pane, view) => set((s) => ({ views: { ...s.views, [pane]: view } })),
+}));
+
+/**
+ * Runs the live tutor for one pane and publishes its view to `useTutorViews`. Returns nothing, so
+ * the calling component never re-renders because of tutor activity.
+ */
+export function useTutor(store: EditorStore, pane: PaneIndex): void {
   useEffect(() => {
     const session = createTutorSession(store);
-    const unsub = session.subscribe(() => holder.set(session.getView()));
-    holder.set(session.getView());
+    const publish = () => useTutorViews.getState().setView(pane, session.getView());
+    const unsub = session.subscribe(publish);
+    publish();
     // A changed provider, model or consent may fix a rejected key: allow checks again.
     const unsubSettings = useSettingsStore.subscribe((s, prev) => {
       const a = s.settings;
@@ -237,8 +299,7 @@ export function useTutor(store: EditorStore): TutorView {
       unsub();
       unsubSettings();
       session.dispose();
-      holder.set(EMPTY);
+      useTutorViews.getState().setView(pane, EMPTY_TUTOR_VIEW);
     };
-  }, [store, holder]);
-  return useSyncExternalStore(holder.subscribe, holder.getView);
+  }, [store, pane]);
 }

@@ -223,3 +223,34 @@ fn anthropic_debug_hides_the_key() {
     let p = AnthropicProvider::new("sk-test-secret".into(), "m".into(), "http://x".into());
     assert!(!format!("{p:?}").contains("sk-test-secret"));
 }
+
+#[test]
+fn anthropic_refusal_and_cut_off_are_final() {
+    for (stop, want) in [("refusal", "refused"), ("max_tokens", "truncated")] {
+        let body = json!({ "content": [{ "type": "text", "text": "{" }], "stop_reason": stop });
+        let (base, seen) = stub(vec![(200, body.to_string()), ok_reply(&verdict_json())]);
+        let e = provider(&base).recognize(&request()).unwrap_err();
+        match want {
+            "refused" => assert!(matches!(e, AiError::Refused), "{e:?}"),
+            _ => assert!(matches!(e, AiError::Truncated), "{e:?}"),
+        }
+        assert_eq!(seen.lock().unwrap().len(), 1, "{stop} must not be retried");
+    }
+}
+
+#[test]
+fn anthropic_maps_billing_and_unknown_model() {
+    let err = r#"{"type":"error","error":{"type":"x","message":"m"}}"#;
+    let (base, seen) = stub(vec![(402, err.into()), ok_reply(&verdict_json())]);
+    assert!(matches!(provider(&base).recognize(&request()), Err(AiError::Billing)));
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    let (base, _) = stub(vec![(404, err.into())]);
+    assert!(matches!(provider(&base).recognize(&request()), Err(AiError::UnknownModel)));
+}
+
+#[test]
+fn anthropic_retries_408() {
+    let (base, seen) = stub(vec![(408, "{}".into()), ok_reply(&verdict_json())]);
+    assert!(provider(&base).recognize(&request()).is_ok());
+    assert_eq!(seen.lock().unwrap().len(), 2);
+}

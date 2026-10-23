@@ -49,6 +49,14 @@ pub enum AiError {
     Disabled,
     #[error("The AI service refused this request ({0}).")]
     Rejected(String),
+    #[error("The AI account has a billing problem. Check it with the provider.")]
+    Billing,
+    #[error("The selected model is not available. Check the model in Settings.")]
+    UnknownModel,
+    #[error("The AI declined to check this note.")]
+    Refused,
+    #[error("The AI's answer was cut off before it finished.")]
+    Truncated,
 }
 
 pub trait Provider: Send + Sync {

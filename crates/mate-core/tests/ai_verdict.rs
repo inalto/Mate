@@ -167,6 +167,10 @@ fn ai_errors_read_as_sentences() {
         AiError::InvalidResponse("bad json".into()),
         AiError::Disabled,
         AiError::Rejected("image too large".into()),
+        AiError::Billing,
+        AiError::UnknownModel,
+        AiError::Refused,
+        AiError::Truncated,
     ] {
         let msg = e.to_string();
         assert!(msg.len() > 10 && msg.ends_with('.'), "{msg}");

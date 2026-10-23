@@ -63,12 +63,16 @@ export function captureGeometry(ink: Rect, opts: CaptureOptions = {}): CaptureGe
 function defaultCanvas(width: number, height: number): CaptureCanvas {
   if (typeof OffscreenCanvas !== "undefined") {
     const c = new OffscreenCanvas(width, height);
-    return {
-      width,
-      height,
-      getContext: () => c.getContext("2d"),
-      encodePng: async () => new Uint8Array(await (await c.convertToBlob({ type: "image/png" })).arrayBuffer()),
-    };
+    // Some engines lack a 2D OffscreenCanvas context or `convertToBlob`: use a DOM canvas then.
+    const ctx = c.getContext("2d");
+    if (ctx && typeof c.convertToBlob === "function") {
+      return {
+        width,
+        height,
+        getContext: () => ctx,
+        encodePng: async () => new Uint8Array(await (await c.convertToBlob({ type: "image/png" })).arrayBuffer()),
+      };
+    }
   }
   const c = document.createElement("canvas");
   c.width = width;

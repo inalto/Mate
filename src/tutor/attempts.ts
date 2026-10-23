@@ -1,0 +1,47 @@
+// Check attempts per revision and the "live checking is blocked" state (rejected key, billing,
+// unknown model). Kept free of heavy imports so settings code can clear the block cheaply.
+
+export const MAX_ATTEMPTS_PER_REVISION = 3;
+
+export type BlockKind = "auth" | "billing" | "unknownModel";
+
+export interface AttemptLedger {
+  count(revision: string): number;
+  add(revision: string): number;
+  reset(revision: string): void;
+  /** No more attempts for this revision (non-retryable failure). */
+  exhaust(revision: string): void;
+  /** Set while live checking is blocked until the key, provider or model changes. */
+  block: { kind: BlockKind; reason: string } | null;
+  setBlock(kind: BlockKind, reason: string): void;
+  /** Call when the key, provider, model or consent changes. */
+  clearAuthBlock(): void;
+}
+
+const LEDGER_LIMIT = 2000;
+
+export function createAttemptLedger(): AttemptLedger {
+  const counts = new Map<string, number>();
+  const set = (rev: string, n: number) => {
+    counts.delete(rev);
+    counts.set(rev, n);
+    if (counts.size > LEDGER_LIMIT) counts.delete(counts.keys().next().value!);
+    return n;
+  };
+  return {
+    count: (rev) => counts.get(rev) ?? 0,
+    add: (rev) => set(rev, (counts.get(rev) ?? 0) + 1),
+    reset: (rev) => void counts.delete(rev),
+    exhaust: (rev) => void set(rev, MAX_ATTEMPTS_PER_REVISION),
+    block: null,
+    setBlock(kind, reason) {
+      this.block = { kind, reason };
+    },
+    clearAuthBlock() {
+      this.block = null;
+    },
+  };
+}
+
+/** Shared ledger for the app session (all editor panes use it). */
+export const sessionAttempts = createAttemptLedger();

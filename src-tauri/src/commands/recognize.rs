@@ -5,13 +5,14 @@
 //! and runs in `spawn_blocking`; at most [`PER_PAGE_CONCURRENCY`] calls per page run at once.
 
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Arc, Mutex};
 
 use base64::Engine;
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, ContextLine, PracticeContext, Provider, RecognizeRequest};
 use mate_core::ai::verdict::Verdict;
-use mate_core::ai::{is_known_provider, provider_for};
+use mate_core::ai::{default_model, is_known_provider, provider_for};
 use mate_core::settings::Settings;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -54,8 +55,9 @@ pub struct RecognizeRequestDto {
     pub practice: Option<PracticeDto>,
 }
 
-/// A failure the frontend can act on: `kind` is one of `disabled`, `auth`, `rateLimited`,
-/// `network`, `invalidResponse`, `rejected`, `internal`; `message` is a user-readable sentence.
+/// A failure the frontend can act on: `kind` is one of `disabled`, `auth`, `billing`,
+/// `unknownModel`, `rateLimited`, `network`, `invalidResponse`, `refused`, `truncated`,
+/// `rejected`, `internal`; `message` is a user-readable sentence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecognizeError {
@@ -72,6 +74,10 @@ impl From<AiError> for RecognizeError {
             AiError::InvalidResponse(_) => "invalidResponse",
             AiError::Disabled => "disabled",
             AiError::Rejected(_) => "rejected",
+            AiError::Billing => "billing",
+            AiError::UnknownModel => "unknownModel",
+            AiError::Refused => "refused",
+            AiError::Truncated => "truncated",
         };
         RecognizeError { kind, message: e.to_string() }
     }
@@ -93,6 +99,55 @@ impl PageGates {
         map.entry(page_id.to_string())
             .or_insert_with(|| Arc::new(Semaphore::new(PER_PAGE_CONCURRENCY)))
             .clone()
+    }
+}
+
+/// The verdict plus which provider and model produced it.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecognizeResult {
+    #[serde(flatten)]
+    pub verdict: Verdict,
+    pub provider: String,
+    pub model: String,
+}
+
+/// One provider instance, rebuilt only when the provider id, model or key changes. Real providers
+/// hold a blocking HTTP client, which must be built and dropped off the async runtime: call
+/// [`ProviderCache::get`] only from `spawn_blocking`.
+#[derive(Default)]
+pub struct ProviderCache(Mutex<Option<(u64, Arc<dyn Provider>)>>);
+
+/// A hash identifying (provider, model, key); the key itself is never stored here.
+fn fingerprint(provider: &str, model: &str, key: &str) -> u64 {
+    let mut h = DefaultHasher::new();
+    (provider, model, key).hash(&mut h);
+    h.finish()
+}
+
+impl ProviderCache {
+    pub fn get(&self, provider: &str, model: &str, key: &str) -> Arc<dyn Provider> {
+        let fp = fingerprint(provider, model, key);
+        let mut slot = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((f, p)) = slot.as_ref()
+            && *f == fp
+        {
+            return p.clone();
+        }
+        let p: Arc<dyn Provider> = Arc::from(provider_for(provider, model, key.to_string()));
+        let old = slot.replace((fp, p.clone()));
+        drop(slot);
+        // The replaced provider (if this was its last user) is dropped here, off the runtime.
+        drop(old);
+        p
+    }
+}
+
+/// The model actually used: the setting, or the provider's default when empty.
+pub fn effective_model(provider: &str, model: &str) -> String {
+    match model.trim() {
+        "" => default_model(provider).to_string(),
+        m => m.to_string(),
     }
 }
 
@@ -132,33 +187,51 @@ pub fn to_request(dto: RecognizeRequestDto) -> Result<RecognizeRequest, Recogniz
     })
 }
 
-/// Runs one blocking provider call behind the page's gate.
-pub async fn run_gated(
+/// Runs one provider call behind the page's gate. `make_prepare` is called once the permit is
+/// held (so it sees the settings as they are now, not when the request was queued); the closure it
+/// returns runs in `spawn_blocking` and decides whether to call, and with which provider and model.
+pub async fn run_gated<M, P>(
     gates: &PageGates,
     page_id: &str,
-    provider: Box<dyn Provider>,
+    make_prepare: M,
     req: RecognizeRequest,
-) -> Result<Verdict, RecognizeError> {
+) -> Result<RecognizeResult, RecognizeError>
+where
+    M: FnOnce() -> Result<P, RecognizeError>,
+    P: FnOnce() -> Result<(Arc<dyn Provider>, String), RecognizeError> + Send + 'static,
+{
     let gate = gates.gate(page_id);
     let _permit = gate.acquire_owned().await.map_err(internal)?;
-    tauri::async_runtime::spawn_blocking(move || provider.recognize(&req))
-        .await
-        .map_err(internal)?
-        .map_err(RecognizeError::from)
+    let prepare = make_prepare()?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let (provider, model) = prepare()?;
+        let verdict = provider.recognize(&req)?;
+        Ok(RecognizeResult { verdict, provider: provider.id().to_string(), model })
+    })
+    .await
+    .map_err(internal)?
 }
 
 #[tauri::command]
-pub async fn recognize_group(state: State<'_, AppState>, req: RecognizeRequestDto) -> Result<Verdict, RecognizeError> {
-    let settings = state.settings.lock().map_err(internal)?.clone();
-    let store: Arc<dyn KeyStore> = state.keys.clone();
-    // The keychain can block on OS prompts: read it off the async runtime.
-    let (provider_id, model, key) = tauri::async_runtime::spawn_blocking(move || resolve(&settings, store.as_ref()))
-        .await
-        .map_err(internal)??;
+pub async fn recognize_group(
+    state: State<'_, AppState>,
+    req: RecognizeRequestDto,
+) -> Result<RecognizeResult, RecognizeError> {
     let page_id = req.page_id.clone();
     let request = to_request(req)?;
-    let provider = provider_for(&provider_id, &model, key);
-    run_gated(&state.recognize_gates, &page_id, provider, request).await
+    let make_prepare = || {
+        // Consent, the tutor switch and the key are checked after waiting for a slot: turning
+        // checking off stops queued requests too.
+        let settings = state.settings.lock().map_err(internal)?.clone();
+        let store: Arc<dyn KeyStore> = state.keys.clone();
+        let cache = state.providers.clone();
+        Ok(move || {
+            let (provider_id, model, key) = resolve(&settings, store.as_ref())?;
+            let model = effective_model(&provider_id, &model);
+            Ok((cache.get(&provider_id, &model, &key), model))
+        })
+    };
+    run_gated(&state.recognize_gates, &page_id, make_prepare, request).await
 }
 
 #[cfg(test)]
@@ -166,7 +239,7 @@ mod tests {
     use super::*;
     use mate_core::ai::keystore::MemoryStore;
     use mate_core::ai::provider::TextRequest;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Duration;
 
     fn consenting() -> Settings {
@@ -218,6 +291,7 @@ mod tests {
     struct Slow {
         now: Arc<AtomicUsize>,
         peak: Arc<AtomicUsize>,
+        calls: Arc<AtomicUsize>,
     }
 
     impl Provider for Slow {
@@ -225,9 +299,10 @@ mod tests {
             "mock"
         }
         fn recognize(&self, _req: &RecognizeRequest) -> Result<Verdict, AiError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
             let n = self.now.fetch_add(1, Ordering::SeqCst) + 1;
             self.peak.fetch_max(n, Ordering::SeqCst);
-            std::thread::sleep(Duration::from_millis(40));
+            std::thread::sleep(Duration::from_millis(80));
             self.now.fetch_sub(1, Ordering::SeqCst);
             Ok(Verdict::default())
         }
@@ -236,34 +311,118 @@ mod tests {
         }
     }
 
+    type Slowed = (Arc<dyn Provider>, Arc<AtomicUsize>, Arc<AtomicUsize>);
+
+    fn slow() -> Slowed {
+        let peak = Arc::new(AtomicUsize::new(0));
+        let calls = Arc::new(AtomicUsize::new(0));
+        let p: Arc<dyn Provider> =
+            Arc::new(Slow { now: Arc::new(AtomicUsize::new(0)), peak: peak.clone(), calls: calls.clone() });
+        (p, peak, calls)
+    }
+
+    fn req() -> RecognizeRequest {
+        RecognizeRequest { image_png: vec![1], context: vec![], difficulty: String::new(), practice: None }
+    }
+
+    type Prepared = Result<(Arc<dyn Provider>, String), RecognizeError>;
+
+    /// `make_prepare` for tests: calls `p` while `allowed` is set, else refuses as Disabled.
+    fn gate_on(
+        p: Arc<dyn Provider>,
+        allowed: Arc<AtomicBool>,
+    ) -> impl FnOnce() -> Result<Box<dyn FnOnce() -> Prepared + Send + 'static>, RecognizeError> {
+        move || {
+            let f: Box<dyn FnOnce() -> Prepared + Send + 'static> = Box::new(move || {
+                if allowed.load(Ordering::SeqCst) { Ok((p, "m".to_string())) } else { Err(AiError::Disabled.into()) }
+            });
+            Ok(f)
+        }
+    }
+
     #[test]
     fn at_most_two_calls_per_page() {
         let gates = Arc::new(PageGates::default());
-        let now = Arc::new(AtomicUsize::new(0));
-        let peak = Arc::new(AtomicUsize::new(0));
-        let other_peak = Arc::new(AtomicUsize::new(0));
+        let (pa, peak, _) = slow();
+        let (pb, other_peak, _) = slow();
+        let on = Arc::new(AtomicBool::new(true));
         tauri::async_runtime::block_on(async {
             let mut tasks = Vec::new();
             for _ in 0..6 {
-                let gates = gates.clone();
-                let provider = Slow { now: now.clone(), peak: peak.clone() };
+                let (gates, p, on) = (gates.clone(), pa.clone(), on.clone());
                 tasks.push(tauri::async_runtime::spawn(async move {
-                    let req = RecognizeRequest { image_png: vec![1], context: vec![], difficulty: String::new(), practice: None };
-                    run_gated(&gates, "page-a", Box::new(provider), req).await
+                    run_gated(&gates, "page-a", gate_on(p, on), req()).await
                 }));
             }
             // Another page is not held back by page-a.
-            let gates_b = gates.clone();
-            let b = Slow { now: Arc::new(AtomicUsize::new(0)), peak: other_peak.clone() };
+            let (gates_b, on_b) = (gates.clone(), on.clone());
             tasks.push(tauri::async_runtime::spawn(async move {
-                let req = RecognizeRequest { image_png: vec![1], context: vec![], difficulty: String::new(), practice: None };
-                run_gated(&gates_b, "page-b", Box::new(b), req).await
+                run_gated(&gates_b, "page-b", gate_on(pb, on_b), req()).await
             }));
             for t in tasks {
-                assert!(t.await.unwrap().is_ok());
+                let res = t.await.unwrap().unwrap();
+                assert_eq!(res.provider, "mock");
             }
         });
         assert_eq!(peak.load(Ordering::SeqCst), PER_PAGE_CONCURRENCY);
         assert_eq!(other_peak.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn consent_off_stops_queued_requests() {
+        let gates = Arc::new(PageGates::default());
+        let (p, _, calls) = slow();
+        let on = Arc::new(AtomicBool::new(true));
+        let results = tauri::async_runtime::block_on(async {
+            let mut tasks = Vec::new();
+            for _ in 0..3 {
+                let (gates, p, on) = (gates.clone(), p.clone(), on.clone());
+                tasks.push(tauri::async_runtime::spawn(async move {
+                    run_gated(&gates, "page", gate_on(p, on), req()).await
+                }));
+            }
+            // The first two hold the page's slots; the third is queued when consent goes off.
+            tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_millis(30))).await.unwrap();
+            on.store(false, Ordering::SeqCst);
+            let mut out = Vec::new();
+            for t in tasks {
+                out.push(t.await.unwrap());
+            }
+            out
+        });
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_eq!(results.iter().filter(|r| r.is_ok()).count(), 2);
+        assert_eq!(results.iter().filter(|r| matches!(r, Err(e) if e.kind == "disabled")).count(), 1);
+    }
+
+    #[test]
+    fn provider_cache_builds_off_the_runtime_and_reuses() {
+        // Building and dropping the real provider (a blocking HTTP client) from a tokio task must
+        // not panic in debug builds: the cache is only used inside spawn_blocking.
+        let cache = Arc::new(ProviderCache::default());
+        let c = cache.clone();
+        let same = tauri::async_runtime::block_on(async move {
+            tauri::async_runtime::spawn(async move {
+                tauri::async_runtime::spawn_blocking(move || {
+                    let a = c.get("anthropic", "claude-opus-5-5", "sk-1");
+                    let b = c.get("anthropic", "claude-opus-5-5", "sk-1");
+                    let same = Arc::ptr_eq(&a, &b);
+                    drop((a, b));
+                    // A new key replaces it (the old one is dropped on this blocking thread).
+                    let d = c.get("anthropic", "claude-opus-5-5", "sk-2");
+                    let e = c.get("anthropic", "claude-opus-5-5", "sk-2");
+                    same && Arc::ptr_eq(&d, &e) && d.id() == "anthropic"
+                })
+                .await
+                .unwrap()
+            })
+            .await
+            .unwrap()
+        });
+        assert!(same);
+        // Release the cached client off the runtime too.
+        std::thread::spawn(move || drop(cache)).join().unwrap();
+        assert_ne!(fingerprint("anthropic", "m", "a"), fingerprint("anthropic", "m", "b"));
+        assert_eq!(effective_model("anthropic", " "), "claude-opus-5-5");
     }
 }

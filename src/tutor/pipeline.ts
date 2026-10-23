@@ -1,81 +1,44 @@
 // Recognition pipeline for one settled stroke group: capture → context → recognize_group → persist.
 // Never throws: every failure becomes an "unchecked" outcome the overlay shows muted, and ink and
-// editing are never affected. At most 3 attempts per revision (the group's ink as it is now).
-import { isRecognizeError, recognizeGroup, type RecognizeErrorKind, type RecognizeRequest } from "../ipc/recognize";
+// editing are never affected. One request per call (Rust already retries transient failures within
+// one ~90 s budget); a transient failure asks the caller to try again later, up to 3 attempts per
+// revision (the group's ink as it is now) across settles.
+import { isRecognizeError, recognizeGroup, type RecognizeErrorKind, type RecognizeRequest, type RecognizeResult } from "../ipc/recognize";
 import { upsertRecognition } from "../ipc/recognition";
-import { AI_DEFAULT_MODEL } from "../model/constants";
 import type { Element, Recognition, RecognitionInput, Settings, UpsertOutcome, Verdict } from "../model/types";
+import { MAX_ATTEMPTS_PER_REVISION, sessionAttempts, type AttemptLedger, type BlockKind } from "./attempts";
 import { captureGroupImage, groupStrokes, type CapturedImage } from "./capture";
 import { pickContext } from "./context";
 import type { Region } from "./types";
 
-export const MAX_ATTEMPTS_PER_REVISION = 3;
-export const BODY_WARN_BYTES = 512 * 1024;
-/** First retry delay; doubles per attempt. */
-export const RETRY_BACKOFF_MS = 1500;
+export { createAttemptLedger, MAX_ATTEMPTS_PER_REVISION, sessionAttempts, type AttemptLedger } from "./attempts";
 
+export const BODY_WARN_BYTES = 512 * 1024;
+/** Delay before the next attempt after a transient failure; doubles per attempt. */
+export const RETRY_DELAY_MS = 15_000;
+
+export type UncheckedKind = RecognizeErrorKind | "capture" | "exhausted";
 
 export type RecognitionOutcome =
   | { status: "checked"; verdict: Verdict; recognition: Recognition; stored: boolean }
-  | { status: "unchecked"; kind: RecognizeErrorKind | "capture" | "exhausted"; reason: string }
+  /** `retryInMs` is set when another attempt for this revision is worth making later. */
+  | { status: "unchecked"; kind: UncheckedKind; reason: string; retryInMs?: number }
   /** The ink changed after capture: the result was dropped and the group will be checked again. */
   | { status: "stale" };
 
-/** Attempts per revision and the "key rejected" block, shared by every check of a session. */
-export interface AttemptLedger {
-  count(revision: string): number;
-  add(revision: string): number;
-  reset(revision: string): void;
-  exhaust(revision: string): void;
-  authBlock: string | null;
-  blockAuth(reason: string): void;
-  /** Call when the key or provider changes. */
-  clearAuthBlock(): void;
-}
-
-const LEDGER_LIMIT = 2000;
-
-export function createAttemptLedger(): AttemptLedger {
-  const counts = new Map<string, number>();
-  const set = (rev: string, n: number) => {
-    counts.delete(rev);
-    counts.set(rev, n);
-    if (counts.size > LEDGER_LIMIT) counts.delete(counts.keys().next().value!);
-    return n;
-  };
-  return {
-    count: (rev) => counts.get(rev) ?? 0,
-    add: (rev) => set(rev, (counts.get(rev) ?? 0) + 1),
-    reset: (rev) => void counts.delete(rev),
-    exhaust: (rev) => void set(rev, MAX_ATTEMPTS_PER_REVISION),
-    authBlock: null,
-    blockAuth(reason) {
-      this.authBlock = reason;
-    },
-    clearAuthBlock() {
-      this.authBlock = null;
-    },
-  };
-}
-
 export interface PipelineDeps {
-  recognize(req: RecognizeRequest): Promise<Verdict>;
+  recognize(req: RecognizeRequest): Promise<RecognizeResult>;
   upsert(rec: RecognitionInput): Promise<UpsertOutcome>;
   capture(elements: Iterable<Element>, region: Region): Promise<CapturedImage>;
-  sleep(ms: number): Promise<void>;
   now(): number;
   warn(message: string): void;
   attempts: AttemptLedger;
 }
 
-/** Shared ledger for the app session (the editor's checks all use it). */
-export const sessionAttempts = createAttemptLedger();
-
 export const defaultPipelineDeps: PipelineDeps = {
   recognize: recognizeGroup,
   upsert: upsertRecognition,
   capture: (elements, region) => captureGroupImage(elements, region),
-  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   now: () => Date.now(),
   warn: (m) => console.warn(m),
   attempts: sessionAttempts,
@@ -112,11 +75,32 @@ function resultHash(elementIds: readonly string[], v: Verdict): string {
   ]);
 }
 
+/** Worth another attempt later (Rust has already retried these within the request). */
 const TRANSIENT: ReadonlySet<string> = new Set(["network", "rateLimited", "invalidResponse"]);
+/** Block live checking until the key, provider or model changes. */
+const BLOCKING: ReadonlySet<string> = new Set(["auth", "billing", "unknownModel"]);
 
 function asRecognizeError(e: unknown): { kind: RecognizeErrorKind; message: string } {
   if (isRecognizeError(e)) return e;
   return { kind: "network", message: "Couldn't check this note." };
+}
+
+function verdictOf(r: RecognizeResult): Verdict {
+  return {
+    description: r.description,
+    latex: r.latex,
+    correct: r.correct,
+    domain: r.domain,
+    errorNature: r.errorNature,
+    hint: r.hint,
+    explanation: r.explanation,
+    nextSteps: r.nextSteps,
+    focusSpan: r.focusSpan,
+    illegible: r.illegible,
+    transcription: r.transcription,
+    code: r.code,
+    kind: r.kind,
+  };
 }
 
 /**
@@ -132,7 +116,7 @@ export async function runRecognition(
 ): Promise<RecognitionOutcome | null> {
   if (!settings.tutorEnabled || settings.aiConsent !== true) return null;
   const { attempts } = deps;
-  if (attempts.authBlock) return { status: "unchecked", kind: "auth", reason: attempts.authBlock };
+  if (attempts.block) return { status: "unchecked", kind: attempts.block.kind, reason: attempts.block.reason };
 
   const els = [...elements];
   const revision = revisionOf(region, els);
@@ -160,28 +144,26 @@ export async function runRecognition(
   const size = JSON.stringify(req).length;
   if (size > BODY_WARN_BYTES) deps.warn(`Tutor request for group ${region.regionId} is ${Math.round(size / 1024)} KB (over 512 KB).`);
 
-  let verdict: Verdict | null = null;
-  for (;;) {
-    const n = attempts.add(revision);
-    try {
-      verdict = await deps.recognize(req);
-      break;
-    } catch (raw) {
-      const err = asRecognizeError(raw);
-      if (err.kind === "disabled") return null;
-      if (err.kind === "auth") {
-        attempts.blockAuth(err.message);
-        return { status: "unchecked", kind: "auth", reason: err.message };
-      }
-      if (!TRANSIENT.has(err.kind) || n >= MAX_ATTEMPTS_PER_REVISION) {
-        attempts.exhaust(revision);
-        return { status: "unchecked", kind: err.kind, reason: err.message };
-      }
-      await deps.sleep(RETRY_BACKOFF_MS * 2 ** (n - 1));
+  const n = attempts.add(revision);
+  let result: RecognizeResult;
+  try {
+    result = await deps.recognize(req);
+  } catch (raw) {
+    const err = asRecognizeError(raw);
+    if (err.kind === "disabled") return null;
+    if (BLOCKING.has(err.kind)) {
+      attempts.setBlock(err.kind as BlockKind, err.message);
+      return { status: "unchecked", kind: err.kind, reason: err.message };
     }
+    if (TRANSIENT.has(err.kind) && n < MAX_ATTEMPTS_PER_REVISION) {
+      return { status: "unchecked", kind: err.kind, reason: err.message, retryInMs: RETRY_DELAY_MS * 2 ** (n - 1) };
+    }
+    attempts.exhaust(revision);
+    return { status: "unchecked", kind: err.kind, reason: err.message };
   }
   attempts.reset(revision);
 
+  const verdict = verdictOf(result);
   const recognition: Recognition = {
     ...verdict,
     pageId,
@@ -190,8 +172,8 @@ export async function runRecognition(
     bounds: { ...region.bounds },
     source: "auto",
     userOverride: false,
-    provider: settings.aiProvider,
-    model: settings.aiModel.trim() || AI_DEFAULT_MODEL[settings.aiProvider] || "",
+    provider: result.provider,
+    model: result.model,
     createdAt: "",
     updatedAt: "",
     capturedAt,

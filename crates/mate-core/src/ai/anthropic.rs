@@ -5,7 +5,7 @@
 
 use std::fmt;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use serde_json::{Value, json};
@@ -41,10 +41,15 @@ impl fmt::Debug for AnthropicProvider {
 }
 
 enum Failure {
-    /// Worth another attempt (429, 5xx, network).
-    Transient(AiError),
+    /// Worth another attempt (408, 429, 5xx, network), optionally after the server's `retry-after`.
+    Transient(AiError, Option<Duration>),
     Final(AiError),
 }
+
+/// Upper bound for one check, retries included, so a group is never in flight for long.
+const DEADLINE: Duration = Duration::from_secs(90);
+/// Longest `retry-after` honoured; longer waits fail now and are retried on a later settle.
+const MAX_RETRY_AFTER: Duration = Duration::from_secs(10);
 
 impl AnthropicProvider {
     pub fn new(api_key: String, model: String, base_url: String) -> Self {
@@ -70,40 +75,60 @@ impl AnthropicProvider {
 
     /// POSTs `body` with retries and returns the first text block of the reply.
     fn send(&self, body: &Value) -> Result<String, AiError> {
+        let start = Instant::now();
         let mut attempt = 0;
         loop {
-            match self.send_once(body) {
+            let left = DEADLINE.saturating_sub(start.elapsed());
+            match self.send_once(body, left.min(TIMEOUT)) {
                 Ok(text) => return Ok(text),
                 Err(Failure::Final(e)) => return Err(e),
-                Err(Failure::Transient(e)) => {
-                    if attempt >= RETRIES {
+                Err(Failure::Transient(e, retry_after)) => {
+                    let wait = match retry_after {
+                        Some(ra) if ra > MAX_RETRY_AFTER => return Err(e),
+                        Some(ra) => ra.max(self.backoff * 2u32.pow(attempt)),
+                        None => self.backoff * 2u32.pow(attempt),
+                    };
+                    // Another try must fit in the deadline with at least a few seconds to run.
+                    if attempt >= RETRIES || start.elapsed() + wait + Duration::from_secs(5) > DEADLINE {
                         return Err(e);
                     }
-                    thread::sleep(self.backoff * 2u32.pow(attempt));
+                    thread::sleep(wait);
                     attempt += 1;
                 }
             }
         }
     }
 
-    fn send_once(&self, body: &Value) -> Result<String, Failure> {
+    fn send_once(&self, body: &Value, timeout: Duration) -> Result<String, Failure> {
         let res = self
             .client
             .post(format!("{}/v1/messages", self.base_url))
+            .timeout(timeout)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", API_VERSION)
             .header("content-type", "application/json")
             .body(body.to_string())
             .send()
-            .map_err(|e| Failure::Transient(network_error(&e)))?;
+            .map_err(|e| Failure::Transient(network_error(&e), None))?;
         let status = res.status().as_u16();
-        let text = res.text().map_err(|e| Failure::Transient(network_error(&e)))?;
+        let retry_after = res
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .map(Duration::from_secs);
+        let text = res.text().map_err(|e| Failure::Transient(network_error(&e), None))?;
         match status {
             200..=299 => first_text_block(&text).map_err(Failure::Final),
             401 | 403 => Err(Failure::Final(AiError::Auth)),
-            400 | 404 | 413 | 422 => Err(Failure::Final(AiError::Rejected(api_message(&text, status)))),
-            429 => Err(Failure::Transient(AiError::RateLimited)),
-            500..=599 => Err(Failure::Transient(AiError::Network(format!("the service answered {status}")))),
+            402 => Err(Failure::Final(AiError::Billing)),
+            404 => Err(Failure::Final(AiError::UnknownModel)),
+            400 | 413 | 422 => Err(Failure::Final(AiError::Rejected(api_message(&text, status)))),
+            408 => Err(Failure::Transient(AiError::Network("the request timed out".into()), retry_after)),
+            429 => Err(Failure::Transient(AiError::RateLimited, retry_after)),
+            500..=599 => {
+                Err(Failure::Transient(AiError::Network(format!("the service answered {status}")), retry_after))
+            }
             _ => Err(Failure::Final(AiError::InvalidResponse(format!("unexpected status {status}")))),
         }
     }
@@ -132,8 +157,8 @@ fn api_message(body: &str, status: u16) -> String {
 fn first_text_block(body: &str) -> Result<String, AiError> {
     let v: Value = serde_json::from_str(body).map_err(|_| AiError::InvalidResponse("not JSON".into()))?;
     match v["stop_reason"].as_str() {
-        Some("refusal") => return Err(AiError::InvalidResponse("the model declined to answer".into())),
-        Some("max_tokens") => return Err(AiError::InvalidResponse("the answer was cut off".into())),
+        Some("refusal") => return Err(AiError::Refused),
+        Some("max_tokens") => return Err(AiError::Truncated),
         _ => {}
     }
     v["content"]

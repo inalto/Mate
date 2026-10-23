@@ -18,7 +18,7 @@ import { watchPageLimit } from "../stores/pageLimit";
 import { useSettingsStore } from "../stores/settings";
 import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
-import { useTutor } from "../tutor/useTutor";
+import TutorController from "../tutor/TutorController";
 
 export default function Editor() {
   const { pageId } = useParams();
@@ -66,9 +66,6 @@ export default function Editor() {
       ),
     [navigate],
   );
-  // Live tutor per pane (checks only with AI consent and a key; the overlay arrives separately).
-  useTutor(editorForPane(0));
-  useTutor(editorForPane(1));
   useEffect(() => watchThumbnails(), []);
   // Box editors are separate chunks: fetch them once the editor is up, ahead of the first edit.
   useEffect(() => preloadBoxEditors(), []);
@@ -97,6 +94,8 @@ export default function Editor() {
                 }}
               >
                 <CanvasView pageId={pane.pageId} store={editorForPane(i as PaneIndex)} />
+                {/* Live tutor (checks only with AI consent and a key); renders nothing. */}
+                <TutorController store={editorForPane(i as PaneIndex)} pane={i as PaneIndex} />
                 <OverlayLayer store={editorForPane(i as PaneIndex)} />
               </div>
             ))}
