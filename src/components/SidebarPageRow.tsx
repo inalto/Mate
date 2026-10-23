@@ -1,10 +1,12 @@
 // One page in the sidebar tree (recursive over child pages) and its context menu.
 import { CaretDown, CaretRight, FileText } from "@phosphor-icons/react";
 import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { openPageWindow } from "../ipc/windows";
 import type { Page } from "../model/types";
 import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
 import { useTabsStore } from "../stores/tabs";
+import { showToast } from "./Toast";
 import { useDismiss } from "./useDismiss";
 
 const PAGE_ICONS = ["📝", "📚", "💡", "⭐", "✅", "🎯", "🧪", "📐", "🎨", "🔖"] as const;
@@ -29,6 +31,11 @@ function PageMenu({ page, at, onClose }: { page: Page; at: { x: number; y: numbe
     if (!tabs.activeTabId) return;
     tabs.split(tabs.activeTabId, page.id);
   };
+  const openWindow = () =>
+    openPageWindow(page.id).catch((err) => {
+      console.error("open page window failed", err);
+      showToast("Could not open the page in a new window.");
+    });
   const item = (label: string, fn: () => unknown, hint?: string) => (
     <button key={label} role="menuitem" onClick={run(fn)}>
       {label}
@@ -47,6 +54,7 @@ function PageMenu({ page, at, onClose }: { page: Page; at: { x: number; y: numbe
           {item("Demote", () => nb.indentPage(page.id, 1), "Alt+→")}
           {item("Duplicate", () => nb.duplicatePage(page.id), "Ctrl+D")}
           {item("Open in split view", split)}
+          {item("Open in new window", openWindow)}
           {item("Delete", () => nb.trash("page", page.id))}
         </>
       ) : (

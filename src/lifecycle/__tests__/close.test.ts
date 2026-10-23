@@ -39,17 +39,24 @@ vi.mock("../../stores/focusedEditor", () => ({ editorForPane: (i: number) => pan
 const showToast = vi.fn();
 vi.mock("../../components/Toast", () => ({ showToast: (...a: unknown[]) => showToast(...a) }));
 let startedResult = true;
+const win = vi.hoisted(() => ({ page: false }));
+vi.mock("../../ipc/windows", () => ({ isPageWindow: () => win.page }));
 
 import * as ipc from "../../ipc/lifecycle";
 import { CLEAN_EXIT_KEY, SAFE_CLOSE_TOAST, STILL_SAVING_TOAST, installCloseHandler } from "../close";
 
-type W = { __mateFlushAndClose?: (id: number) => Promise<void>; __mateCloseAttemptCancelled?: (id: number) => void };
+type W = {
+  __mateFlushAndClose?: (id: number) => Promise<void>;
+  __mateCloseAttemptCancelled?: (id: number) => void;
+  __mateCloseRefused?: () => void;
+};
 const w = window as unknown as W;
 
 beforeEach(() => {
   calls.length = 0;
   failedCount = 0;
   startedResult = true;
+  win.page = false;
   openSession.id = null;
   showToast.mockClear();
   vi.mocked(ipc.completeCloseAttempt).mockClear();
@@ -58,6 +65,18 @@ beforeEach(() => {
 });
 
 describe("close handler", () => {
+  it("page_window_close_leaves_the_clean_exit_flag_to_main", async () => {
+    win.page = true;
+    await w.__mateFlushAndClose!(4);
+    expect(calls).toEqual(["started:4", "flush", "settings", "complete:4"]);
+    expect(localStorage.getItem(CLEAN_EXIT_KEY)).toBeNull();
+  });
+
+  it("main_close_refused_by_a_page_window_shows_the_safe_close_toast", () => {
+    w.__mateCloseRefused!();
+    expect(showToast).toHaveBeenCalledWith(SAFE_CLOSE_TOAST);
+  });
+
   it("flushes_pending_settings_on_beforeunload", async () => {
     window.dispatchEvent(new Event("beforeunload"));
     await Promise.resolve();

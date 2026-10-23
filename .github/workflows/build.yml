@@ -41,6 +41,9 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      - name: Skip updater artifacts (CI builds are unsigned)
+        run: node -e "const f='src-tauri/tauri.conf.json',fs=require('fs'),c=JSON.parse(fs.readFileSync(f,'utf8'));c.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(c,null,2))"
+
       - run: npm run tauri build
 
       - uses: actions/upload-artifact@v4

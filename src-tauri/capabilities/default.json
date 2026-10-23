@@ -3,13 +3,16 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": [
-    "main"
+    "main",
+    "page-*"
   ],
   "permissions": [
     "core:default",
     "core:path:default",
     "dialog:default",
     "opener:default",
-    "window-state:default"
+    "window-state:default",
+    "core:window:allow-set-title",
+    "core:window:allow-close"
   ]
 }

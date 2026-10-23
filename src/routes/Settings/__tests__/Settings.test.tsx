@@ -251,7 +251,7 @@ describe("navigation and landmarks", () => {
       expect(within(nav).getByRole("button", { name: s })).toBeTruthy();
       expect(screen.getByRole("heading", { level: 2, name: s })).toBeTruthy();
     }
-    expect(screen.getAllByText("Coming in this release")).toHaveLength(2);
+    expect(screen.getAllByText("Coming in this release")).toHaveLength(1);
   });
 
   it("arrow_keys_move_between_nav_items", () => {

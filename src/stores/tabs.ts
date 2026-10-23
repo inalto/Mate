@@ -1,5 +1,6 @@
 // Editor tabs. A tab shows one page or, in split view, exactly two. Persisted in localStorage.
 import { create } from "zustand";
+import { isPageWindow } from "../ipc/windows";
 import { useNotebookStore } from "./notebook";
 
 export const TABS_STORAGE_KEY = "mate_tabs_v1";
@@ -54,6 +55,8 @@ const withPanes = (tab: Tab, panes: Tab["panes"], focusedPaneIndex: PaneIndex): 
 });
 
 function load(): { tabs: Tab[]; activeTabId: string | null } {
+  // A page window has its own single tab, in memory: the stored tabs belong to the main window.
+  if (isPageWindow()) return { tabs: [], activeTabId: null };
   try {
     const raw = JSON.parse(localStorage.getItem(TABS_STORAGE_KEY) ?? "null");
     if (!raw || !Array.isArray(raw.tabs)) return { tabs: [], activeTabId: null };
@@ -72,6 +75,7 @@ function load(): { tabs: Tab[]; activeTabId: string | null } {
 }
 
 function save(tabs: Tab[], activeTabId: string | null): void {
+  if (isPageWindow()) return;
   try {
     localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify({ tabs, activeTabId }));
   } catch {

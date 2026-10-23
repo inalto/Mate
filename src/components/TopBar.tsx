@@ -2,6 +2,7 @@
 import { ArrowArcLeft, ArrowArcRight, DotsThree, House, Plus, SidebarSimple } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
+import { isPageWindow } from "../ipc/windows";
 import { startNewTab } from "../keys/editorCommands";
 import { useChromeStore } from "../stores/chrome";
 import { useFocusedEditor } from "../stores/focusedEditor";
@@ -33,7 +34,7 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
           <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPageSettings(pageId))}>Page settings</button>
           <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPalette("title"))}>Suggest title</button>
           <button role="menuitem" onClick={pick(() => chrome().openPalette())}>Search and actions…</button>
-          <button role="menuitem" onClick={pick(() => navigate("/settings"))}>Settings</button>
+          {!isPageWindow() && <button role="menuitem" onClick={pick(() => navigate("/settings"))}>Settings</button>}
           <button role="menuitem" onClick={pick(() => chrome().setShortcutsOpen(true))}>Keyboard shortcuts</button>
         </div>
       )}
@@ -59,13 +60,15 @@ export default function TopBar() {
     if (pageId && next && next !== title) await useNotebookStore.getState().rename("page", pageId, next);
   };
 
+  // A page window has no home, sidebar or tabs: closing the window is its only exit.
+  const pageWindow = isPageWindow();
   return (
     <header className="topbar">
-      <button className="icon-btn" aria-label="Home" title="Home" onClick={() => navigate("/")}><House size={18} /></button>
-      <button className="icon-btn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+\)" onClick={() => useChromeStore.getState().toggleSidebar()}><SidebarSimple size={18} /></button>
+      {!pageWindow && <button className="icon-btn" aria-label="Home" title="Home" onClick={() => navigate("/")}><House size={18} /></button>}
+      {!pageWindow && <button className="icon-btn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+\)" onClick={() => useChromeStore.getState().toggleSidebar()}><SidebarSimple size={18} /></button>}
       <button className="icon-btn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={() => ed.getState().undo()}><ArrowArcLeft size={18} /></button>
       <button className="icon-btn" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => ed.getState().redo()}><ArrowArcRight size={18} /></button>
-      <button className="icon-btn" aria-label="New tab" title="New tab (Ctrl+T)" onClick={() => startNewTab(navigate)}><Plus size={18} /></button>
+      {!pageWindow && <button className="icon-btn" aria-label="New tab" title="New tab (Ctrl+T)" onClick={() => startNewTab(navigate)}><Plus size={18} /></button>}
       <input
         className="input topbar-title"
         aria-label="Page title"

@@ -74,6 +74,35 @@ npm run tauri dev      # desktop app with hot reload
 npm run tauri build    # release build; installers under target/release/bundle/
 ```
 
+## Updates
+
+Mate can check GitHub Releases for a newer build, download it and restart into it (Settings, Updates). Every download is verified against a minisign public key baked into the app, so only builds signed with your private key are ever installed.
+
+### One-time setup
+
+1. Generate a key pair (keep the private key out of the repository):
+
+   ```
+   npm run tauri signer generate -- -w ~/.tauri/mate.key
+   ```
+
+   This writes `~/.tauri/mate.key` (private) and `~/.tauri/mate.key.pub` (public). Losing the private key or its password means existing installs can never be updated again.
+2. Replace the placeholder public key. Paste the contents of `mate.key.pub` into **both** `src-tauri/updater.pub` and `plugins.updater.pubkey` in `src-tauri/tauri.conf.json` (Tauri cannot read the key from a file, so a unit test checks that the two are identical). Commit both.
+3. Add GitHub repository secrets (Settings, Secrets and variables, Actions): `TAURI_SIGNING_PRIVATE_KEY` (the contents of `mate.key`) and, if you set one, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+4. Push a tag such as `v0.5.0`. The release workflow builds the installers, signs the updater bundles and uploads `latest.json` (version, notes, per-platform URL and signature) to the release.
+
+The app looks at `https://github.com/inalto/Mate/releases/latest/download/latest.json`, which always points at the newest release.
+
+### Without a key
+
+Until step 2 is done the committed key is a throwaway placeholder whose private half does not exist. Such a build shows "Updates are not configured for this build." and never installs anything. The same message appears if the endpoint has no manifest (for example a release built without the signing secret). CI still builds installers without the secret: the workflow switches `bundle.createUpdaterArtifacts` off, so those builds are unsigned and cannot be updated to or from.
+
+For a local `npm run tauri build` without the private key, pass `--config '{"bundle":{"createUpdaterArtifacts":false}}'`, or set `TAURI_SIGNING_PRIVATE_KEY` in your shell.
+
+### Settings
+
+Settings, Updates has "Check for updates on startup" (on by default; a failed or offline check is silent, only an available update shows a notice), "Check for updates", download progress and "Restart to update".
+
 ## Tests and checks
 
 ```bash

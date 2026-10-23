@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -94,8 +96,20 @@ impl CloseGate {
     }
 }
 
-fn gate(state: &AppState) -> std::sync::MutexGuard<'_, CloseGate> {
-    state.close_attempt.lock().unwrap_or_else(|e| e.into_inner())
+/// One close gate per window label: every window (the main one and each page window) runs its own
+/// handshake with its own webview. Attempt ids are per window.
+#[derive(Default)]
+pub struct CloseGates(Mutex<HashMap<String, CloseGate>>);
+
+impl CloseGates {
+    pub fn with<R>(&self, label: &str, f: impl FnOnce(&mut CloseGate) -> R) -> R {
+        let mut map = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        f(map.entry(label.to_owned()).or_default())
+    }
+}
+
+fn gate<R>(state: &AppState, label: &str, f: impl FnOnce(&mut CloseGate) -> R) -> R {
+    state.close_attempt.with(label, f)
 }
 
 fn eval_js(window: &Window, js: String) {
@@ -110,20 +124,15 @@ pub fn start_close_attempt(window: &Window) -> bool {
     start_attempt(window, false)
 }
 
-/// Handles a user-initiated `RunEvent::ExitRequested` (macOS Cmd+Q / app menu "Quit" / Dock quit,
-/// which never send `CloseRequested`). Same contract as `start_close_attempt`: true = the exit was
-/// prevented and the frontend flushes first; `complete_close_attempt` then destroys the window and
-/// exits the app.
-pub fn start_exit_attempt(window: &Window) -> bool {
-    start_attempt(window, true)
-}
-
-fn start_attempt(window: &Window, exit: bool) -> bool {
+/// Starts `window`'s own handshake. `exit`: a user-initiated `RunEvent::ExitRequested` (macOS Cmd+Q
+/// / app menu "Quit" / Dock quit, which never send `CloseRequested`) on the main window, so the app
+/// exits once `complete_close_attempt` destroyed it. True =
+/// the frontend flushes first; false = the window should close now (its frontend never answered the
+/// previous attempt).
+pub(crate) fn start_attempt(window: &Window, exit: bool) -> bool {
     let state = window.state::<AppState>();
-    let id = {
-        let mut g = gate(&state);
-        if exit { g.on_exit_requested() } else { g.on_close_requested() }
-    };
+    let label = window.label().to_owned();
+    let id = gate(&state, &label, |g| if exit { g.on_exit_requested() } else { g.on_close_requested() });
     let Some(id) = id else {
         return false;
     };
@@ -134,25 +143,30 @@ fn start_attempt(window: &Window, exit: bool) -> bool {
     std::thread::spawn(move || {
         std::thread::sleep(WATCHDOG);
         let state = window.state::<AppState>();
-        let expiry = gate(&state).expire(id);
+        let expiry = gate(&state, &label, |g| g.expire(id));
         if expiry == Expiry::Acknowledged {
             // Mate is still saving: tell the frontend to surface it.
             eval_js(&window, format!(
                 "window.__mateCloseAttemptCancelled && window.__mateCloseAttemptCancelled({id})"
             ));
+            // A page window that could not flush holds up a pending main-window close: cancel it.
+            crate::windows::secondary_refused(window.app_handle(), &label);
         }
     });
     true
 }
 
 #[tauri::command]
-pub fn close_attempt_started(state: State<'_, AppState>, attempt_id: u64) -> bool {
-    gate(&state).acknowledge(attempt_id)
+pub fn close_attempt_started(window: Window, state: State<'_, AppState>, attempt_id: u64) -> bool {
+    gate(&state, window.label(), |g| g.acknowledge(attempt_id))
 }
 
 #[tauri::command]
-pub fn cancel_close_attempt(state: State<'_, AppState>, attempt_id: u64) {
-    gate(&state).clear_if_current(attempt_id);
+pub fn cancel_close_attempt(window: Window, state: State<'_, AppState>, attempt_id: u64) {
+    if gate(&state, window.label(), |g| g.clear_if_current(attempt_id)) {
+        // The frontend could not flush (it shows why); a pending main-window close waits no more.
+        crate::windows::secondary_refused(window.app_handle(), window.label());
+    }
 }
 
 #[tauri::command]
@@ -164,7 +178,8 @@ pub fn complete_close_attempt(
 ) -> Result<(), String> {
     // `force` is the user's explicit "Close anyway" after a recovery file was written; the attempt
     // was already cancelled at that point, so it is no longer current.
-    let current = gate(&state).clear_if_current(attempt_id);
+    let label = window.label().to_owned();
+    let current = gate(&state, &label, |g| g.clear_if_current(attempt_id));
     if !current && force != Some(true) {
         return Err("stale close attempt".into());
     }
@@ -172,7 +187,7 @@ pub fn complete_close_attempt(
     // A quit (Cmd+Q) was prevented to flush first. Destroying the last window usually ends the
     // app on its own (it emits ExitRequested again, which then finds no main window and is let
     // through); exit explicitly in case it does not. The gate hands this out once.
-    if gate(&state).take_exit_after_destroy() {
+    if gate(&state, &label, |g| g.take_exit_after_destroy()) {
         window.app_handle().exit(0);
     }
     Ok(())
@@ -285,6 +300,18 @@ mod tests {
         let c = g.on_close_requested().unwrap();
         assert!(g.clear_if_current(c));
         assert!(!g.take_exit_after_destroy());
+    }
+
+    #[test]
+    fn each_window_has_its_own_gate() {
+        let gates = CloseGates::default();
+        let main = gates.with("main", |g| g.on_close_requested()).unwrap();
+        let page = gates.with("page-p1", |g| g.on_close_requested()).unwrap();
+        // An unacknowledged attempt in one window does not let another window's close through.
+        assert!(gates.with("page-p1", |g| g.acknowledge(page)));
+        assert!(gates.with("main", |g| g.is_current(main)));
+        assert!(gates.with("page-p1", |g| g.clear_if_current(page)));
+        assert_eq!(gates.with("main", |g| g.on_close_requested()), None);
     }
 
     #[test]

@@ -1,5 +1,6 @@
 mod commands;
 mod state;
+mod windows;
 
 use commands::{
   ai, archive, ask, assets, elements, export, haptics, import, lifecycle, notebook, open_files, pdf, practice, recognition, recognize, settings,
@@ -25,13 +26,21 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
-    .on_window_event(|window, event| {
-      if let WindowEvent::CloseRequested { api, .. } = event {
+    .on_window_event(|window, event| match event {
+      WindowEvent::CloseRequested { api, .. } => {
         // Fail open: if the frontend never acknowledged the previous attempt, let the window close.
-        if lifecycle::start_close_attempt(window) {
+        // The main window first closes every page window through its own handshake.
+        let prevent = if window.label() == crate::windows::MAIN_LABEL {
+          crate::windows::request_main_close(window.app_handle(), false)
+        } else {
+          lifecycle::start_close_attempt(window)
+        };
+        if prevent {
           api.prevent_close();
         }
       }
+      WindowEvent::Destroyed => crate::windows::window_destroyed(window.app_handle(), window.label()),
+      _ => {}
     })
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -50,6 +59,7 @@ pub fn run() {
       let cwd = std::env::current_dir().unwrap_or_default();
       app.manage(open_files::PendingImportFiles::new(open_files::import_paths_from_args(std::env::args(), &cwd)));
       app.manage(import::ImportControl::default());
+      app.manage(crate::windows::PageWindows::default());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -106,6 +116,9 @@ pub fn run() {
       lifecycle::cancel_close_attempt,
       lifecycle::complete_close_attempt,
       lifecycle::write_recovery_artifact,
+      commands::windows::open_page_window,
+      commands::windows::focus_page_window,
+      commands::windows::list_page_windows,
       haptics::pen_haptics_pulse,
     ])
     .build(tauri::generate_context!())
@@ -124,8 +137,8 @@ pub fn run() {
       // the main window. On Windows/Linux this event fires after the last window was destroyed,
       // when there is no main window any more, so it passes through unchanged.
       if let RunEvent::ExitRequested { api, code: None, .. } = event
-        && let Some(main) = app.get_webview_window("main")
-        && lifecycle::start_exit_attempt(&main.as_ref().window())
+        && app.get_webview_window(crate::windows::MAIN_LABEL).is_some()
+        && crate::windows::request_main_close(app, true)
       {
         api.prevent_exit();
       }
