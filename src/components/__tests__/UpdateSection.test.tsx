@@ -54,6 +54,9 @@ describe("UpdateSection", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Install 0.5.0" }));
 
     await waitFor(() => expect(ipc.installUpdate).toHaveBeenCalled());
+    // Until the first chunk arrives every window is being saved.
+    expect(screen.getByText("Saving your work…")).toBeTruthy();
+    expect(ipc.installUpdate).toHaveBeenCalledWith("0.5.0");
     act(() => emit({ downloaded: 1024 * 1024, total: 4 * 1024 * 1024 }));
     expect(await screen.findByText(/1\.0 MB of 4\.0 MB/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Restart to update" })).toBeNull();

@@ -21,7 +21,7 @@ type State =
 const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 export function formatProgress(p: UpdateProgress | null): string {
-  if (!p) return "Starting download...";
+  if (!p) return "Saving your work…";
   return p.total ? `${mb(p.downloaded)} of ${mb(p.total)}` : mb(p.downloaded);
 }
 
@@ -36,6 +36,8 @@ export default function UpdateSection() {
 
   useEffect(() => {
     live.current = true;
+    // "View" on the startup notice lands here: /settings#updates.
+    if (window.location.hash === "#updates") document.getElementById("set-sec-updates")?.scrollIntoView?.({ block: "start" });
     getVersion().then(
       (v) => live.current && setVersion(v),
       () => {},
@@ -65,7 +67,7 @@ export default function UpdateSection() {
       unlisten = await onUpdateProgress((progress) => {
         if (live.current) setState({ kind: "downloading", version: target, progress });
       });
-      await installUpdate();
+      await installUpdate(target);
       if (live.current) setState({ kind: "ready", version: target });
     } catch (e) {
       if (live.current) setState({ kind: "error", message: errorText(e) });
@@ -90,7 +92,7 @@ export default function UpdateSection() {
             Restart to update
           </button>
         ) : (
-          <button type="button" className="btn" disabled={busy || state.kind === "notConfigured"} onClick={() => void check()}>
+          <button type="button" className="btn" disabled={busy} onClick={() => void check()}>
             {state.kind === "checking" ? "Checking..." : "Check for updates"}
           </button>
         )}
@@ -101,7 +103,8 @@ export default function UpdateSection() {
           {state.kind === "upToDate" && "You are up to date."}
           {state.kind === "notConfigured" && NOT_CONFIGURED_COPY}
           {state.kind === "available" && `Version ${state.version} is available.${state.notes ? ` ${state.notes}` : ""}`}
-          {state.kind === "downloading" && `Downloading ${state.version}: ${formatProgress(state.progress)}`}
+          {state.kind === "downloading" &&
+            (state.progress ? `Downloading ${state.version}: ${formatProgress(state.progress)}` : formatProgress(null))}
           {state.kind === "ready" && `Version ${state.version} is installed. Restart to finish updating.`}
           {state.kind === "error" && `Could not update: ${state.message}`}
         </span>
@@ -125,7 +128,7 @@ export function StartupUpdateCheck() {
       try {
         const r = await checkForUpdate();
         if (r.configured && r.available && r.version) {
-          showToast(`Mate ${r.version} is available.`, { label: "View", onClick: () => navigateTo("/settings") });
+          showToast(`Mate ${r.version} is available.`, { label: "View", onClick: () => navigateTo("/settings#updates") });
         }
       } catch {
         // Offline or a transient failure: stay quiet, the user can check from Settings.

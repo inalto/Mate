@@ -29,9 +29,8 @@ tauri-plugin-window-state = "2"
 tauri-plugin-single-instance = "2"
 mate-core = { path = "../crates/mate-core" }
 base64 = "0.22"
-tokio = { version = "1", features = ["sync"] }
+tokio = { version = "1", features = ["sync", "time"] }
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "zip"] }
-tauri-plugin-process = "2"
 semver = "1"
 
 [target.'cfg(windows)'.dependencies]

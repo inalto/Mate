@@ -17,8 +17,12 @@ export interface UpdateProgress {
 
 export const checkForUpdate = (): Promise<UpdateCheck> => invoke("check_for_update");
 
-/** Downloads (signature-verified) and installs; progress arrives on `onUpdateProgress`. */
-export const installUpdate = (): Promise<void> => invoke("install_update");
+/**
+ * Saves every window, then downloads (signature-verified) and installs `expectedVersion`; progress
+ * arrives on `onUpdateProgress`. On Windows the installer restarts the app and this never resolves.
+ */
+export const installUpdate = (expectedVersion: string): Promise<void> =>
+  invoke("install_update", { expectedVersion });
 
 /** Restarts the app into the installed update. */
 export const relaunch = (): Promise<void> => invoke("relaunch");

@@ -95,13 +95,19 @@ The app looks at `https://github.com/inalto/Mate/releases/latest/download/latest
 
 ### Without a key
 
-Until step 2 is done the committed key is a throwaway placeholder whose private half does not exist. Such a build shows "Updates are not configured for this build." and never installs anything. The same message appears if the endpoint has no manifest (for example a release built without the signing secret). CI still builds installers without the secret: the workflow switches `bundle.createUpdaterArtifacts` off, so those builds are unsigned and cannot be updated to or from.
+Until step 2 is done the committed key is a throwaway placeholder whose private half does not exist. Such a build shows "Updates are not configured for this build." and never installs anything. A missing manifest (for example a release built without the signing secret) or an unreachable server is reported as "could not check" and can be retried. CI still builds installers without the secret: the workflow switches `bundle.createUpdaterArtifacts` off, so those builds are unsigned and cannot be updated to or from.
 
 For a local `npm run tauri build` without the private key, pass `--config '{"bundle":{"createUpdaterArtifacts":false}}'`, or set `TAURI_SIGNING_PRIVATE_KEY` in your shell.
 
 ### Settings
 
 Settings, Updates has "Check for updates on startup" (on by default; a failed or offline check is silent, only an available update shows a notice), "Check for updates", download progress and "Restart to update".
+
+PowerShell (Windows) equivalents: the key directory is `$HOME\.tauri`, so generate with `npm run tauri signer generate -- -w "$HOME\.tauri\mate.key"`, and copy a key for pasting with `Get-Content "$HOME\.tauri\mate.key.pub" -Raw | Set-Clipboard` (same for `mate.key` when creating the secret). For a local build without the private key, set it for the session with `$env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content "$HOME\.tauri\mate.key" -Raw)`, or use `npm run tauri build -- --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'`.
+
+### What happens on install
+
+Before downloading, Mate saves every window and aborts the update (with a message) if any note could not be saved. On Windows the installer then restarts Mate by itself; on macOS and Linux "Restart to update" appears once the download is installed. The updater does not read system proxy settings (that plugin feature is switched off in this build).
 
 ## Tests and checks
 

@@ -27,7 +27,6 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
     .plugin(tauri_plugin_updater::Builder::new().build())
-    .plugin(tauri_plugin_process::init())
     .on_window_event(|window, event| match event {
       WindowEvent::CloseRequested { api, .. } => {
         // Fail open: if the frontend never acknowledged the previous attempt, let the window close.
@@ -126,6 +125,7 @@ pub fn run() {
       updater::check_for_update,
       updater::install_update,
       updater::relaunch,
+      updater::report_flush,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
