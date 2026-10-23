@@ -18,7 +18,7 @@ vi.mock("../../ipc/notebook", () => ({
 vi.mock("../../ipc/assets", () => ({ gcAssets: vi.fn(async () => 0) }));
 vi.mock("../../ipc/settings", () => ({
   getSettings: vi.fn(),
-  setSettings: vi.fn(async () => {}),
+  patchSettings: vi.fn(async () => {}),
 }));
 
 import { gcAssets } from "../../ipc/assets";

@@ -10,7 +10,7 @@ vi.mock("../../ipc/windows", () => ({
 vi.mock("../../ipc/notebook", () => ({
   getNotebookTree: vi.fn(async () => ({ bookshelves: [], units: [], sections: [], pages: [] })),
 }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { getNotebookTree } from "../../ipc/notebook";
 import { closeThisWindow } from "../../ipc/windows";

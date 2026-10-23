@@ -10,7 +10,7 @@ const ipc = vi.hoisted(() => ({
 }));
 vi.mock("../../ipc/updater", () => ipc);
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "0.4.0") }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { useSettingsStore } from "../../stores/settings";
 import { useToastStore } from "../Toast";

@@ -12,7 +12,7 @@ vi.mock("../notebook", () => ({
   getNotebookTree: vi.fn(async () => ({ bookshelves: [], units: [], sections: [], pages: [] })),
   upsertPage: vi.fn(async () => {}),
 }));
-vi.mock("../settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import CanvasView from "../../canvas/CanvasView";
 import { SnapshotCache } from "../../canvas/snapshot";

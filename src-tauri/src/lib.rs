@@ -92,7 +92,7 @@ pub fn run() {
       semantics::page_graph,
       practice::practice_generate,
       settings::get_settings,
-      settings::set_settings,
+      settings::patch_settings,
       ai::set_ai_key,
       ai::clear_ai_key,
       ai::get_ai_status,

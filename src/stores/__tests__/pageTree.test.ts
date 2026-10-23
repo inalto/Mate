@@ -3,7 +3,7 @@ import type { Page } from "../../model/types";
 
 vi.mock("../../ipc/notebook", () => ({ upsertPage: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []), upsertElements: vi.fn(async () => {}) }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 const order = vi.hoisted(() => [] as string[]);
 vi.mock("../../ipc/elementsQueue", () => ({
   elementsQueue: {

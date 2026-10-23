@@ -3,7 +3,7 @@ import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../../model/constants";
 
-vi.mock("../../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../../ipc/ai", () => ({
   getAiStatus: vi.fn(async () => ({ configured: false, provider: "anthropic", model: "claude-opus-5-5", consent: false })),
   setAiKey: vi.fn(),

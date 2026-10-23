@@ -23,7 +23,7 @@ vi.mock("../../ipc/notebook", () => ({
   purgeEntity: vi.fn(async () => {}),
   purgeTrashOlderThan: vi.fn(async () => 0),
 }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 // The canvas, overlays and tutor are not under test here.
 vi.mock("../../canvas/CanvasView", () => ({ default: () => <div data-testid="canvas" /> }));
 vi.mock("../../tutor/TutorController", () => ({ default: () => null }));

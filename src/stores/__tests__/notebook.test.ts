@@ -15,7 +15,7 @@ vi.mock("../../ipc/notebook", () => ({
 }));
 vi.mock("../../ipc/settings", () => ({
   getSettings: vi.fn(),
-  setSettings: vi.fn(async () => {}),
+  patchSettings: vi.fn(async () => {}),
 }));
 
 import * as ipc from "../../ipc/notebook";

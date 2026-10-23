@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { AiStatus } from "../../model/types";
 
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/ai", () => ({
   setAiKey: vi.fn(async () => {}),
   clearAiKey: vi.fn(async () => {}),
@@ -12,7 +12,7 @@ vi.mock("../../ipc/ai", () => ({
 }));
 
 import { clearAiKey, getAiStatus, setAiKey, testAiKey } from "../../ipc/ai";
-import { setSettings } from "../../ipc/settings";
+import { patchSettings } from "../../ipc/settings";
 import { flushSettings, useSettingsStore } from "../../stores/settings";
 import AiSettings from "../AiSettings";
 
@@ -65,7 +65,7 @@ describe("AiSettings", () => {
     // The key never reaches settings, in memory or on disk.
     await act(flushSettings);
     expect(JSON.stringify(useSettingsStore.getState().settings)).not.toContain(SECRET);
-    for (const call of vi.mocked(setSettings).mock.calls) expect(JSON.stringify(call)).not.toContain(SECRET);
+    for (const call of vi.mocked(patchSettings).mock.calls) expect(JSON.stringify(call)).not.toContain(SECRET);
   });
 
   it("does not claim the key works when consent is off (nothing was sent)", async () => {

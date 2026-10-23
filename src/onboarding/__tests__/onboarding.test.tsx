@@ -12,7 +12,7 @@ vi.mock("../../ipc/notebook", () => ({
   softDeleteEntity: vi.fn(async () => {}),
 }));
 vi.mock("../../ipc/elements", () => ({ upsertElements: vi.fn(async () => {}), loadElements: vi.fn(async () => []) }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../components/AiSettings", () => ({ default: () => <div>AI settings</div> }));
 
 import WhatsNew from "../../components/WhatsNew";

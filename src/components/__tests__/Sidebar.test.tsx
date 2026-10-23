@@ -15,7 +15,7 @@ vi.mock("../../ipc/notebook", () => ({
   purgeEntity: vi.fn(async () => {}),
   purgeTrashOlderThan: vi.fn(async () => 0),
 }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/windows", () => ({
   openPageWindow: vi.fn(async () => "page-p2"),
   isPageWindow: () => false,

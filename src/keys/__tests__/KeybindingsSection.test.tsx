@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../ipc/settings", () => ({
   getSettings: vi.fn(),
-  setSettings: vi.fn(async () => {}),
+  patchSettings: vi.fn(async () => {}),
 }));
 
 import { DEFAULT_SETTINGS } from "../../model/constants";

@@ -10,7 +10,7 @@ const queue = vi.hoisted(() => ({
 }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => [] as Element[]) }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { DEFAULT_SHORTCUTS, matchShortcut } from "../../keys/shortcuts";
