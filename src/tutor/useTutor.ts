@@ -9,7 +9,7 @@ import type { EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import { sessionAttempts } from "./attempts";
 import { createGroupManager, type GroupManager } from "./groupManager";
-import { defaultPipelineDeps, runRecognition, type PipelineDeps, type RecognitionOutcome, type UncheckedKind } from "./pipeline";
+import { defaultPipelineDeps, revisionOf, runRecognition, type PipelineDeps, type RecognitionOutcome, type UncheckedKind } from "./pipeline";
 import { segmentPage } from "./segmentation";
 import type { ElementsChange, Region } from "./types";
 
@@ -54,6 +54,13 @@ export interface TutorSessionDeps {
 export interface TutorSession {
   getView(): TutorView;
   subscribe(cb: () => void): () => void;
+  /**
+   * The user asked about this group: check it (also in "onask" mode) on the normal settle schedule.
+   * `retry` also forgets earlier failed attempts ("Try again"). False when the group is unknown.
+   */
+  check(groupId: string, opts?: { retry?: boolean }): boolean;
+  /** Replace a shown verdict (e.g. after "Mark as correct"); ignored for unknown groups. */
+  setRecognition(rec: Recognition): void;
   dispose(): void;
 }
 
@@ -97,6 +104,8 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   let pendingChange: ElementsChange | null = null;
   let batchTimer: unknown;
   const retryTimers = new Map<string, unknown>();
+  /** Groups the user asked about: checked even in "onask" mode. */
+  const requested = new Set<string>();
 
   const emit = (next: Partial<TutorView>) => {
     view = { ...view, ...next };
@@ -127,6 +136,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     pendingChange = null;
     for (const h of retryTimers.values()) clearTimer(h);
     retryTimers.clear();
+    requested.clear();
   }
 
   function flushChanges(): void {
@@ -138,8 +148,11 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     manager.noteElementsChanged(change);
   }
 
-  /** Try a group again later (transient failure or too many pending), if it still exists then. */
-  function scheduleRetry(token: number, regionId: string, ms: number): void {
+  /**
+   * Try a group again later (transient failure or too many pending), if it still exists then. The
+   * retry re-dirties the group, so it goes through the settle schedule (held while the pen is down).
+   */
+  function scheduleRetry(token: number, regionId: string, ms: number, asked: boolean): void {
     const old = retryTimers.get(regionId);
     if (old !== undefined) clearTimer(old);
     retryTimers.set(
@@ -147,8 +160,9 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       setTimer(() => {
         retryTimers.delete(regionId);
         if (disposed || token !== pageToken) return;
-        const region = view.regions.get(regionId);
-        if (region && !view.inFlight.has(regionId)) fire(token, region);
+        if (!view.regions.has(regionId) || view.inFlight.has(regionId)) return;
+        if (asked) requested.add(regionId);
+        manager?.redirty(regionId);
       }, ms),
     );
   }
@@ -156,12 +170,16 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   function fire(token: number, region: Region): void {
     const s = settings();
     if (!s.tutorEnabled || s.aiConsent !== true) return;
+    const asked = requested.has(region.regionId);
+    // "onask": nothing is sent until the user asks about this group.
+    if (s.tutorMode === "onask" && !asked) return;
     if (view.inFlight.has(region.regionId)) return;
     if (view.inFlight.size >= MAX_PENDING_PER_PAGE) {
       emit({ unchecked: withMap(view.unchecked, (m) => m.set(region.regionId, { kind: "busy", reason: "Too many checks are waiting. This note will be checked shortly." })) });
-      scheduleRetry(token, region.regionId, BUSY_RETRY_MS);
+      scheduleRetry(token, region.regionId, BUSY_RETRY_MS, asked);
       return;
     }
+    requested.delete(region.regionId);
     const m = manager;
     m?.markInFlight(region.regionId, true);
     emit({
@@ -184,7 +202,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
           });
         } else if (alive && out?.status === "unchecked") {
           patch.unchecked = withMap(view.unchecked, (x) => x.set(id, { kind: out.kind, reason: out.reason }));
-          if (out.retryInMs !== undefined) scheduleRetry(token, id, out.retryInMs);
+          if (out.retryInMs !== undefined) scheduleRetry(token, id, out.retryInMs, asked);
         }
         emit(patch);
         m?.markInFlight(id, false);
@@ -251,6 +269,22 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
+    check(groupId, opts) {
+      const region = view.regions.get(groupId);
+      if (disposed || !manager || !region) return false;
+      if (opts?.retry) {
+        pipeline.attempts.reset(revisionOf(region, elementsNow()));
+        const old = retryTimers.get(groupId);
+        if (old !== undefined) clearTimer(old);
+        retryTimers.delete(groupId);
+      }
+      requested.add(groupId);
+      return manager.redirty(groupId);
+    },
+    setRecognition(rec) {
+      if (disposed || rec.pageId !== view.pageId || !view.recognitions.has(rec.strokeGroupId)) return;
+      emit({ recognitions: withMap(view.recognitions, (x) => x.set(rec.strokeGroupId, rec)) });
+    },
     dispose() {
       disposed = true;
       pageToken++;
@@ -279,6 +313,18 @@ export const useTutorViews = create<TutorViewsState>((set) => ({
   setView: (pane, view) => set((s) => ({ views: { ...s.views, [pane]: view } })),
 }));
 
+/** The running session of each pane (for user requests from the overlay and the tutor card). */
+const sessions = new Map<PaneIndex, TutorSession>();
+
+/** Ask the pane's tutor to check a group now (also in "onask" mode). False when it can't. */
+export const requestCheck = (pane: PaneIndex, groupId: string, opts?: { retry?: boolean }): boolean =>
+  sessions.get(pane)?.check(groupId, opts) ?? false;
+
+/** Show `rec` in every pane that has its page open. */
+export function showRecognition(rec: Recognition): void {
+  for (const s of sessions.values()) s.setRecognition(rec);
+}
+
 /**
  * Runs the live tutor for one pane and publishes its view to `useTutorViews`. Returns nothing, so
  * the calling component never re-renders because of tutor activity.
@@ -286,6 +332,7 @@ export const useTutorViews = create<TutorViewsState>((set) => ({
 export function useTutor(store: EditorStore, pane: PaneIndex): void {
   useEffect(() => {
     const session = createTutorSession(store);
+    sessions.set(pane, session);
     const publish = () => useTutorViews.getState().setView(pane, session.getView());
     const unsub = session.subscribe(publish);
     publish();
@@ -298,6 +345,7 @@ export function useTutor(store: EditorStore, pane: PaneIndex): void {
     return () => {
       unsub();
       unsubSettings();
+      if (sessions.get(pane) === session) sessions.delete(pane);
       session.dispose();
       useTutorViews.getState().setView(pane, EMPTY_TUTOR_VIEW);
     };

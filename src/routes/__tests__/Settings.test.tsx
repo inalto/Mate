@@ -99,3 +99,33 @@ describe("Settings intelligence section", () => {
     expect(await screen.findByText("No key")).toBeTruthy();
   });
 });
+
+describe("Settings tutor rows", () => {
+  beforeEach(() => useSettingsStore.setState({ settings: DEFAULT_SETTINGS, loaded: true }));
+  afterEach(cleanup);
+
+  it("tutor_rows_update_settings", () => {
+    render(<Settings />);
+    expect(screen.getByRole("heading", { name: "Tutor" })).toBeTruthy();
+    const mode = screen.getByLabelText("When to check") as HTMLSelectElement;
+    expect(mode.value).toBe("live");
+    fireEvent.change(mode, { target: { value: "onask" } });
+    expect(cfg().tutorMode).toBe("onask");
+    const rows: Array<[string, keyof typeof DEFAULT_SETTINGS]> = [
+      ["Tutor", "tutorEnabled"],
+      ["Underline mistakes", "tutorUnderlineErrors"],
+      ["Tick correct work", "correctnessMode"],
+      ["Show when checking", "tutorShowChecking"],
+      ["Double-tap ink to ask", "tutorDoubleTapAsk"],
+      ["Hold the pen on ink to ask", "tutorHoldToAsk"],
+    ];
+    for (const [label, key] of rows) {
+      const box = screen.getByLabelText(label) as HTMLInputElement;
+      const before = cfg()[key];
+      expect(box.checked).toBe(before);
+      fireEvent.click(box);
+      expect(cfg()[key]).toBe(!before);
+    }
+    expect(document.body.textContent).not.toMatch(/derive/i);
+  });
+});

@@ -183,6 +183,8 @@ export type ErrorNature = "slip" | "procedural" | "conceptual";
 export type VerdictCode = "INCOMPLETE" | "OK" | "CONCEPTUAL" | "ARITHMETIC" | "ALGEBRA" | "CALCULUS";
 export type VerdictKind = "math" | "diagram";
 
+export type TutorMode = "live" | "onask";
+
 export interface Transcription {
   kind: "text" | "code";
   text: string;
@@ -312,6 +314,8 @@ export interface Settings {
   tutorUnderlineErrors: boolean;
   tutorShowChecking: boolean;
   tutorEnabled: boolean;
+  /** "live": check each group as it settles; "onask": only groups the user asks about. */
+  tutorMode: TutorMode;
   tutorDoubleTapAsk: boolean;
   tutorHoldToAsk: boolean;
   tutorVerdictChangeGate: string;

@@ -5,6 +5,7 @@ import type { Element, Settings } from "../../model/types";
 import type { EditorStore } from "../../stores/editor";
 import { el } from "../../tools/__tests__/fixtures";
 import { createAttemptLedger, RETRY_DELAY_MS, type PipelineDeps } from "../pipeline";
+import { SETTLE_DELAY_MS } from "../groupManager";
 import { segmentPage } from "../segmentation";
 import type { ElementsChange } from "../types";
 import { createTutorSession, MAX_PENDING_PER_PAGE, RESEGMENT_BATCH_MS } from "../useTutor";
@@ -185,9 +186,12 @@ describe("tutor session", () => {
     expect(recognize).toHaveBeenCalledTimes(1);
     expect([...session.getView().unchecked.values()][0]).toMatchObject({ kind: "network" });
     expect(session.getView().inFlight.size).toBe(0);
+    // Retries re-dirty the group, so they go through the settle delay (held while the pen is down).
     await h.advance(RETRY_DELAY_MS);
+    expect(recognize).toHaveBeenCalledTimes(1);
+    await h.advance(SETTLE_DELAY_MS);
     expect(recognize).toHaveBeenCalledTimes(2);
-    await h.advance(RETRY_DELAY_MS * 2);
+    await h.advance(RETRY_DELAY_MS * 2 + SETTLE_DELAY_MS);
     expect(recognize).toHaveBeenCalledTimes(3);
     // Three attempts per revision, then it stops.
     await h.advance(RETRY_DELAY_MS * 10);
@@ -216,5 +220,78 @@ describe("tutor session", () => {
     expect(s2.getView().inFlight.size).toBe(MAX_PENDING_PER_PAGE);
     expect([...s2.getView().unchecked.values()].filter((u) => u.kind === "busy")).toHaveLength(5);
     s2.dispose();
+  });
+  it("onask_mode_checks_only_groups_the_user_asks_about", async () => {
+    const recognize = vi.fn(async () => result);
+    const h = harness({ ...on, tutorMode: "onask" }, recognize);
+    const fs = fakeStore([]);
+    const session = createTutorSession(fs.store, h.deps);
+    fs.add(glyph("a", 0, 0));
+    h.pen().down();
+    h.pen().up();
+    await h.advance(5000);
+    expect(recognize).not.toHaveBeenCalled();
+    const gid = [...session.getView().regions.keys()][0];
+    expect(session.check(gid)).toBe(true);
+    await h.advance(SETTLE_DELAY_MS);
+    expect(recognize).toHaveBeenCalledTimes(1);
+    expect(session.getView().recognitions.get(gid)?.latex).toBe("x=2");
+    expect(session.check("nope")).toBe(false);
+    session.dispose();
+  });
+
+  it("loads_stored_verdicts_on_page_open", async () => {
+    const h = harness(on, vi.fn(async () => result));
+    const stored = { ...result, pageId: "pg", strokeGroupId: "g9", elementIds: ["x"], bounds: { x: 0, y: 0, width: 10, height: 10 }, capturedAt: 1, source: "auto" as const, userOverride: false, createdAt: "", updatedAt: "" };
+    const load = vi.fn(async () => [stored]);
+    const session = createTutorSession(fakeStore([]).store, { ...h.deps, loadRecognitions: load });
+    await h.advance(0);
+    expect(load).toHaveBeenCalledWith("pg");
+    expect(session.getView().recognitions.get("g9")?.latex).toBe("x=2");
+    // A user override replaces the shown verdict.
+    session.setRecognition({ ...stored, correct: true, userOverride: true });
+    expect(session.getView().recognitions.get("g9")?.userOverride).toBe(true);
+    session.dispose();
+  });
+
+  it("retry_waits_for_pen_up", async () => {
+    const recognize = vi.fn(async (): Promise<RecognizeResult> => Promise.reject({ kind: "network", message: "offline" }));
+    const h = harness(on, recognize);
+    const fs = fakeStore([]);
+    const session = createTutorSession(fs.store, h.deps);
+    fs.add(glyph("a", 0, 0));
+    h.pen().down();
+    h.pen().up();
+    await h.advance(2000);
+    expect(recognize).toHaveBeenCalledTimes(1);
+    await h.advance(RETRY_DELAY_MS - 3000);
+    h.pen().down();
+    await h.advance(3000 + SETTLE_DELAY_MS);
+    // The retry came due while the pen is down: it waits for pen-up.
+    expect(recognize).toHaveBeenCalledTimes(1);
+    h.pen().up();
+    await h.advance(SETTLE_DELAY_MS);
+    expect(recognize).toHaveBeenCalledTimes(2);
+    session.dispose();
+  });
+
+  it("try_again_forgets_failed_attempts", async () => {
+    const recognize = vi.fn(async (): Promise<RecognizeResult> => Promise.reject({ kind: "refused", message: "declined" }));
+    const h = harness(on, recognize);
+    const fs = fakeStore([]);
+    const session = createTutorSession(fs.store, h.deps);
+    fs.add(glyph("a", 0, 0));
+    h.pen().up();
+    await h.advance(2000);
+    const gid = [...session.getView().regions.keys()][0];
+    expect(session.getView().unchecked.get(gid)?.kind).toBe("refused");
+    session.check(gid);
+    await h.advance(2000);
+    // Exhausted: a plain check does not call again.
+    expect(recognize).toHaveBeenCalledTimes(1);
+    session.check(gid, { retry: true });
+    await h.advance(2000);
+    expect(recognize).toHaveBeenCalledTimes(2);
+    session.dispose();
   });
 });

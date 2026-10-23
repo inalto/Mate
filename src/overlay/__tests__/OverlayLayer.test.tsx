@@ -20,6 +20,10 @@ import { useNotebookStore } from "../../stores/notebook";
 import { resizeBox } from "../boxGeometry";
 import { lazyEditor, registerEditor } from "../editorRegistry";
 import OverlayLayer from "../OverlayLayer";
+import { FLASH_EXPIRY_MS, flashGroup, useFlashStore } from "../../stores/flash";
+import { useTutorUi } from "../../stores/tutor";
+import { EMPTY_TUTOR_VIEW, useTutorViews } from "../../tutor/useTutor";
+import { BOUNDS, recognition, viewWith } from "../../tutor/__tests__/fixtures";
 
 const box = el("box", [[100, 100]], { type: "text-box", boxWidth: 200, boxHeight: 80, width: 1 });
 const img = el("img", [[400, 100]], { type: "image", width: 200, height: 100 });
@@ -111,6 +115,41 @@ describe("OverlayLayer", () => {
     expect(b.points[0]).toMatchObject({ x: 100, y: 100 });
     s().undo();
     expect(s().elements.get("box")!.boxWidth).toBe(200);
+  });
+});
+
+describe("OverlayLayer tutor hosts", () => {
+  beforeEach(async () => {
+    store = createEditorStore();
+    await load([ink]);
+    useFlashStore.setState({ flash: null });
+  });
+  afterEach(cleanup);
+
+  it("mounts_the_search_flash_in_page_units", () => {
+    useTutorViews.setState({ views: { 0: viewWith([recognition("g1")]), 1: EMPTY_TUTOR_VIEW } });
+    const { getByTestId, queryByTestId } = render(<OverlayLayer store={store} />);
+    expect(queryByTestId("flash-rect")).toBeNull();
+    // No bounds in the request: they come from the pane's loaded recognitions.
+    act(() => flashGroup("pg", "g1"));
+    const rect = getByTestId("flash-rect");
+    expect(getByTestId("overlay-layer").contains(rect)).toBe(true);
+    expect(rect.style.left).toBe(`${BOUNDS.x - 6}px`);
+    // Another page's flash is ignored; an old one is dropped on read.
+    act(() => flashGroup("other", "g1"));
+    expect(queryByTestId("flash-rect")).toBeNull();
+    act(() => useFlashStore.setState({ flash: { pageId: "pg", groupId: "g1", at: Date.now() - FLASH_EXPIRY_MS - 1 } }));
+    expect(queryByTestId("flash-rect")).toBeNull();
+  });
+
+  it("hosts_the_tutor_card_outside_the_zoomed_layer", () => {
+    useTutorViews.setState({ views: { 0: viewWith([recognition("g1")]), 1: EMPTY_TUTOR_VIEW } });
+    const { getByTestId, queryByTestId } = render(<OverlayLayer store={store} />);
+    expect(queryByTestId("tutor-card")).toBeNull();
+    act(() => useTutorUi.getState().openCard(0, "g1"));
+    const card = getByTestId("tutor-card");
+    expect(getByTestId("overlay-layer").contains(card)).toBe(false);
+    act(() => useTutorUi.getState().closeCard());
   });
 });
 

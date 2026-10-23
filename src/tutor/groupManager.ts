@@ -30,6 +30,12 @@ export interface GroupManager {
   /** Plain ids are treated as updates; a change object's `removed` ids drop their regions. */
   noteElementsChanged(change: string[] | ElementsChange): void;
   markInFlight(regionId: string, inFlight: boolean): void;
+  /**
+   * Dirty one region again (a retry, or the user asked for a check) so it fires on the normal
+   * schedule: never while the pen is down, and not within 1200 ms of the last pen-up. No neighbour
+   * recheck. False when the region is unknown.
+   */
+  redirty(regionId: string): boolean;
   dispose(): void;
 }
 
@@ -218,6 +224,14 @@ export function createGroupManager(deps: GroupManagerDeps): GroupManager {
         inFlight.delete(regionId);
         if (settleTimer === undefined) schedule();
       }
+    },
+
+    redirty(regionId) {
+      const e = entries.get(regionId);
+      if (disposed || !e) return false;
+      markDirty(e);
+      schedule();
+      return true;
     },
 
     dispose() {

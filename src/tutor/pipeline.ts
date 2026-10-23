@@ -5,6 +5,7 @@
 // revision (the group's ink as it is now) across settles.
 import { isRecognizeError, recognizeGroup, type RecognizeErrorKind, type RecognizeRequest, type RecognizeResult } from "../ipc/recognize";
 import { upsertRecognition } from "../ipc/recognition";
+import { findPracticeContext } from "../practice/practiceContext";
 import type { Element, Recognition, RecognitionInput, Settings, UpsertOutcome, Verdict } from "../model/types";
 import { MAX_ATTEMPTS_PER_REVISION, sessionAttempts, type AttemptLedger, type BlockKind } from "./attempts";
 import { captureGroupImage, groupStrokes, type CapturedImage } from "./capture";
@@ -141,6 +142,9 @@ export async function runRecognition(
     imagePngBase64: toBase64(image.png),
     context: pickContext(region, recognitions),
   };
+  // An answer written under a practice question is checked against its expected answer.
+  const practice = findPracticeContext(region.bounds, els);
+  if (practice) req.practice = { question: practice.question, expectedAnswer: practice.expectedAnswer };
   const size = JSON.stringify(req).length;
   if (size > BODY_WARN_BYTES) deps.warn(`Tutor request for group ${region.regionId} is ${Math.round(size / 1024)} KB (over 512 KB).`);
 

@@ -447,3 +447,138 @@ export function drawSelectionBounds(ctx: CanvasRenderingContext2D, b: Rect, c: C
   }
   ctx.restore();
 }
+
+/** A quick tap: at most this long (ms) and this far (screen px) from where it started. */
+export const TAP_MS = 300;
+/** Hold the pen still on ink this long (ms) to ask the tutor about it. */
+export const HOLD_ASK_MS = 600;
+/** Moving further than this (screen px) turns a hold into a normal stroke. */
+export const HOLD_SLOP_PX = 6;
+
+export interface TutorGestureDeps {
+  /** The tutor marker under world point `p` (tick, squiggle, ring, dash), as its group id. */
+  markerAt(p: Vec2): string | null;
+  /** The stroke group whose ink is under world point `p`. */
+  groupAt(p: Vec2): string | null;
+  openCard(groupId: string): void;
+  openAsk(groupId: string): void;
+  getSettings(): Settings;
+  now?(): number;
+  setTimer?(fn: () => void, ms: number): unknown;
+  clearTimer?(h: unknown): void;
+}
+
+/** What to do with the stroke that just ended. */
+export type TutorUp = "commit" | "discard" | "defer";
+
+/**
+ * Tutor gestures for the pen: tap a marker (opens its card), double-tap ink or hold the pen still
+ * on ink (`tutorDoubleTapAsk` / `tutorHoldToAsk`, opens Ask). Drawing always wins: a hold that
+ * moves is a normal stroke, a tap that isn't followed by a second one is committed (late), and
+ * nothing here runs for pointers the input adapter already rejected (palm, finger when off).
+ * Select tools only use `markerDown`, which opens the card on pointer-down.
+ */
+export function createTutorGestures(deps: TutorGestureDeps) {
+  const now = deps.now ?? (() => performance.now());
+  const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
+  const clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  /** The pen stroke in progress. */
+  let cur: { t: number; screen: Vec2; group: string | null; marker: string | null; moved: boolean } | null = null;
+  let holdTimer: unknown;
+  /** A tap on ink held back for a possible second tap; `commit` draws it after all. */
+  let pending: { tap: Tap; commit: () => void; timer: unknown } | null = null;
+
+  const stopHold = () => {
+    if (holdTimer !== undefined) clearTimer(holdTimer);
+    holdTimer = undefined;
+  };
+  const flushPending = () => {
+    const p = pending;
+    pending = null;
+    if (!p) return;
+    clearTimer(p.timer);
+    p.commit();
+  };
+
+  return {
+    /** Select tools: a tap on a marker opens its card. True when consumed. */
+    markerDown(p: Vec2): boolean {
+      const id = deps.markerAt(p);
+      if (id) deps.openCard(id);
+      return !!id;
+    },
+
+    /**
+     * Pen down at world `p` / screen `screen`. Returns true when it completed a double-tap (Ask is
+     * open; do not start a stroke). `onHold` is called if the pen then stays still on ink long
+     * enough: drop the stroke in progress (Ask opens).
+     */
+    inkDown(p: Vec2, screen: Vec2, onHold: () => void): boolean {
+      stopHold();
+      const cfg = deps.getSettings();
+      const group = cfg.tutorEnabled && (cfg.tutorDoubleTapAsk || cfg.tutorHoldToAsk) ? deps.groupAt(p) : null;
+      const t = now();
+      if (pending) {
+        const second: Tap = { id: group ?? "", t, x: screen.x, y: screen.y };
+        if (group && isDoubleTap(pending.tap, second)) {
+          clearTimer(pending.timer);
+          pending = null; // the first tap's dot is dropped
+          cur = null;
+          deps.openAsk(group);
+          return true;
+        }
+        flushPending();
+      }
+      cur = { t, screen, group, marker: cfg.tutorEnabled ? deps.markerAt(p) : null, moved: false };
+      if (group && cfg.tutorHoldToAsk) {
+        holdTimer = setTimer(() => {
+          holdTimer = undefined;
+          if (!cur || cur.moved || cur.group !== group) return;
+          cur = null;
+          onHold();
+          deps.openAsk(group);
+        }, HOLD_ASK_MS);
+      }
+      return false;
+    },
+
+    inkMove(screen: Vec2): void {
+      if (!cur || cur.moved) return;
+      if (Math.hypot(screen.x - cur.screen.x, screen.y - cur.screen.y) > HOLD_SLOP_PX) {
+        cur.moved = true;
+        stopHold();
+      }
+    },
+
+    /** Pen up: commit the stroke, drop it (a marker tap opened a card) or hold it back (`commit` later). */
+    inkUp(commit: () => void): TutorUp {
+      stopHold();
+      const c = cur;
+      cur = null;
+      if (!c || c.moved || now() - c.t > TAP_MS) return "commit";
+      if (c.marker) {
+        deps.openCard(c.marker);
+        return "discard";
+      }
+      if (c.group && deps.getSettings().tutorDoubleTapAsk) {
+        const tap: Tap = { id: c.group, t: c.t, x: c.screen.x, y: c.screen.y };
+        pending = { tap, commit, timer: setTimer(flushPending, DOUBLE_TAP_MS) };
+        return "defer";
+      }
+      return "commit";
+    },
+
+    /** The stroke was cancelled (pointercancel, tool change). */
+    cancel(): void {
+      stopHold();
+      cur = null;
+    },
+
+    dispose(): void {
+      stopHold();
+      flushPending();
+    },
+  };
+}
+
+export type TutorGestures = ReturnType<typeof createTutorGestures>;

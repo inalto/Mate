@@ -104,6 +104,8 @@ pub struct Settings {
     pub tutor_underline_errors: bool,
     pub tutor_show_checking: bool,
     pub tutor_enabled: bool,
+    /// `"live"` (check each group as it settles) or `"onask"` (only groups the user asks about).
+    pub tutor_mode: String,
     pub tutor_double_tap_ask: bool,
     pub tutor_hold_to_ask: bool,
     pub tutor_verdict_change_gate: String,
@@ -175,6 +177,7 @@ impl Default for Settings {
             tutor_underline_errors: true,
             tutor_show_checking: true,
             tutor_enabled: true,
+            tutor_mode: s("live"),
             tutor_double_tap_ask: true,
             tutor_hold_to_ask: true,
             tutor_verdict_change_gate: s("enforce"),

@@ -84,6 +84,7 @@ export const DEFAULT_SETTINGS: Settings = {
   tutorUnderlineErrors: true,
   tutorShowChecking: true,
   tutorEnabled: true,
+  tutorMode: "live",
   tutorDoubleTapAsk: true,
   tutorHoldToAsk: true,
   tutorVerdictChangeGate: "enforce",

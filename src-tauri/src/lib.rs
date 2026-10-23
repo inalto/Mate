@@ -2,7 +2,7 @@ mod commands;
 mod state;
 
 use commands::{
-  ai, archive, assets, elements, export, lifecycle, notebook, pdf, practice, recognition, recognize, settings,
+  ai, archive, ask, assets, elements, export, lifecycle, notebook, pdf, practice, recognition, recognize, settings,
   semantics, thumbnails,
 };
 use state::AppState;
@@ -73,6 +73,7 @@ pub fn run() {
       recognition::search_recognition,
       recognition::record_learning_event,
       recognize::recognize_group,
+      ask::tutor_ask,
       semantics::summarize_page,
       semantics::suggest_title,
       semantics::related_pages,

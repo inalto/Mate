@@ -175,3 +175,22 @@ describe("runRecognition", () => {
     expect(await runRecognition(region, elements, [], on, failingWrite)).toMatchObject({ status: "checked", stored: false });
   });
 });
+
+describe("practice context", () => {
+  it("answer_under_question_sends_practice_context", async () => {
+    const question = el("q", [[0, -200]], {
+      type: "text-box",
+      boxWidth: 400,
+      boxHeight: 80,
+      content: { rawContent: "Differentiate x^2", practice: { expectedAnswer: "2x", solutionLatex: "2x", questionType: "short-answer" } },
+    });
+    const d = deps();
+    await runRecognition(region, [...elements, question], [], on, d);
+    expect(d.recognize).toHaveBeenCalledWith(expect.objectContaining({ practice: { question: "Differentiate x^2", expectedAnswer: "2x" } }));
+
+    // Not under a practice question: no practice block.
+    const d2 = deps();
+    await runRecognition(region, elements, [], on, d2);
+    expect(vi.mocked(d2.recognize).mock.calls[0][0].practice).toBeUndefined();
+  });
+});

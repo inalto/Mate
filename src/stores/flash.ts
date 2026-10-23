@@ -11,6 +11,13 @@ export interface FlashRequest {
   at: number;
 }
 
+/** A flash older than this is dropped when read (no layer was there to show and clear it). */
+export const FLASH_EXPIRY_MS = 5000;
+
+/** The flash request if it is still fresh at `now`. */
+export const freshFlash = (flash: FlashRequest | null, now = Date.now()): FlashRequest | null =>
+  flash && now - flash.at <= FLASH_EXPIRY_MS ? flash : null;
+
 interface FlashState {
   flash: FlashRequest | null;
   flashGroup(pageId: string, groupId: string, bounds?: GroupBounds): void;
