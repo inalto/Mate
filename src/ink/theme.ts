@@ -39,3 +39,22 @@ export function mapInkColor(hex: string, theme: ThemeName): string {
   if (r > 215 && g > 215 && b > 215) return "#000000";
   return hex;
 }
+
+const LIGHT_INK: Record<string, string> = Object.fromEntries(Object.entries(DARK_INK).map(([l, d]) => [d, l]));
+
+/**
+ * Any ink colour → its light-paper variant, for images that are always rendered on white (AI
+ * capture). Dark-palette colours map back to their light originals; near-white maps to black.
+ */
+export function toLightInk(hex: string): string {
+  if (!HEX6.test(hex)) return "#000000";
+  const key = hex.toUpperCase();
+  if (key in DARK_INK) return key;
+  const back = LIGHT_INK[key];
+  if (back) return back;
+  const r = parseInt(key.slice(1, 3), 16);
+  const g = parseInt(key.slice(3, 5), 16);
+  const b = parseInt(key.slice(5, 7), 16);
+  if (r > 215 && g > 215 && b > 215) return "#000000";
+  return key;
+}

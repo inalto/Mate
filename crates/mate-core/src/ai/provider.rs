@@ -47,6 +47,8 @@ pub enum AiError {
     InvalidResponse(String),
     #[error("AI checking is off. Turn it on in Settings.")]
     Disabled,
+    #[error("The AI service refused this request ({0}).")]
+    Rejected(String),
 }
 
 pub trait Provider: Send + Sync {

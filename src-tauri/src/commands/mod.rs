@@ -7,5 +7,6 @@ pub mod lifecycle;
 pub mod notebook;
 pub mod pdf;
 pub mod recognition;
+pub mod recognize;
 pub mod settings;
 pub mod thumbnails;

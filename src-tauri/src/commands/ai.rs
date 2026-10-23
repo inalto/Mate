@@ -4,7 +4,8 @@
 use std::sync::Arc;
 
 use mate_core::ai::keystore::KeyStore;
-use mate_core::ai::{default_model, is_known_provider};
+use mate_core::ai::provider::{AiError, Provider, TextRequest};
+use mate_core::ai::{default_model, is_known_provider, provider_for};
 use mate_core::settings::Settings;
 use serde::Serialize;
 use tauri::State;
@@ -102,9 +103,32 @@ pub async fn get_ai_status(state: State<'_, AppState>) -> Result<AiStatus, Strin
     on_keychain(&state, move |s| status(s, &settings)).await
 }
 
+/// With AI consent on, a minimal real request (a few output tokens) checks the key with the
+/// service; without consent it only checks that a key is stored, so nothing leaves the device.
 #[tauri::command]
 pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result<(), String> {
-    on_keychain(&state, move |s| test_key(s, &provider)).await
+    let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
+    let store: Arc<dyn KeyStore> = state.keys.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        test_key(store.as_ref(), &provider)?;
+        if settings.ai_consent != Some(true) || provider == "openai" {
+            return Ok(());
+        }
+        let key = store.get(&provider)?.unwrap_or_default();
+        let model = if settings.ai_provider == provider { settings.ai_model.clone() } else { String::new() };
+        ping(provider_for(&provider, &model, key).as_ref())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// A reply cut off by the tiny token budget still proves the key works.
+pub fn ping(p: &dyn Provider) -> Result<(), String> {
+    let req = TextRequest { system: String::new(), user: "Reply with OK.".into(), max_tokens: 16, json_schema: None };
+    match p.complete(&req) {
+        Ok(_) | Err(AiError::InvalidResponse(_)) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -146,6 +170,15 @@ mod tests {
         settings.ai_provider = "anthropic".into();
         let st = status(&store, &settings).unwrap();
         assert_eq!(st, AiStatus { configured: false, provider: "anthropic".into(), model: "gpt-5-mini".into(), consent: true });
+    }
+
+    #[test]
+    fn ping_accepts_cut_off_replies_and_reports_auth() {
+        use mate_core::ai::mock::MockProvider;
+        let ok = MockProvider::new(vec![]).with_text(vec![Err(AiError::InvalidResponse("cut off".into()))]);
+        assert!(ping(&ok).is_ok());
+        let bad = MockProvider::new(vec![]).with_text(vec![Err(AiError::Auth)]);
+        assert_eq!(ping(&bad).unwrap_err(), AiError::Auth.to_string());
     }
 
     #[test]

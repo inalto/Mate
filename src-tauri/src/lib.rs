@@ -2,7 +2,8 @@ mod commands;
 mod state;
 
 use commands::{
-  ai, archive, assets, elements, export, lifecycle, notebook, pdf, recognition, settings, thumbnails,
+  ai, archive, assets, elements, export, lifecycle, notebook, pdf, recognition, recognize, settings,
+  thumbnails,
 };
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -71,6 +72,7 @@ pub fn run() {
       recognition::set_user_override,
       recognition::search_recognition,
       recognition::record_learning_event,
+      recognize::recognize_group,
       settings::get_settings,
       settings::set_settings,
       ai::set_ai_key,

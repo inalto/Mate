@@ -147,14 +147,14 @@ fn mock_provider_scripts_results() {
 }
 
 #[test]
-fn provider_factory_is_disabled_for_real_providers_for_now() {
+fn provider_factory_builds_known_providers() {
     assert_eq!(default_model("anthropic"), "claude-opus-5-5");
     assert_eq!(default_model("openai"), "gpt-5");
-    for id in ["anthropic", "openai"] {
-        let p = provider_for(id, "", "k".into());
-        assert_eq!(p.id(), id);
-        assert!(matches!(p.recognize(&request()), Err(AiError::Disabled)));
-    }
+    // Construction only: no request is sent here.
+    assert_eq!(provider_for("anthropic", "", "k".into()).id(), "anthropic");
+    let p = provider_for("openai", "", "k".into());
+    assert_eq!(p.id(), "openai");
+    assert!(matches!(p.recognize(&request()), Err(AiError::Disabled)));
     assert_eq!(provider_for("mock", "", String::new()).id(), "mock");
 }
 
@@ -166,6 +166,7 @@ fn ai_errors_read_as_sentences() {
         AiError::Network("timeout".into()),
         AiError::InvalidResponse("bad json".into()),
         AiError::Disabled,
+        AiError::Rejected("image too large".into()),
     ] {
         let msg = e.to_string();
         assert!(msg.len() > 10 && msg.ends_with('.'), "{msg}");

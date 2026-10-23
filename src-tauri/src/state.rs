@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::commands::lifecycle::CloseGate;
+use crate::commands::recognize::PageGates;
 use mate_core::ai::keystore::{KeyStore, KeyringStore};
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
@@ -17,6 +18,8 @@ pub struct AppState {
     pub close_attempt: Mutex<CloseGate>,
     /// API keys (OS keychain); never exposed to the frontend.
     pub keys: Arc<dyn KeyStore>,
+    /// Per-page limit on concurrent AI checks.
+    pub recognize_gates: PageGates,
 }
 
 impl AppState {
@@ -36,6 +39,7 @@ impl AppState {
             data_dir,
             close_attempt: Mutex::new(CloseGate::default()),
             keys: Arc::new(KeyringStore),
+            recognize_gates: PageGates::default(),
         })
     }
 }
