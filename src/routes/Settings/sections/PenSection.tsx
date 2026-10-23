@@ -1,3 +1,4 @@
+import { isWindowsPlatform } from "../../../canvas/haptics";
 import { SHAPE_LABEL, SHAPE_TYPES } from "../../../shapes/catalog";
 import { ColorRow, SelectRow, SettingsSection, SliderRow, SubTitle, ToggleRow } from "../rows";
 
@@ -19,7 +20,13 @@ export default function PenSection() {
         step={1}
       />
       <SliderRow k="fountainPenNibFlatness" label="Fountain pen nib flatness" min={0} max={100} step={1} />
-      <ToggleRow k="penHaptics" label="Pen haptics" hint="A small tap when the pen snaps or erases, where supported" />
+      {isWindowsPlatform() && (
+        <ToggleRow
+          k="penHaptics"
+          label="Pen haptics (Windows)"
+          hint="Buzz while inking and a click when a shape snaps, on pens that support it."
+        />
+      )}
 
       <SubTitle>Ink to shape and scribble</SubTitle>
       <ToggleRow k="inkToShape" label="Ink to shape" hint="Hold the pen still at the end of a stroke to turn it into a shape" />
