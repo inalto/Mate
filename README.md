@@ -50,7 +50,7 @@ Mate is not affiliated with any of these apps or their makers.
 
 **Limits:** 2 000 pages and 5 000 elements per page per import; 50 000 points per stroke; file size up to 100 MiB (GoodNotes, Notability, Samsung Notes), 256 MiB (OneNote) or 200 MB (Freenotes); 60 seconds per file. Files over a limit are refused or cut short, and the report says what was left out.
 
-**Re-importing** the same file adds only pages that are not already in the book; pages imported before are counted as already imported.
+**Re-importing:** only a byte-identical file is skipped, and its pages are counted as already imported. A changed or grown file is imported again in full, alongside the earlier pages.
 
 The full guide, with per-format detail and known gaps, is in the wiki: [Importing](https://github.com/inalto/Mate/wiki/Importing).
 
