@@ -16,4 +16,5 @@ pub mod practice;
 pub mod semantics;
 pub mod settings;
 pub mod thumbnails;
+pub mod updater;
 pub mod windows;

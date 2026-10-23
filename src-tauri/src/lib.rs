@@ -4,7 +4,7 @@ mod windows;
 
 use commands::{
   ai, archive, ask, assets, elements, export, haptics, import, lifecycle, notebook, open_files, pdf, practice, recognition, recognize, settings,
-  semantics, thumbnails,
+  semantics, thumbnails, updater,
 };
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -26,6 +26,8 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
+    .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_process::init())
     .on_window_event(|window, event| match event {
       WindowEvent::CloseRequested { api, .. } => {
         // Fail open: if the frontend never acknowledged the previous attempt, let the window close.
@@ -120,6 +122,9 @@ pub fn run() {
       commands::windows::focus_page_window,
       commands::windows::list_page_windows,
       haptics::pen_haptics_pulse,
+      updater::check_for_update,
+      updater::install_update,
+      updater::relaunch,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

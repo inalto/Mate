@@ -13,6 +13,8 @@
     "opener:default",
     "window-state:default",
     "core:window:allow-set-title",
-    "core:window:allow-close"
+    "core:window:allow-close",
+    "updater:default",
+    "process:allow-restart"
   ]
 }
