@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import { startNewTab } from "../keys/editorCommands";
 import { useChromeStore } from "../stores/chrome";
 import { useFocusedEditor } from "../stores/focusedEditor";
+import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 import ExportDialog from "./ExportDialog";
@@ -42,6 +43,7 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
       {open && (
         <div className="menu menu-right" role="menu">
           <button role="menuitem" disabled={!pageId} onClick={pick(onExport)}>Export page…</button>
+          <button role="menuitem" onClick={pick(() => void useImportStore.getState().openDialog())}>Import notes…</button>
           <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPageSettings(pageId))}>Page settings</button>
           <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPalette("title"))}>Suggest title</button>
           <button role="menuitem" onClick={pick(() => chrome().openPalette())}>Search and actions…</button>
