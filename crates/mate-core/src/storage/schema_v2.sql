@@ -1,7 +1,14 @@
 -- Mate schema v2: tutor recognitions, learning events, page semantics and full-text search.
 -- Applied on top of v1 inside one migration transaction; v1 tables are untouched.
 
+-- When an element's ink last changed (insert, points/geometry/content edit, erase, revive), as
+-- opposed to `updated_at`, which every re-save stamps. A verdict captured before this instant
+-- is stale. Rows from v1 start at their `updated_at`.
+ALTER TABLE elements ADD COLUMN ink_updated_at TEXT;
+UPDATE elements SET ink_updated_at = updated_at;
+
 -- One verdict per stroke group. `element_ids`, `transcription` and `bounds` are JSON.
+-- `captured_at` (ms since the epoch) is when the frontend captured the group's ink.
 -- `fts_rowid` is the rowid of this row's `recognition_fts` entry (FTS5 rowids survive VACUUM,
 -- unlike the implicit rowid of this table).
 CREATE TABLE stroke_group_recognition (
@@ -27,6 +34,7 @@ CREATE TABLE stroke_group_recognition (
     provider        TEXT NOT NULL DEFAULT '',
     model           TEXT NOT NULL DEFAULT '',
     fts_rowid       INTEGER,
+    captured_at     INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT NOT NULL,
     updated_at      TEXT NOT NULL,
     PRIMARY KEY (page_id, stroke_group_id)

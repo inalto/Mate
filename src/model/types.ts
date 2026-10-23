@@ -221,6 +221,8 @@ export interface Recognition extends Verdict {
   strokeGroupId: string;
   elementIds: string[];
   bounds: GroupBounds;
+  /** When the group's ink was captured for the request (ms since the epoch, `Date.now()`). */
+  capturedAt: number;
   source: "auto" | "user";
   /** The user set `correct` by hand ("Mark as correct"). */
   userOverride: boolean;
@@ -231,6 +233,12 @@ export interface Recognition extends Verdict {
   /** Always stamped by Rust. */
   updatedAt: string;
 }
+
+/** What `upsertRecognition` sends: `code`/`kind` are computed in Rust. */
+export type RecognitionInput = Omit<Recognition, "code" | "kind">;
+
+/** `stale`: the ink changed after capture, or a newer capture is stored; nothing was written. */
+export type UpsertOutcome = "stored" | "stale";
 
 /** One full-text match. Hits arrive best first. */
 export interface SearchHit {

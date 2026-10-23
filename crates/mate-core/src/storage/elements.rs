@@ -25,6 +25,8 @@ struct InkState {
     page_id: String,
     r#type: String,
     points: String,
+    image_url: Option<String>,
+    is_highlighter: bool,
     height: Option<f64>,
     shape_type: Option<String>,
     box_width: Option<f64>,
@@ -86,8 +88,9 @@ impl Storage {
     /// Limits are checked for the whole batch before anything is written.
     ///
     /// Tutor verdicts of groups containing an element whose ink changed (page, type, points,
-    /// box size, shape, content or deleted state) are invalidated in the same transaction;
-    /// style-only edits (colour, width, pen) and unchanged re-saves keep them.
+    /// box size, shape, content, image, highlighter or deleted state) are invalidated in the same
+    /// transaction and its `ink_updated_at` is stamped (new rows get it too); style-only edits
+    /// (colour, width, pen) and unchanged re-saves keep both.
     pub fn upsert_elements(&mut self, elements: &[Element]) -> Result<()> {
         self.check_limits(elements)?;
         let now = now_iso();
@@ -95,12 +98,13 @@ impl Storage {
         let mut changed: Vec<String> = Vec::new();
         {
             let mut prev = tx.prepare(
-                "SELECT page_id, type, points, height, shape_type, box_width, box_height, content,                  deleted_at FROM elements WHERE id = ?1",
+                "SELECT page_id, type, points, height, shape_type, box_width, box_height, content, deleted_at,
+                 image_url, is_highlighter FROM elements WHERE id = ?1",
             )?;
             let mut stmt = tx.prepare(&format!(
-                "INSERT INTO elements ({ELEMENT_COLS})
+                "INSERT INTO elements ({ELEMENT_COLS}, ink_updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                         ?17, ?18, ?19, ?20, 1, ?21)
+                         ?17, ?18, ?19, ?20, 1, ?21, ?19)
                  ON CONFLICT(id) DO UPDATE SET
                    page_id = excluded.page_id, type = excluded.type, points = excluded.points,
                    color = excluded.color, width = excluded.width, height = excluded.height,
@@ -110,7 +114,9 @@ impl Storage {
                    box_height = excluded.box_height, content = excluded.content,
                    classification = excluded.classification, ui_group_id = excluded.ui_group_id,
                    updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
-                   version = elements.version + 1, last_write_id = excluded.last_write_id"
+                   version = elements.version + 1, last_write_id = excluded.last_write_id,
+                   ink_updated_at = CASE WHEN ?22 THEN excluded.ink_updated_at
+                                         ELSE elements.ink_updated_at END"
             ))?;
             for e in elements {
                 let r#type = enum_to_sql(&e.r#type)?;
@@ -129,6 +135,8 @@ impl Storage {
                             box_height: r.get(6)?,
                             content: r.get(7)?,
                             deleted: r.get::<_, Option<String>>(8)?.is_some(),
+                            image_url: r.get(9)?,
+                            is_highlighter: r.get(10)?,
                         })
                     })
                     .optional()?;
@@ -142,8 +150,11 @@ impl Storage {
                     box_height: e.box_height,
                     content: content.clone(),
                     deleted: e.deleted_at.is_some(),
+                    image_url: e.image_url.clone(),
+                    is_highlighter: e.is_highlighter,
                 };
-                if stored.is_some_and(|s| s != incoming) {
+                let ink_changed = stored.is_some_and(|s| s != incoming);
+                if ink_changed {
                     changed.push(e.id.clone());
                 }
                 stmt.execute(params![
@@ -171,6 +182,7 @@ impl Storage {
                     now,
                     e.deleted_at,
                     e.last_write_id,
+                    ink_changed,
                 ])?;
             }
         }
@@ -250,7 +262,7 @@ impl Storage {
         let tx = self.conn.transaction()?;
         {
             let mut stmt = tx.prepare(
-                "UPDATE elements SET deleted_at = ?1, updated_at = ?1, version = version + 1 \
+                "UPDATE elements SET deleted_at = ?1, updated_at = ?1, ink_updated_at = ?1, version = version + 1 \
                  WHERE id = ?2 AND deleted_at IS NULL",
             )?;
             for id in ids {

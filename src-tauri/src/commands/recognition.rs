@@ -1,6 +1,6 @@
 //! Tutor recognitions, their full-text search and learning events.
 
-use mate_core::storage::{LearningEvent, Recognition, SearchHit};
+use mate_core::storage::{LearningEvent, Recognition, SearchHit, UpsertOutcome};
 use tauri::State;
 
 use crate::state::AppState;
@@ -13,8 +13,9 @@ pub fn get_recognitions(state: State<'_, AppState>, page_id: String) -> Res<Vec<
     storage.get_recognitions(&page_id).map_err(|e| e.to_string())
 }
 
+/// `"stale"` means the ink changed after capture (or a newer capture is stored): drop the result.
 #[tauri::command]
-pub fn upsert_recognition(state: State<'_, AppState>, rec: Recognition) -> Res<()> {
+pub fn upsert_recognition(state: State<'_, AppState>, rec: Recognition) -> Res<UpsertOutcome> {
     let mut storage = state.storage.lock().map_err(|e| e.to_string())?;
     storage.upsert_recognition(&rec).map_err(|e| e.to_string())
 }

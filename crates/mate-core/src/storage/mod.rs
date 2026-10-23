@@ -13,7 +13,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 pub use notebook::{EntityKind, NotebookTree, TrashItem};
-pub use recognition::{Bounds, LearningEvent, Recognition, RecognitionSource};
+pub use recognition::{Bounds, LearningEvent, Recognition, RecognitionSource, UpsertOutcome};
 pub use search::{SNIPPET_CLOSE, SNIPPET_OPEN, SearchHit};
 
 /// Ordered migrations: `MIGRATIONS[i]` brings the schema from version `i` to `i + 1`.

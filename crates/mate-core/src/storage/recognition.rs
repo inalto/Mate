@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{Result, Storage, StorageError, enum_col, enum_to_sql, json_col, opt_enum_col, opt_json_col};
 use crate::ai::verdict::Verdict;
-use crate::model::now_iso;
+use crate::model::{format_iso, now_iso};
 
 /// Axis-aligned bounds of a stroke group, in page (world) units.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -36,6 +36,16 @@ pub enum RecognitionSource {
     User,
 }
 
+/// What [`Storage::upsert_recognition`] did with a result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpsertOutcome {
+    Stored,
+    /// The ink changed after capture, or a newer capture of overlapping ink is already stored:
+    /// nothing was written. Callers drop the result quietly.
+    Stale,
+}
+
 /// A persisted verdict for one stroke group. On the wire the verdict's fields are flattened
 /// next to the group's (camelCase), e.g. `{pageId, strokeGroupId, elementIds, bounds, latex, …}`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -48,6 +58,9 @@ pub struct Recognition {
     /// `code` and `kind` are always re-derived by the store; incoming values are ignored.
     #[serde(flatten)]
     pub verdict: Verdict,
+    /// When the frontend captured the group's ink, in ms since the Unix epoch. Required (> 0):
+    /// it is how the store recognises stale and out-of-order results.
+    pub captured_at: i64,
     #[serde(default)]
     pub source: RecognitionSource,
     /// The user set `correct` by hand ("Mark as correct"); `verdict.correct` holds their call.
@@ -86,7 +99,8 @@ pub struct LearningEvent {
 
 const REC_COLS: &str = "page_id, stroke_group_id, element_ids, kind, latex, description, correct, \
      code, domain, error_nature, hint, explanation, next_steps, focus_span, illegible, \
-     transcription, bounds, source, user_override, provider, model, created_at, updated_at";
+     transcription, bounds, source, user_override, provider, model, created_at, updated_at, \
+     captured_at";
 
 fn recognition_from_row(r: &Row) -> rusqlite::Result<Recognition> {
     let mut verdict = Verdict {
@@ -117,13 +131,73 @@ fn recognition_from_row(r: &Row) -> rusqlite::Result<Recognition> {
         model: r.get(20)?,
         created_at: r.get(21)?,
         updated_at: r.get(22)?,
+        captured_at: r.get(23)?,
     })
 }
 
-/// The text indexed for search: latex, description and transcription.
+/// The text indexed for search: latex, description and transcription. ASCII control characters
+/// become spaces, so provider text cannot forge the snippet markers.
 fn fts_content(v: &Verdict) -> String {
     let transcription = v.transcription.as_ref().map(|t| t.text.as_str()).unwrap_or("");
     format!("{} {} {}", v.latex, v.description, transcription)
+        .chars()
+        .map(|c| if c.is_ascii_control() { ' ' } else { c })
+        .collect()
+}
+
+fn same_set(a: &[String], b: &[String]) -> bool {
+    let a: BTreeSet<&String> = a.iter().collect();
+    let b: BTreeSet<&String> = b.iter().collect();
+    a == b
+}
+
+/// The capture instant in the stored `ink_updated_at` format (ISO, ms, UTC).
+fn capture_iso(captured_at_ms: i64) -> Result<String> {
+    let at = time::OffsetDateTime::from_unix_timestamp_nanos(i128::from(captured_at_ms) * 1_000_000)
+        .map_err(|e| StorageError::Limit(format!("capturedAt out of range: {e}")))?;
+    Ok(format_iso(at))
+}
+
+/// True when `rec` no longer describes the ink: a member element is missing, erased, on another
+/// page or had its ink changed after the capture; or a stored recognition of overlapping ink
+/// (same group or sharing an element) was captured later.
+fn is_stale(conn: &Connection, rec: &Recognition) -> Result<bool> {
+    let captured = capture_iso(rec.captured_at)?;
+    let mut member = conn.prepare_cached(
+        "SELECT page_id, deleted_at IS NOT NULL, ink_updated_at FROM elements WHERE id = ?1",
+    )?;
+    for id in &rec.element_ids {
+        let row = member
+            .query_row([id], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, bool>(1)?, r.get::<_, Option<String>>(2)?))
+            })
+            .optional()?;
+        match row {
+            None => return Ok(true),
+            Some((page, deleted, ink_at)) => {
+                if deleted || page != rec.page_id || ink_at.is_some_and(|t| t > captured) {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+    let newer: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM stroke_group_recognition          WHERE page_id = ?1 AND stroke_group_id = ?2 AND captured_at > ?3)",
+        params![rec.page_id, rec.stroke_group_id, rec.captured_at],
+        |r| r.get(0),
+    )?;
+    if newer {
+        return Ok(true);
+    }
+    let mut overlapping = conn.prepare_cached(
+        "SELECT EXISTS (SELECT 1 FROM recognition_elements m            JOIN stroke_group_recognition g              ON g.page_id = m.page_id AND g.stroke_group_id = m.stroke_group_id          WHERE m.page_id = ?1 AND m.element_id = ?2 AND g.captured_at > ?3)",
+    )?;
+    for id in &rec.element_ids {
+        if overlapping.query_row(params![rec.page_id, id, rec.captured_at], |r| r.get::<_, bool>(0))? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 struct Existing {
@@ -153,16 +227,24 @@ fn existing(conn: &Connection, page_id: &str, group_id: &str) -> Result<Option<E
         .optional()?)
 }
 
-fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<()> {
-    if rec.page_id.is_empty() || rec.stroke_group_id.is_empty() {
-        return Err(StorageError::Limit("recognition needs a page id and a stroke group id".into()));
+fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<UpsertOutcome> {
+    if rec.page_id.is_empty() || rec.stroke_group_id.is_empty() || rec.element_ids.is_empty() {
+        return Err(StorageError::Limit(
+            "recognition needs a page id, a stroke group id and at least one element".into(),
+        ));
+    }
+    if rec.captured_at <= 0 {
+        return Err(StorageError::Limit("recognition needs capturedAt (ms since the epoch)".into()));
+    }
+    if is_stale(conn, rec)? {
+        return Ok(UpsertOutcome::Stale);
     }
     let prev = existing(conn, &rec.page_id, &rec.stroke_group_id)?;
     let mut verdict = rec.verdict.clone();
     let mut user_override = rec.user_override;
     // A re-recognition of the same ink keeps the user's own call.
     if let Some(p) = prev.as_ref().filter(|p| p.user_override && !user_override)
-        && p.element_ids == rec.element_ids
+        && same_set(&p.element_ids, &rec.element_ids)
     {
         user_override = true;
         verdict.correct = p.correct;
@@ -201,7 +283,7 @@ fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<()> {
         &format!(
             "INSERT INTO stroke_group_recognition ({REC_COLS}, fts_rowid)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                     ?18, ?19, ?20, ?21, ?22, ?23, ?24)
+                     ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)
              ON CONFLICT(page_id, stroke_group_id) DO UPDATE SET
                element_ids = excluded.element_ids, kind = excluded.kind, latex = excluded.latex,
                description = excluded.description, correct = excluded.correct,
@@ -212,7 +294,8 @@ fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<()> {
                transcription = excluded.transcription, bounds = excluded.bounds,
                source = excluded.source, user_override = excluded.user_override,
                provider = excluded.provider, model = excluded.model,
-               updated_at = excluded.updated_at, fts_rowid = excluded.fts_rowid"
+               updated_at = excluded.updated_at, captured_at = excluded.captured_at,
+               fts_rowid = excluded.fts_rowid"
         ),
         params![
             rec.page_id,
@@ -238,6 +321,7 @@ fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<()> {
             rec.model,
             created_at,
             now,
+            rec.captured_at,
             fts_rowid,
         ],
     )?;
@@ -253,7 +337,7 @@ fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<()> {
     for id in &rec.element_ids {
         member.execute(params![rec.page_id, rec.stroke_group_id, id])?;
     }
-    Ok(())
+    Ok(UpsertOutcome::Stored)
 }
 
 /// Deletes every recognition whose group contains any of `element_ids` (search rows go via the
@@ -286,14 +370,27 @@ pub(crate) fn invalidate_in(conn: &Connection, element_ids: &[String]) -> Result
 }
 
 impl Storage {
-    /// Inserts or replaces the recognition for `(page_id, stroke_group_id)` and its search row.
-    /// `code`/`kind` are re-derived; `created_at` is kept from the first insert; a user override
-    /// survives a re-recognition of the same elements; groups sharing elements are superseded.
-    pub fn upsert_recognition(&mut self, rec: &Recognition) -> Result<()> {
+    /// Inserts or replaces the recognition for `(page_id, stroke_group_id)` and its search row,
+    /// unless the result is stale.
+    ///
+    /// Contract: `rec.captured_at` is when the frontend captured the group's ink (ms epoch).
+    /// Inside one transaction the result is rejected with `Ok(UpsertOutcome::Stale)` (nothing
+    /// written) when any member element is missing, soft-deleted, on another page, or had its
+    /// ink changed (`elements.ink_updated_at`) after `captured_at`; or when a stored recognition
+    /// of the same group or of any overlapping group has a later `captured_at`. Element writes
+    /// must therefore reach the store before results for that ink (the write-behind queue
+    /// flushes in 150 ms, well inside the 1200 ms settle); a result for ink not yet flushed is
+    /// reported stale and is re-requested by the next settle.
+    ///
+    /// When stored: `code`/`kind` are re-derived; `created_at` is kept from the first insert; a
+    /// user override survives a re-recognition of the same element set; older groups sharing an
+    /// element are superseded. Errors only on invalid input (empty ids, `captured_at <= 0`) or
+    /// a database failure.
+    pub fn upsert_recognition(&mut self, rec: &Recognition) -> Result<UpsertOutcome> {
         let tx = self.conn.transaction()?;
-        upsert_in(&tx, rec)?;
+        let outcome = upsert_in(&tx, rec)?;
         tx.commit()?;
-        Ok(())
+        Ok(outcome)
     }
 
     /// Recognitions of a page, oldest first.
@@ -400,6 +497,7 @@ mod tests {
             element_ids: ids.iter().map(|s| s.to_string()).collect(),
             bounds: Bounds::default(),
             verdict: Verdict { latex: "x".into(), ..Verdict::default() },
+            captured_at: 1_900_000_000_000,
             source: RecognitionSource::Auto,
             user_override: false,
             provider: String::new(),
@@ -417,7 +515,11 @@ mod tests {
                  INSERT INTO sections (id, unit_id, title, color, created_at, updated_at)
                    VALUES ('s', 'u', 'S', '#000', 'a', 'a');
                  INSERT INTO pages (id, section_id, title, mode, background_config, created_at, updated_at)
-                   VALUES ('p1', 's', 'P', 'canvas', '{}', 'a', 'a');",
+                   VALUES ('p1', 's', 'P', 'canvas', '{}', 'a', 'a');
+                 INSERT INTO elements (id, page_id, type, points, color, width, created_at,
+                                       updated_at, ink_updated_at)
+                   SELECT column1, 'p1', 'stroke', '[]', '#000', 1, 'a', 'a', '2020-01-01T00:00:00.000Z'
+                   FROM (VALUES ('a'), ('b'), ('c'), ('d'));",
             )
             .unwrap();
         st
@@ -441,6 +543,12 @@ mod tests {
         let members: i64 =
             st.conn.query_row("SELECT COUNT(*) FROM recognition_elements", [], |r| r.get(0)).unwrap();
         assert_eq!(members, 0);
+    }
+
+    #[test]
+    fn fts_content_strips_control_characters() {
+        let v = Verdict { latex: "a\u{2}b\u{3}".into(), description: "x\ny".into(), ..Verdict::default() };
+        assert_eq!(fts_content(&v), "a b  x y ");
     }
 
     #[test]

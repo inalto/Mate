@@ -11,7 +11,9 @@ import {
   searchRecognition,
   setUserOverride,
   snippetParts,
+  upsertRecognition,
 } from "../recognition";
+import type { RecognitionInput } from "../../model/types";
 
 describe("recognition ipc", () => {
   it("passes camelCase args matching the Rust commands", async () => {
@@ -36,5 +38,37 @@ describe("recognition ipc", () => {
       { text: "x", match: true },
     ]);
     expect(snippetParts("<b>plain</b>")).toEqual([{ text: "<b>plain</b>", match: false }]);
+  });
+});
+
+describe("upsertRecognition", () => {
+  it("sends the input without code/kind and returns the outcome", async () => {
+    invoke.mockResolvedValueOnce("stale" as never);
+    const rec: RecognitionInput = {
+      pageId: "p1",
+      strokeGroupId: "g1",
+      elementIds: ["a"],
+      bounds: { x: 0, y: 0, width: 1, height: 1 },
+      capturedAt: 1,
+      source: "auto",
+      userOverride: false,
+      provider: "anthropic",
+      model: "m",
+      createdAt: "",
+      updatedAt: "",
+      description: "",
+      latex: "x",
+      correct: null,
+      domain: "algebra",
+      errorNature: null,
+      hint: null,
+      explanation: null,
+      nextSteps: null,
+      focusSpan: null,
+      illegible: false,
+      transcription: null,
+    };
+    await expect(upsertRecognition(rec)).resolves.toBe("stale");
+    expect(invoke).toHaveBeenLastCalledWith("upsert_recognition", { rec });
   });
 });

@@ -5,6 +5,7 @@ use mate_core::ai::verdict::{Domain, ErrorNature, Transcription, TranscriptionKi
 use mate_core::model::{BackgroundConfig, PageMode};
 use mate_core::storage::{
     Bounds, LearningEvent, Recognition, RecognitionSource, SNIPPET_CLOSE, SNIPPET_OPEN, Storage,
+    UpsertOutcome,
 };
 
 fn verdict(latex: &str, description: &str, correct: Option<bool>) -> Verdict {
@@ -30,9 +31,28 @@ fn rec(page_id: &str, group: &str, element_ids: &[&str], v: Verdict) -> Recognit
         user_override: false,
         provider: "anthropic".into(),
         model: "claude-opus-5-5".into(),
+        captured_at: now_ms(),
         created_at: String::new(),
         updated_at: String::new(),
     }
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+}
+
+/// Lets the wall clock move past the last element write, so "before"/"after" are unambiguous.
+fn tick() {
+    std::thread::sleep(std::time::Duration::from_millis(5));
+}
+
+/// Writes strokes `ids` on page `p1`.
+fn ink(st: &mut Storage, ids: &[&str]) {
+    let strokes: Vec<_> = ids.iter().map(|id| stroke(id, "p1", 3)).collect();
+    st.upsert_elements(&strokes).unwrap();
 }
 
 fn temp_db() -> std::path::PathBuf {
@@ -106,6 +126,7 @@ fn migrates_v1_to_v2_keeping_data() {
 #[test]
 fn upsert_and_get_recognitions() {
     let mut st = seeded();
+    ink(&mut st, &["e1", "e2", "e3", "e4"]);
     let mut v = verdict("2x+3=7", "solving for x", Some(false));
     v.transcription = Some(Transcription { kind: TranscriptionKind::Text, text: "two x plus three".into() });
     st.upsert_recognition(&rec("p1", "g1", &["e1", "e2"], v)).unwrap();
@@ -206,6 +227,7 @@ fn edit_invalidates_verdict_and_search() {
 
     // Direct invalidation reports how many groups it removed.
     st.upsert_recognition(&rec("p1", "g4", &["e2"], verdict("x", "letter x", None))).unwrap();
+    ink(&mut st, &["e9"]);
     st.upsert_recognition(&rec("p1", "g5", &["e9"], verdict("y", "letter y", None))).unwrap();
     assert_eq!(st.invalidate_recognition_for_elements(&["e2".into(), "e9".into(), "zz".into()]).unwrap(), 2);
     assert_eq!(st.invalidate_recognition_for_elements(&["e2".into()]).unwrap(), 0);
@@ -215,6 +237,7 @@ fn edit_invalidates_verdict_and_search() {
 #[test]
 fn search_ranks_matching_latex() {
     let mut st = seeded();
+    ink(&mut st, &["e1", "e2", "e3"]);
     st.upsert_recognition(&rec("p1", "g1", &["e1"], verdict("\\int_0^1 x^2 dx", "integral of a square", None)))
         .unwrap();
     st.upsert_recognition(&rec(
@@ -261,6 +284,7 @@ fn user_override_persists() {
         st.upsert_unit(&common::unit("u1", None)).unwrap();
         st.upsert_section(&common::section("sec1", "u1")).unwrap();
         st.upsert_page(&common::page("p1", "sec1", None)).unwrap();
+        ink(&mut st, &["e1"]);
         st.upsert_recognition(&rec("p1", "g1", &["e1"], verdict("3+4=8", "addition", Some(false))))
             .unwrap();
         st.set_user_override("p1", "g1", true).unwrap();
@@ -290,4 +314,118 @@ fn user_override_persists() {
     for suffix in ["", "-wal", "-shm"] {
         let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
     }
+}
+
+#[test]
+fn fresh_result_is_stored() {
+    let mut st = seeded();
+    ink(&mut st, &["a", "b"]);
+    tick();
+    let r = rec("p1", "g1", &["a", "b"], verdict("x=1", "fresh", None));
+    // An unchanged re-save after capture (autosave flush) does not make it stale.
+    tick();
+    ink(&mut st, &["a"]);
+    assert_eq!(st.upsert_recognition(&r).unwrap(), UpsertOutcome::Stored);
+    assert_eq!(st.get_recognitions("p1").unwrap()[0].captured_at, r.captured_at);
+    assert_eq!(serde_json::to_value(UpsertOutcome::Stale).unwrap(), "stale");
+    assert_eq!(serde_json::to_value(UpsertOutcome::Stored).unwrap(), "stored");
+
+    // Invalid input is an error, not "stale".
+    let mut bad = r.clone();
+    bad.captured_at = 0;
+    assert!(st.upsert_recognition(&bad).is_err());
+    let mut bad = r.clone();
+    bad.element_ids.clear();
+    assert!(st.upsert_recognition(&bad).is_err());
+}
+
+#[test]
+fn stale_result_after_erase_is_rejected() {
+    let mut st = seeded();
+    ink(&mut st, &["a", "b"]);
+    tick();
+    // Settle captures {a, b} and the request goes out; the user erases b meanwhile.
+    let r = rec("p1", "g1", &["a", "b"], verdict("x+1", "before erase", None));
+    tick();
+    st.delete_elements(&["b".to_string()]).unwrap();
+    assert_eq!(st.upsert_recognition(&r).unwrap(), UpsertOutcome::Stale);
+    assert!(st.get_recognitions("p1").unwrap().is_empty());
+    assert!(st.search_recognition("erase", 10).unwrap().is_empty());
+
+    // Unknown elements and elements on another page are stale too.
+    let r = rec("p1", "g2", &["a", "ghost"], verdict("y", "ghost", None));
+    assert_eq!(st.upsert_recognition(&r).unwrap(), UpsertOutcome::Stale);
+    let r = rec("p2", "g3", &["a"], verdict("y", "elsewhere", None));
+    assert_eq!(st.upsert_recognition(&r).unwrap(), UpsertOutcome::Stale);
+}
+
+#[test]
+fn stale_result_after_move_is_rejected() {
+    let mut st = seeded();
+    ink(&mut st, &["a", "b"]);
+    tick();
+    let r = rec("p1", "g1", &["a", "b"], verdict("x+1", "before move", None));
+    tick();
+    let mut moved = stroke("a", "p1", 3);
+    for p in &mut moved.points {
+        p.y += 30.0;
+    }
+    st.upsert_elements(&[moved]).unwrap();
+    assert_eq!(st.upsert_recognition(&r).unwrap(), UpsertOutcome::Stale);
+    assert!(st.get_recognitions("p1").unwrap().is_empty());
+
+    // A highlighter toggle or a new image also counts as an ink change.
+    tick();
+    let r = rec("p1", "g1", &["a", "b"], verdict("x+1", "after move", None));
+    assert_eq!(st.upsert_recognition(&r).unwrap(), UpsertOutcome::Stored);
+    let mut hl = stroke("b", "p1", 3);
+    hl.is_highlighter = true;
+    st.upsert_elements(&[hl]).unwrap();
+    assert!(st.get_recognitions("p1").unwrap().is_empty());
+    let mut img = stroke("b", "p1", 3);
+    img.is_highlighter = true;
+    st.upsert_recognition(&rec("p1", "g1", &["a", "b"], verdict("x", "again", None))).unwrap();
+    tick();
+    img.image_url = Some("asset-1".into());
+    st.upsert_elements(&[img]).unwrap();
+    assert!(st.get_recognitions("p1").unwrap().is_empty());
+}
+
+#[test]
+fn older_response_does_not_supersede_newer() {
+    let mut st = seeded();
+    ink(&mut st, &["a", "b"]);
+    tick();
+    // g1 = {a, b} is captured and in flight; the user adds c; g2 = {a, b, c} is captured later.
+    let g1 = rec("p1", "g1", &["a", "b"], verdict("x+1", "older capture", None));
+    tick();
+    ink(&mut st, &["c"]);
+    tick();
+    let g2 = rec("p1", "g2", &["a", "b", "c"], verdict("x+1=2", "newer capture", Some(true)));
+    // g2 returns first, then g1.
+    assert_eq!(st.upsert_recognition(&g2).unwrap(), UpsertOutcome::Stored);
+    assert_eq!(st.upsert_recognition(&g1).unwrap(), UpsertOutcome::Stale);
+    let left: Vec<_> = st.get_recognitions("p1").unwrap().into_iter().map(|r| r.stroke_group_id).collect();
+    assert_eq!(left, vec!["g2"]);
+    assert_eq!(st.search_recognition("newer", 10).unwrap().len(), 1);
+    assert!(st.search_recognition("older", 10).unwrap().is_empty());
+
+    // The same group answered out of order keeps the later capture too.
+    tick();
+    let late = rec("p1", "g2", &["a", "b", "c"], verdict("x+1=2", "latest", Some(true)));
+    assert_eq!(st.upsert_recognition(&late).unwrap(), UpsertOutcome::Stored);
+    assert_eq!(st.upsert_recognition(&g2).unwrap(), UpsertOutcome::Stale);
+    assert_eq!(st.get_recognitions("p1").unwrap()[0].verdict.description, "latest");
+}
+
+#[test]
+fn override_survives_reordered_element_ids() {
+    let mut st = seeded();
+    ink(&mut st, &["a", "b"]);
+    st.upsert_recognition(&rec("p1", "g1", &["a", "b"], verdict("1+1=3", "sum", Some(false)))).unwrap();
+    st.set_user_override("p1", "g1", true).unwrap();
+    st.upsert_recognition(&rec("p1", "g1", &["b", "a"], verdict("1+1=3", "sum", Some(false)))).unwrap();
+    let r = &st.get_recognitions("p1").unwrap()[0];
+    assert!(r.user_override);
+    assert_eq!(r.verdict.correct, Some(true));
 }

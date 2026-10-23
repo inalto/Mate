@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { LearningEvent, Recognition, SearchHit } from "../model/types";
+import type { LearningEvent, Recognition, RecognitionInput, SearchHit, UpsertOutcome } from "../model/types";
 
 /** Start / end markers of a matched term in `SearchHit.snippet` (Rust `storage::SNIPPET_OPEN/CLOSE`). */
 export const SNIPPET_OPEN = "\u0002";
@@ -8,8 +8,18 @@ export const SNIPPET_CLOSE = "\u0003";
 export const getRecognitions = (pageId: string): Promise<Recognition[]> =>
   invoke("get_recognitions", { pageId });
 
-/** Inserts or replaces the verdict of `(pageId, strokeGroupId)`; `code`/`kind` are re-derived in Rust. */
-export const upsertRecognition = (rec: Recognition): Promise<void> => invoke("upsert_recognition", { rec });
+/**
+ * Inserts or replaces the verdict of `(pageId, strokeGroupId)`; `code`/`kind` are computed in Rust.
+ *
+ * Contract: set `capturedAt = Date.now()` when the group's ink is captured, and make sure the
+ * group's element writes were flushed before (the write-behind queue flushes within 150 ms). The
+ * store answers `"stale"` and writes nothing when, at write time, any member element is missing,
+ * erased, on another page or had its ink changed after `capturedAt`, or when a recognition of the
+ * same or overlapping ink with a later `capturedAt` is already stored. Drop stale results quietly;
+ * the next settle re-requests. Rejects only on invalid input (no elements, `capturedAt <= 0`).
+ */
+export const upsertRecognition = (rec: RecognitionInput): Promise<UpsertOutcome> =>
+  invoke("upsert_recognition", { rec });
 
 /** "Mark as correct" (or wrong): the user's call wins over the tutor's. */
 export const setUserOverride = (pageId: string, strokeGroupId: string, correct: boolean): Promise<void> =>
