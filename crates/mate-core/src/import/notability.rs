@@ -7,25 +7,25 @@
 //! images are the `richText.mediaObjects` of the session dictionary. A note is one tall canvas,
 //! so it becomes one Mate page whose height is the lowest content.
 //!
-//! The plist is decoded through the `plist` crate's event reader into a small tree under an
-//! event/byte budget and a nesting cap (binary plists may share objects, so a tiny file could
-//! otherwise expand without bound). UID references are resolved by hand, refusing any reference
-//! back to an object on the current walk path (a cycle) as `Corrupt`.
+//! The binary plist is read lazily by [`Bplist`]: objects are decoded by index on demand and
+//! collections keep their children as object indices, so nothing is ever expanded and memory
+//! stays proportional to the file however objects are shared. Every decode costs a step from a
+//! budget proportional to the file (and checks the deadline); the bytes of every blob turned
+//! into strokes or text are charged to a second budget. Keyed-archive UIDs and plist object
+//! references are resolved through the same index space, and a reference back to an object on
+//! the current walk path (a cycle) is `Corrupt`.
 
-use std::io::Cursor;
+use std::borrow::Cow;
+use std::cell::Cell;
+use std::collections::HashSet;
 
-use plist::stream::{BinaryReader, Event};
-
-use super::zipsrc::is_safe_name;
 use super::{
     ImportBackground, ImportDocument, ImportError, ImportImage, ImportLimits, ImportPage,
     ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ImportText, ZipSource,
-    base_name, check_deadline,
+    base_name, check_deadline, zipsrc::is_safe_name,
 };
 use crate::model::{PageMode, PenStyle};
 
-/// Deepest collection nesting accepted in the plist.
-const MAX_NESTING: usize = 128;
 /// Longest walk path / UID chain followed.
 const MAX_PATH: usize = 64;
 /// Page width when the note does not record one (Mate's sheet, scale 1).
@@ -35,9 +35,17 @@ const DEFAULT_HEIGHT: f64 = 1440.0;
 const HIGHLIGHTER_ALPHA: u8 = 200;
 const HIGHLIGHTER_OPACITY: f64 = 0.5;
 const SESSION_FILE: &str = "Session.plist";
+const CYCLE: &str = "keyed archive references itself (cycle)";
+const BEHIND_TEXT_KEY: &str = "NBNoteTakingSessionIsHighlighterBehindTextKey";
 
 fn corrupt(msg: impl Into<String>) -> ImportError {
     ImportError::Corrupt(msg.into())
+}
+
+/// Errors that only spoil one media object (it is skipped and counted); a cycle, a budget or the
+/// deadline still fail the import.
+fn skippable(e: &ImportError) -> bool {
+    matches!(e, ImportError::Corrupt(m) if m != CYCLE)
 }
 
 /// Reads a zip entry; a password-protected entry is `Encrypted`.
@@ -51,194 +59,381 @@ fn read(src: &mut ZipSource, name: &str) -> Result<Option<Vec<u8>>, ImportError>
 }
 
 // ---------------------------------------------------------------------------------------------
-// Binary plist → tree
+// Lazy binary plist
 
-#[derive(Debug)]
-enum Node {
+/// Big-endian unsigned integer of up to 8 bytes.
+fn be(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0u64, |acc, &b| (acc << 8) | u64::from(b))
+}
+
+/// The object references of a collection, read on demand.
+#[derive(Debug, Clone, Copy)]
+struct Refs<'a> {
+    bytes: &'a [u8],
+    size: usize,
+}
+
+impl Refs<'_> {
+    fn len(&self) -> usize {
+        self.bytes.len() / self.size
+    }
+
+    /// Reference `i` (`i < len()`); an index the file cannot hold maps to `usize::MAX`, which
+    /// [`Bplist::object`] rejects.
+    fn get(&self, i: usize) -> usize {
+        let raw = &self.bytes[i * self.size..(i + 1) * self.size];
+        usize::try_from(be(raw)).unwrap_or(usize::MAX)
+    }
+}
+
+/// One decoded object; strings and data borrow the file, collections hold references.
+#[derive(Debug, Clone, Copy)]
+enum Val<'a> {
+    Null,
     Bool(bool),
-    Num(f64),
-    Str(String),
-    Data(Vec<u8>),
+    Int(i64),
+    Real(f64),
+    Ascii(&'a [u8]),
+    /// Big-endian UTF-16 code units.
+    Utf16(&'a [u8]),
+    Data(&'a [u8]),
     Uid(u64),
-    Array(Vec<Node>),
-    Dict(Vec<(String, Node)>),
-    /// Dates and anything else Mate does not read.
+    Array(Refs<'a>),
+    Dict(Refs<'a>, Refs<'a>),
+    /// Dates, fill bytes and unknown markers.
     Other,
 }
 
-enum Frame {
-    Array(Vec<Node>),
-    Dict { items: Vec<(String, Node)>, key: Option<String> },
+impl<'a> Val<'a> {
+    fn text(&self) -> Option<Cow<'a, str>> {
+        match *self {
+            Val::Ascii(b) => Some(String::from_utf8_lossy(b)),
+            Val::Utf16(b) => {
+                let units: Vec<u16> =
+                    b.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+                Some(Cow::Owned(String::from_utf16_lossy(&units)))
+            }
+            _ => None,
+        }
+    }
+
+    fn is_str(&self, s: &str) -> bool {
+        match self {
+            Val::Ascii(b) => *b == s.as_bytes(),
+            Val::Utf16(_) => self.text().is_some_and(|t| t == s),
+            _ => false,
+        }
+    }
+
+    fn number(&self) -> Option<f64> {
+        match *self {
+            Val::Int(i) => Some(i as f64),
+            Val::Real(r) if r.is_finite() => Some(r),
+            Val::Bool(b) => Some(f64::from(u8::from(b))),
+            _ => None,
+        }
+    }
+
+    fn boolean(&self) -> Option<bool> {
+        match *self {
+            Val::Bool(b) => Some(b),
+            Val::Int(i) => Some(i != 0),
+            Val::Real(r) => Some(r != 0.0),
+            _ => None,
+        }
+    }
 }
 
-/// Decodes a binary plist into a [`Node`] tree. `Corrupt` for anything malformed, `Limit` when
-/// the decoded tree would be far larger than the file (shared-object expansion).
-fn decode(bytes: &[u8], limits: &ImportLimits) -> Result<Node, ImportError> {
-    let max_events = (bytes.len() as u64).saturating_mul(16).saturating_add(4096);
-    let max_payload = (bytes.len() as u64).saturating_mul(8).saturating_add(1 << 20);
-    let too_big = || ImportError::Limit("its note data expands to too much".into());
-    let (mut events, mut payload) = (0u64, 0u64);
-    let mut stack: Vec<Frame> = Vec::new();
-    let mut root: Option<Node> = None;
+/// A `bplist00` file read lazily: only the trailer is parsed up front.
+struct Bplist<'a> {
+    bytes: &'a [u8],
+    offset_size: usize,
+    ref_size: usize,
+    count: usize,
+    top: usize,
+    table: usize,
+    /// Start of the trailer; no object byte lies at or after it.
+    end: usize,
+    steps: Cell<u64>,
+    max_steps: u64,
+    limits: &'a ImportLimits,
+}
 
-    for event in BinaryReader::new(Cursor::new(bytes)) {
-        let event = event.map_err(|e| corrupt(format!("Session.plist: {e}")))?;
-        events += 1;
-        if events > max_events {
-            return Err(too_big());
+impl<'a> Bplist<'a> {
+    fn new(bytes: &'a [u8], limits: &'a ImportLimits) -> Result<Bplist<'a>, ImportError> {
+        let bad = |what: &str| corrupt(format!("Session.plist: {what}"));
+        if bytes.len() < 8 + 32 || !bytes.starts_with(b"bplist00") {
+            return Err(bad("not a binary plist"));
         }
-        if events.is_multiple_of(4096) {
-            check_deadline(limits)?;
+        let end = bytes.len() - 32;
+        let t = &bytes[end..];
+        let (offset_size, ref_size) = (usize::from(t[6]), usize::from(t[7]));
+        if !(1..=8).contains(&offset_size) || !(1..=8).contains(&ref_size) {
+            return Err(bad("bad trailer sizes"));
         }
-        let node = match event {
-            Event::StartArray(_) | Event::StartDictionary(_) => {
-                if stack.len() >= MAX_NESTING {
-                    return Err(corrupt("Session.plist is nested too deeply"));
+        let to_usize = |v: u64| usize::try_from(v).map_err(|_| bad("bad trailer"));
+        let count = to_usize(be(&t[8..16]))?;
+        let top = to_usize(be(&t[16..24]))?;
+        let table = to_usize(be(&t[24..32]))?;
+        let table_end = count.checked_mul(offset_size).and_then(|n| n.checked_add(table));
+        if count == 0 || top >= count || table < 8 || table_end.is_none_or(|e| e > end) {
+            return Err(bad("bad trailer"));
+        }
+        Ok(Bplist {
+            bytes,
+            offset_size,
+            ref_size,
+            count,
+            top,
+            table,
+            end,
+            steps: Cell::new(0),
+            max_steps: (bytes.len() as u64).saturating_mul(32).saturating_add(1 << 20),
+            limits,
+        })
+    }
+
+    #[cfg(test)]
+    fn steps(&self) -> u64 {
+        self.steps.get()
+    }
+
+    fn step(&self) -> Result<(), ImportError> {
+        let s = self.steps.get() + 1;
+        self.steps.set(s);
+        if s > self.max_steps {
+            return Err(ImportError::Limit("its note data takes too long to read".into()));
+        }
+        if s.is_multiple_of(4096) {
+            check_deadline(self.limits)?;
+        }
+        Ok(())
+    }
+
+    /// `len` bytes at `start`, all before the trailer.
+    fn slice(&self, start: usize, len: usize) -> Result<&'a [u8], ImportError> {
+        match start.checked_add(len) {
+            Some(stop) if stop <= self.end => Ok(&self.bytes[start..stop]),
+            _ => Err(corrupt("Session.plist: object runs past the end")),
+        }
+    }
+
+    /// Length of a variable-size object with marker low nibble `low` at `at`, and where its
+    /// payload starts.
+    fn length(&self, at: usize, low: u8) -> Result<(usize, usize), ImportError> {
+        if low != 0x0F {
+            return Ok((usize::from(low), at + 1));
+        }
+        let marker = self.slice(at + 1, 1)?[0];
+        if marker >> 4 != 1 || marker & 0x0F > 3 {
+            return Err(corrupt("Session.plist: bad object length"));
+        }
+        let n = 1usize << (marker & 0x0F);
+        let len = usize::try_from(be(self.slice(at + 2, n)?))
+            .map_err(|_| corrupt("Session.plist: bad object length"))?;
+        Ok((len, at + 2 + n))
+    }
+
+    fn refs(&self, start: usize, len: usize) -> Result<Refs<'a>, ImportError> {
+        let n = len
+            .checked_mul(self.ref_size)
+            .ok_or_else(|| corrupt("Session.plist: bad collection length"))?;
+        Ok(Refs { bytes: self.slice(start, n)?, size: self.ref_size })
+    }
+
+    /// Decodes object `i`.
+    fn object(&self, i: usize) -> Result<Val<'a>, ImportError> {
+        self.step()?;
+        if i >= self.count {
+            return Err(corrupt("Session.plist: object reference out of range"));
+        }
+        let at = self.table + i * self.offset_size;
+        let offset = usize::try_from(be(&self.bytes[at..at + self.offset_size]))
+            .map_err(|_| corrupt("Session.plist: bad object offset"))?;
+        if offset < 8 || offset >= self.end {
+            return Err(corrupt("Session.plist: bad object offset"));
+        }
+        let marker = self.bytes[offset];
+        let low = marker & 0x0F;
+        Ok(match marker >> 4 {
+            0x0 => match low {
+                0x0 => Val::Null,
+                0x8 => Val::Bool(false),
+                0x9 => Val::Bool(true),
+                _ => Val::Other,
+            },
+            0x1 => {
+                if low > 4 {
+                    return Err(corrupt("Session.plist: bad integer"));
                 }
-                stack.push(match event {
-                    Event::StartArray(_) => Frame::Array(Vec::new()),
-                    _ => Frame::Dict { items: Vec::new(), key: None },
-                });
-                continue;
+                let n = 1usize << low;
+                let b = self.slice(offset + 1, n)?;
+                // 8-byte integers are signed; 16-byte ones keep their low 64 bits.
+                Val::Int(be(&b[n.saturating_sub(8)..]) as i64)
             }
-            Event::EndCollection => match stack.pop() {
-                Some(Frame::Array(v)) => Node::Array(v),
-                Some(Frame::Dict { items, key: None }) => Node::Dict(items),
-                _ => return Err(corrupt("Session.plist has an unbalanced collection")),
+            0x2 => match low {
+                2 => {
+                    let b = self.slice(offset + 1, 4)?;
+                    Val::Real(f64::from(f32::from_be_bytes([b[0], b[1], b[2], b[3]])))
+                }
+                3 => Val::Real(f64::from_bits(be(self.slice(offset + 1, 8)?))),
+                _ => return Err(corrupt("Session.plist: bad real")),
             },
-            Event::Boolean(b) => Node::Bool(b),
-            Event::Integer(i) => Node::Num(
-                i.as_signed().map(|v| v as f64).or(i.as_unsigned().map(|v| v as f64)).unwrap_or(0.0),
-            ),
-            Event::Real(r) => Node::Num(r),
-            Event::String(s) => {
-                payload = payload.saturating_add(s.len() as u64);
-                Node::Str(s.into_owned())
+            0x3 => {
+                self.slice(offset + 1, 8)?;
+                Val::Other
             }
-            Event::Data(d) => {
-                payload = payload.saturating_add(d.len() as u64);
-                Node::Data(d.into_owned())
+            kind @ 0x4..=0x6 => {
+                let (len, start) = self.length(offset, low)?;
+                let n = if kind == 0x6 { len.checked_mul(2) } else { Some(len) }
+                    .ok_or_else(|| corrupt("Session.plist: bad string length"))?;
+                let b = self.slice(start, n)?;
+                match kind {
+                    0x4 => Val::Data(b),
+                    0x5 => Val::Ascii(b),
+                    _ => Val::Utf16(b),
+                }
             }
-            Event::Uid(u) => Node::Uid(u.get()),
-            _ => Node::Other,
-        };
-        if payload > max_payload {
-            return Err(too_big());
-        }
-        match stack.last_mut() {
-            None if root.is_none() => root = Some(node),
-            None => return Err(corrupt("Session.plist has more than one root")),
-            Some(Frame::Array(v)) => v.push(node),
-            Some(Frame::Dict { items, key }) => match key.take() {
-                Some(k) => items.push((k, node)),
-                None => match node {
-                    Node::Str(s) => *key = Some(s),
-                    _ => return Err(corrupt("Session.plist has a non-string dictionary key")),
-                },
-            },
-        }
-    }
-    if !stack.is_empty() {
-        return Err(corrupt("Session.plist ends inside a collection"));
-    }
-    root.ok_or_else(|| corrupt("Session.plist is empty"))
-}
-
-fn direct<'a>(node: &'a Node, key: &str) -> Option<&'a Node> {
-    match node {
-        Node::Dict(items) => items.iter().find(|(k, _)| k == key).map(|(_, v)| v),
-        _ => None,
+            0x8 => Val::Uid(be(self.slice(offset + 1, usize::from(low) + 1)?)),
+            0xA | 0xC => {
+                let (len, start) = self.length(offset, low)?;
+                Val::Array(self.refs(start, len)?)
+            }
+            0xD => {
+                let (len, start) = self.length(offset, low)?;
+                let keys = self.refs(start, len)?;
+                let values = self.refs(start + keys.bytes.len(), len)?;
+                Val::Dict(keys, values)
+            }
+            _ => Val::Other,
+        })
     }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Keyed archive
 
-struct Archive {
-    objects: Vec<Node>,
-}
-
-/// A node reached by a walk, with the `$objects` indices dereferenced on the way to it.
-#[derive(Clone)]
+/// An object reached by a walk, with the object indices visited on the way to it.
+#[derive(Debug, Clone)]
 struct Obj<'a> {
-    node: &'a Node,
+    val: Val<'a>,
+    idx: usize,
     path: Vec<usize>,
 }
 
-impl Archive {
-    fn from_root(root: Node) -> Result<Archive, ImportError> {
-        let Node::Dict(items) = root else {
-            return Err(corrupt("not a keyed archive (no $objects)"));
-        };
-        let objects = items.into_iter().find(|(k, _)| k == "$objects").map(|(_, v)| v);
-        match objects {
-            Some(Node::Array(objects)) => Ok(Archive { objects }),
-            _ => Err(corrupt("not a keyed archive (no $objects)")),
-        }
-    }
+struct Archive<'a> {
+    p: Bplist<'a>,
+    /// The `$objects` array: UID `n` is object `objects.get(n)`.
+    objects: Refs<'a>,
+    blob_bytes: Cell<u64>,
+    max_blob_bytes: u64,
+}
 
-    /// The `$objects` entry `i` as the start of a walk.
-    fn object(&self, i: usize) -> Obj<'_> {
-        Obj { node: &self.objects[i], path: vec![i] }
-    }
-
-    /// Follows UID references from `node`; a reference to an object already on `path` is a
-    /// cycle (`Corrupt`).
-    fn deref<'a>(&'a self, node: &'a Node, path: &[usize]) -> Result<Obj<'a>, ImportError> {
-        let mut node = node;
-        let mut path = path.to_vec();
-        while let Node::Uid(n) = node {
-            let i = usize::try_from(*n).map_err(|_| corrupt("keyed archive UID out of range"))?;
-            node = self.objects.get(i).ok_or_else(|| corrupt("keyed archive UID out of range"))?;
-            if path.contains(&i) {
-                return Err(corrupt("keyed archive references itself (cycle)"));
+impl<'a> Archive<'a> {
+    fn new(p: Bplist<'a>) -> Result<Archive<'a>, ImportError> {
+        let no_objects = || corrupt("not a keyed archive (no $objects)");
+        let Val::Dict(keys, values) = p.object(p.top)? else { return Err(no_objects()) };
+        for i in 0..keys.len() {
+            if p.object(keys.get(i))?.is_str("$objects") {
+                let Val::Array(objects) = p.object(values.get(i))? else { break };
+                let max_blob_bytes =
+                    (p.bytes.len() as u64).saturating_mul(2).saturating_add(1 << 20);
+                return Ok(Archive { p, objects, blob_bytes: Cell::new(0), max_blob_bytes });
             }
-            path.push(i);
+        }
+        Err(no_objects())
+    }
+
+    /// Charges `n` bytes of blob conversion (strokes, text) to the budget.
+    fn charge(&self, n: usize) -> Result<(), ImportError> {
+        let total = self.blob_bytes.get().saturating_add(n as u64);
+        self.blob_bytes.set(total);
+        if total > self.max_blob_bytes {
+            return Err(ImportError::Limit("its note data is repeated too often".into()));
+        }
+        Ok(())
+    }
+
+    /// Follows object reference `raw` (and any UIDs) from an object whose path is `from`.
+    fn child(&self, from: &[usize], raw: usize) -> Result<Obj<'a>, ImportError> {
+        let mut idx = raw;
+        let mut path = from.to_vec();
+        loop {
+            if path.contains(&idx) {
+                return Err(corrupt(CYCLE));
+            }
+            path.push(idx);
             if path.len() > MAX_PATH {
                 return Err(corrupt("keyed archive references nest too deeply"));
             }
+            match self.p.object(idx)? {
+                Val::Uid(n) => {
+                    let n = usize::try_from(n).unwrap_or(usize::MAX);
+                    if n >= self.objects.len() {
+                        return Err(corrupt("keyed archive UID out of range"));
+                    }
+                    idx = self.objects.get(n);
+                }
+                val => return Ok(Obj { val, idx, path }),
+            }
         }
-        Ok(Obj { node, path })
-    }
-}
-
-impl<'a> Obj<'a> {
-    fn deref(&self, a: &'a Archive, node: &'a Node) -> Result<Obj<'a>, ImportError> {
-        a.deref(node, &self.path)
     }
 
-    fn direct(&self, key: &str) -> Option<&'a Node> {
-        direct(self.node, key)
+    /// Reference of the plain dictionary field `key`.
+    fn direct(&self, o: &Obj<'a>, key: &str) -> Result<Option<usize>, ImportError> {
+        let Val::Dict(keys, values) = o.val else { return Ok(None) };
+        for i in 0..keys.len() {
+            if self.p.object(keys.get(i))?.is_str(key) {
+                return Ok(Some(values.get(i)));
+            }
+        }
+        Ok(None)
     }
 
     /// Value of `key`: a plain keyed-object field, an `NS.keys`/`NS.objects` dictionary entry,
-    /// or an `NS.key.<i>`/`NS.object.<i>` pair.
-    fn get(&self, a: &'a Archive, key: &str) -> Result<Option<Obj<'a>>, ImportError> {
-        let Node::Dict(items) = self.node else { return Ok(None) };
-        if let Some(v) = self.direct(key) {
-            return self.deref(a, v).map(Some);
+    /// or an `NS.key.<i>`/`NS.object.<i>` pair. Linear in the dictionary size.
+    fn get(&self, o: &Obj<'a>, key: &str) -> Result<Option<Obj<'a>>, ImportError> {
+        let Val::Dict(keys, values) = o.val else { return Ok(None) };
+        let (mut ns_keys, mut ns_objects, mut pairs) = (None, None, false);
+        for i in 0..keys.len() {
+            let k = self.p.object(keys.get(i))?;
+            if k.is_str(key) {
+                return self.child(&o.path, values.get(i)).map(Some);
+            } else if k.is_str("NS.keys") {
+                ns_keys = Some(values.get(i));
+            } else if k.is_str("NS.objects") {
+                ns_objects = Some(values.get(i));
+            } else if let Val::Ascii(name) = k {
+                pairs |= name.starts_with(b"NS.key.");
+            }
         }
-        if let (Some(keys), Some(values)) = (self.direct("NS.keys"), self.direct("NS.objects")) {
-            let keys = self.deref(a, keys)?;
-            let values = self.deref(a, values)?;
-            let (Node::Array(keys_v), Node::Array(values_v)) = (keys.node, values.node) else {
+        if let (Some(ks), Some(vs)) = (ns_keys, ns_objects) {
+            let (ks, vs) = (self.child(&o.path, ks)?, self.child(&o.path, vs)?);
+            let (Val::Array(kr), Val::Array(vr)) = (ks.val, vs.val) else {
                 return Err(corrupt("keyed archive dictionary is malformed"));
             };
-            for (i, k) in keys_v.iter().enumerate() {
-                if keys.deref(a, k)?.string(a)?.as_deref() == Some(key) {
-                    let v = values_v
-                        .get(i)
-                        .ok_or_else(|| corrupt("keyed archive dictionary is malformed"))?;
-                    return values.deref(a, v).map(Some);
+            for i in 0..kr.len() {
+                let k = self.child(&ks.path, kr.get(i))?;
+                if k.val.is_str(key) || self.string(&k)?.as_deref() == Some(key) {
+                    if i >= vr.len() {
+                        return Err(corrupt("keyed archive dictionary is malformed"));
+                    }
+                    return self.child(&vs.path, vr.get(i)).map(Some);
                 }
             }
             return Ok(None);
         }
-        for (name, k) in items {
-            let Some(index) = name.strip_prefix("NS.key.") else { continue };
-            if self.deref(a, k)?.string(a)?.as_deref() == Some(key) {
-                return match self.direct(&format!("NS.object.{index}")) {
-                    Some(v) => self.deref(a, v).map(Some),
+        if !pairs {
+            return Ok(None);
+        }
+        for i in 0..keys.len() {
+            let name = self.p.object(keys.get(i))?;
+            let Some(name) = name.text() else { continue };
+            let Some(suffix) = name.strip_prefix("NS.key.") else { continue };
+            let k = self.child(&o.path, values.get(i))?;
+            if k.val.is_str(key) || self.string(&k)?.as_deref() == Some(key) {
+                return match self.direct(o, &format!("NS.object.{suffix}"))? {
+                    Some(v) => self.child(&o.path, v).map(Some),
                     None => Ok(None),
                 };
             }
@@ -246,58 +441,69 @@ impl<'a> Obj<'a> {
         Ok(None)
     }
 
-    /// Elements of an array: a plain array, `NS.objects`, or `NS.object.<i>` keys.
-    fn items(&self, a: &'a Archive) -> Result<Vec<Obj<'a>>, ImportError> {
-        match self.node {
-            Node::Array(v) => v.iter().map(|n| self.deref(a, n)).collect(),
-            Node::Dict(items) => {
-                if let Some(objs) = self.direct("NS.objects") {
-                    let list = self.deref(a, objs)?;
-                    return match list.node {
-                        Node::Array(v) => v.iter().map(|n| list.deref(a, n)).collect(),
+    /// Elements of an array (a plain array, `NS.objects`, or `NS.object.<i>` keys) as the
+    /// container to resolve them from and their references. Linear in the entry count.
+    fn items(&self, o: &Obj<'a>) -> Result<(Obj<'a>, Vec<usize>), ImportError> {
+        let all = |r: Refs<'a>| (0..r.len()).map(|i| r.get(i)).collect::<Vec<_>>();
+        match o.val {
+            Val::Array(r) => Ok((o.clone(), all(r))),
+            Val::Dict(keys, values) => {
+                if let Some(raw) = self.direct(o, "NS.objects")? {
+                    let list = self.child(&o.path, raw)?;
+                    return match list.val {
+                        Val::Array(r) => Ok((list, all(r))),
                         _ => Err(corrupt("keyed archive array is malformed")),
                     };
                 }
-                let mut out = Vec::new();
-                for i in 0..items.len() {
-                    match self.direct(&format!("NS.object.{i}")) {
-                        Some(n) => out.push(self.deref(a, n)?),
-                        None => break,
+                // One pass: place each `NS.object.<i>` by its index, then take 0, 1, 2, ...
+                let n = keys.len();
+                let mut slots: Vec<Option<usize>> = vec![None; n];
+                for i in 0..n {
+                    let Val::Ascii(name) = self.p.object(keys.get(i))? else { continue };
+                    let Some(index) = name.strip_prefix(b"NS.object.") else { continue };
+                    let index =
+                        std::str::from_utf8(index).ok().and_then(|s| s.parse::<usize>().ok());
+                    if let Some(index) = index.filter(|x| *x < n) {
+                        slots[index] = Some(values.get(i));
                     }
                 }
-                Ok(out)
+                Ok((o.clone(), slots.into_iter().map_while(|s| s).collect()))
             }
-            _ => Ok(Vec::new()),
+            _ => Ok((o.clone(), Vec::new())),
         }
     }
 
     /// A string: plain, `NS.string`, or UTF-8 `NS.bytes`.
-    fn string(&self, a: &'a Archive) -> Result<Option<String>, ImportError> {
-        match self.node {
-            Node::Str(s) => Ok(Some(s.clone())),
-            Node::Dict(_) => {
-                if let Some(s) = self.direct("NS.string") {
-                    return self.deref(a, s)?.string(a);
-                }
-                if let Some(b) = self.direct("NS.bytes") {
-                    return Ok(self
-                        .deref(a, b)?
-                        .data(a)?
-                        .map(|d| String::from_utf8_lossy(d).into_owned()));
-                }
-                Ok(None)
-            }
-            _ => Ok(None),
+    fn string(&self, o: &Obj<'a>) -> Result<Option<String>, ImportError> {
+        if let Some(t) = o.val.text() {
+            self.charge(t.len())?;
+            return Ok(Some(t.into_owned()));
         }
+        if let Some(raw) = self.direct(o, "NS.string")? {
+            return match self.child(&o.path, raw)?.val.text() {
+                Some(t) => {
+                    self.charge(t.len())?;
+                    Ok(Some(t.into_owned()))
+                }
+                None => Ok(None),
+            };
+        }
+        if let Some(raw) = self.direct(o, "NS.bytes")?
+            && let Val::Data(d) = self.child(&o.path, raw)?.val
+        {
+            self.charge(d.len())?;
+            return Ok(Some(String::from_utf8_lossy(d).into_owned()));
+        }
+        Ok(None)
     }
 
     /// Raw bytes: a plist `<data>` or an `NS.data` wrapper.
-    fn data(&self, a: &'a Archive) -> Result<Option<&'a [u8]>, ImportError> {
-        match self.node {
-            Node::Data(d) => Ok(Some(d)),
-            Node::Dict(_) => match self.direct("NS.data") {
-                Some(d) => match self.deref(a, d)?.node {
-                    Node::Data(d) => Ok(Some(d)),
+    fn data(&self, o: &Obj<'a>) -> Result<Option<&'a [u8]>, ImportError> {
+        match o.val {
+            Val::Data(d) => Ok(Some(d)),
+            Val::Dict(..) => match self.direct(o, "NS.data")? {
+                Some(raw) => match self.child(&o.path, raw)?.val {
+                    Val::Data(d) => Ok(Some(d)),
                     _ => Ok(None),
                 },
                 None => Ok(None),
@@ -306,26 +512,10 @@ impl<'a> Obj<'a> {
         }
     }
 
-    fn number(&self) -> Option<f64> {
-        match self.node {
-            Node::Num(n) if n.is_finite() => Some(*n),
-            Node::Bool(b) => Some(f64::from(u8::from(*b))),
-            _ => None,
-        }
-    }
-
-    fn boolean(&self) -> Option<bool> {
-        match self.node {
-            Node::Bool(b) => Some(*b),
-            Node::Num(n) => Some(*n != 0.0),
-            _ => None,
-        }
-    }
-
-    fn class_name(&self, a: &'a Archive) -> Result<Option<String>, ImportError> {
-        match self.get(a, "$class")? {
-            Some(class) => match class.get(a, "$classname")? {
-                Some(name) => name.string(a),
+    fn class_name(&self, o: &Obj<'a>) -> Result<Option<String>, ImportError> {
+        match self.get(o, "$class")? {
+            Some(class) => match self.get(&class, "$classname")? {
+                Some(name) => self.string(&name),
                 None => Ok(None),
             },
             None => Ok(None),
@@ -333,10 +523,10 @@ impl<'a> Obj<'a> {
     }
 
     /// `get` along a chain of keys.
-    fn at(&self, a: &'a Archive, keys: &[&str]) -> Result<Option<Obj<'a>>, ImportError> {
-        let mut cur = self.clone();
+    fn at(&self, o: &Obj<'a>, keys: &[&str]) -> Result<Option<Obj<'a>>, ImportError> {
+        let mut cur = o.clone();
         for k in keys {
-            match cur.get(a, k)? {
+            match self.get(&cur, k)? {
                 Some(next) => cur = next,
                 None => return Ok(None),
             }
@@ -344,12 +534,57 @@ impl<'a> Obj<'a> {
         Ok(Some(cur))
     }
 
-    fn string_at(&self, a: &'a Archive, keys: &[&str]) -> Result<Option<String>, ImportError> {
-        match self.at(a, keys)? {
-            Some(o) => o.string(a),
+    fn string_at(&self, o: &Obj<'a>, keys: &[&str]) -> Result<Option<String>, ImportError> {
+        match self.at(o, keys)? {
+            Some(v) => self.string(&v),
             None => Ok(None),
         }
     }
+}
+
+/// What the flat scans of `$objects` find (as Derive does).
+struct Scan<'a> {
+    session: Option<Obj<'a>>,
+    page_width: Option<f64>,
+    highlighter_behind_text: bool,
+    curves: Vec<Obj<'a>>,
+}
+
+/// One pass over `$objects` (each distinct object once), one pass over each dictionary's keys.
+fn scan<'a>(a: &Archive<'a>) -> Result<Scan<'a>, ImportError> {
+    let mut out =
+        Scan { session: None, page_width: None, highlighter_behind_text: false, curves: Vec::new() };
+    let mut seen = HashSet::new();
+    for n in 0..a.objects.len() {
+        let idx = a.objects.get(n);
+        if !seen.insert(idx) {
+            continue;
+        }
+        let val = a.p.object(idx)?;
+        let Val::Dict(keys, values) = val else { continue };
+        let obj = Obj { val, idx, path: vec![idx] };
+        for i in 0..keys.len() {
+            let k = a.p.object(keys.get(i))?;
+            if k.is_str("richText") {
+                if out.session.is_none() {
+                    out.session = Some(obj.clone());
+                }
+            } else if k.is_str("pageWidthInDocumentCoordsKey") {
+                if out.page_width.is_none()
+                    && let Some(w) = a.child(&obj.path, values.get(i))?.val.number()
+                    && w > 0.0
+                {
+                    out.page_width = Some(w);
+                }
+            } else if k.is_str(BEHIND_TEXT_KEY) {
+                out.highlighter_behind_text |=
+                    a.child(&obj.path, values.get(i))?.val.boolean().unwrap_or(false);
+            } else if k.is_str("curvespoints") {
+                out.curves.push(obj.clone());
+            }
+        }
+    }
+    Ok(out)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -414,18 +649,19 @@ struct Ink {
 }
 
 /// Appends the strokes of one curves dictionary.
-fn read_curves(
-    a: &Archive,
-    curves: &Obj<'_>,
+fn read_curves<'a>(
+    a: &Archive<'a>,
+    curves: &Obj<'a>,
     highlighter_behind_text: bool,
     ink: &mut Ink,
-    limits: &ImportLimits,
 ) -> Result<(), ImportError> {
-    let field = |key: &str| -> Result<&[u8], ImportError> {
-        match curves.get(a, key)? {
-            Some(o) => o.data(a)?.ok_or_else(|| corrupt(format!("{key} is not data"))),
-            None => Err(corrupt(format!("missing {key}"))),
-        }
+    let field = |key: &str| -> Result<&'a [u8], ImportError> {
+        let d = match a.get(curves, key)? {
+            Some(o) => a.data(&o)?.ok_or_else(|| corrupt(format!("{key} is not data")))?,
+            None => return Err(corrupt(format!("missing {key}"))),
+        };
+        a.charge(d.len())?;
+        Ok(d)
     };
     let counts = le_i32s(field("curvesnumpoints")?, "curvesnumpoints")?;
     let points = le_f32s(field("curvespoints")?, "curvespoints")?;
@@ -451,16 +687,19 @@ fn read_curves(
     if colors.len() != strokes.saturating_mul(4) {
         return Err(corrupt("curvescolors does not match curvesnumpoints"));
     }
-    let fractional = match curves.get(a, "curvesfractionalwidths")? {
-        Some(o) => match o.data(a)? {
-            Some(d) if d.len().is_multiple_of(4) => Some(le_f32s(d, "curvesfractionalwidths")?),
+    let fractional = match a.get(curves, "curvesfractionalwidths")? {
+        Some(o) => match a.data(&o)? {
+            Some(d) if d.len().is_multiple_of(4) => {
+                a.charge(d.len())?;
+                Some(le_f32s(d, "curvesfractionalwidths")?)
+            }
             _ => None,
         },
         None => None,
     }
     .filter(|f| cubic && f.len() as u64 == nodes);
-    if let Some(shapes) = curves.get(a, "shapes")?
-        && shapes.data(a)?.is_some_and(|d| !d.is_empty())
+    if let Some(shapes) = a.get(curves, "shapes")?
+        && a.data(&shapes)?.is_some_and(|d| !d.is_empty())
     {
         ink.shapes += 1;
     }
@@ -468,7 +707,7 @@ fn read_curves(
     let (mut point_at, mut node_at) = (0usize, 0usize);
     for (i, &n) in counts.iter().enumerate() {
         if i % 1024 == 0 {
-            check_deadline(limits)?;
+            check_deadline(a.p.limits)?;
         }
         let n = n as usize; // non-negative, checked above
         let xy = &points[point_at * 2..(point_at + n) * 2];
@@ -548,28 +787,35 @@ struct Media {
     other: u32,
 }
 
-fn read_text(a: &Archive, obj: &Obj<'_>, media: &mut Media) -> Result<(), ImportError> {
-    let Some(attributed) = obj.at(a, &["textStore", "attributedString"])? else {
+/// A text box. One without text is dropped silently; one without a position is skipped and
+/// counted (as images are).
+fn read_text<'a>(a: &Archive<'a>, obj: &Obj<'a>, media: &mut Media) -> Result<(), ImportError> {
+    let Some(attributed) = a.at(obj, &["textStore", "attributedString"])? else {
         return Ok(());
     };
-    let Some(text) = attributed.string_at(a, &["stringKey"])? else { return Ok(()) };
+    let Some(text) = a.string_at(&attributed, &["stringKey"])? else { return Ok(()) };
     if text.trim().is_empty() {
         return Ok(());
     }
-    let (x, y) = obj.string_at(a, &["documentOrigin"])?.as_deref().and_then(pair).unwrap_or((0.0, 0.0));
-    let size = obj.string_at(a, &["unscaledContentSize"])?.as_deref().and_then(pair);
+    let Some((x, y)) = a.string_at(obj, &["documentOrigin"])?.as_deref().and_then(pair) else {
+        media.other += 1;
+        return Ok(());
+    };
+    let size = a.string_at(obj, &["unscaledContentSize"])?.as_deref().and_then(pair);
     let (mut font_size, mut color) = (None, None);
-    if let Some(ranges) = attributed.get(a, "subRangesKey")?
-        && let Some(first) = ranges.items(a)?.into_iter().next()
-    {
-        font_size = first
-            .at(a, &["subRangeFontKey", "NSFontSizeAttribute"])?
-            .and_then(|o| o.number())
-            .filter(|s| *s > 0.0);
-        color = first
-            .string_at(a, &["subRangeColorCrossPlatformKey"])?
-            .as_deref()
-            .and_then(cross_platform_color);
+    if let Some(ranges) = a.get(&attributed, "subRangesKey")? {
+        let (list, raws) = a.items(&ranges)?;
+        if let Some(&first) = raws.first() {
+            let first = a.child(&list.path, first)?;
+            font_size = a
+                .at(&first, &["subRangeFontKey", "NSFontSizeAttribute"])?
+                .and_then(|o| o.val.number())
+                .filter(|s| *s > 0.0);
+            color = a
+                .string_at(&first, &["subRangeColorCrossPlatformKey"])?
+                .as_deref()
+                .and_then(cross_platform_color);
+        }
     }
     let width = size.map(|(w, _)| w).filter(|w| *w > 0.0);
     media.max_y = media.max_y.max(y + size.map_or(0.0, |(_, h)| h.max(0.0)));
@@ -584,23 +830,24 @@ fn read_text(a: &Archive, obj: &Obj<'_>, media: &mut Media) -> Result<(), Import
     Ok(())
 }
 
-fn read_image(
-    a: &Archive,
-    obj: &Obj<'_>,
+fn read_image<'a>(
+    a: &Archive<'a>,
+    obj: &Obj<'a>,
     dir: &str,
     src: &mut ZipSource,
     media: &mut Media,
 ) -> Result<(), ImportError> {
     let Some(snapshot) =
-        obj.at(a, &["figure", "FigureBackgroundObjectKey", "kImageObjectSnapshotKey"])?
+        a.at(obj, &["figure", "FigureBackgroundObjectKey", "kImageObjectSnapshotKey"])?
     else {
         media.other += 1;
         return Ok(());
     };
-    let missing = snapshot.get(a, "imageIsMissing")?.and_then(|o| o.boolean()).unwrap_or(false);
-    let rel = snapshot.string_at(a, &["relativePath"])?;
-    let origin = obj.string_at(a, &["documentOrigin"])?.as_deref().and_then(pair);
-    let size = obj.string_at(a, &["unscaledContentSize"])?.as_deref().and_then(pair);
+    let missing =
+        a.get(&snapshot, "imageIsMissing")?.and_then(|o| o.val.boolean()).unwrap_or(false);
+    let rel = a.string_at(&snapshot, &["relativePath"])?;
+    let origin = a.string_at(obj, &["documentOrigin"])?.as_deref().and_then(pair);
+    let size = a.string_at(obj, &["unscaledContentSize"])?.as_deref().and_then(pair);
     let (Some(rel), Some((x, y)), Some((w, h)), false) = (rel, origin, size, missing) else {
         media.other += 1;
         return Ok(());
@@ -628,6 +875,27 @@ fn read_image(
     Ok(())
 }
 
+/// One media object; errors that only spoil it are counted by the caller.
+fn read_media<'a>(
+    a: &Archive<'a>,
+    item: &Obj<'a>,
+    dir: &str,
+    src: &mut ZipSource,
+    media: &mut Media,
+) -> Result<(), ImportError> {
+    if !matches!(item.val, Val::Dict(..)) {
+        return Ok(()); // `$null` and other placeholders
+    }
+    match a.class_name(item)?.as_deref() {
+        Some("TextBlockMediaObject") => read_text(a, item, media),
+        Some("ImageMediaObject") => read_image(a, item, dir, src, media),
+        _ => {
+            media.other += 1;
+            Ok(())
+        }
+    }
+}
+
 /// `"<Dots|Grid|Lines>:<inches>"` → background, spacing `round(96 · inches)`.
 fn line_style(s: &str) -> Option<ImportBackground> {
     let (kind, inches) = s.split_once(':').unwrap_or((s, ""));
@@ -641,25 +909,35 @@ fn line_style(s: &str) -> Option<ImportBackground> {
     }
 }
 
-fn paper(a: &Archive, session: &Obj<'_>) -> Result<ImportBackground, ImportError> {
-    let style = session.string_at(
-        a,
+fn paper<'a>(a: &Archive<'a>, session: &Obj<'a>) -> Result<ImportBackground, ImportError> {
+    let style = a.string_at(
+        session,
         &["NBNoteTakingSessionDocumentPaperLayoutModelKey", "documentPaperAttributes", "lineStyle2"],
     )?;
     if let Some(bg) = style.as_deref().and_then(line_style) {
         return Ok(bg);
     }
-    Ok(match session.get(a, "paperLineStyle")?.and_then(|o| o.number()) {
+    Ok(match a.get(session, "paperLineStyle")?.and_then(|o| o.val.number()) {
         Some(5.0) => ImportBackground::Grid { spacing: 24.0 },
         Some(2.0) => ImportBackground::Lined { spacing: 32.0 },
         _ => ImportBackground::Plain,
     })
 }
 
+/// Embedded PDFs: entries matching `/PDFs/[^/]+\.pdf$` (case-insensitive).
+fn is_pdf_entry(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    let Some((parent, file)) = lower.rsplit_once('/') else { return false };
+    parent.ends_with("/pdfs") && file.len() > 4 && file.ends_with(".pdf")
+}
+
 // ---------------------------------------------------------------------------------------------
 
 pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocument, ImportError> {
     check_deadline(limits)?;
+    if src.any_encrypted() {
+        return Err(ImportError::Encrypted);
+    }
     let names = src.names();
     let session_name = names
         .iter()
@@ -668,85 +946,46 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
         .cloned()
         .ok_or_else(|| corrupt("no Session.plist in the .note package"))?;
     let dir = session_name.rsplit_once('/').map_or("", |(d, _)| d).to_owned();
-    let pdfs = names
-        .iter()
-        .filter(|n| {
-            let lower = n.to_ascii_lowercase();
-            lower.contains("/pdfs/") && lower.ends_with(".pdf")
-        })
-        .count();
+    let pdfs = names.iter().filter(|n| is_pdf_entry(n)).count();
 
     let bytes = read(src, &session_name)?.ok_or_else(|| corrupt("Session.plist is missing"))?;
-    if !bytes.starts_with(b"bplist00") {
-        return Err(corrupt("Session.plist is not a binary plist"));
-    }
-    let archive = Archive::from_root(decode(&bytes, limits)?)?;
-    drop(bytes);
-    let a = &archive;
-    check_deadline(limits)?;
-
-    // Flat scans of `$objects`, as Derive does.
-    let mut session = None;
-    let mut page_width = None;
-    let mut highlighter_behind_text = false;
-    let mut curves = Vec::new();
-    for i in 0..a.objects.len() {
-        let obj = a.object(i);
-        if !matches!(obj.node, Node::Dict(_)) {
-            continue;
-        }
-        if session.is_none() && obj.direct("richText").is_some() {
-            session = Some(obj.clone());
-        }
-        if page_width.is_none()
-            && obj.direct("pageWidthInDocumentCoordsKey").is_some()
-            && let Some(w) = obj.get(a, "pageWidthInDocumentCoordsKey")?.and_then(|o| o.number())
-            && w > 0.0
-        {
-            page_width = Some(w);
-        }
-        if obj.direct("NBNoteTakingSessionIsHighlighterBehindTextKey").is_some() {
-            highlighter_behind_text |= obj
-                .get(a, "NBNoteTakingSessionIsHighlighterBehindTextKey")?
-                .and_then(|o| o.boolean())
-                .unwrap_or(false);
-        }
-        if obj.direct("curvespoints").is_some() {
-            curves.push(obj);
-        }
-    }
-    if curves.is_empty() {
+    let a = Archive::new(Bplist::new(&bytes, limits)?)?;
+    let found = scan(&a)?;
+    if found.curves.is_empty() {
         return Err(corrupt("missing curvespoints"));
     }
 
     let mut ink = Ink { strokes: Vec::new(), max_y: 0.0, shapes: 0 };
-    for c in &curves {
-        read_curves(a, c, highlighter_behind_text, &mut ink, limits)?;
+    for c in &found.curves {
+        read_curves(&a, c, found.highlighter_behind_text, &mut ink)?;
     }
 
     let mut media = Media { texts: Vec::new(), images: Vec::new(), max_y: 0.0, other: 0 };
     let mut background = ImportBackground::Plain;
-    if let Some(session) = &session {
-        background = paper(a, session)?;
-        if let Some(list) = session.at(a, &["richText", "mediaObjects"])? {
-            for (i, item) in list.items(a)?.into_iter().enumerate() {
-                if i % 256 == 0 {
-                    check_deadline(limits)?;
-                }
-                if !matches!(item.node, Node::Dict(_)) {
-                    continue;
-                }
-                match item.class_name(a)?.as_deref() {
-                    Some("TextBlockMediaObject") => read_text(a, &item, &mut media)?,
-                    Some("ImageMediaObject") => read_image(a, &item, &dir, src, &mut media)?,
-                    _ => media.other += 1,
+    if let Some(session) = &found.session {
+        background = paper(&a, session)?;
+        if let Some(list) = a.at(session, &["richText", "mediaObjects"])? {
+            let (list, raws) = a.items(&list)?;
+            let mut seen = HashSet::new();
+            for raw in raws {
+                let result = a.child(&list.path, raw).and_then(|item| {
+                    if seen.insert(item.idx) {
+                        read_media(&a, &item, &dir, src, &mut media)
+                    } else {
+                        Ok(()) // the same object listed twice
+                    }
+                });
+                match result {
+                    Ok(()) => {}
+                    Err(e) if skippable(&e) => media.other += 1,
+                    Err(e) => return Err(e),
                 }
             }
         }
     }
 
     let content_bottom = ink.max_y.max(media.max_y).ceil();
-    let (width, height) = match page_width {
+    let (width, height) = match found.page_width {
         Some(w) => (w, content_bottom),
         None => (DEFAULT_WIDTH, content_bottom.max(DEFAULT_HEIGHT)),
     };
@@ -791,7 +1030,7 @@ mod tests {
     }
 
     #[test]
-    fn line_styles_and_colours() {
+    fn line_styles_colours_and_pdf_names() {
         assert_eq!(line_style("Grid:0.25"), Some(ImportBackground::Grid { spacing: 24.0 }));
         assert_eq!(line_style("Lines:x"), Some(ImportBackground::Lined { spacing: 32.0 }));
         assert_eq!(line_style("Dots:0.5"), Some(ImportBackground::Dotted { spacing: 48.0 }));
@@ -800,6 +1039,9 @@ mod tests {
         assert_eq!(cross_platform_color("0,128,255,1").as_deref(), Some("#0080ff"));
         assert_eq!(pair("{50, 100}"), Some((50.0, 100.0)));
         assert_eq!(pair("50, 100"), None);
+        assert!(is_pdf_entry("N/PDFs/a.pdf") && is_pdf_entry("N/pdfs/B.PDF"));
+        assert!(!is_pdf_entry("N/PDFs/sub/a.pdf") && !is_pdf_entry("N/PDFs/.pdf"));
+        assert!(!is_pdf_entry("PDFs/a.pdf") && !is_pdf_entry("N/XPDFs/a.pdf"));
     }
 
     #[test]
@@ -810,5 +1052,112 @@ mod tests {
         assert!(is_highlighter([255, 255, 0, 255], true));
         assert!(!is_highlighter([200, 200, 200, 255], true));
         assert!(!is_highlighter([0, 0, 255, 255], true));
+    }
+
+    /// Hand-assembles a bplist with 4-byte offsets.
+    fn assemble(objects: &[Vec<u8>], top: u64, ref_size: u8) -> Vec<u8> {
+        let mut out = b"bplist00".to_vec();
+        let mut offsets = Vec::new();
+        for o in objects {
+            offsets.push(out.len() as u32);
+            out.extend_from_slice(o);
+        }
+        let table = out.len() as u64;
+        for o in offsets {
+            out.extend_from_slice(&o.to_be_bytes());
+        }
+        out.extend_from_slice(&[0; 6]);
+        out.extend_from_slice(&[4, ref_size]);
+        out.extend_from_slice(&(objects.len() as u64).to_be_bytes());
+        out.extend_from_slice(&top.to_be_bytes());
+        out.extend_from_slice(&table.to_be_bytes());
+        out
+    }
+
+    fn ascii(s: &str) -> Vec<u8> {
+        let mut v = vec![0x50 | s.len() as u8];
+        v.extend_from_slice(s.as_bytes());
+        v
+    }
+
+    #[test]
+    fn shared_object_bomb_is_bounded_by_steps() {
+        // root {"$objects": A}; A = 1 M references to the same dictionary D {"k": "v"}.
+        const N: u32 = 1_000_000;
+        let mut array = vec![0xAF, 0x12];
+        array.extend_from_slice(&N.to_be_bytes());
+        array.extend(std::iter::repeat_n(3u8, N as usize));
+        let objects =
+            vec![vec![0xD1, 1, 2], ascii("$objects"), array, vec![0xD1, 4, 5], ascii("k"), ascii("v")];
+        let bytes = assemble(&objects, 0, 1);
+        assert!(bytes.len() < 1_100_000);
+        let limits = ImportLimits::default();
+        let a = Archive::new(Bplist::new(&bytes, &limits).unwrap()).unwrap();
+        let found = scan(&a).unwrap();
+        assert!(found.curves.is_empty() && found.session.is_none());
+        // The shared dictionary is decoded once; nothing is expanded.
+        assert!(a.p.steps() < 100, "steps {}", a.p.steps());
+    }
+
+    /// Visits what is reachable from the top object (bounded fan-out and depth).
+    fn walk(p: &Bplist<'_>) -> Result<(), ImportError> {
+        let mut stack = vec![(p.top, 0usize)];
+        while let Some((i, depth)) = stack.pop() {
+            match p.object(i)? {
+                Val::Array(r) if depth < 8 => {
+                    stack.extend((0..r.len().min(16)).map(|k| (r.get(k), depth + 1)));
+                }
+                Val::Dict(k, v) if depth < 8 => {
+                    for j in 0..k.len().min(16) {
+                        stack.push((k.get(j), depth + 1));
+                        stack.push((v.get(j), depth + 1));
+                    }
+                }
+                v => {
+                    let _ = v.text();
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reader_survives_random_bytes() {
+        let limits = ImportLimits::default();
+        let mut seed: u64 = 0x0bad_5eed;
+        let mut next = move || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (seed >> 33) as usize
+        };
+        let mut opened = 0;
+        for _ in 0..1000 {
+            let len = 40 + next() % 400;
+            let mut bytes: Vec<u8> = (0..len).map(|_| next() as u8).collect();
+            bytes[..8].copy_from_slice(b"bplist00");
+            // A plausible trailer most of the time, so decoding gets past it.
+            if next() % 4 != 0 {
+                let end = len - 32;
+                let count = 1 + next() % 24;
+                let off = 1 + next() % 2;
+                let table = 8 + next() % end.saturating_sub(8 + count * off).max(1);
+                let ref_size = 1 + next() % 2;
+                let top = next() % count;
+                let t = &mut bytes[end..];
+                t[..6].fill(0);
+                t[6] = off as u8;
+                t[7] = ref_size as u8;
+                t[8..16].copy_from_slice(&(count as u64).to_be_bytes());
+                t[16..24].copy_from_slice(&(top as u64).to_be_bytes());
+                t[24..32].copy_from_slice(&(table as u64).to_be_bytes());
+            }
+            if let Ok(p) = Bplist::new(&bytes, &limits) {
+                opened += 1;
+                let _ = walk(&p);
+                if let Ok(a) = Archive::new(p) {
+                    let _ = scan(&a);
+                }
+            }
+        }
+        assert!(opened > 100, "only {opened} trailers accepted");
     }
 }

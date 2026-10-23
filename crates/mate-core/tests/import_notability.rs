@@ -39,6 +39,12 @@ mod notability_fixture {
         pub image: bool,
         /// The media-object array lists itself.
         pub cycle: bool,
+        /// Extra variants: `lineStyle2`, `NS.key.<i>` / `NS.string` / `NS.bytes` texts with
+        /// sub-ranges, a text without position, a missing image, a dangling UID, PDF entries.
+        pub rich: bool,
+        /// Extra media objects of an unknown class; when non-zero the media array is written
+        /// as `NS.object.<i>` keys.
+        pub filler_media: usize,
     }
 
     fn line(y: f32) -> Vec<(f32, f32)> {
@@ -55,10 +61,13 @@ mod notability_fixture {
                 Stroke { points: line(40.0), rgba: [0xFF, 0, 0, 0xFF], width: 3.0 },
                 Stroke { points: line(60.0), rgba: [0xFF, 0xFF, 0, 0x80], width: 12.0 },
             ]),
-            fractional: Some(vec![1.0, 1.0, 1.0, 2.0, 1.0, 1.0]),
+            // C's nodes [2, 2] would double its width if highlighters used them.
+            fractional: Some(vec![1.0, 1.0, 1.0, 2.0, 2.0, 2.0]),
             text: true,
             image: true,
             cycle: false,
+            rich: false,
+            filler_media: 0,
         }
     }
 
@@ -143,12 +152,87 @@ mod notability_fixture {
                 ("rotationDegrees", Value::Real(0.0)),
             ])));
         }
+        if spec.rich {
+            let cls = a.class("TextBlockMediaObject");
+            // attributedString as NS.key.<i>/NS.object.<i>, the string as {NS.string}.
+            let (k0, k1) = (a.string("stringKey"), a.string("subRangesKey"));
+            let inner = a.string("Second");
+            let second = a.add(dict(vec![("NS.string", inner)]));
+            let font = a.add(dict(vec![("NSFontSizeAttribute", Value::Real(18.0))]));
+            let colour = a.string("1,0,0,1");
+            let range = a.add(dict(vec![
+                ("subRangeFontKey", font),
+                ("subRangeColorCrossPlatformKey", colour),
+            ]));
+            let ranges = a.add(dict(vec![("NS.objects", Value::Array(vec![range]))]));
+            let attributed = a.add(dict(vec![
+                ("NS.key.0", k0),
+                ("NS.object.0", second),
+                ("NS.key.1", k1),
+                ("NS.object.1", ranges),
+            ]));
+            let store = a.add(dict(vec![("attributedString", attributed)]));
+            let (origin, size) = (a.string("{60, 500}"), a.string("{100, 20}"));
+            media.push(a.add(dict(vec![
+                ("$class", cls.clone()),
+                ("textStore", store),
+                ("documentOrigin", origin),
+                ("unscaledContentSize", size),
+            ])));
+            // The string as UTF-8 {NS.bytes}.
+            let raw = a.data(b"Bytes".to_vec());
+            let bytes = a.add(dict(vec![("NS.bytes", raw)]));
+            let attributed = a.add(dict(vec![("stringKey", bytes)]));
+            let store = a.add(dict(vec![("attributedString", attributed)]));
+            let (origin, size) = (a.string("{70, 520}"), a.string("{100, 20}"));
+            media.push(a.add(dict(vec![
+                ("$class", cls.clone()),
+                ("textStore", store),
+                ("documentOrigin", origin),
+                ("unscaledContentSize", size),
+            ])));
+            // No documentOrigin: skipped and counted.
+            let text = a.string("Lost");
+            let attributed = a.add(dict(vec![("stringKey", text)]));
+            let store = a.add(dict(vec![("attributedString", attributed)]));
+            media.push(a.add(dict(vec![("$class", cls), ("textStore", store)])));
+            // imageIsMissing: skipped and counted.
+            let cls = a.class("ImageMediaObject");
+            let path = a.string("Images/img1.png");
+            let snap = a.add(dict(vec![("relativePath", path), ("imageIsMissing", Value::Boolean(true))]));
+            let bg = a.add(dict(vec![("kImageObjectSnapshotKey", snap)]));
+            let fig = a.add(dict(vec![("FigureBackgroundObjectKey", bg)]));
+            let (origin, size) = (a.string("{0, 0}"), a.string("{10, 10}"));
+            media.push(a.add(dict(vec![
+                ("$class", cls),
+                ("figure", fig),
+                ("documentOrigin", origin),
+                ("unscaledContentSize", size),
+            ])));
+            // A dangling UID: skipped and counted.
+            media.push(Value::Uid(Uid::new(999_999)));
+        }
+        if spec.filler_media > 0 {
+            let cls = a.class("AudioMediaObject");
+            for _ in 0..spec.filler_media {
+                media.push(a.add(dict(vec![("$class", cls.clone())])));
+            }
+        }
         let array_cls = a.class("NSMutableArray");
         let array_index = a.objects.len() as u64;
         if spec.cycle {
             media.push(Value::Uid(Uid::new(array_index)));
         }
-        let array = a.add(dict(vec![("NS.objects", Value::Array(media)), ("$class", array_cls)]));
+        let array = if spec.filler_media > 0 {
+            let mut d = Dictionary::new();
+            for (i, m) in media.into_iter().enumerate() {
+                d.insert(format!("NS.object.{i}"), m);
+            }
+            d.insert("$class".into(), array_cls);
+            a.add(Value::Dictionary(d))
+        } else {
+            a.add(dict(vec![("NS.objects", Value::Array(media)), ("$class", array_cls)]))
+        };
         let rich = a.add(dict(vec![("mediaObjects", array)]));
 
         if let Some(strokes) = &spec.strokes {
@@ -177,6 +261,12 @@ mod notability_fixture {
         if let Some(p) = spec.paper_line_style {
             session.push(("paperLineStyle", Value::Integer(p.into())));
         }
+        if spec.rich {
+            let style = a.string("Grid:0.25");
+            let attrs = a.add(dict(vec![("lineStyle2", style)]));
+            let layout = a.add(dict(vec![("documentPaperAttributes", attrs)]));
+            session.push(("NBNoteTakingSessionDocumentPaperLayoutModelKey", layout));
+        }
         a.objects[1] = dict(session);
 
         let root = dict(vec![
@@ -192,17 +282,31 @@ mod notability_fixture {
 
     /// A zip with `Fixture/Session.plist` = `plist` and `Fixture/Images/img1.png`.
     pub fn zip_with(plist: &[u8]) -> Vec<u8> {
+        zip_with_extra(plist, &[])
+    }
+
+    /// [`zip_with`] plus small entries named `extra`.
+    pub fn zip_with_extra(plist: &[u8], extra: &[&str]) -> Vec<u8> {
         let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
         let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
         w.start_file("Fixture/Session.plist", opts).unwrap();
         w.write_all(plist).unwrap();
         w.start_file("Fixture/Images/img1.png", opts).unwrap();
         w.write_all(PNG).unwrap();
+        for name in extra {
+            w.start_file(*name, opts).unwrap();
+            w.write_all(b"%PDF-1.4").unwrap();
+        }
         w.finish().unwrap().into_inner()
     }
 
     pub fn build(spec: &Spec) -> Vec<u8> {
-        zip_with(&session_plist(spec))
+        let pdfs: &[&str] = if spec.rich {
+            &["Fixture/PDFs/doc.pdf", "Fixture/PDFs/sub/x.pdf", "Fixture/notPDFs/y.pdf"]
+        } else {
+            &[]
+        };
+        zip_with_extra(&session_plist(spec), pdfs)
     }
 }
 
@@ -378,30 +482,89 @@ fn notability_keyed_archive_cycle_does_not_hang() {
     assert!(started.elapsed().as_secs() < 5);
 }
 
-#[test]
-fn notability_shared_object_expansion_is_bounded() {
-    // A hand-made bplist whose arrays each reference the next one twice: a few hundred bytes
-    // that expand to 2^60 values if decoded naively.
-    const N: usize = 60;
-    let mut bytes = b"bplist00".to_vec();
+/// A hand-made bplist with 4-byte offsets and 1-byte references.
+fn assemble(objects: &[Vec<u8>], top: u64) -> Vec<u8> {
+    let mut out = b"bplist00".to_vec();
     let mut offsets = Vec::new();
-    for i in 0..N {
-        offsets.push(bytes.len() as u8);
-        bytes.extend_from_slice(&[0xA2, (i + 1) as u8, (i + 1) as u8]);
+    for o in objects {
+        offsets.push(out.len() as u32);
+        out.extend_from_slice(o);
     }
-    offsets.push(bytes.len() as u8);
-    bytes.extend_from_slice(&[0x51, b'x']);
-    let table = bytes.len() as u64;
-    bytes.extend_from_slice(&offsets);
-    bytes.extend_from_slice(&[0; 6]);
-    bytes.extend_from_slice(&[1, 1]);
-    bytes.extend_from_slice(&((N + 1) as u64).to_be_bytes());
-    bytes.extend_from_slice(&0u64.to_be_bytes());
-    bytes.extend_from_slice(&table.to_be_bytes());
+    let table = out.len() as u64;
+    for o in offsets {
+        out.extend_from_slice(&o.to_be_bytes());
+    }
+    out.extend_from_slice(&[0, 0, 0, 0, 0, 0, 4, 1]);
+    out.extend_from_slice(&(objects.len() as u64).to_be_bytes());
+    out.extend_from_slice(&top.to_be_bytes());
+    out.extend_from_slice(&table.to_be_bytes());
+    out
+}
+
+fn ascii(s: &str) -> Vec<u8> {
+    let mut v = vec![0x50 | s.len() as u8];
+    v.extend_from_slice(s.as_bytes());
+    v
+}
+
+#[test]
+fn notability_shared_object_bomb_is_bounded() {
+    let run = |bytes: &[u8]| {
+        let started = std::time::Instant::now();
+        let r = import(&notability_fixture::zip_with(bytes));
+        assert!(matches!(r, Err(ImportError::Limit(_) | ImportError::Corrupt(_))), "{r:?}");
+        assert!(started.elapsed().as_secs() < 5);
+    };
+    // {"$objects": A}, A = 1 M references to one dictionary {"k": "v"}: ~1 MiB.
+    const N: u32 = 1_000_000;
+    let mut array = vec![0xAF, 0x12];
+    array.extend_from_slice(&N.to_be_bytes());
+    array.extend(std::iter::repeat_n(3u8, N as usize));
+    let bomb = assemble(
+        &[vec![0xD1, 1, 2], ascii("$objects"), array, vec![0xD1, 4, 5], ascii("k"), ascii("v")],
+        0,
+    );
+    assert!(bomb.len() < 1_100_000);
+    run(&bomb);
+    // Arrays that each reference the next twice: 2^60 values if expanded.
+    let mut objects: Vec<Vec<u8>> = vec![vec![0xD1, 1, 2], ascii("$objects")];
+    for i in 2..62u8 {
+        objects.push(vec![0xA2, i + 1, i + 1]);
+    }
+    objects.push(ascii("x"));
+    run(&assemble(&objects, 0));
+}
+
+#[test]
+fn notability_many_media_objects_is_linear() {
+    let spec = Spec { filler_media: 50_000, ..basic() };
+    let bytes = build(&spec);
     let started = std::time::Instant::now();
-    let r = import(&notability_fixture::zip_with(&bytes));
-    assert!(matches!(r, Err(ImportError::Limit(_))), "{r:?}");
-    assert!(started.elapsed().as_secs() < 5);
+    let doc = import(&bytes).expect("parse");
+    let elapsed = started.elapsed();
+    let page = &doc.sections[0].pages[0];
+    assert_eq!((page.texts.len(), page.images.len()), (1, 1));
+    assert_eq!(page.skipped.other, 50_000);
+    assert!(elapsed.as_millis() < 1000, "{elapsed:?}");
+}
+
+#[test]
+fn notability_rich_fixture_variants() {
+    let doc = import(&build(&Spec { rich: true, ..basic() })).expect("parse");
+    let page = &doc.sections[0].pages[0];
+    // lineStyle2 wins over paperLineStyle.
+    assert_eq!(page.background, ImportBackground::Grid { spacing: 24.0 });
+    let texts: Vec<&str> = page.texts.iter().map(|t| t.text.as_str()).collect();
+    assert_eq!(texts, ["Hello", "Second", "Bytes"]);
+    let second = &page.texts[1];
+    assert_eq!((second.x, second.y), (60.0, 500.0));
+    assert_eq!(second.font_size, Some(18.0));
+    assert_eq!(second.color, "#ff0000");
+    assert_eq!(page.texts[0].color, "#000000");
+    assert_eq!(page.images.len(), 1);
+    // No-origin text + missing image + dangling UID + one PDF (`PDFs/doc.pdf` only).
+    assert_eq!(page.skipped.other, 4);
+    assert_eq!(page.height, 540.0);
 }
 
 #[test]

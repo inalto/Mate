@@ -18,9 +18,6 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 infer = { version = "0.19", default-features = false }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 base64 = "0.22"
-# The event reader (`plist::stream`) lets the Notability importer bound the decoded size; it is
-# behind the crate's unstable-API feature, hence the minor-version pin.
-plist = { version = "~1.10", features = ["enable_unstable_features_that_may_break_with_minor_version_bumps"] }
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-decode"] }
 # OneNote sections/notebooks (MPL-2.0, used unmodified). No `native-fs`: Mate parses from memory.
 onenote_parser = { version = "2.1", default-features = false, features = ["onepkg"] }
@@ -29,3 +26,7 @@ cab = "0.6"
 # `onenote_parser` takes its file names as `TypedPath`s.
 typed-path = "0.12"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+
+[dev-dependencies]
+# Writes the keyed-archive fixtures in tests/import_notability.rs (the importer reads bplists itself).
+plist = "1"
