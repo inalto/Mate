@@ -2,6 +2,7 @@ pub mod ai;
 pub mod archive;
 pub mod assets;
 pub mod geometry;
+pub mod import;
 pub mod model;
 pub mod semantics;
 pub mod settings;

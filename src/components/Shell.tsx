@@ -1,8 +1,12 @@
 import { Books, Gear, House, ShareNetwork, Trash } from "@phosphor-icons/react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect } from "react";
 import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
+import { isImportPath } from "../ipc/import";
+import { useImportStore } from "../stores/importStore";
 import CommandPalette from "./CommandPalette";
+import ImportDialog from "./ImportDialog";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
@@ -26,6 +30,30 @@ export default function Shell() {
       ),
     [],
   );
+
+  // Notebook files from other apps dropped anywhere open the import dialog (PDFs and images are
+  // handled by the canvas and window drop handlers).
+  useEffect(() => {
+    let detached = false;
+    let unlisten: (() => void) | null = null;
+    try {
+      void getCurrentWebview()
+        .onDragDropEvent((event) => {
+          if (event.payload.type !== "drop") return;
+          const paths = event.payload.paths.filter(isImportPath);
+          if (paths.length === 0) return;
+          void useImportStore.getState().openDialog({ paths });
+        })
+        .then((fn) => (detached ? fn() : (unlisten = fn)))
+        .catch(() => {});
+    } catch {
+      /* not running inside the Tauri shell */
+    }
+    return () => {
+      detached = true;
+      unlisten?.();
+    };
+  }, []);
 
   return (
     <div className="shell">
@@ -53,6 +81,7 @@ export default function Shell() {
         <Outlet />
       </main>
       <CommandPalette />
+      <ImportDialog />
     </div>
   );
 }

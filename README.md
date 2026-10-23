@@ -6,7 +6,7 @@ Write with a pen on an endless canvas or on paged sheets, organise pages into bo
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **Phase 3 complete** — the foundation, ink editor, rich content (v0.2.0) and an optional, bring-your-own-key AI tutor, off by default. Importers for GoodNotes / Notability / OneNote are next. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap).
+> Status: **Phase 4 complete** — the foundation, ink editor, rich content (v0.2.0), an optional bring-your-own-key AI tutor (off by default) and importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes. Phase 5 (polish) is next. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap).
 
 ## Features
 
@@ -31,6 +31,32 @@ The AI tutor reads your handwritten maths, checks it and points out mistakes. It
 - **Turn it off:** untick the permission, switch the Tutor off under Settings → Tutor, or remove the key under Settings → Intelligence.
 
 Details are in the wiki: [AI tutor](https://github.com/inalto/Mate/wiki/AI-Tutor).
+
+## Import
+
+Open **Import notes…** (Library or the top bar), drag a file onto the window, or open a notebook file with Mate. Mate reads these formats, detected from their contents:
+
+- GoodNotes (`.goodnotes`)
+- Notability (`.note`)
+- OneNote (`.one` sections and `.onepkg` notebooks)
+- Freenotes (`.freenotes`, `.freenotesv2`, `.freebackup`)
+- Samsung Notes (`.sdocx`, best effort)
+
+Mate is not affiliated with any of these apps or their makers.
+
+**Imported:** ink (pen, highlighter and pencil strokes, with colour and width), text boxes (plain text), images, and ruled, grid and dot backgrounds. Each source page becomes one Mate page, scaled to Mate's sheet width.
+
+**Not imported:** tables, most shapes (Freenotes' basic shapes are kept as outlines), rich text styling (bold, italic, per-run colours), PDF or image page templates, Samsung Notes typed text, and image rotation.
+
+**Limits:** 2 000 pages and 5 000 elements per page per import; 20 000 000 ink points and 2 000 000 elements per file; 50 000 points per stroke; file size up to 100 MiB (GoodNotes, Notability, Samsung Notes), 256 MiB (OneNote) or 200 MB (Freenotes); 60 seconds to read a file and 60 more to place its pages. Files over a limit are refused or cut short, and the report says what was left out.
+
+**Re-importing:** only a byte-identical file is skipped, and its pages are counted as already imported. A changed or grown file is imported again in full, alongside the earlier pages.
+
+The full guide, with per-format detail and known gaps, is in the wiki: [Importing](https://github.com/inalto/Mate/wiki/Importing).
+
+**Smoke test (developers):** `cargo run -p mate-core --example import_smoke -- <file> [more files]` parses each file into a temporary store and prints its import report as JSON with timings. Keep real sample files in `docs/import-samples/`, which is gitignored.
+
+**Licence note:** OneNote import uses [`onenote_parser`](https://crates.io/crates/onenote_parser) 2.1 and its companion crate [`onenote_parser-macros`](https://crates.io/crates/onenote_parser-macros), both licensed under MPL-2.0. They are used unmodified; the MPL applies to those crates' own files.
 
 ## Quick start
 

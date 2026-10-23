@@ -48,6 +48,41 @@
         "description": "PDF document",
         "role": "Editor",
         "rank": "Alternate"
+      },
+      {
+        "ext": ["goodnotes"],
+        "name": "GoodNotes file",
+        "description": "GoodNotes file",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["note"],
+        "name": "Notability file",
+        "description": "Notability file",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["one", "onepkg"],
+        "name": "OneNote file",
+        "description": "OneNote file",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["freenotes", "freenotesv2", "freebackup"],
+        "name": "Freenotes file",
+        "description": "Freenotes file",
+        "role": "Viewer",
+        "rank": "Alternate"
+      },
+      {
+        "ext": ["sdocx"],
+        "name": "Samsung Notes file",
+        "description": "Samsung Notes file",
+        "role": "Viewer",
+        "rank": "Alternate"
       }
     ],
     "android": {

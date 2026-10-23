@@ -5,6 +5,7 @@ import BookCard from "../components/BookCard";
 import { importUnitArchive } from "../ipc/archive";
 import type { Unit } from "../model/types";
 import ShelfSection from "../components/ShelfSection";
+import { useImportStore } from "../stores/importStore";
 import { pickAndImportPdf } from "../pdf/import";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
@@ -73,6 +74,7 @@ export default function Library() {
         />
         <button type="button" className="btn" onClick={() => void importBook()}>Import book…</button>
         <button type="button" className="btn" onClick={() => void importPdf()}>Import PDF…</button>
+        <button type="button" className="btn" onClick={() => void useImportStore.getState().openDialog()}>Import notes…</button>
         <div className="segmented" role="group" aria-label="Sort books">
           <button aria-pressed={view === "recent"} onClick={() => setView("recent")}>Recent</button>
           <button aria-pressed={view === "az"} onClick={() => setView("az")}>A-Z</button>

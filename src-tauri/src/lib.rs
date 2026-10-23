@@ -2,7 +2,7 @@ mod commands;
 mod state;
 
 use commands::{
-  ai, archive, ask, assets, elements, export, lifecycle, notebook, pdf, practice, recognition, recognize, settings,
+  ai, archive, ask, assets, elements, export, import, lifecycle, notebook, open_files, pdf, practice, recognition, recognize, settings,
   semantics, thumbnails,
 };
 use state::AppState;
@@ -20,11 +20,7 @@ pub fn run() {
         let _ = main.show();
         let _ = main.set_focus();
       }
-      if let Some(path) = pdf::pdf_from_args(argv, std::path::Path::new(&cwd))
-        && std::path::Path::new(&path).is_file()
-      {
-        pdf::file_opened(app, path);
-      }
+      open_files::args_opened(app, argv, std::path::Path::new(&cwd));
     }))
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
@@ -51,6 +47,9 @@ pub fn run() {
         std::env::args(),
         &std::env::current_dir().unwrap_or_default(),
       )));
+      let cwd = std::env::current_dir().unwrap_or_default();
+      app.manage(open_files::PendingImportFiles::new(open_files::import_paths_from_args(std::env::args(), &cwd)));
+      app.manage(import::ImportControl::default());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -94,6 +93,10 @@ pub fn run() {
       assets::gc_assets,
       pdf::read_shared_pdf,
       pdf::take_pending_open_file,
+      open_files::take_pending_import_files,
+      import::sniff_import_files,
+      import::import_files,
+      import::cancel_import,
       export::write_export_file,
       archive::export_unit_archive,
       archive::import_unit_archive,
@@ -109,7 +112,7 @@ pub fn run() {
       #[cfg(any(target_os = "macos", target_os = "ios"))]
       if let RunEvent::Opened { urls } = &event {
         for path in urls.iter().filter_map(|u| u.to_file_path().ok()) {
-          pdf::file_opened(app, path.to_string_lossy().into_owned());
+          open_files::file_opened(app, path.to_string_lossy().into_owned());
         }
       }
       // macOS: Cmd+Q, the app menu "Quit" and Dock "Quit" end the app without a window

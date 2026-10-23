@@ -191,6 +191,10 @@ pub struct Page {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
     pub version: i64,
+    /// Where an imported page came from (`source`, `sourcePageId`, `sourceFingerprint`); `None`
+    /// for pages created in Mate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import_metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

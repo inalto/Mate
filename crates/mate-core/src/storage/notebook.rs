@@ -4,7 +4,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 
-use super::{Result, Storage, StorageError, enum_col, enum_to_sql, json_col};
+use super::{Result, Storage, StorageError, enum_col, enum_to_sql, json_col, opt_json_col};
 use crate::model::{Bookshelf, Page, Section, Unit, format_iso, now_iso};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,7 +53,7 @@ const SECTION_COLS: &str = "id, unit_id, title, color, icon, order_index, is_exp
      created_at, updated_at, deleted_at, version";
 const PAGE_COLS: &str = "id, section_id, parent_id, title, is_expanded, is_favourite, depth, \
      mode, background_config, page_width, page_height, thumbnail_version, icon, order_index, \
-     created_at, updated_at, deleted_at, version";
+     created_at, updated_at, deleted_at, version, import_metadata";
 
 fn bookshelf_from_row(r: &Row) -> rusqlite::Result<Bookshelf> {
     Ok(Bookshelf {
@@ -123,6 +123,7 @@ fn page_from_row(r: &Row) -> rusqlite::Result<Page> {
         updated_at: r.get(15)?,
         deleted_at: r.get(16)?,
         version: r.get(17)?,
+        import_metadata: opt_json_col(r, 18)?,
     })
 }
 
@@ -391,42 +392,20 @@ impl Storage {
     }
 
     pub fn upsert_page(&mut self, p: &Page) -> Result<()> {
-        self.conn.execute(
-            &format!(
-                "INSERT INTO pages ({PAGE_COLS})
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                         ?17, 1)
-                 ON CONFLICT(id) DO UPDATE SET
-                   section_id = excluded.section_id, parent_id = excluded.parent_id,
-                   title = excluded.title, is_expanded = excluded.is_expanded,
-                   is_favourite = excluded.is_favourite, depth = excluded.depth,
-                   mode = excluded.mode, background_config = excluded.background_config,
-                   page_width = excluded.page_width, page_height = excluded.page_height,
-                   thumbnail_version = MAX(pages.thumbnail_version, excluded.thumbnail_version),
-                   icon = excluded.icon,
-                   order_index = excluded.order_index,
-                   updated_at = excluded.updated_at, version = pages.version + 1"
-            ),
-            params![
-                p.id,
-                p.section_id,
-                p.parent_id,
-                p.title,
-                p.is_expanded,
-                p.is_favourite,
-                p.depth,
-                enum_to_sql(&p.mode)?,
-                serde_json::to_string(&p.background_config)?,
-                p.page_width,
-                p.page_height,
-                p.thumbnail_version,
-                p.icon,
-                p.order_index,
-                p.created_at,
-                now_iso(),
-                p.deleted_at
-            ],
-        )?;
+        upsert_page_in(&self.conn, p)
+    }
+
+    /// Inserts (or updates) a page and its elements in one transaction: either both land or
+    /// neither does. Element limits are checked as in [`Storage::upsert_elements`].
+    pub fn upsert_page_with_elements(
+        &mut self,
+        page: &Page,
+        elements: &[crate::model::Element],
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        upsert_page_in(&tx, page)?;
+        super::elements::upsert_elements_in(&tx, elements)?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -506,4 +485,51 @@ impl Storage {
         tx.commit()?;
         Ok(old.len())
     }
+}
+
+/// Inserts or updates a page row. A missing `import_metadata` keeps the stored one, so a page
+/// edited by a client that does not know the field keeps its import fingerprint.
+fn upsert_page_in(conn: &Connection, p: &Page) -> Result<()> {
+    conn.execute(
+        &format!(
+            "INSERT INTO pages ({PAGE_COLS})
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
+                     ?17, 1, ?18)
+             ON CONFLICT(id) DO UPDATE SET
+               section_id = excluded.section_id, parent_id = excluded.parent_id,
+               title = excluded.title, is_expanded = excluded.is_expanded,
+               is_favourite = excluded.is_favourite, depth = excluded.depth,
+               mode = excluded.mode, background_config = excluded.background_config,
+               page_width = excluded.page_width, page_height = excluded.page_height,
+               thumbnail_version = MAX(pages.thumbnail_version, excluded.thumbnail_version),
+               icon = excluded.icon,
+               order_index = excluded.order_index,
+               import_metadata = COALESCE(excluded.import_metadata, pages.import_metadata),
+               updated_at = excluded.updated_at, version = pages.version + 1"
+        ),
+        params![
+            p.id,
+            p.section_id,
+            p.parent_id,
+            p.title,
+            p.is_expanded,
+            p.is_favourite,
+            p.depth,
+            enum_to_sql(&p.mode)?,
+            serde_json::to_string(&p.background_config)?,
+            p.page_width,
+            p.page_height,
+            p.thumbnail_version,
+            p.icon,
+            p.order_index,
+            p.created_at,
+            now_iso(),
+            p.deleted_at,
+            p.import_metadata
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?
+        ],
+    )?;
+    Ok(())
 }

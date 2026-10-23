@@ -117,6 +117,8 @@ export interface Page {
   updatedAt: string;
   deletedAt?: string;
   version: number;
+  /** Provenance of an imported page (`source`, `sourcePageId`, `sourceFingerprint`). */
+  importMetadata?: Record<string, unknown>;
 }
 
 export interface Element {

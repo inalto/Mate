@@ -79,6 +79,7 @@ pub fn page(id: &str, section_id: &str, parent_id: Option<&str>) -> Page {
         updated_at: now,
         deleted_at: None,
         version: 0,
+        import_metadata: None,
     }
 }
 

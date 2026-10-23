@@ -124,6 +124,76 @@ fn migrates_v1_to_v2_keeping_data() {
 }
 
 #[test]
+fn migrates_v2_to_v3_keeping_data() {
+    let path = temp_db();
+    {
+        // A database exactly as Phase 3 left it: schema v2 with a page, a stroke and a verdict.
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(include_str!("../src/storage/schema.sql")).unwrap();
+        conn.execute_batch(include_str!("../src/storage/schema_v2.sql")).unwrap();
+        conn.execute_batch("INSERT INTO schema_version (version) VALUES (1), (2)").unwrap();
+        let now = "2026-01-01T00:00:00.000Z";
+        conn.execute(
+            "INSERT INTO units (id, title, created_at, updated_at) VALUES ('u1', 'Maths', ?1, ?1)",
+            [now],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO sections (id, unit_id, title, color, created_at, updated_at)              VALUES ('sec1', 'u1', 'Algebra', '#ff8800', ?1, ?1)",
+            [now],
+        )
+        .unwrap();
+        let bg = serde_json::to_string(&BackgroundConfig::default()).unwrap();
+        conn.execute(
+            "INSERT INTO pages (id, section_id, title, mode, background_config, page_height, created_at, updated_at)              VALUES ('p1', 'sec1', 'Equations', 'page', ?1, 1500, ?2, ?2)",
+            rusqlite::params![bg, now],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO elements (id, page_id, type, points, color, width, created_at, updated_at, ink_updated_at)              VALUES ('e1', 'p1', 'stroke', '[{\"x\":1,\"y\":2,\"pressure\":0.5,\"timestamp\":0}]',                      '#000000', 3, ?1, ?1, ?1)",
+            [now],
+        )
+        .unwrap();
+    }
+
+    let mut st = Storage::open(&path).unwrap();
+    st.upsert_recognition(&rec("p1", "g1", &["e1"], verdict("x+1=2", "linear equation", Some(true))))
+        .unwrap();
+    let tree = st.list_tree().unwrap();
+    assert_eq!(tree.pages.len(), 1);
+    let mut page = tree.pages[0].clone();
+    assert_eq!(page.title, "Equations");
+    assert_eq!(page.mode, PageMode::Page);
+    assert_eq!(page.page_height, Some(1500.0));
+    assert_eq!(page.import_metadata, None);
+    assert_eq!(st.load_elements("p1").unwrap().len(), 1);
+
+    // The v3 column round-trips, and a save without it keeps the stored value.
+    let meta = serde_json::json!({ "source": "good-notes", "sourcePageId": "x", "sourceFingerprint": "0123456789abcdef" });
+    page.import_metadata = Some(meta.clone());
+    st.upsert_page(&page).unwrap();
+    page.import_metadata = None;
+    page.title = "Renamed".into();
+    st.upsert_page(&page).unwrap();
+    let got = st.list_tree().unwrap().pages[0].clone();
+    assert_eq!(got.title, "Renamed");
+    assert_eq!(got.import_metadata, Some(meta.clone()));
+    let json = serde_json::to_value(&got).unwrap();
+    assert_eq!(json["importMetadata"], meta);
+    drop(st);
+
+    // Reopening is a no-op migration and keeps everything.
+    let st = Storage::open(&path).unwrap();
+    assert_eq!(st.list_tree().unwrap().pages[0].import_metadata, Some(meta));
+    assert_eq!(st.load_elements("p1").unwrap().len(), 1);
+    assert_eq!(st.get_recognitions("p1").unwrap().len(), 1);
+    drop(st);
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+}
+
+#[test]
 fn upsert_and_get_recognitions() {
     let mut st = seeded();
     ink(&mut st, &["e1", "e2", "e3", "e4"]);

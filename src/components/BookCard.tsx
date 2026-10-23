@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { exportUnitArchive } from "../ipc/archive";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
 import type { Unit } from "../model/types";
+import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import PracticeDialog from "./PracticeDialog";
 
@@ -128,6 +129,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
               <button role="menuitem" onClick={() => setMenu("shelf")}>Move to shelf</button>
               <button role="menuitem" onClick={act(async () => setPractising(true))}>Practice from this book…</button>
               <button role="menuitem" onClick={act(exportBook)}>Export book…</button>
+              <button role="menuitem" onClick={act(() => useImportStore.getState().openDialog({ unitId: unit.id }))}>Import into this book…</button>
               <button role="menuitem" onClick={act(() => trash("unit", unit.id))}>Delete</button>
             </>
           )}
