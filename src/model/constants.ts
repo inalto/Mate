@@ -91,7 +91,6 @@ export const DEFAULT_SETTINGS: Settings = {
   aiConsent: null,
   aiProvider: "anthropic",
   aiModel: "",
-  analyticsConsent: false,
   trashRetentionDays: 30,
   defaultExportFormat: "pdf",
   recentColors: [],
@@ -102,4 +101,10 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: "preset-4", type: "highlighter", color: "#FDE047", width: 20.06 },
     { id: "preset-5", type: "fountain-pen", color: "#000000", width: 4.11 },
   ],
+  keybindings: [],
+  onboardingDone: false,
+  lastSeenVersion: "",
+  playgroundPageId: null,
+  penHaptics: true,
+  checkUpdatesOnStartup: true,
 };
