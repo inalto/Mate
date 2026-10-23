@@ -2,6 +2,8 @@
 
 pub(crate) mod elements;
 mod notebook;
+mod recognition;
+mod search;
 
 use std::path::Path;
 
@@ -11,9 +13,11 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 pub use notebook::{EntityKind, NotebookTree, TrashItem};
+pub use recognition::{Bounds, LearningEvent, Recognition, RecognitionSource};
+pub use search::{SNIPPET_CLOSE, SNIPPET_OPEN, SearchHit};
 
-const SCHEMA_V1: &str = include_str!("schema.sql");
-const CURRENT_VERSION: i64 = 1;
+/// Ordered migrations: `MIGRATIONS[i]` brings the schema from version `i` to `i + 1`.
+const MIGRATIONS: [&str; 2] = [include_str!("schema.sql"), include_str!("schema_v2.sql")];
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -60,13 +64,14 @@ fn migrate(conn: &mut Connection) -> Result<()> {
         [],
         |r| r.get(0),
     )?;
-    if current < 1 {
+    // Each step runs in its own transaction, so a failure leaves the last good version intact.
+    for (version, sql) in (1i64..).zip(MIGRATIONS) {
+        if current >= version {
+            continue;
+        }
         let tx = conn.transaction()?;
-        tx.execute_batch(SCHEMA_V1)?;
-        tx.execute(
-            "INSERT INTO schema_version (version) VALUES (?1)",
-            [CURRENT_VERSION],
-        )?;
+        tx.execute_batch(sql)?;
+        tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [version])?;
         tx.commit()?;
     }
     Ok(())

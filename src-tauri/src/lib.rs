@@ -1,7 +1,9 @@
 mod commands;
 mod state;
 
-use commands::{ai, archive, assets, elements, export, lifecycle, notebook, pdf, settings, thumbnails};
+use commands::{
+  ai, archive, assets, elements, export, lifecycle, notebook, pdf, recognition, settings, thumbnails,
+};
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
 
@@ -64,6 +66,11 @@ pub fn run() {
       elements::load_elements,
       elements::upsert_elements,
       elements::delete_elements,
+      recognition::get_recognitions,
+      recognition::upsert_recognition,
+      recognition::set_user_override,
+      recognition::search_recognition,
+      recognition::record_learning_event,
       settings::get_settings,
       settings::set_settings,
       ai::set_ai_key,

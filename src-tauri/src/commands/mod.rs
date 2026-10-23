@@ -6,5 +6,6 @@ pub mod export;
 pub mod lifecycle;
 pub mod notebook;
 pub mod pdf;
+pub mod recognition;
 pub mod settings;
 pub mod thumbnails;
