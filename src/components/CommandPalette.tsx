@@ -15,6 +15,7 @@ import { showToast } from "./Toast";
 const SEARCH_DEBOUNCE_MS = 150;
 const SEARCH_LIMIT = 20;
 const MAX_PAGE_MATCHES = 6;
+const EMPTY_HITS: SearchHit[] = [];
 
 type Item =
   | { key: string; section: "Pages"; label: string; page: Page }
@@ -62,14 +63,35 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   const pages = useNotebookStore((s) => s.tree.pages);
   const currentPageId = useTabsStore((s) => focusedPageId(s));
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<SearchHit[]>([]);
+  // Hits are tied to the query that produced them: while the next query is still debounced, the
+  // old hits are not shown and Enter cannot activate one.
+  const [found, setFound] = useState<{ q: string; hits: SearchHit[] }>({ q: "", hits: [] });
+  const hits = found.q === query.trim() ? found.hits : EMPTY_HITS;
   const [active, setActive] = useState(0);
   const [panel, setPanel] = useState<Panel | null>(() =>
     initialAction && currentPageId ? { kind: initialAction, pageId: currentPageId, status: "loading" } : null,
   );
   const searchSeq = useRef(0);
   const panelSeq = useRef(0);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Read during the first render, before autoFocus moves focus into the dialog.
+  const openerRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const close = () => useChromeStore.getState().closePalette();
+  /** Drops the panel and any answer still in flight for it. */
+  const clearPanel = () => {
+    panelSeq.current++;
+    setPanel(null);
+  };
+
+  // Focus returns to where it was when the palette closes; late answers are dropped.
+  useEffect(() => {
+    const before = openerRef.current;
+    const seq = panelSeq;
+    return () => {
+      seq.current++;
+      before?.focus?.();
+    };
+  }, []);
 
   const titleOf = (id: string) => pages.find((p) => p.id === id)?.title || "Untitled";
 
@@ -80,14 +102,14 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     if (!q) return;
     const timer = setTimeout(() => {
       searchRecognition(q, SEARCH_LIMIT)
-        .then((found) => {
+        .then((result) => {
           if (seq === searchSeq.current) {
-            setHits(found);
+            setFound({ q, hits: result });
             setActive(0);
           }
         })
         .catch(() => {
-          if (seq === searchSeq.current) setHits([]);
+          if (seq === searchSeq.current) setFound({ q, hits: [] });
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
@@ -181,6 +203,11 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, pages, hits, currentPageId]);
 
+  // Keep the active row in view while arrowing through a long list.
+  useEffect(() => {
+    document.getElementById(`palette-opt-${active}`)?.scrollIntoView?.({ block: "nearest" });
+  }, [active, items]);
+
   const activate = (item: Item | undefined) => {
     if (!item) return;
     if (item.section === "Pages") openPage(item.page.id);
@@ -191,14 +218,21 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
-      if (panel) setPanel(null);
+      if (panel) clearPanel();
       else close();
     } else if (!panel && e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((a) => Math.min(a + 1, items.length - 1));
+      setActive((a) => Math.max(0, Math.min(a + 1, items.length - 1)));
     } else if (!panel && e.key === "ArrowUp") {
       e.preventDefault();
       setActive((a) => Math.max(a - 1, 0));
+    } else if (e.key === "Tab") {
+      const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>("input, button:not([disabled])") ?? [])];
+      if (focusable.length === 0) return;
+      const i = focusable.indexOf(document.activeElement as HTMLElement);
+      const next = e.shiftKey ? (i <= 0 ? focusable.length - 1 : i - 1) : i === focusable.length - 1 ? 0 : i + 1;
+      e.preventDefault();
+      focusable[next].focus();
     } else if (!panel && e.key === "Enter") {
       e.preventDefault();
       activate(items[Math.min(active, items.length - 1)]);
@@ -230,6 +264,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        ref={dialogRef}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
       >
@@ -247,8 +282,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
             onChange={(e) => {
               setQuery(e.target.value);
               setActive(0);
-              if (!e.target.value.trim()) setHits([]);
-              setPanel(null);
+              clearPanel();
             }}
           />
         </div>
@@ -275,7 +309,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
               )
             )}
             <div className="dialog-actions">
-              <button type="button" className="btn" onClick={() => setPanel(null)}>Back</button>
+              <button type="button" className="btn" onClick={clearPanel}>Back</button>
               {panel.text && (
                 <button type="button" className="btn" onClick={() => copy(panel.text ?? "")}>Copy</button>
               )}

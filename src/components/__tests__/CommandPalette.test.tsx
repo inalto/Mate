@@ -204,6 +204,47 @@ describe("CommandPalette", () => {
     expect(screen.getByTestId("where").textContent).toBe("/graph");
   });
 
+  it("drops a summary that resolves after the user typed on", async () => {
+    let resolve: (v: { summary: string; cached: boolean }) => void = () => {};
+    vi.mocked(summarizePage).mockReturnValue(new Promise((r) => (resolve = r)));
+    renderPalette();
+    open();
+    fireEvent.click(screen.getByRole("option", { name: "Summarise this page" }));
+    expect(screen.getByText("Working on it…")).toBeTruthy();
+    fireEvent.change(input(), { target: { value: "cell" } });
+    await act(async () => resolve({ summary: "Late summary", cached: false }));
+    expect(screen.queryByText("Late summary")).toBeNull();
+    expect(screen.queryByRole("region")).toBeNull();
+  });
+
+  it("Enter in the debounce window does not open a hit of the previous query", async () => {
+    vi.mocked(searchRecognition).mockResolvedValue([{ pageId: "p2", strokeGroupId: "g7", snippet: "alpha", rank: -1 }]);
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "alpha" } });
+    await screen.findByRole("option", { name: /alpha/ });
+    fireEvent.change(input(), { target: { value: "alphab" } });
+    expect(screen.queryByRole("option", { name: /alpha$/ })).toBeNull();
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(screen.getByTestId("where").textContent).toBe("/edit/p1");
+  });
+
+  it("keeps focus inside with Tab, ignores editor shortcuts while open and restores focus on close", () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    renderPalette();
+    open();
+    const dialog = screen.getByRole("dialog");
+    fireEvent.keyDown(input(), { key: "Tab" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(input(), { key: "Tab", shiftKey: true });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(input(), { key: "Escape" });
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
   it("Ctrl+K and Cmd+K are bound to the palette", () => {
     const ev = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
     expect(matchShortcut(DEFAULT_SHORTCUTS, ev({ key: "k", ctrlKey: true }), false)?.action).toBe("palette.open");

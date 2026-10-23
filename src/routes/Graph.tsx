@@ -1,10 +1,12 @@
 // Page graph: pages as nodes, edges between pages with similar recognised text (local TF-IDF).
 import {
   forceCenter,
+  type ForceLink,
   forceCollide,
   forceLink,
   forceManyBody,
   forceSimulation,
+  type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
 } from "d3-force";
@@ -46,14 +48,18 @@ export default function Graph() {
 
   const edges = useMemo(() => (graph?.edges ?? []).filter((e) => e.score >= cutoff), [graph, cutoff]);
 
+  // The simulation (and so every node position) lives as long as the graph; a new cutoff only
+  // swaps the links and reheats it.
+  const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
+  const linksRef = useRef<SimLink[]>([]);
+
   useEffect(() => {
     if (!graph || graph.nodes.length === 0) return;
     const nodes: SimNode[] = graph.nodes.map((n) => ({ ...n }));
-    const links: SimLink[] = edges.map((e) => ({ source: e.a, target: e.b, score: e.score }));
     const sim = forceSimulation(nodes)
       .force(
         "link",
-        forceLink<SimNode, SimLink>(links)
+        forceLink<SimNode, SimLink>([])
           .id((n) => n.pageId)
           .distance((l) => 140 - 90 * l.score)
           .strength((l) => 0.2 + 0.6 * l.score),
@@ -65,7 +71,7 @@ export default function Graph() {
         for (const n of nodes) {
           nodeEls.current.get(n.pageId)?.setAttribute("transform", `translate(${n.x ?? 0} ${n.y ?? 0})`);
         }
-        for (const l of links) {
+        for (const l of linksRef.current) {
           const s = l.source as SimNode;
           const t = l.target as SimNode;
           const el = edgeEls.current.get(`${s.pageId}|${t.pageId}`);
@@ -75,9 +81,20 @@ export default function Graph() {
           el?.setAttribute("y2", String(t.y ?? 0));
         }
       });
+    simRef.current = sim;
     return () => {
       sim.stop();
+      simRef.current = null;
     };
+  }, [graph]);
+
+  useEffect(() => {
+    const sim = simRef.current;
+    if (!sim) return;
+    const links: SimLink[] = edges.map((e) => ({ source: e.a, target: e.b, score: e.score }));
+    linksRef.current = links;
+    sim.force<ForceLink<SimNode, SimLink>>("link")?.links(links);
+    sim.alpha(0.3).restart();
   }, [graph, edges]);
 
   const empty = graph !== null && graph.nodes.length === 0;
@@ -114,7 +131,7 @@ export default function Graph() {
           <svg
             className="graph-svg"
             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-            role="img"
+            role="group"
             aria-label={`Page graph, ${graph.nodes.length} pages and ${edges.length} links`}
           >
             <g>

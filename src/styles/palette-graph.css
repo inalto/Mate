@@ -179,3 +179,30 @@
   stroke: var(--color-surface-1);
   stroke-width: 3px;
 }
+
+/* Search-result flash (src/components/FlashLayer.tsx) */
+.flash-rect {
+  position: absolute;
+  box-sizing: border-box;
+  border-style: solid;
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  pointer-events: none;
+  animation: flash-fade 1.5s ease-out forwards;
+}
+
+@keyframes flash-fade {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-rect {
+    animation-duration: 0.01s;
+    animation-delay: 1.2s;
+  }
+}

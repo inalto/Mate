@@ -82,7 +82,7 @@ impl Storage {
 
     /// Every live page with recognised search text, for the similarity model. The text is the
     /// page's `recognition_fts` content (one entry per stroke group) joined by newlines.
-    fn page_documents(&self) -> Result<Vec<PageDoc>> {
+    pub fn page_documents(&self) -> Result<Vec<PageDoc>> {
         let mut stmt = self.conn.prepare_cached(
             "SELECT f.page_id, p.title, group_concat(f.content, char(10)) \
              FROM recognition_fts f JOIN pages p ON p.id = f.page_id \

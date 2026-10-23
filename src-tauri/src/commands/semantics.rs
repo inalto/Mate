@@ -7,7 +7,7 @@
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, Provider};
 use mate_core::ai::{is_known_provider, provider_for};
-use mate_core::semantics::related::{PageGraph, RelatedPage};
+use mate_core::semantics::related::{self, PageGraph, RelatedPage};
 use mate_core::semantics::summary::{self, Task};
 use mate_core::settings::Settings;
 use serde::Serialize;
@@ -70,14 +70,15 @@ pub async fn suggest_title(app: AppHandle, page_id: String) -> Res<TitleResult> 
 
 #[tauri::command]
 pub fn related_pages(state: State<'_, AppState>, page_id: String, limit: Option<usize>) -> Res<Vec<RelatedPage>> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
-    storage.related_pages(&page_id, limit.unwrap_or(8)).map_err(|e| e.to_string())
+    // Read the documents under the lock; the TF-IDF work runs after it is released.
+    let docs = state.storage.lock().map_err(|e| e.to_string())?.page_documents().map_err(|e| e.to_string())?;
+    Ok(related::related_pages(&docs, &page_id, limit.unwrap_or(8)))
 }
 
 #[tauri::command]
 pub fn page_graph(state: State<'_, AppState>, min_score: Option<f64>) -> Res<PageGraph> {
-    let storage = state.storage.lock().map_err(|e| e.to_string())?;
-    storage.page_graph(min_score.unwrap_or(0.2)).map_err(|e| e.to_string())
+    let docs = state.storage.lock().map_err(|e| e.to_string())?.page_documents().map_err(|e| e.to_string())?;
+    Ok(related::page_graph(&docs, min_score.unwrap_or(0.2)))
 }
 
 #[cfg(test)]
