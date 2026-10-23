@@ -350,10 +350,12 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
         return false;
       }
       if (opts?.retry) {
+        // "Try again": forget the failure and the attempts for this revision, then check it as new.
         pipeline.attempts.reset(revisionOf(region, elementsNow()));
         const old = retryTimers.get(groupId);
         if (old !== undefined) clearTimer(old);
         retryTimers.delete(groupId);
+        if (view.unchecked.has(groupId)) emit({ unchecked: withMap(view.unchecked, (m) => m.delete(groupId)) });
       }
       requested.add(groupId);
       return manager.redirty(groupId);

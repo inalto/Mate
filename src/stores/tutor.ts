@@ -78,8 +78,12 @@ interface TutorUiState {
   submitAsk(): Promise<void>;
   /** "Mark as correct": the user's call replaces the verdict; records "override". */
   markCorrect(): Promise<void>;
-  /** "Try again" for a group that couldn't be checked. */
-  retry(): void;
+  /**
+   * "Try again" for a group that couldn't be checked: the open card's group when no id is given,
+   * otherwise that group (found in whichever pane shows it). Clears its failure and attempts and
+   * requeues a check. False when no pane shows the group.
+   */
+  retry(groupId?: string): boolean;
 }
 
 let seq = 0;
@@ -214,9 +218,14 @@ export const useTutorUi = create<TutorUiState>((set, get) => {
       }
     },
 
-    retry() {
-      const c = get().card;
-      if (c) requestCheck(c.pane, c.groupId, { retry: true });
+    retry(groupId) {
+      if (groupId === undefined) {
+        const c = get().card;
+        if (!c) return false;
+        return requestCheck(c.pane, c.groupId, { retry: true });
+      }
+      const pane = ([0, 1] as const).find((p) => viewOf(p).unchecked.has(groupId)) ?? ([0, 1] as const).find((p) => viewOf(p).regions.has(groupId));
+      return pane !== undefined && requestCheck(pane, groupId, { retry: true });
     },
   };
 });

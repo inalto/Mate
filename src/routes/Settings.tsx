@@ -274,7 +274,7 @@ export default function Settings() {
         <h2 className="section-title">Tutor</h2>
         <Field label="Tutor" htmlFor="set-tutor">
           <input id="set-tutor" type="checkbox" checked={settings.tutorEnabled} onChange={(e) => void update({ tutorEnabled: e.target.checked })} />
-          <span className="muted">Read handwritten maths and point out mistakes (needs AI to be on)</span>
+          <span className="muted">Read handwritten maths and point out mistakes. Needs AI set up above.</span>
         </Field>
         <Field label="When to check" htmlFor="set-tutor-mode">
           <select id="set-tutor-mode" className="input" value={settings.tutorMode} onChange={(e) => void update({ tutorMode: e.target.value as TutorMode })}>

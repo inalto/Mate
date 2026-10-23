@@ -16,7 +16,7 @@ import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } 
 import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
 import { paintBackground, type SurfaceColors } from "./background";
-import { worldToScreen, type Camera, type Vec2 } from "./camera";
+import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
@@ -27,7 +27,7 @@ import { createToolController, pointerTool } from "./toolInteractions";
 import { createTutorInk } from "./tutorInk";
 import { consumeDismissDown, paneOfStore } from "../stores/tutor";
 import { useAiStatus } from "../tutor/aiStatus";
-import { drawTutorMarkers } from "../tutor/overlay";
+import { drawTutorMarkers, drawTutorTip, hitTutorMarker } from "../tutor/overlay";
 import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
 
@@ -93,6 +93,8 @@ function createEngine(
   let sheetCount = 0;
   /** The pen stroke in progress takes part in tutor gestures (tap / double-tap / hold on ink). */
   let tutorStroke = false;
+  /** Group whose "couldn't check" marker the mouse hovers (its label is drawn). */
+  let hoverGroup: string | null = null;
 
   const ready = () => {
     const s = st();
@@ -167,7 +169,10 @@ function createEngine(
     if (flash && performance.now() < flash.until) drawSnapFlash(lctx, flash.shape, c, dpr, SNAP_FLASH_COLOR);
     const antsMove = tools.draw(lctx, c, dpr); // marching ants animate while selected
     // Tutor markers sit above the ink and below the DOM overlay; the ring turns while checking.
-    const ringTurns = drawTutorMarkers(lctx, markersNow(), c, dpr, theme(), performance.now());
+    const tutorMarkersNow = markersNow();
+    const ringTurns = drawTutorMarkers(lctx, tutorMarkersNow, c, dpr, theme(), performance.now());
+    const hovered = hoverGroup ? tutorMarkersNow.find((m) => m.groupId === hoverGroup) : undefined;
+    if (hovered) drawTutorTip(lctx, hovered, c, dpr);
     if (antsMove || ringTurns) requestLive();
   };
   const requestLive = () => {
@@ -453,6 +458,25 @@ function createEngine(
   });
 
   host.addEventListener("wheel", onWheel, { passive: false });
+  // Mouse hover over a "couldn't check" marker shows its label (pen and touch get the tap instead).
+  const onHover = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || e.buttons !== 0) return;
+    const r = host.getBoundingClientRect();
+    const s = st();
+    const m = hitTutorMarker(markersNow(), screenToWorld(s.camera, { x: e.clientX - r.left, y: e.clientY - r.top }), s.camera.z, 0);
+    const id = m?.kind === "unchecked" ? m.groupId : null;
+    if (id !== hoverGroup) {
+      hoverGroup = id;
+      requestLive();
+    }
+  };
+  const onHoverLeave = () => {
+    if (hoverGroup === null) return;
+    hoverGroup = null;
+    requestLive();
+  };
+  host.addEventListener("pointermove", onHover);
+  host.addEventListener("pointerleave", onHoverLeave);
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
   if (ro) ro.observe(host);
   else window.addEventListener("resize", resize);
@@ -480,6 +504,8 @@ function createEngine(
       ro?.disconnect();
       window.removeEventListener("resize", resize);
       host.removeEventListener("wheel", onWheel);
+      host.removeEventListener("pointermove", onHover);
+      host.removeEventListener("pointerleave", onHoverLeave);
       if (rasterTimer !== null) clearTimeout(rasterTimer);
       if (snapTimer !== null) clearTimeout(snapTimer);
       if (flashTimer !== null) clearTimeout(flashTimer);

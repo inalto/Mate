@@ -218,3 +218,45 @@ export function drawTutorMarkers(ctx: MarkerContext, markers: readonly TutorMark
   ctx.restore();
   return animate;
 }
+
+/** Hover label for a group that couldn't be checked (mouse only; a tap opens the card instead). */
+export const UNCHECKED_TIP = "Couldn't check — tap to retry";
+
+/** The parts of a 2D context the hover label uses. */
+export type TipContext = Pick<
+  CanvasRenderingContext2D,
+  "save" | "restore" | "setTransform" | "fillRect" | "fillText" | "measureText"
+> & {
+  fillStyle: CanvasRenderingContext2D["fillStyle"];
+  font: string;
+  textBaseline: CanvasTextBaseline;
+  textAlign: CanvasTextAlign;
+};
+
+const TIP_FONT_PX = 12;
+const TIP_PAD_PX = 6;
+const TIP_H_PX = 20;
+
+/**
+ * Draws the hover label next to an unchecked marker (screen space, to the right of the dash) and
+ * returns the label's screen rectangle. Only `unchecked` markers have a label.
+ */
+export function drawTutorTip(ctx: TipContext, m: TutorMarker, c: Camera, dpr: number): { x: number; y: number; width: number; height: number } | null {
+  if (m.kind !== "unchecked") return null;
+  const a = markerAnchor(m.bounds, c.z);
+  const s = worldToScreen(c, { x: a.x, y: a.y });
+  const r = a.r * c.z;
+  ctx.save();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.font = `${TIP_FONT_PX}px system-ui, sans-serif`;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  const width = Math.ceil(ctx.measureText(UNCHECKED_TIP).width) + TIP_PAD_PX * 2;
+  const rect = { x: s.x + r + TIP_PAD_PX, y: s.y - TIP_H_PX / 2, width, height: TIP_H_PX };
+  ctx.fillStyle = "rgba(40, 40, 46, 0.92)";
+  ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(UNCHECKED_TIP, rect.x + TIP_PAD_PX, s.y);
+  ctx.restore();
+  return rect;
+}

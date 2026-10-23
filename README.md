@@ -6,7 +6,7 @@ Write with a pen on an endless canvas or on paged sheets, organise pages into bo
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **Phase 1 complete** — the foundation and ink editor. Rich content (text, shapes, images, PDF, math, graphs), an optional bring-your-own-key AI tutor, and importers for GoodNotes / Notability / OneNote are planned. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap).
+> Status: **Phase 3 complete** — the foundation, ink editor, rich content (v0.2.0) and an optional, bring-your-own-key AI tutor, off by default. Importers for GoodNotes / Notability / OneNote are next. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap).
 
 ## Features
 
@@ -18,6 +18,19 @@ Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core c
 - **Export / import** — PNG, SVG, and `.mate` archives (a whole book, round-trippable)
 - **Never lose ink** — strokes are written to SQLite 150 ms after you lift the pen; closing the window waits for pending writes and writes a recovery file if it can't; a restart-recovery card reopens the page you were on
 - **Themes** — light, dark, sepia, high-contrast
+
+## AI tutor (optional)
+
+The AI tutor reads your handwritten maths, checks it and points out mistakes. It is **off by default** and needs a key from your own AI provider.
+
+- **What it does:** marks each checked group of ink as right or wrong (ink is never changed), offers a hint, then an explanation and next steps on request, and answers questions about a line. It also summarises a page, suggests a title, finds related pages and can generate practice questions from a book.
+- **Nothing is sent until you turn it on.** Mate makes no AI call until you tick the permission under Settings → Intelligence *and* save a key. Turning the permission off stops all AI calls straight away.
+- **Providers:** Anthropic (default model `claude-opus-5-5`) and OpenAI (default model `gpt-5`; enter any model name you have access to). Choose one under Settings → Intelligence.
+- **Keys** are stored in the OS keychain (Windows Credential Manager, macOS Keychain or Linux Secret Service). They are not written to `settings.json`, not logged and never shown again after saving.
+- **What is sent:** when a group of ink is checked, a PNG of that group only, plus the recognised text of up to 11 nearby lines. A question about a line sends that line's recognised text, its verdict and your question, without the image. Summaries and titles send recognised page text only. Search, related pages and the graph run on your machine.
+- **Turn it off:** untick the permission, switch the Tutor off under Settings → Tutor, or remove the key under Settings → Intelligence.
+
+Details are in the wiki: [AI tutor](https://github.com/inalto/Mate/wiki/AI-Tutor).
 
 ## Quick start
 
