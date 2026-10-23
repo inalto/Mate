@@ -4,6 +4,7 @@ pub mod ask;
 pub mod assets;
 pub mod elements;
 pub mod export;
+pub mod haptics;
 pub mod lifecycle;
 pub mod import;
 pub mod notebook;

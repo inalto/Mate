@@ -31,6 +31,7 @@ import { useAiStatus } from "../tutor/aiStatus";
 import { drawTutorMarkers, drawTutorTip, hitTutorMarker } from "../tutor/overlay";
 import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
+import { createPenInkHaptics } from "./haptics";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
@@ -237,7 +238,9 @@ function createEngine(
     requestStatic();
   };
 
+  const penInk = createPenInkHaptics(liveCanvas);
   const onSnap = (r: RecognizedShape) => {
+    penInk.click();
     snapShape = snapShapeElement(r, st().preset, pageId, "live", "");
     flash = { shape: r, until: performance.now() + SNAP_FLASH_MS };
     if (flashTimer !== null) clearTimeout(flashTimer);
@@ -262,6 +265,7 @@ function createEngine(
   };
 
   const endStroke = () => {
+    penInk.stop();
     snap?.cancel();
     snap = null;
     snapShape = null;
@@ -319,6 +323,7 @@ function createEngine(
         }
         const set = getSettings();
         mode = "draw";
+        penInk.start(info.pointerType);
         builder = createStrokeBuilder({
           pageId,
           preset: s.preset,
@@ -507,6 +512,7 @@ function createEngine(
       tutor.dispose();
       disposed = true;
       adapter();
+      penInk.dispose();
       tools.dispose();
       unsubscribe();
       unsubscribeTutor();

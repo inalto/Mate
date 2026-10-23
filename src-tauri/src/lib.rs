@@ -2,7 +2,7 @@ mod commands;
 mod state;
 
 use commands::{
-  ai, archive, ask, assets, elements, export, import, lifecycle, notebook, open_files, pdf, practice, recognition, recognize, settings,
+  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, notebook, open_files, pdf, practice, recognition, recognize, settings,
   semantics, thumbnails,
 };
 use state::AppState;
@@ -106,6 +106,7 @@ pub fn run() {
       lifecycle::cancel_close_attempt,
       lifecycle::complete_close_attempt,
       lifecycle::write_recovery_artifact,
+      haptics::pen_haptics_pulse,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")

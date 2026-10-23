@@ -30,3 +30,7 @@ tauri-plugin-single-instance = "2"
 mate-core = { path = "../crates/mate-core" }
 base64 = "0.22"
 tokio = { version = "1", features = ["sync"] }
+
+[target.'cfg(windows)'.dependencies]
+# Pen haptics (commands/haptics.rs). Same version tauri/webview2 already pull in.
+windows = { version = "0.62.2", features = ["Foundation", "Foundation_Collections", "Devices_Haptics", "Devices_Input"] }
