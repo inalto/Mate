@@ -4,6 +4,7 @@ pub(crate) mod elements;
 mod notebook;
 mod recognition;
 mod search;
+mod semantics;
 
 use std::path::Path;
 
