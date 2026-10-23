@@ -1,5 +1,6 @@
 // Command palette (Ctrl/Cmd+K): jump to a page by title, search everything the tutor has read,
 // and run page actions (summary, title, related pages, graph).
+import { useModal } from "./useModal";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router";
@@ -69,6 +70,7 @@ export default function CommandPalette() {
 }
 
 function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
+  const releaseModal = useModal();
   const navigate = useNavigate();
   const pages = useNotebookStore((s) => s.tree.pages);
   const currentPageId = useTabsStore((s) => focusedPageId(s));
@@ -90,7 +92,10 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   // Read during the first render, before autoFocus moves focus into the dialog.
   const skipRestoreRef = useRef(false);
   const openerRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
-  const close = () => useChromeStore.getState().closePalette();
+  const close = () => {
+    releaseModal(); // actions run right after closing must not see the palette as a modal
+    useChromeStore.getState().closePalette();
+  };
   /** Drops the panel and any answer still in flight for it. */
   const clearPanel = () => {
     panelSeq.current++;
@@ -170,6 +175,8 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
       if (pageId !== currentPageId) openPageInWindow(pageId);
       return;
     }
+    // The page being opened takes focus; handing it back to the opener would steal it.
+    skipRestoreRef.current = true;
     close();
     navigate(`/edit/${pageId}`);
   };

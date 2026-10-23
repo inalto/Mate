@@ -399,4 +399,39 @@ describe("CommandPalette quick actions", () => {
     expect(focus).not.toHaveBeenCalled();
     opener.remove();
   });
+
+  it("does_not_restore_focus_to_the_opener_after_navigating_to_a_page", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "cell" } });
+    const focus = vi.spyOn(opener, "focus");
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(screen.getByTestId("where").textContent).toBe("/edit/p2");
+    expect(focus).not.toHaveBeenCalled();
+    opener.remove();
+  });
+
+  it("escape_still_restores_focus_to_the_opener", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    renderPalette();
+    open();
+    const focus = vi.spyOn(opener, "focus");
+    fireEvent.keyDown(input(), { key: "Escape" });
+    expect(focus).toHaveBeenCalled();
+    opener.remove();
+  });
+
+  it("counts_as_a_modal_while_open", () => {
+    renderPalette();
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+    open();
+    expect(useChromeStore.getState().modalDepth).toBe(1);
+    fireEvent.keyDown(input(), { key: "Escape" });
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+  });
 });

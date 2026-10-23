@@ -34,7 +34,7 @@ beforeEach(() => {
     ].map((k) => [k, vi.fn()]),
   );
   useEditorStore.setState({ ...spies, selection: new Set<string>(), viewport: { width: 800, height: 600 } } as never);
-  useChromeStore.setState({ paletteOpen: false, shortcutsOpen: false });
+  useChromeStore.setState({ paletteOpen: false, shortcutsOpen: false, modalDepth: 0 });
   useNotebookStore.setState({
     tree: {
       bookshelves: [],
@@ -114,12 +114,31 @@ describe("runEditorShortcut", () => {
   });
 
   it("help_overlay_blocks_editor_shortcuts_and_traps_focus", () => {
-    useChromeStore.setState({ shortcutsOpen: true });
+    useChromeStore.setState({ shortcutsOpen: true, modalDepth: 1 }); // as the mounted overlay sets it
     for (const a of ["delete", "undo", "cut", "escape", "duplicate", "save", "page.next"]) runEditorShortcut(a as never, {});
     expect(spies.select).not.toHaveBeenCalled();
     expect(elementsQueue.flushAll).not.toHaveBeenCalled();
     expect(focused()).toBe("b");
     runEditorShortcut("help.shortcuts", {});
     expect(useChromeStore.getState().shortcutsOpen).toBe(true);
+  });
+
+  it("modal_depth_blocks_editor_shortcuts_until_every_modal_is_popped", () => {
+    const { pushModal, popModal } = useChromeStore.getState();
+    pushModal();
+    pushModal();
+    for (const a of ["delete", "undo", "escape", "save", "page.next", "help.shortcuts", "palette.open"]) runEditorShortcut(a as never, {});
+    expect(spies.select).not.toHaveBeenCalled();
+    expect(elementsQueue.flushAll).not.toHaveBeenCalled();
+    expect(useChromeStore.getState().shortcutsOpen).toBe(false);
+    expect(useChromeStore.getState().paletteOpen).toBe(false);
+    popModal();
+    runEditorShortcut("selectAll", {});
+    expect(spies.selectAll).not.toHaveBeenCalled();
+    popModal();
+    popModal(); // never below zero
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+    runEditorShortcut("selectAll", {});
+    expect(spies.selectAll).toHaveBeenCalled();
   });
 });

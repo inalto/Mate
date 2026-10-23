@@ -1,3 +1,4 @@
+import { useModal } from "../components/useModal";
 import { useEffect, useRef } from "react";
 import { useChromeStore } from "../stores/chrome";
 import { ACTION_GROUPS, ACTION_META, ACTIONS } from "./actions";
@@ -13,6 +14,7 @@ export default function ShortcutHelp() {
 }
 
 function Overlay() {
+  useModal();
   const map = useKeyMap();
   const mac = isMacPlatform();
   const close = () => useChromeStore.getState().setShortcutsOpen(false);

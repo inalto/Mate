@@ -1,3 +1,4 @@
+import { useModal } from "./useModal";
 import { useEffect, useRef, type ReactNode } from "react";
 
 type Block = { kind: "h"; text: string } | { kind: "p"; text: string } | { kind: "ul"; items: string[] };
@@ -40,6 +41,7 @@ function renderBlock(b: Block, i: number): ReactNode {
 }
 
 export default function WhatsNew({ notes, onClose }: { notes: string; onClose: () => void }) {
+  useModal();
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     ref.current?.focus();

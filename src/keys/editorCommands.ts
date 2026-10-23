@@ -121,10 +121,15 @@ function runChromeShortcut(action: string): boolean {
 }
 
 export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
-  // While the command palette is open it owns the keyboard; only reopening it is allowed.
-  if (useChromeStore.getState().paletteOpen && action !== "palette.open") return;
-  // Likewise the shortcut help overlay: only closing/reopening it is allowed.
-  if (useChromeStore.getState().shortcutsOpen && action !== "help.shortcuts" && action !== "palette.open") return;
+  // While any dialog, overlay, palette or menu is open it owns the keyboard. Only the palette
+  // and the shortcut help may be toggled by their own shortcut (Escape is handled by the modal).
+  const chrome = useChromeStore.getState();
+  if (chrome.modalDepth > 0) {
+    const toggles =
+      (action === "palette.open" && (chrome.paletteOpen || chrome.shortcutsOpen)) ||
+      (action === "help.shortcuts" && chrome.shortcutsOpen);
+    if (!toggles) return;
+  }
   noteShortcutUse(action);
   if (runChromeShortcut(action)) return;
   const s = getFocusedEditor().getState();

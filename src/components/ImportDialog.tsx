@@ -1,5 +1,6 @@
 // "Import notes": pick notebook files from other apps, check what each one is, choose a new or an
 // existing book, import with progress, then read the report and open the book.
+import { useModal } from "./useModal";
 import { useEffect, useRef } from "react";
 import type { ImportProgress, SniffResult } from "../ipc/import";
 import { bookNameFromFile, reportNotes, sumReports, useImportStore } from "../stores/importStore";
@@ -55,6 +56,7 @@ export default function ImportDialog() {
   const units = useNotebookStore((n) => n.tree.units);
   const isOpen = s.open;
   const dialogRef = useRef<HTMLDivElement>(null);
+  useModal(isOpen);
   const focusables = () =>
     [...(dialogRef.current?.querySelectorAll<HTMLElement>("input, select, button:not([disabled])") ?? [])];
 

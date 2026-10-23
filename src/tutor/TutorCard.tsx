@@ -3,6 +3,7 @@
 // (explanation) → "Next step", plus "Mark as correct" and "Ask" (a free question). A group that
 // couldn't be checked shows the reason and "Try again". Rendered in screen space inside the pane's
 // overlay clip, positioned from the group's page-unit bounds and clamped to the viewport.
+import { useModal } from "../components/useModal";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
 import { renderLatex } from "../math/katex";
@@ -35,6 +36,7 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
   const titleId = useId();
   const [height, setHeight] = useState(0);
   const open = card !== null && view.pageId === card.pageId;
+  useModal(open);
   const g = open ? groupState(view, card.groupId) : null;
   const bounds = g?.bounds ?? card?.anchor;
   const rec = g?.recognition;

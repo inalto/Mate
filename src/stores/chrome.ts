@@ -31,6 +31,8 @@ interface ChromeState extends Persisted {
   renamingPageId: string | null;
   pageSettingsFor: string | null;
   shortcutsOpen: boolean;
+  /** Open dialogs, overlays, palette and menus: while above 0 editor shortcuts do nothing. */
+  modalDepth: number;
   /** Command palette (Ctrl/Cmd+K). `paletteAction` runs as soon as it opens. */
   paletteOpen: boolean;
   paletteAction: PaletteAction | null;
@@ -40,6 +42,8 @@ interface ChromeState extends Persisted {
   setRenaming(id: string | null): void;
   openPageSettings(pageId: string | null): void;
   setShortcutsOpen(open: boolean): void;
+  pushModal(): void;
+  popModal(): void;
   openPalette(action?: PaletteAction): void;
   closePalette(): void;
 }
@@ -60,6 +64,7 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     renamingPageId: null,
     pageSettingsFor: null,
     shortcutsOpen: false,
+    modalDepth: 0,
     paletteOpen: false,
     paletteAction: null,
     setSidebarOpen(sidebarOpen) {
@@ -74,6 +79,8 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     setRenaming: (renamingPageId) => set({ renamingPageId }),
     openPageSettings: (pageSettingsFor) => set({ pageSettingsFor }),
     setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+    pushModal: () => set((s) => ({ modalDepth: s.modalDepth + 1 })),
+    popModal: () => set((s) => ({ modalDepth: Math.max(0, s.modalDepth - 1) })),
     openPalette: (action) => set({ paletteOpen: true, paletteAction: action ?? null }),
     closePalette: () => set({ paletteOpen: false, paletteAction: null }),
   };
