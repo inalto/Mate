@@ -1,4 +1,4 @@
-import { getVersion } from "@tauri-apps/api/app";
+import { getAppVersion } from "../../../ipc/app";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useSettingsStore } from "../../../stores/settings";
@@ -10,7 +10,7 @@ export default function AboutSection() {
 
   useEffect(() => {
     let live = true;
-    getVersion().then(
+    getAppVersion().then(
       (v) => live && setVersion(v),
       () => live && setVersion("unknown"),
     );

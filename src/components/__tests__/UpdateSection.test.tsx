@@ -78,6 +78,30 @@ describe("UpdateSection", () => {
 });
 
 describe("StartupUpdateCheck", () => {
+  beforeEach(() => useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, onboardingDone: true }, loaded: true }));
+
+  it("does_not_check_during_onboarding", async () => {
+    ipc.checkForUpdate.mockResolvedValue({ configured: true, available: true, version: "0.5.0" });
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, onboardingDone: false }, loaded: true });
+    render(<StartupUpdateCheck />);
+    await act(async () => {});
+    expect(ipc.checkForUpdate).not.toHaveBeenCalled();
+    // Welcome finished: the check runs now.
+    act(() => useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, onboardingDone: true } }));
+    await waitFor(() => expect(useToastStore.getState().message).toBe("Mate 0.5.0 is available."));
+  });
+
+  it("does_not_check_on_the_welcome_route", async () => {
+    window.history.pushState({}, "", "/welcome");
+    try {
+      render(<StartupUpdateCheck />);
+      await act(async () => {});
+      expect(ipc.checkForUpdate).not.toHaveBeenCalled();
+    } finally {
+      window.history.pushState({}, "", "/");
+    }
+  });
+
   it("startup_check_failure_is_silent", async () => {
     ipc.checkForUpdate.mockRejectedValue(new Error("offline"));
     render(<StartupUpdateCheck />);
@@ -93,7 +117,7 @@ describe("StartupUpdateCheck", () => {
   });
 
   it("does_not_check_when_the_setting_is_off", async () => {
-    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, checkUpdatesOnStartup: false }, loaded: true });
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, onboardingDone: true, checkUpdatesOnStartup: false }, loaded: true });
     render(<StartupUpdateCheck />);
     await act(async () => {});
     expect(ipc.checkForUpdate).not.toHaveBeenCalled();

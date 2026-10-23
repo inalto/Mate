@@ -26,7 +26,7 @@ Open **Settings** from the More menu in the top bar. The pane has a list of sect
 - **Appearance:** theme, invert images in dark mode, paper and layout defaults (page mode, background, page size, orientation, snap to grid).
 - **Writing:** pen, highlighter, text, shape and eraser defaults; ink to shape and scribble to erase; pen barrel and eraser-end buttons; palm rejection, drawing with a finger, pinch and wheel behaviour; Pen haptics (Windows only; not yet verified on haptic pen hardware).
 - **Intelligence:** the AI provider, key and tutor options (see below).
-- **System:** keyboard shortcuts, trash retention, **Download backup** (every book in one zip, which you can import again) and **Reset local data**, which writes a recovery zip first and then restarts. API keys in the system keychain are kept. Updates and About (version, Show welcome again) are here too.
+- **System:** keyboard shortcuts, trash retention, **Download backup** (one zip holding a `.mate` archive per book; to restore, unzip it and import each `.mate` file) and **Reset local data**, which writes a recovery zip first and then restarts. API keys in the system keychain are kept. Updates and About (version, Show welcome again) are here too.
 
 ## Keyboard shortcuts
 

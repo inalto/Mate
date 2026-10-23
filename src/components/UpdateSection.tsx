@@ -1,4 +1,4 @@
-import { getVersion } from "@tauri-apps/api/app";
+import { getAppVersion } from "../ipc/app";
 import { useEffect, useRef, useState } from "react";
 import { checkForUpdate, installUpdate, onUpdateProgress, relaunch, type UpdateProgress } from "../ipc/updater";
 import { navigateTo } from "../stores/navigation";
@@ -38,7 +38,7 @@ export default function UpdateSection() {
     live.current = true;
     // "View" on the startup notice lands here: /settings#updates.
     if (window.location.hash === "#updates") document.getElementById("set-sec-updates")?.scrollIntoView?.({ block: "start" });
-    getVersion().then(
+    getAppVersion().then(
       (v) => live.current && setVersion(v),
       () => {},
     );
@@ -114,14 +114,19 @@ export default function UpdateSection() {
 }
 
 /**
- * Once settings are loaded, checks for an update if `checkUpdatesOnStartup` is on. Silent when
+ * Once settings are loaded and onboarding is done (never on /welcome), checks for an update if
+ * `checkUpdatesOnStartup` is on. Silent when
  * up to date, not configured, offline or failing; only an available update shows a toast.
  */
 export function StartupUpdateCheck() {
   const loaded = useSettingsStore((s) => s.loaded);
+  const onboardingDone = useSettingsStore((s) => s.settings.onboardingDone);
   const ran = useRef(false);
   useEffect(() => {
     if (!loaded || ran.current) return;
+    // Not during the welcome flow (first run, or before onboarding is marked done): the check
+    // runs once onboarding finishes.
+    if (!onboardingDone || window.location.pathname.startsWith("/welcome")) return;
     ran.current = true;
     if (!useSettingsStore.getState().settings.checkUpdatesOnStartup) return;
     void (async () => {
@@ -134,6 +139,6 @@ export function StartupUpdateCheck() {
         // Offline or a transient failure: stay quiet, the user can check from Settings.
       }
     })();
-  }, [loaded]);
+  }, [loaded, onboardingDone]);
   return null;
 }

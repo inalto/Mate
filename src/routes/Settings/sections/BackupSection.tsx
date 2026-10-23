@@ -43,7 +43,7 @@ export default function BackupSection() {
       <ButtonRow
         id="backup-download"
         label="Download backup"
-        hint="Every book in one zip. Each book can be imported again from the zip."
+        hint="One zip holding a .mate file per book. To restore, unzip it and import each .mate file."
         buttonLabel="Download backup"
         onClick={() => void download()}
         disabled={busy}
