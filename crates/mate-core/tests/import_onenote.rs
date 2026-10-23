@@ -113,7 +113,11 @@ fn fake_section(rng: &mut Rng, len: usize) -> Vec<u8> {
     let mut v = ONE_MAGIC.to_vec();
     while v.len() < len {
         let r = rng.next();
-        v.push(if r.is_multiple_of(4) { (r >> 8) as u8 } else { 0 });
+        v.push(if r.is_multiple_of(4) {
+            (r >> 8) as u8
+        } else {
+            0
+        });
     }
     v.truncate(len.max(ONE_MAGIC.len()));
     v
@@ -207,6 +211,69 @@ fn onenote_onepkg_declared_size_is_bounded() {
         parse(&cab, "x.onepkg", &ImportLimits::default()),
         Err(ImportError::Corrupt(_))
     ));
+}
+
+#[test]
+fn onepkg_duplicate_entry_names_are_rejected() {
+    let big = vec![7u8; 64 * 1024];
+    let mut files: Vec<(&str, &[u8])> = vec![("Notebook.onetoc2", &big)];
+    files.extend(std::iter::repeat_n(("Notebook.onetoc2", &[][..]), 40));
+    let cab = build_cab(&files);
+    match parse(&cab, "dup.onepkg", &ImportLimits::default()) {
+        Err(ImportError::Corrupt(msg)) => assert!(msg.contains("more than once"), "{msg}"),
+        other => panic!("expected Corrupt, got {other:?}"),
+    }
+    // Names that only differ in their separators normalise to the same file.
+    let cab = build_cab(&[("a/Section.one", b"x"), ("a\\Section.one", b"y")]);
+    assert!(matches!(
+        parse(&cab, "dup.onepkg", &ImportLimits::default()),
+        Err(ImportError::Corrupt(_))
+    ));
+}
+
+#[test]
+fn onepkg_quadratic_work_is_bounded() {
+    // 200 small entries in one folder: tiny in total, but `cab` re-decompresses the folder for
+    // each of them. Rejected before any parsing.
+    let names: Vec<String> = (0..200).map(|i| format!("s{i}.one")).collect();
+    let chunk = [0x55u8; 1024];
+    let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &chunk[..])).collect();
+    let cab = build_cab(&files);
+    let limits = ImportLimits {
+        max_unzipped_bytes: 1024 * 1024,
+        ..ImportLimits::default()
+    };
+    match parse(&cab, "many.onepkg", &limits) {
+        Err(ImportError::Limit(msg)) => assert!(msg.contains("too long"), "{msg}"),
+        other => panic!("expected Limit, got {other:?}"),
+    }
+    // More files than any real export holds.
+    let names: Vec<String> = (0..600).map(|i| format!("s{i}.one")).collect();
+    let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &b"x"[..])).collect();
+    let cab = build_cab(&files);
+    match parse(&cab, "many.onepkg", &ImportLimits::default()) {
+        Err(ImportError::Limit(msg)) => assert!(msg.contains("600 files"), "{msg}"),
+        other => panic!("expected Limit, got {other:?}"),
+    }
+}
+
+/// A CFFILE whose folder offset points far past the folder makes the `cab`/`onenote_parser`
+/// read path panic; the `catch_unwind` guard turns it into `Corrupt`.
+#[test]
+fn onenote_crate_panic_becomes_corrupt() {
+    let mut cab = build_cab(&[
+        ("Notebook.onetoc2", &[0u8; 64]),
+        ("Section.one", &[0u8; 64]),
+    ]);
+    let coff_files = u32::from_le_bytes(cab[16..20].try_into().unwrap()) as usize;
+    // CFFILE: cbFile (u32), uoffFolderStart (u32), ...
+    cab[coff_files + 4..coff_files + 8].copy_from_slice(&0x7fff_0000u32.to_le_bytes());
+    match parse(&cab, "panic.onepkg", &ImportLimits::default()) {
+        Err(ImportError::Corrupt(msg)) => {
+            assert!(msg.contains("invalid internal structure"), "{msg}")
+        }
+        other => panic!("expected Corrupt, got {other:?}"),
+    }
 }
 
 fn build_cab(files: &[(&str, &[u8])]) -> Vec<u8> {

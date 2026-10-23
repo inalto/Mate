@@ -15,6 +15,7 @@
 //! and ink-container offsets are half-inches → px (`× 48`). Pages are 1080 px wide (wider when the
 //! content reaches further), so the placer's scale is usually 1.
 
+use std::collections::HashSet;
 use std::io::{Cursor, Read};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -30,6 +31,12 @@ use adapter::{ImageView, InkView, OutlineView, PageView, SectionView, StrokeView
 /// Longest crate error message carried into [`ImportError::Corrupt`].
 const MAX_DETAIL_CHARS: usize = 160;
 const MIB: u64 = 1024 * 1024;
+/// Most files a `.onepkg` may hold (real exports hold a `.onetoc2` and tens of sections).
+pub const MAX_ONEPKG_ENTRIES: usize = 512;
+/// Uncompressed size of one CAB data block (CFDATA), at most.
+const CAB_BLOCK_BYTES: u64 = 65_536;
+/// Decompression work allowed for a `.onepkg`, as a multiple of `max_unzipped_bytes`.
+const CAB_WORK_FACTOR: u64 = 4;
 
 pub fn parse(
     bytes: &[u8],
@@ -46,7 +53,7 @@ pub fn parse(
     let base = file_base_name(filename);
     let (title, sections) = if bytes.starts_with(CAB_MAGIC) {
         check_cabinet(bytes, limits)?;
-        let title = base.strip_suffix(".onepkg").unwrap_or(base).to_owned();
+        let title = strip_suffix_ci(base, ".onepkg").to_owned();
         let sections = guarded("the OneNote notebook", || {
             let notebook = Parser::new_with_fs(MemFs { data: bytes })
                 .parse_package(TypedPath::new("notebook.onepkg", PathType::Unix))
@@ -71,7 +78,7 @@ pub fn parse(
             let mut budget = Budget::new(limits);
             Ok(vec![extract_section(&section, "", limits, &mut budget)?])
         })?;
-        let title = sections[0].title.clone();
+        let title = strip_suffix_ci(&sections[0].title, ".one").to_owned();
         (title, sections)
     };
     Ok(adapter::from_sections(&title, sections, limits.max_pages))
@@ -100,33 +107,100 @@ fn file_base_name(filename: &str) -> &str {
     filename.rsplit(['/', '\\']).next().unwrap_or(filename)
 }
 
-/// A `.onepkg` is unpacked fully into memory by `onenote_parser`; check the cabinet's declared
-/// entry count and sizes first (the `cab` reader never yields more than an entry's declared size).
+/// `name` without `suffix`, compared ASCII case-insensitively; an all-suffix name is kept.
+fn strip_suffix_ci<'a>(name: &'a str, suffix: &str) -> &'a str {
+    let cut = name.len().wrapping_sub(suffix.len());
+    match name.get(cut..) {
+        Some(tail) if cut > 0 && tail.eq_ignore_ascii_case(suffix) => &name[..cut],
+        _ => name,
+    }
+}
+
+/// A cabinet entry name as `onenote_parser` normalises it (separators, `.`/`..`).
+fn normalize_cab_name(name: &str) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in name.split(['/', '\\']) {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+    }
+    parts.join("/")
+}
+
+/// A `.onepkg` is unpacked fully into memory by `onenote_parser`, so check the cabinet first:
+///
+/// - at most [`MAX_ONEPKG_ENTRIES`] files (and `max_zip_entries`), no duplicate names: the crate
+///   reads entries by name and `cab` resolves a name to its first match, so duplicates would
+///   decompress the same data again and again;
+/// - the declared sizes sum to at most `max_unzipped_bytes` (the `cab` reader never yields more
+///   than an entry's declared size);
+/// - the decompression *work*: `cab` 0.6 re-decompresses an entry's folder from its first block
+///   on every read, so the cost is the sum over entries of the folder's blocks × 64 KiB, which
+///   must stay within [`CAB_WORK_FACTOR`] × `max_unzipped_bytes` (many entries in one folder are
+///   quadratic).
+///
+/// Peak memory of a package import is still a few times `max_unzipped_bytes`: the unpacked files,
+/// the crate's copy of the section being parsed, and the image bytes read for the document.
 fn check_cabinet(bytes: &[u8], limits: &ImportLimits) -> Result<(), ImportError> {
-    let (entries, total) = guarded("the OneNote notebook package", || {
+    struct Stats {
+        entries: usize,
+        total: u64,
+        work: u64,
+        duplicate: Option<String>,
+    }
+    let stats = guarded("the OneNote notebook package", || {
         let cab = cab::Cabinet::new(Cursor::new(bytes))
             .map_err(|e| crate_error("the OneNote notebook package could not be opened", &e))?;
-        let mut entries = 0usize;
-        let mut total = 0u64;
+        let mut stats = Stats {
+            entries: 0,
+            total: 0,
+            work: 0,
+            duplicate: None,
+        };
+        let mut raw = HashSet::new();
+        let mut normalized = HashSet::new();
         for folder in cab.folder_entries() {
+            let folder_work = u64::from(folder.num_data_blocks()) * CAB_BLOCK_BYTES;
             for file in folder.file_entries() {
-                entries += 1;
-                total += u64::from(file.uncompressed_size());
+                stats.entries += 1;
+                stats.total += u64::from(file.uncompressed_size());
+                stats.work = stats.work.saturating_add(folder_work);
+                let name = file.name();
+                let fresh =
+                    raw.insert(name.to_owned()) & normalized.insert(normalize_cab_name(name));
+                if !fresh && stats.duplicate.is_none() {
+                    stats.duplicate = Some(name.chars().take(MAX_DETAIL_CHARS).collect());
+                }
             }
         }
-        Ok((entries, total))
+        Ok(stats)
     })?;
-    if entries > limits.max_zip_entries {
+    let max_entries = limits.max_zip_entries.min(MAX_ONEPKG_ENTRIES);
+    if stats.entries > max_entries {
         return Err(ImportError::Limit(format!(
-            "it contains {entries} files; the most Mate reads is {}",
-            limits.max_zip_entries
+            "it contains {} files; the most Mate reads is {max_entries}",
+            stats.entries
         )));
     }
-    if total > limits.max_unzipped_bytes {
+    if let Some(name) = stats.duplicate {
+        return Err(ImportError::Corrupt(format!(
+            "the OneNote notebook package lists the file \"{name}\" more than once"
+        )));
+    }
+    if stats.total > limits.max_unzipped_bytes {
         return Err(ImportError::Limit(format!(
             "it unpacks to more than {} MiB",
             limits.max_unzipped_bytes / MIB
         )));
+    }
+    if stats.work > limits.max_unzipped_bytes.saturating_mul(CAB_WORK_FACTOR) {
+        return Err(ImportError::Limit(
+            "unpacking its many files would take too long".into(),
+        ));
     }
     Ok(())
 }
@@ -172,16 +246,20 @@ impl FileSystem for MemFs<'_> {
     }
 }
 
-/// Image bytes still allowed, starting at `max_unzipped_bytes` (an image blob can be referenced
-/// many times, so the file size alone does not bound what reading every image allocates).
+/// What extraction may still produce: image bytes, starting at `max_unzipped_bytes` (an image
+/// blob can be referenced many times, so the file size alone does not bound what reading every
+/// image allocates), and pages over all sections, starting at `max_pages` (pages past it are not
+/// read at all, images included).
 struct Budget {
     left: u64,
+    pages_left: usize,
 }
 
 impl Budget {
     fn new(limits: &ImportLimits) -> Budget {
         Budget {
             left: limits.max_unzipped_bytes,
+            pages_left: limits.max_pages,
         }
     }
 }
@@ -216,9 +294,10 @@ fn extract_section(
     let mut pages = Vec::new();
     for page in section.page_series().iter().flat_map(|s| s.pages()) {
         check_deadline(limits)?;
-        if pages.len() >= limits.max_pages {
+        if budget.pages_left == 0 {
             break;
         }
+        budget.pages_left -= 1;
         pages.push(extract_page(page, limits, budget)?);
     }
     Ok(SectionView {
