@@ -211,7 +211,7 @@ describe("search", () => {
     act(() => void vi.advanceTimersByTime(1));
     expect(row.classList.contains("srow-flash")).toBe(false);
     // the section nav follows the jump
-    expect(screen.getByRole("button", { name: "Gestures & touch" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("button", { name: "Gestures & touch" }).getAttribute("aria-current")).toBe("location");
   });
 
   it("enter_in_the_search_box_jumps_to_the_best_hit", () => {
@@ -272,7 +272,7 @@ describe("navigation and landmarks", () => {
     renderPane();
     fireEvent.click(screen.getByRole("button", { name: "Backup" }));
     expect(scroll).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Backup" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("button", { name: "Backup" }).getAttribute("aria-current")).toBe("location");
   });
 });
 
@@ -298,7 +298,7 @@ describe("about and backup", () => {
     expect(resetLocalData).not.toHaveBeenCalled();
     const dialog = screen.getByRole("alertdialog");
     expect(dialog.textContent).toContain(
-      "Reset local data?This deletes all books, pages and settings on this device. A backup zip is written first.",
+      "Reset local data?This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept.",
     );
     // Cancel does nothing.
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));

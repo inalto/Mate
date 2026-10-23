@@ -185,13 +185,17 @@ pub fn export_unit(storage: &Storage, unit_id: &str, assets_dir: &Path) -> Resul
     Ok(bytes)
 }
 
-/// Zips every live book as its own `.mate` archive (`books/NN-<title>.mate`, stored without
-/// further compression) so a whole library can be restored one book at a time by importing the
-/// entries. Used by "Download backup" and the pre-reset recovery file.
-pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<Vec<u8>> {
+/// One book of a backup: its entry name inside the zip and its `.mate` bytes.
+pub struct BackupEntry {
+    pub name: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Exports every live book as a `.mate` archive. This is the part that needs the database, so
+/// callers can hold the storage lock for it and build the zip ([`zip_backup`]) afterwards.
+pub fn backup_entries(storage: &Storage, assets_dir: &Path) -> Result<Vec<BackupEntry>> {
     let units = storage.list_tree()?.units;
-    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
-    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    let mut out = Vec::with_capacity(units.len());
     for (i, unit) in units.iter().enumerate() {
         let slug: String = unit
             .title
@@ -207,20 +211,37 @@ pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<Vec<u8>> {
             .take(40)
             .collect();
         let slug = if slug.is_empty() { "book".to_string() } else { slug };
-        let bytes = export_unit(storage, &unit.id, assets_dir)?;
-        zip.start_file(format!("books/{:02}-{slug}.mate", i + 1), stored)
-            .map_err(zip_err)?;
-        zip.write_all(&bytes).map_err(io_err)?;
+        out.push(BackupEntry {
+            name: format!("books/{:02}-{slug}.mate", i + 1),
+            bytes: export_unit(storage, &unit.id, assets_dir)?,
+        });
+    }
+    Ok(out)
+}
+
+/// Zips backup entries (stored without further compression) plus a `backup.json` manifest.
+pub fn zip_backup(entries: &[BackupEntry]) -> Result<Vec<u8>> {
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    for e in entries {
+        zip.start_file(&e.name, stored).map_err(zip_err)?;
+        zip.write_all(&e.bytes).map_err(io_err)?;
     }
     let manifest = serde_json::json!({
         "format": "mate-backup",
         "exportedAt": now_iso(),
-        "books": units.len(),
+        "books": entries.len(),
     });
     zip.start_file("backup.json", stored).map_err(zip_err)?;
     zip.write_all(&serde_json::to_vec_pretty(&manifest)?)
         .map_err(io_err)?;
     Ok(zip.finish().map_err(zip_err)?.into_inner())
+}
+
+/// Zips every live book as its own `.mate` archive (`books/NN-<title>.mate`) so a whole library
+/// can be restored one book at a time. Used by "Download backup" and the pre-reset recovery file.
+pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<Vec<u8>> {
+    zip_backup(&backup_entries(storage, assets_dir)?)
 }
 
 /// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store and

@@ -9,6 +9,7 @@ import { installPdfOpenHandler } from "./pdf/openFile";
 import { markFileLaunch } from "./onboarding/fileLaunch";
 import LaunchChecks from "./onboarding/LaunchChecks";
 import { router } from "./router";
+import ResetNotice from "./routes/Settings/ResetNotice";
 import { setNavigator } from "./stores/navigation";
 
 setNavigator((path) => void router.navigate(path));
@@ -26,6 +27,7 @@ export default function App() {
       <ToastHost />
       {!isPageWindow() && <LaunchChecks />}
       {!isPageWindow() && <StartupUpdateCheck />}
+      {!isPageWindow() && <ResetNotice />}
     </>
   );
 }

@@ -70,7 +70,7 @@ export default function BackupSection() {
           onConfirm={() => void reset()}
           onCancel={() => setConfirming(false)}
         >
-          This deletes all books, pages and settings on this device. A backup zip is written first.
+          This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept.
         </ConfirmDialog>
       )}
     </SettingsSection>

@@ -114,6 +114,7 @@ pub fn run() {
       archive::import_unit_archive,
       archive::export_backup,
       archive::reset_local_data,
+      archive::take_reset_incomplete,
       lifecycle::close_attempt_started,
       lifecycle::cancel_close_attempt,
       lifecycle::complete_close_attempt,

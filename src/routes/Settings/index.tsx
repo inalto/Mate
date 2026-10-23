@@ -24,8 +24,15 @@ export default function Settings() {
   const [active, setActive] = useState(NAV_GROUPS[0].sections[0].id);
 
   // Rows are read from the rendered pane so the index can never drift from what is shown.
+  // They are re-read whenever the pane's DOM changes (sections that load late or swap in).
   useEffect(() => {
-    if (contentRef.current) setEntries(collectEntries(contentRef.current));
+    const root = contentRef.current;
+    if (!root) return;
+    const read = () => setEntries(collectEntries(root));
+    read();
+    const mo = new MutationObserver(read);
+    mo.observe(root, { childList: true, subtree: true });
+    return () => mo.disconnect();
   }, []);
 
   const hits = useMemo(() => searchEntries(query, entries).slice(0, 8), [query, entries]);
@@ -125,7 +132,7 @@ export default function Settings() {
                     <button
                       type="button"
                       data-nav-item
-                      aria-current={active === s.id ? "true" : undefined}
+                      aria-current={active === s.id ? "location" : undefined}
                       onClick={() => goToSection(s.id)}
                     >
                       {s.title}

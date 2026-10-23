@@ -238,6 +238,7 @@ impl Settings {
             if serde_json::from_value::<Settings>(serde_json::Value::Object(merged.clone()))
                 .is_err()
             {
+                eprintln!("settings: ignoring wrong-typed value for \"{key}\"; using its default");
                 merged.insert(key, old); // wrong type: keep the default
             }
         }
