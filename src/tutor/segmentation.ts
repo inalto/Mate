@@ -86,7 +86,9 @@ export function mergeCost(a: ReachShape, b: ReachShape, cfg: SegmentationConfig 
     if (minW <= 0 || overlap / minW < cfg.horizontalOverlap) return Infinity;
   }
   const maxHeight = Math.max(A.height, B.height);
-  let dist = Math.hypot(dx * cfg.horizontalWeight, dy * cfg.verticalWeight);
+  const hx = dx * cfg.horizontalWeight;
+  const vy = dy * cfg.verticalWeight;
+  let dist = Math.sqrt(hx * hx + vy * vy);
   if (dt !== null && dt <= TEMPORAL_NEAR_MS) dist *= cfg.temporalWeight;
   const aligned = Math.abs(a.baselineY - b.baselineY) <= BASELINE_ALIGN * maxHeight;
   const reach =
@@ -149,6 +151,12 @@ function clusterOf(el: Element): Cluster {
   return { ids: [el.id], bounds: b, baselineY: b.y + b.height, ...strokeTimes(el), points: el.points.length, path: pathLength(el) };
 }
 
+/** Appends `b` to `a` in place (clusters are internal; avoids an O(n) copy per merge). */
+function append(a: string[], b: string[]): string[] {
+  for (const id of b) a.push(id);
+  return a;
+}
+
 function merged(a: Cluster, b: Cluster): Cluster {
   const x = Math.min(a.bounds.x, b.bounds.x);
   const y = Math.min(a.bounds.y, b.bounds.y);
@@ -156,13 +164,133 @@ function merged(a: Cluster, b: Cluster): Cluster {
   const btm = Math.max(a.bounds.y + a.bounds.height, b.bounds.y + b.bounds.height);
   const timed = a.tStart !== undefined && b.tStart !== undefined;
   return {
-    ids: a.ids.concat(b.ids),
+    ids: append(a.ids, b.ids),
     bounds: { x, y, width: r - x, height: btm - y },
     baselineY: btm,
     ...(timed ? { tStart: Math.min(a.tStart!, b.tStart!), tEnd: Math.max(a.tEnd!, b.tEnd!) } : {}),
     points: a.points + b.points,
     path: a.path + b.path,
   };
+}
+
+/**
+ * Uniform grid (cell = lineYThreshold) over cluster bounds, for neighbour candidates. A query covers
+ * the dy window lineYThreshold (beyond → different lines) and a dx window past which no merge reach
+ * can stretch: maxReach / (horizontalWeight · min(1, temporalWeight)), where maxReach uses the
+ * tallest cluster so far (reach only grows with height, capped at 600).
+ */
+class ClusterGrid {
+  private readonly cells = new Map<number, number[]>();
+  private readonly range: Int32Array;
+  private readonly stamp: Int32Array;
+  private tick = 0;
+  private readonly cell: number;
+  private readonly wy: number;
+  private maxHeight = 0;
+
+  private readonly cs: (Cluster | null)[];
+  private readonly cfg: SegmentationConfig;
+
+  constructor(cs: (Cluster | null)[], cfg: SegmentationConfig) {
+    this.cs = cs;
+    this.cfg = cfg;
+    this.cell = Math.max(1, cfg.lineYThreshold);
+    this.wy = cfg.lineYThreshold;
+    this.range = new Int32Array(cs.length * 4);
+    this.stamp = new Int32Array(cs.length);
+    cs.forEach((c, i) => {
+      this.maxHeight = Math.max(this.maxHeight, c!.bounds.height);
+      const [x0, y0, x1, y1] = this.cellsOf(c!.bounds, 0, 0);
+      this.range.set([x0, y0, x1, y1], i * 4);
+      this.add(i, x0, y0, x1, y1, Infinity, Infinity, -Infinity, -Infinity);
+    });
+  }
+
+  private cellsOf(r: Rect, mx: number, my: number): [number, number, number, number] {
+    const c = this.cell;
+    return [
+      Math.floor((r.x - mx) / c),
+      Math.floor((r.y - my) / c),
+      Math.floor((r.x + r.width + mx) / c),
+      Math.floor((r.y + r.height + my) / c),
+    ];
+  }
+
+  private static key = (cx: number, cy: number) => (cx + 0x100000) * 0x200000 + (cy + 0x100000);
+
+  /** Register `i` in cells of [x0..x1]×[y0..y1] that are outside the old range [ox0..ox1]×[oy0..oy1]. */
+  private add(i: number, x0: number, y0: number, x1: number, y1: number, ox0: number, oy0: number, ox1: number, oy1: number) {
+    for (let cx = x0; cx <= x1; cx++)
+      for (let cy = y0; cy <= y1; cy++) {
+        if (cx >= ox0 && cx <= ox1 && cy >= oy0 && cy <= oy1) continue;
+        const k = ClusterGrid.key(cx, cy);
+        const list = this.cells.get(k);
+        if (list) list.push(i);
+        else this.cells.set(k, [i]);
+      }
+  }
+
+  /** Cluster `i` grew (merge): register it in its new cells. */
+  grow(i: number): void {
+    const r = this.range;
+    const o = i * 4;
+    this.maxHeight = Math.max(this.maxHeight, this.cs[i]!.bounds.height);
+    const [x0, y0, x1, y1] = this.cellsOf(this.cs[i]!.bounds, 0, 0);
+    this.add(i, x0, y0, x1, y1, r[o], r[o + 1], r[o + 2], r[o + 3]);
+    r.set([Math.min(x0, r[o]), Math.min(y0, r[o + 1]), Math.max(x1, r[o + 2]), Math.max(y1, r[o + 3])], o);
+  }
+
+  /**
+   * Visit each live neighbour of `i` once, own cells first (overlapping clusters always share a cell),
+   * then the rest of the reach window; `visit` returning true stops the scan. Dead entries are compacted.
+   */
+  near(i: number, visit: (j: number) => boolean): void {
+    const t = ++this.tick;
+    this.stamp[i] = t;
+    const cfg = this.cfg;
+    const b = this.cs[i]!.bounds;
+    const maxReach = adaptive(this.maxHeight, cfg.distanceThreshold) * SAME_ROW_FACTOR * Math.max(BASELINE_BONUS, BASELINE_PENALTY);
+    const wx = maxReach / (cfg.horizontalWeight * Math.min(1, cfg.temporalWeight));
+    const [ox0, oy0, ox1, oy1] = this.cellsOf(b, 0, 0);
+    if (this.scanRange(ox0, oy0, ox1, oy1, t, visit)) return;
+    const [x0, y0, x1, y1] = this.cellsOf(b, wx, this.wy);
+    for (let cx = x0; cx <= x1; cx++)
+      for (let cy = y0; cy <= y1; cy++) {
+        if (cx >= ox0 && cx <= ox1 && cy >= oy0 && cy <= oy1) continue;
+        if (this.scan(cx, cy, t, visit)) return;
+      }
+  }
+
+  /** Visit each live cluster sharing a cell with `i` (every cluster whose bounds overlap `i`'s, and some more). */
+  own(i: number, visit: (j: number) => boolean): void {
+    const t = ++this.tick;
+    this.stamp[i] = t;
+    const [x0, y0, x1, y1] = this.cellsOf(this.cs[i]!.bounds, 0, 0);
+    this.scanRange(x0, y0, x1, y1, t, visit);
+  }
+
+  private scanRange(x0: number, y0: number, x1: number, y1: number, t: number, visit: (j: number) => boolean): boolean {
+    for (let cx = x0; cx <= x1; cx++) for (let cy = y0; cy <= y1; cy++) if (this.scan(cx, cy, t, visit)) return true;
+    return false;
+  }
+
+  private scan(cx: number, cy: number, t: number, visit: (j: number) => boolean): boolean {
+    const list = this.cells.get(ClusterGrid.key(cx, cy));
+    if (!list) return false;
+    const stamp = this.stamp;
+    let w = 0;
+    let stop = false;
+    for (let r = 0; r < list.length; r++) {
+      const j = list[r];
+      if (!this.cs[j]) continue;
+      list[w++] = j;
+      if (stop || stamp[j] === t) continue;
+      stamp[j] = t;
+      stop = visit(j);
+    }
+    list.length = w;
+    return stop;
+  }
 }
 
 const enoughInk = (c: Cluster): boolean =>
@@ -180,23 +308,43 @@ export function segmentPage(elements: Iterable<Element>, cfg: SegmentationConfig
   }
   const cs: (Cluster | null)[] = strokes.map(clusterOf);
   const n = cs.length;
+  const grid = new ClusterGrid(cs, cfg);
+  // Overlapping clusters (cost 0) merge before anything else in closest-pair order, and overlap only
+  // grows with merging, so union them to a fixpoint first: dense ink (shading, cross-outs) collapses
+  // here in near-linear time instead of one closest pair at a time.
+  for (let i = 0; i < n; i++) {
+    for (;;) {
+      const ci = cs[i];
+      if (!ci) break;
+      const hits: number[] = [];
+      grid.own(i, (j) => {
+        if (mergeCost(ci, cs[j]!, cfg) === 0) hits.push(j);
+        return false;
+      });
+      if (hits.length === 0) break;
+      for (const j of hits) {
+        cs[i] = merged(cs[i]!, cs[j]!);
+        cs[j] = null;
+      }
+      grid.grow(i);
+    }
+  }
   const bestJ = new Int32Array(n).fill(-1);
   const bestC = new Float64Array(n).fill(Infinity);
   const refresh = (i: number) => {
     bestJ[i] = -1;
     bestC[i] = Infinity;
     const ci = cs[i]!;
-    for (let j = 0; j < n; j++) {
-      const cj = cs[j];
-      if (j === i || !cj) continue;
-      const c = mergeCost(ci, cj, cfg);
+    grid.near(i, (j) => {
+      const c = mergeCost(ci, cs[j]!, cfg);
       if (c < bestC[i]) {
         bestC[i] = c;
         bestJ[i] = j;
       }
-    }
+      return c === 0; // nothing beats overlap
+    });
   };
-  for (let i = 0; i < n; i++) refresh(i);
+  for (let i = 0; i < n; i++) if (cs[i]) refresh(i);
   // Closest pair first, until nothing is within reach.
   for (;;) {
     let i = -1;
@@ -205,18 +353,26 @@ export function segmentPage(elements: Iterable<Element>, cfg: SegmentationConfig
     const j = bestJ[i];
     cs[i] = merged(cs[i]!, cs[j]!);
     cs[j] = null;
+    grid.grow(i);
     refresh(i);
-    for (let k = 0; k < n; k++) {
-      if (k === i || !cs[k]) continue;
-      if (bestJ[k] === i || bestJ[k] === j) refresh(k);
-      else {
-        const c = mergeCost(cs[k]!, cs[i]!, cfg);
-        if (c < bestC[k]) {
-          bestC[k] = c;
-          bestJ[k] = i;
-        }
+    // Only the merged cluster's neighbours can have a changed best pair: j lies inside i's bounds.
+    const ci = cs[i]!;
+    const stale: number[] = [];
+    grid.near(i, (k) => {
+      const pointed = bestJ[k] === i || bestJ[k] === j;
+      if (bestC[k] === 0) {
+        // Overlap with i or j is overlap with their union (time span only widens), so still 0.
+        if (pointed) bestJ[k] = i;
+        return false;
       }
-    }
+      const c = mergeCost(cs[k]!, ci, cfg);
+      if (pointed ? c <= bestC[k] : c < bestC[k]) {
+        bestC[k] = c;
+        bestJ[k] = i;
+      } else if (pointed) stale.push(k);
+      return false;
+    });
+    for (const k of stale) refresh(k);
   }
   const regions: Region[] = [];
   for (const c of cs) {

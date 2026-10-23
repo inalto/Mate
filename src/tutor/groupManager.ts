@@ -116,6 +116,19 @@ export function createGroupManager(deps: GroupManagerDeps): GroupManager {
     }
   }
 
+  /**
+   * Clean regions within merge reach of a changed region are re-dirtied so they are rechecked with
+   * the new context. One hop only: rechecked regions do not recheck their own neighbours.
+   */
+  function recheckNeighbours(changed: Set<string>): void {
+    if (changed.size === 0) return;
+    const fresh = [...changed].map((id) => entries.get(id)).filter((e): e is Entry => !!e);
+    for (const [id, e] of entries) {
+      if (e.dirty || changed.has(id)) continue;
+      if (fresh.some((b) => !beyondMergeReach(e.region, b.region, cfg))) markDirty(e);
+    }
+  }
+
   const dirtySet = () => new Set(dirtyEntries().map((e) => e.region.regionId));
 
   function markDirty(e: Entry): void {
@@ -148,6 +161,7 @@ export function createGroupManager(deps: GroupManagerDeps): GroupManager {
       changed.add(rid);
     }
     earlyFire(prevDirty, changed);
+    recheckNeighbours(changed);
     schedule();
   }
 
@@ -172,6 +186,7 @@ export function createGroupManager(deps: GroupManagerDeps): GroupManager {
       for (const r of regions) for (const id of r.elementIds) byElement.set(id, r.regionId);
       for (const id of dropped) deps.onInvalidate?.(id);
       earlyFire(prevDirty, changed);
+      recheckNeighbours(changed);
       schedule();
     },
 

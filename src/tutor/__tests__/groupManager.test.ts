@@ -162,6 +162,51 @@ describe("group manager", () => {
     expect(fired).toEqual([]);
   });
 
+  it("neighbour_within_reach_is_redirtied", () => {
+    stroke();
+    gm.setRegions([region("A", ["s1"], 0)]);
+    clock.advance(1200);
+    expect(fired).toEqual([["A", "settle"]]);
+    // B lands within reach of the clean A (e.g. written later): A is rechecked with the new context.
+    stroke();
+    gm.setRegions([region("A", ["s1"], 0), region("B", ["s2"], 130)]);
+    clock.advance(1200);
+    expect(fired.slice(1).sort()).toEqual([
+      ["A", "settle"],
+      ["B", "settle"],
+    ]);
+    // Editing B rechecks A too.
+    fired = [];
+    stroke();
+    gm.noteElementsChanged(["s2"]);
+    clock.advance(1200);
+    expect(fired.sort()).toEqual([
+      ["A", "settle"],
+      ["B", "settle"],
+    ]);
+    // A far region is not rechecked.
+    fired = [];
+    stroke();
+    gm.setRegions([region("A", ["s1"], 0), region("B", ["s2"], 130), region("F", ["s9"], 2000)]);
+    clock.advance(1200);
+    expect(fired).toEqual([["F", "settle"]]);
+  });
+
+  it("recheck_does_not_cascade", () => {
+    stroke();
+    // A–B and B–C are within reach; A–C is not.
+    gm.setRegions([region("A", ["a"], 0), region("B", ["b"], 130), region("C", ["c"], 260)]);
+    clock.advance(1200);
+    fired = [];
+    stroke();
+    gm.noteElementsChanged(["c"]);
+    clock.advance(1200);
+    expect(fired.sort()).toEqual([
+      ["B", "settle"],
+      ["C", "settle"],
+    ]);
+  });
+
   it("removed_element_invalidates_region", () => {
     stroke();
     gm.setRegions([region("A", ["s1", "s2"], 0), region("B", ["s3"], 0, 400)]);

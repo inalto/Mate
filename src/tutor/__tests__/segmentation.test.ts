@@ -76,6 +76,21 @@ describe("segmentPage", () => {
     expect(segmentPage([hl, shape, box, deleted])).toEqual([]);
   });
 
+  it("segments_5000_overlapping_strokes_under_1s", () => {
+    // Dense shading / cross-outs: 5000 strokes piled into a 300 x 120 patch, plus a separate glyph.
+    let seed = 12345;
+    const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32;
+    const strokes: Element[] = [];
+    for (let i = 0; i < 5000; i++) strokes.push(glyph(`s${i}`, rnd() * 280, 100 + rnd() * 90, i * 2));
+    strokes.push(glyph("far", 3000, 3000, 0));
+    const start = performance.now();
+    const regions = segmentPage(strokes);
+    const elapsed = performance.now() - start;
+    expect(regions).toHaveLength(2);
+    expect(regions[0].elementIds).toHaveLength(5000);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
   it("beyond_merge_reach_uses_gaps_and_adaptive_threshold", () => {
     const r = (x: number, y: number, w = 30, h = 30) => ({ bounds: { x, y, width: w, height: h }, baselineY: y + h });
     // dx gap 60 on the same row: 60*0.5 = 30 <= 40*1.3*bonus -> within reach.
