@@ -42,8 +42,7 @@ export default function Shell() {
           if (event.payload.type !== "drop") return;
           const paths = event.payload.paths.filter(isImportPath);
           if (paths.length === 0) return;
-          const s = useImportStore.getState();
-          void (s.open && s.stage === "review" ? s.addPaths(paths) : s.openDialog({ paths }));
+          void useImportStore.getState().openDialog({ paths });
         })
         .then((fn) => (detached ? fn() : (unlisten = fn)))
         .catch(() => {});

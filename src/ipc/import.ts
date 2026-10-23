@@ -40,9 +40,13 @@ export interface NoteImportReport {
   texts: number;
   images: number;
   elementsSkippedLimit: number;
+  /** Items dropped because their data was unusable. */
+  elementsSkippedInvalid: number;
   tablesSkipped: number;
   shapesSkipped: number;
   warnings: string[];
+  /** Technical notes behind the warnings. For the log only: never show them. */
+  details: string[];
 }
 
 export interface ImportFileResult {

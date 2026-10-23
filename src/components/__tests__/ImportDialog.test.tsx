@@ -43,7 +43,7 @@ const good = { path: "C:/n/Maths.goodnotes", filename: "Maths.goodnotes", size: 
 const bad = { path: "C:/n/a.note", filename: "a.note", size: 4, status: "rejected", reason: "This file is not a format Mate can import (.note)." } as const;
 const report = {
   unitId: "u9", sectionIds: ["s9"], pagesImported: 12, pagesSkippedDuplicate: 3, pagesSkippedLimit: 0, strokes: 340, texts: 5, images: 2,
-  elementsSkippedLimit: 0, tablesSkipped: 1, shapesSkipped: 0, warnings: ["One image could not be read."],
+  elementsSkippedLimit: 0, elementsSkippedInvalid: 0, tablesSkipped: 1, shapesSkipped: 0, warnings: ["One image could not be read."], details: [],
 };
 
 beforeEach(() => {
@@ -150,5 +150,95 @@ describe("ImportDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
     await screen.findByText("Import finished");
     expect(container.textContent).not.toMatch(/derive/i);
+  });
+});
+
+describe("ImportDialog during an import", () => {
+  const pending = () => {
+    let resolve!: (v: unknown) => void;
+    const p = new Promise((r) => (resolve = r));
+    return { p, resolve };
+  };
+
+  it("open_with_during_import_does_not_reset", async () => {
+    const run = pending();
+    ipc.importFiles.mockReturnValueOnce(run.p);
+    render(<ImportDialog />);
+    await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await screen.findByText("Importing");
+    ipc.sniffImportFiles.mockClear();
+    await act(async () => useImportStore.getState().openDialog({ paths: ["C:/n/Other.note"] }));
+    expect(useImportStore.getState().stage).toBe("importing");
+    expect(useImportStore.getState().files).toHaveLength(2);
+    expect(useImportStore.getState().queued).toEqual(["C:/n/Other.note"]);
+    expect(ipc.sniffImportFiles).not.toHaveBeenCalled();
+    expect(screen.getByText("1 more file will be offered when this import finishes.")).toBeTruthy();
+
+    await act(async () => run.resolve([{ path: good.path, status: "ok", report }]));
+    await screen.findByText("Import finished");
+    ipc.sniffImportFiles.mockResolvedValue([{ ...good, path: "C:/n/Other.note", filename: "Other.note" }]);
+    fireEvent.click(screen.getByRole("button", { name: "Import 1 more file…" }));
+    await screen.findByText("GoodNotes file, 2 KB");
+    expect(useImportStore.getState().stage).toBe("review");
+    expect(ipc.sniffImportFiles).toHaveBeenCalledWith(["C:/n/Other.note"]);
+  });
+
+  it("ignores a second submit while importing", async () => {
+    const run = pending();
+    ipc.importFiles.mockReturnValueOnce(run.p);
+    await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
+    const first = useImportStore.getState().run();
+    await useImportStore.getState().run();
+    await waitFor(() => expect(ipc.importFiles).toHaveBeenCalledTimes(1));
+    run.resolve([{ path: good.path, status: "ok", report }]);
+    await first;
+    await useImportStore.getState().run(); // done: not a review step any more
+    expect(ipc.importFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancel shows that the current file is finishing", async () => {
+    const run = pending();
+    ipc.importFiles.mockReturnValueOnce(run.p);
+    render(<ImportDialog />);
+    await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel import" }));
+    await screen.findByText("Cancelling… finishing the current file.");
+    expect(ipc.cancelImport).toHaveBeenCalled();
+    await act(async () => run.resolve([{ path: good.path, status: "failed", error: "The import was cancelled." }]));
+  });
+
+  it("shows invalid-item counts but never the log-only details", async () => {
+    ipc.importFiles.mockResolvedValue([
+      { path: good.path, status: "ok", report: { ...report, elementsSkippedInvalid: 4, details: ["page write failed: secret"] } },
+    ]);
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+    const { container } = render(<ImportDialog />);
+    await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await screen.findByText("4 items could not be read and were skipped.");
+    expect(container.textContent).not.toContain("secret");
+    expect(debug).toHaveBeenCalled();
+    debug.mockRestore();
+  });
+
+  it("closes on a backdrop click only when not importing", async () => {
+    render(<ImportDialog />);
+    await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
+    expect(document.activeElement?.closest("[role=dialog]")).not.toBeNull();
+    fireEvent.click(document.querySelector(".backdrop")!);
+    expect(useImportStore.getState().open).toBe(false);
+  });
+});
+
+describe("copy", () => {
+  it("never says Derive in the entry points", () => {
+    const sources = import.meta.glob(
+      ["../TopBar.tsx", "../BookCard.tsx", "../ImportDialog.tsx", "../../routes/Library.tsx", "../../stores/importStore.ts"],
+      { query: "?raw", import: "default", eager: true },
+    );
+    expect(Object.keys(sources)).toHaveLength(5);
+    for (const [f, text] of Object.entries(sources)) expect(text as string, f).not.toMatch(/derive/i);
   });
 });

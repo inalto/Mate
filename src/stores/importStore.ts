@@ -16,6 +16,7 @@ import {
   type PlaceTarget,
   type SniffResult,
 } from "../ipc/import";
+import { showToast } from "../components/Toast";
 import { useNotebookStore } from "./notebook";
 
 export type ImportStage = "review" | "importing" | "done";
@@ -42,7 +43,13 @@ interface ImportState {
   progress: Record<string, ImportProgress>;
   results: ImportFileResult[];
   error: string | null;
-  /** Open the dialog, optionally with files (dropped, opened with Mate) and a target book. */
+  /** Files opened or dropped while an import was running; offered once it finishes. */
+  queued: string[];
+  /** Cancel was requested for the running import. */
+  cancelling: boolean;
+  /** Open the dialog, optionally with files (dropped, opened with Mate) and a target book.
+   * Files arriving while the dialog is open are added (review) or queued (importing); only a
+   * finished import is replaced by a new dialog. */
   openDialog(opts?: { paths?: string[]; unitId?: string }): Promise<void>;
   /** Show the file picker and add what is chosen. */
   pickFiles(): Promise<void>;
@@ -64,12 +71,30 @@ const initial = {
   progress: {} as Record<string, ImportProgress>,
   results: [] as ImportFileResult[],
   error: null as string | null,
+  queued: [] as string[],
+  cancelling: false,
 };
+
+function fail(err: unknown): string {
+  const text = message(err);
+  showToast(text);
+  return text;
+}
 
 export const useImportStore = create<ImportState>((set, get) => ({
   ...initial,
 
   openDialog: async (opts) => {
+    const cur = get();
+    if (cur.open && cur.stage === "importing") {
+      if (opts?.paths?.length) set({ queued: [...new Set([...cur.queued, ...opts.paths])] });
+      return;
+    }
+    if (cur.open && cur.stage === "review") {
+      if (opts?.paths?.length) await cur.addPaths(opts.paths);
+      else await cur.pickFiles();
+      return;
+    }
     set({ ...initial, open: true, destination: opts?.unitId ? { kind: "existing", unitId: opts.unitId } : initial.destination });
     if (opts?.paths?.length) await get().addPaths(opts.paths);
     else await get().pickFiles();
@@ -84,7 +109,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
         filters: [{ name: "Notebook files", extensions: [...IMPORT_EXTENSIONS] }],
       });
     } catch (err) {
-      set({ error: message(err) });
+      set({ error: fail(err) });
       return;
     }
     const paths = picked == null ? [] : Array.isArray(picked) ? picked : [picked];
@@ -109,7 +134,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
         return { files, destination, sniffing: false };
       });
     } catch (err) {
-      set({ sniffing: false, error: message(err) });
+      set({ sniffing: false, error: fail(err) });
     }
   },
 
@@ -118,28 +143,31 @@ export const useImportStore = create<ImportState>((set, get) => ({
   setDestination: (destination) => set({ destination, nameTouched: destination.kind === "new" }),
 
   run: async () => {
-    const { files, destination } = get();
+    const { files, destination, stage, sniffing } = get();
+    if (stage !== "review" || sniffing) return; // one import at a time; ignores a double click
     const paths = files.filter((f) => f.status === "ok").map((f) => f.path);
     if (paths.length === 0) return;
     const target: PlaceTarget =
       destination.kind === "existing"
         ? { kind: "existing-unit", unitId: destination.unitId }
         : { kind: "new-unit", title: destination.title.trim() || null };
-    set({ stage: "importing", progress: {}, results: [], error: null });
+    set({ stage: "importing", progress: {}, results: [], error: null, cancelling: false });
     // Listen first so no early event is missed; the listener is best effort.
     const unlisten = await onImportProgress((p) => set((s) => ({ progress: { ...s.progress, [p.path]: p } }))).catch(() => null);
     try {
       const results = await importFiles(paths, target);
       await useNotebookStore.getState().load();
-      set({ results, stage: "done" });
+      for (const r of results) if (r.report?.details.length) console.debug("import details", r.path, r.report.details);
+      set({ results, stage: "done", cancelling: false });
     } catch (err) {
-      set({ error: message(err), stage: "review" });
+      set({ error: fail(err), stage: "review", cancelling: false });
     } finally {
       unlisten?.();
     }
   },
 
   cancel: async () => {
+    set({ cancelling: true });
     try {
       await cancelImport();
     } catch {
@@ -160,9 +188,7 @@ export function installImportOpenHandler(): () => void {
   const handle = (paths: string[]) => {
     const wanted = paths.filter(isImportPath);
     if (wanted.length === 0) return;
-    const s = useImportStore.getState();
-    // Opened again while the dialog is up: add to the list instead of resetting it.
-    void (s.open && s.stage === "review" ? s.addPaths(wanted) : s.openDialog({ paths: wanted }));
+    void useImportStore.getState().openDialog({ paths: wanted });
   };
   // Listen first: a file opened after the pending ones were taken is emitted, never parked.
   void onImportFileOpened(handle)

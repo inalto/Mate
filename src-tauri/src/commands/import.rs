@@ -9,6 +9,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use super::open_files::is_import_path;
 use mate_core::import::place::{ImportReport, PlaceTarget, place_document};
 use mate_core::import::{
     IMPORT_DEADLINE, ImportDocument, ImportError, ImportLimits, ImportSource, fingerprint, max_file_bytes, parse,
@@ -36,7 +37,36 @@ const LARGEST_FILE: u64 = 256 * 1024 * 1024;
 #[derive(Default)]
 pub struct ImportControl {
     cancel: AtomicBool,
+    running: AtomicBool,
 }
+
+/// Held while an import runs; dropping it allows the next one.
+pub struct RunGuard<'a>(&'a AtomicBool);
+
+impl Drop for RunGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
+
+impl ImportControl {
+    /// Claims the single import slot and clears the cancel flag; an error sentence when an import
+    /// is already running.
+    pub fn begin(&self) -> Result<RunGuard<'_>, String> {
+        self.running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map_err(|_| ALREADY_RUNNING.to_string())?;
+        self.cancel.store(false, Ordering::SeqCst);
+        Ok(RunGuard(&self.running))
+    }
+}
+
+pub const ALREADY_RUNNING: &str = "An import is already running.";
+/// Most files one call accepts.
+pub const MAX_PATHS: usize = 50;
+/// How much of a file is read to rule out obvious non-matches before reading all of it.
+pub const HEAD_BYTES: usize = 64 * 1024;
+const NOT_IMPORTABLE: &str = "This is not a notebook file Mate can import (unsupported file extension).";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -109,7 +139,11 @@ pub fn storage_error_message(e: &StorageError) -> String {
     match e {
         StorageError::NotFound(_) => "That book no longer exists. Choose another destination.".into(),
         StorageError::Limit(why) => format!("The file could not be imported: {why}."),
-        other => format!("The pages could not be saved ({other})."),
+        other => {
+            // The technical detail goes to the log, not to the user.
+            eprintln!("mate: import could not save pages: {other}");
+            "The pages could not be saved. Try again, and if it keeps failing restart Mate.".into()
+        }
     }
 }
 
@@ -129,6 +163,33 @@ impl Importer for CoreImporter {
 
 fn filename_of(path: &Path) -> String {
     path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+/// The path must have an import extension and name an existing regular file.
+pub fn check_path(path: &str) -> Result<(), String> {
+    if !is_import_path(path) {
+        return Err(NOT_IMPORTABLE.into());
+    }
+    match fs::metadata(path) {
+        Ok(m) if m.is_file() => Ok(()),
+        _ => Err(UNREADABLE.into()),
+    }
+}
+
+/// The first [`HEAD_BYTES`] of `path`.
+fn read_head(path: &Path) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut head = Vec::new();
+    fs::File::open(path)?.take(HEAD_BYTES as u64).read_to_end(&mut head)?;
+    Ok(head)
+}
+
+/// True when the first bytes could start a format Mate reads (a zip, a OneNote section or a cabinet).
+fn plausible_head(head: &[u8]) -> bool {
+    head.starts_with(b"PK\x03\x04")
+        || head.starts_with(b"PK\x05\x06")
+        || head.starts_with(b"MSCF")
+        || head.starts_with(&mate_core::import::ONE_MAGIC)
 }
 
 /// Reads `path` after checking it is a file within the size every format accepts.
@@ -160,6 +221,19 @@ pub fn sniff_path(path: &str) -> SniffResult {
         source_name: None,
         reason: Some(reason),
     };
+    if let Err(reason) = check_path(path) {
+        return rejected(reason);
+    }
+    // Rule out obvious non-matches from the head before reading a large file in full.
+    match read_head(p) {
+        Ok(head) if !plausible_head(&head) => {
+            return rejected(
+                sniff(&head, &filename).err().map_or_else(|| NOT_IMPORTABLE.to_owned(), |e| import_error_message(&e)),
+            );
+        }
+        Ok(_) => {}
+        Err(_) => return rejected(UNREADABLE.into()),
+    }
     let bytes = match read_source(p) {
         Ok(b) => b,
         Err(reason) => return rejected(reason),
@@ -203,6 +277,8 @@ pub fn import_one(
         progress(Progress { path: path.to_owned(), phase, pages_done: done, pages_total: total })
     };
     let cancelled = || job.cancel.load(Ordering::SeqCst);
+    check_path(path)?;
+    let deadline = Instant::now() + job.deadline;
     let p = Path::new(path);
     let filename = filename_of(p);
 
@@ -213,7 +289,6 @@ pub fn import_one(
     }
 
     say(Phase::Parsing, 0, 0);
-    let deadline = Instant::now() + job.deadline;
     let source = sniff(&bytes, &filename).map_err(|e| import_error_message(&e))?;
     let limits = ImportLimits { deadline: Some(deadline), ..ImportLimits::for_source(source) };
     let doc = importer.parse(&bytes, &filename, &limits).map_err(|e| match e {
@@ -237,9 +312,16 @@ pub fn import_one(
     Ok(report)
 }
 
+fn too_many() -> String {
+    format!("Choose at most {MAX_PATHS} files at a time.")
+}
+
 /// Detects the format of each picked or dropped file.
 #[tauri::command]
 pub async fn sniff_import_files(paths: Vec<String>) -> Result<Vec<SniffResult>, String> {
+    if paths.len() > MAX_PATHS {
+        return Err(too_many());
+    }
     tauri::async_runtime::spawn_blocking(move || paths.iter().map(|p| sniff_path(p)).collect())
         .await
         .map_err(|e| e.to_string())
@@ -253,7 +335,11 @@ pub async fn import_files(
     paths: Vec<String>,
     target: PlaceTarget,
 ) -> Result<Vec<ImportFileResult>, String> {
-    app.state::<ImportControl>().cancel.store(false, Ordering::SeqCst);
+    if paths.len() > MAX_PATHS {
+        return Err(too_many());
+    }
+    let control_state = app.state::<ImportControl>();
+    let _slot = control_state.begin()?;
     let mut target = target;
     let mut results = Vec::with_capacity(paths.len());
     for path in paths {
@@ -326,11 +412,11 @@ mod tests {
     #[test]
     fn sniff_command_rejects_unknown_with_reason() {
         let d = temp("sniff");
-        let txt = d.join("notes.txt");
+        let txt = d.join("notes.note");
         fs::write(&txt, b"hello").unwrap();
         let r = sniff_path(&txt.to_string_lossy());
         assert_eq!(r.status, SniffStatus::Rejected);
-        assert_eq!(r.filename, "notes.txt");
+        assert_eq!(r.filename, "notes.note");
         assert_eq!(r.size, 5);
         assert_eq!(r.source, None);
         assert!(r.reason.as_deref().unwrap().contains("not a format Mate can import"), "{:?}", r.reason);
@@ -444,8 +530,57 @@ mod tests {
     }
 
     #[test]
+    fn commands_reject_non_import_extensions() {
+        let d = temp("ext");
+        let zip = d.join("sneaky.txt");
+        bare_zip(&zip);
+        let r = sniff_path(&zip.to_string_lossy());
+        assert_eq!(r.status, SniffStatus::Rejected);
+        assert!(r.reason.as_deref().unwrap().contains("extension"));
+        let dir = d.join("folder.goodnotes");
+        fs::create_dir_all(&dir).unwrap();
+        assert_eq!(sniff_path(&dir.to_string_lossy()).reason.as_deref(), Some(UNREADABLE));
+
+        let storage = Mutex::new(Storage::open_in_memory().unwrap());
+        let cancel = AtomicBool::new(false);
+        let job = Job { storage: &storage, assets_dir: &d, cancel: &cancel, deadline: Duration::from_secs(5) };
+        let err = import_one(&OneBlankPage, &job, &zip.to_string_lossy(), PlaceTarget::NewUnit { title: None }, &|_| {})
+            .unwrap_err();
+        assert!(err.contains("extension"));
+        assert!(storage.lock().unwrap().list_tree().unwrap().units.is_empty());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn sniff_reads_head_before_full_file() {
+        let d = temp("head");
+        let big = d.join("big.note");
+        fs::write(&big, vec![b'x'; 5 * 1024 * 1024]).unwrap();
+        assert_eq!(read_head(&big).unwrap().len(), HEAD_BYTES);
+        assert!(!plausible_head(&read_head(&big).unwrap()));
+        let r = sniff_path(&big.to_string_lossy());
+        assert_eq!(r.status, SniffStatus::Rejected);
+        assert!(r.reason.as_deref().unwrap().contains("not a format Mate can import"));
+        assert!(plausible_head(b"PK\x03\x04rest") && plausible_head(b"MSCF"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn only_one_import_runs_at_a_time() {
+        let control = ImportControl::default();
+        let first = control.begin().unwrap();
+        assert_eq!(control.begin().err().as_deref(), Some(ALREADY_RUNNING));
+        control.cancel.store(true, Ordering::SeqCst);
+        drop(first);
+        let _second = control.begin().unwrap();
+        assert!(!control.cancel.load(Ordering::SeqCst)); // a new import starts uncancelled
+    }
+
+    #[test]
     fn both_error_types_become_sentences() {
         assert_eq!(import_error_message(&ImportError::Cancelled), "The import was cancelled.");
+        let json = serde_json::from_str::<u8>("x").unwrap_err();
+        assert!(!storage_error_message(&StorageError::Json(json)).to_lowercase().contains("json"));
         assert!(storage_error_message(&StorageError::NotFound("unit x".into())).contains("no longer exists"));
         assert!(
             storage_error_message(&StorageError::Limit("the file has no pages to import".into())).contains("no pages")

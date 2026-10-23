@@ -1,6 +1,6 @@
 // "Import notes": pick notebook files from other apps, check what each one is, choose a new or an
 // existing book, import with progress, then read the report and open the book.
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ImportFileResult, ImportProgress, NoteImportReport, SniffResult } from "../ipc/import";
 import { bookNameFromFile, useImportStore } from "../stores/importStore";
 import { navigateTo } from "../stores/navigation";
@@ -32,9 +32,11 @@ export function sumReports(results: ImportFileResult[]): NoteImportReport {
     texts: 0,
     images: 0,
     elementsSkippedLimit: 0,
+    elementsSkippedInvalid: 0,
     tablesSkipped: 0,
     shapesSkipped: 0,
     warnings: [],
+    details: [], // log-only; never rendered
   };
   for (const r of results) {
     const rep = r.report;
@@ -47,6 +49,7 @@ export function sumReports(results: ImportFileResult[]): NoteImportReport {
     total.texts += rep.texts;
     total.images += rep.images;
     total.elementsSkippedLimit += rep.elementsSkippedLimit;
+    total.elementsSkippedInvalid += rep.elementsSkippedInvalid ?? 0;
     total.tablesSkipped += rep.tablesSkipped;
     total.shapesSkipped += rep.shapesSkipped;
     total.warnings.push(...rep.warnings);
@@ -88,11 +91,32 @@ export default function ImportDialog() {
   const s = useImportStore();
   const units = useNotebookStore((n) => n.tree.units);
   const isOpen = s.open;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const focusables = () =>
+    [...(dialogRef.current?.querySelectorAll<HTMLElement>("input, select, button:not([disabled])") ?? [])];
 
+  // Focus moves into the dialog when it opens and back to where it came from when it closes.
+  useEffect(() => {
+    if (!isOpen) return;
+    const before = document.activeElement as HTMLElement | null;
+    return () => before?.focus?.();
+  }, [isOpen]);
+  // ...and to the first control whenever the step changes.
+  useEffect(() => {
+    if (isOpen) focusables()[0]?.focus();
+  }, [isOpen, s.stage, s.sniffing]);
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && useImportStore.getState().stage !== "importing") useImportStore.getState().close();
+      if (e.key === "Tab") {
+        const items = focusables();
+        if (items.length === 0) return;
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        const next = e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i === items.length - 1 ? 0 : i + 1;
+        e.preventDefault();
+        items[next].focus();
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -124,7 +148,11 @@ export default function ImportDialog() {
             ))}
           </ul>
           <div className="dialog-actions">
-            <button type="button" className="btn" onClick={() => void s.cancel()}>Cancel import</button>
+            {s.cancelling && <span role="status">Cancelling… finishing the current file.</span>}
+            {s.queued.length > 0 && (
+              <span>{plural(s.queued.length, "more file")} will be offered when this import finishes.</span>
+            )}
+            <button type="button" className="btn" disabled={s.cancelling} onClick={() => void s.cancel()}>Cancel import</button>
           </div>
         </>
       );
@@ -137,6 +165,8 @@ export default function ImportDialog() {
       if (total.pagesSkippedDuplicate > 0)
         notes.push(`${plural(total.pagesSkippedDuplicate, "page")} already imported, so not added again.`);
       if (total.pagesSkippedLimit > 0) notes.push(`${plural(total.pagesSkippedLimit, "page")} over the page limit were skipped.`);
+      if (total.elementsSkippedInvalid > 0)
+        notes.push(`${plural(total.elementsSkippedInvalid, "item")} could not be read and were skipped.`);
       if (total.elementsSkippedLimit > 0)
         notes.push(`${plural(total.elementsSkippedLimit, "item")} over the size limits were skipped.`);
       if (total.tablesSkipped > 0) notes.push(`${plural(total.tablesSkipped, "table")} could not be imported.`);
@@ -174,6 +204,11 @@ export default function ImportDialog() {
           )}
           <div className="dialog-actions">
             <button type="button" className="btn" onClick={s.close}>Close</button>
+            {s.queued.length > 0 && (
+              <button type="button" className="btn" onClick={() => void s.openDialog({ paths: s.queued })}>
+                Import {plural(s.queued.length, "more file")}…
+              </button>
+            )}
             {imported && <button type="button" className="btn btn-primary" onClick={openBook}>Open book</button>}
           </div>
         </>
@@ -250,8 +285,13 @@ export default function ImportDialog() {
   };
 
   return (
-    <div className="backdrop">
-      <div className="card dialog" role="dialog" aria-modal="true" aria-label="Import notes">
+    <div
+      className="backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && s.stage !== "importing") s.close();
+      }}
+    >
+      <div ref={dialogRef} className="card dialog" role="dialog" aria-modal="true" aria-label="Import notes">
         {body()}
       </div>
     </div>
