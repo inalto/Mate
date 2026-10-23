@@ -58,12 +58,16 @@ export interface TutorCard {
   hintLogged: boolean;
   /** Bumped on each open, so the card re-focuses when it moves to another group. */
   seq: number;
+  /** Where to show the card while the group is briefly missing from the view (re-segmenting). */
+  anchor?: GroupBounds;
+  /** `Date.now()` when opened. */
+  openedAt: number;
 }
 
 interface TutorUiState {
   card: TutorCard | null;
   /** Open the card for a group (`ask`: straight to the question box). Checks unchecked ink first. */
-  openCard(pane: PaneIndex, groupId: string, opts?: { ask?: boolean }): void;
+  openCard(pane: PaneIndex, groupId: string, opts?: { ask?: boolean; anchor?: GroupBounds }): void;
   closeCard(): void;
   /** The card shows the hint now: records "hint_shown" once per opening. */
   noteHintShown(): void;
@@ -141,6 +145,8 @@ export const useTutorUi = create<TutorUiState>((set, get) => {
           busy: false,
           hintLogged: false,
           seq: ++seq,
+          anchor: opts?.anchor,
+          openedAt: Date.now(),
         },
       });
     },

@@ -422,7 +422,9 @@ mod tests {
             // Wait until the first two hold the page's slots (the third is queued behind them).
             let c = calls.clone();
             tauri::async_runtime::spawn_blocking(move || {
+                let deadline = std::time::Instant::now() + Duration::from_secs(10);
                 while c.load(Ordering::SeqCst) < 2 {
+                    assert!(std::time::Instant::now() < deadline, "the first two calls never started");
                     std::thread::yield_now();
                 }
             })

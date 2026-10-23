@@ -115,6 +115,13 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   const retryTimers = new Map<string, unknown>();
   /** Groups the user asked about: checked even in "onask" mode. */
   const requested = new Set<string>();
+  /**
+   * Verdicts of groups that vanished because their membership changed (e.g. a dot joined them).
+   * If the same membership comes back with its ink untouched, the verdict is shown again and the
+   * group is not re-sent. Entries go when any member's ink changes.
+   */
+  const stash = new Map<string, Recognition>();
+  const STASH_LIMIT = 200;
 
   const emit = (next: Partial<TutorView>) => {
     view = { ...view, ...next };
@@ -146,6 +153,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     for (const h of retryTimers.values()) clearTimer(h);
     retryTimers.clear();
     requested.clear();
+    stash.clear();
   }
 
   function flushChanges(): void {
@@ -153,7 +161,23 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     const change = pendingChange;
     pendingChange = null;
     if (!manager || disposed || !change) return;
-    manager.setRegions(resegment());
+    const touched = new Set([...change.updated, ...change.removed]);
+    for (const [id, r] of stash) if (r.elementIds.some((e) => touched.has(e))) stash.delete(id);
+    const regions = resegment();
+    const back = new Set<string>();
+    const restored = new Map(view.recognitions);
+    for (const r of regions) {
+      const old = stash.get(r.regionId);
+      if (!old || restored.has(r.regionId) || old.elementIds.length !== r.elementIds.length) continue;
+      const members = new Set(r.elementIds);
+      if (!old.elementIds.every((e) => members.has(e))) continue;
+      stash.delete(r.regionId);
+      requested.delete(r.regionId);
+      restored.set(r.regionId, old);
+      back.add(r.regionId);
+    }
+    if (back.size > 0) emit({ recognitions: restored });
+    manager.setRegions(regions, { clean: back });
     manager.noteElementsChanged(change);
   }
 
@@ -234,6 +258,12 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       onFire: (region) => fire(token, region),
       onInvalidate: (regionId) => {
         if (token !== pageToken) return;
+        const rec = view.recognitions.get(regionId);
+        if (rec) {
+          stash.delete(regionId);
+          stash.set(regionId, rec);
+          if (stash.size > STASH_LIMIT) stash.delete(stash.keys().next().value!);
+        }
         emit({
           recognitions: withMap(view.recognitions, (x) => x.delete(regionId)),
           unchecked: withMap(view.unchecked, (x) => x.delete(regionId)),
@@ -287,7 +317,12 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     },
     check(groupId, opts) {
       const region = view.regions.get(groupId);
-      if (disposed || !manager || !region) return false;
+      if (disposed || !manager) return false;
+      if (!region) {
+        // Not segmented yet (e.g. it reappears once a gesture dot is removed): check it when it does.
+        requested.add(groupId);
+        return false;
+      }
       if (opts?.retry) {
         pipeline.attempts.reset(revisionOf(region, elementsNow()));
         const old = retryTimers.get(groupId);

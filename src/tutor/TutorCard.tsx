@@ -16,6 +16,8 @@ import "../styles/tutor.css";
 const CARD_W = 300;
 const GAP = 8;
 const MARGIN = 8;
+/** A group missing from the view this long after opening (erased, re-grouped) closes the card. */
+export const MISSING_GRACE_MS = 600;
 
 function Latex({ latex }: { latex: string }) {
   const html = useMemo(() => renderLatex(latex).html, [latex]);
@@ -34,6 +36,7 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
   const [height, setHeight] = useState(0);
   const open = card !== null && view.pageId === card.pageId;
   const g = open ? groupState(view, card.groupId) : null;
+  const bounds = g?.bounds ?? card?.anchor;
   const rec = g?.recognition;
 
   // Esc or a press outside closes the card; that press does nothing else on the canvas.
@@ -56,10 +59,27 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
     };
   }, [open, ui]);
 
-  // The page changed under the card, or its group is gone: close it.
+  // The page changed under the card, or its group is gone (after a short grace: a gesture's dot
+  // being removed re-groups the ink for a moment): close it.
+  const missing = !g?.bounds;
   useEffect(() => {
-    if (card && (view.pageId !== card.pageId || !g?.bounds)) ui().closeCard();
-  }, [card, view.pageId, g?.bounds, ui]);
+    if (!card) return;
+    if (view.pageId !== card.pageId) {
+      ui().closeCard();
+      return;
+    }
+    if (!missing) return;
+    const left = card.openedAt + MISSING_GRACE_MS - Date.now();
+    if (left <= 0) {
+      ui().closeCard();
+      return;
+    }
+    const t = setTimeout(() => {
+      const c = ui().card;
+      if (c?.seq === card.seq && !groupState(useTutorViews.getState().views[pane], c.groupId).bounds) ui().closeCard();
+    }, left);
+    return () => clearTimeout(t);
+  }, [card, view.pageId, missing, ui, pane]);
 
   // Focus moves into the card when it opens and returns where it was when it closes.
   const seq = card?.seq;
@@ -88,8 +108,8 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
     if (ref.current) setHeight(ref.current.offsetHeight);
   }, [card, rec, unchecked, inFlight]);
 
-  if (!open || !card || !g?.bounds) return null;
-  const b = g.bounds;
+  if (!open || !card || !g || !bounds) return null;
+  const b = bounds;
 
   // Below the group, left-aligned with it; above when there is no room; always inside the pane.
   const below = worldToScreen(camera, { x: b.x, y: b.y + b.height });

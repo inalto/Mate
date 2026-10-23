@@ -462,10 +462,16 @@ export interface TutorGestureDeps {
   markerAt(p: Vec2, slopPx?: number): string | null;
   /** Some ink (any element) lies within a few px of world point `p`. */
   inkAt(p: Vec2): boolean;
-  /** The stroke group whose ink is under world point `p`. */
-  groupAt(p: Vec2): string | null;
+  /**
+   * The id of a grouped ink element under world point `p`, ignoring `exclude` (dots this gesture
+   * left on the page), or null when there is no grouped ink there.
+   */
+  inkUnder(p: Vec2, exclude: ReadonlySet<string>): string | null;
+  /** Two ink elements belong to the same current stroke group (or are the same element). */
+  sameGroup(a: string, b: string): boolean;
   openCard(groupId: string): void;
-  openAsk(groupId: string): void;
+  /** Open Ask for the group of ink element `elementId`, first removing `dots` (one undo entry). */
+  openAsk(elementId: string, dots: string[]): void;
   getSettings(): Settings;
   now?(): number;
   setTimer?(fn: () => void, ms: number): unknown;
@@ -475,26 +481,38 @@ export interface TutorGestureDeps {
 /** What to do with the pen contact that just ended. */
 export type TutorUp = "commit" | "discard";
 
+/** The first tap of a possible double-tap. */
+interface InkTap {
+  /** The ink element under the tap (not counting gesture dots). */
+  under: string;
+  t: number;
+  x: number;
+  y: number;
+  /** The dot the tap left on the page, once committed. */
+  dot: string | null;
+}
+
 /**
  * Tutor gestures. Ink always wins: every pen contact is committed at once like any stroke, except
  * - a quick tap on blank paper inside a marker's own area (tick, ring, dash, squiggle; no slop),
  *   which opens that group's card instead of leaving a dot;
- * - the second tap of a double-tap on a group's ink (`tutorDoubleTapAsk`): Ask opens and that
- *   second dot is not drawn (the first tap's dot stays; it was committed normally);
+ * - the second tap of a double-tap on a group's ink (`tutorDoubleTapAsk`): Ask opens, the second
+ *   dot is not drawn and the first tap's dot is removed again (one undo entry), so the group keeps
+ *   its original ink. Taps match by the ink under them (same element or same group), not by group
+ *   id, since the first dot itself changes the group's membership for a moment;
  * - a pen held still on ink (`tutorHoldToAsk`) for 600 ms before drawing anything: the contact is
  *   cancelled (no ink yet, nothing existing is touched) and Ask opens.
  * A contact that moves is always a normal stroke. Select tools open a marker's card on pointer-up
- * when the pointer did not move; a drag that starts on a marker is a normal selection gesture.
- * Nothing runs for pointers the input adapter rejected (palm, finger when off).
+ * when the pointer did not move (over ink only the marker's own area counts); a drag that starts
+ * on a marker is a normal selection gesture. Nothing runs for pointers the input adapter rejected.
  */
 export function createTutorGestures(deps: TutorGestureDeps) {
   const now = deps.now ?? (() => performance.now());
   const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
   /** The pen contact in progress. */
-  let cur: { t: number; screen: Vec2; group: string | null; marker: string | null; moved: boolean } | null = null;
-  /** The last committed tap on a group's ink (first half of a double-tap). */
-  let lastTap: Tap | null = null;
+  let cur: { t: number; screen: Vec2; under: string | null; marker: string | null; moved: boolean } | null = null;
+  let lastTap: InkTap | null = null;
   /** A select-tool press on a marker, decided on pointer-up. */
   let sel: { marker: string; screen: Vec2; moved: boolean } | null = null;
   let holdTimer: unknown;
@@ -504,12 +522,13 @@ export function createTutorGestures(deps: TutorGestureDeps) {
     holdTimer = undefined;
   };
   const far = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y) > HOLD_SLOP_PX;
+  const gestureDots = (): ReadonlySet<string> => new Set(lastTap?.dot ? [lastTap.dot] : []);
 
   return {
     /** Select tools, pointer-down: true when it is on a marker (wait for up or a move). */
     selectDown(p: Vec2, screen: Vec2): boolean {
       sel = null;
-      const marker = deps.active() ? deps.markerAt(p) : null;
+      const marker = !deps.active() ? null : deps.inkAt(p) ? deps.markerAt(p, 0) : deps.markerAt(p);
       if (marker) sel = { marker, screen, moved: false };
       return !!marker;
     },
@@ -537,17 +556,17 @@ export function createTutorGestures(deps: TutorGestureDeps) {
       cur = null;
       if (!deps.active()) return;
       const cfg = deps.getSettings();
-      const group = cfg.tutorDoubleTapAsk || cfg.tutorHoldToAsk ? deps.groupAt(p) : null;
+      const under = cfg.tutorDoubleTapAsk || cfg.tutorHoldToAsk ? deps.inkUnder(p, gestureDots()) : null;
       const marker = deps.inkAt(p) ? null : deps.markerAt(p, 0);
-      cur = { t: now(), screen, group, marker, moved: false };
-      if (group && cfg.tutorHoldToAsk) {
+      cur = { t: now(), screen, under, marker, moved: false };
+      if (under && cfg.tutorHoldToAsk) {
         holdTimer = setTimer(() => {
           holdTimer = undefined;
-          if (!cur || cur.moved || cur.group !== group) return;
+          if (!cur || cur.moved || cur.under !== under) return;
           cur = null;
           lastTap = null;
           onHold();
-          deps.openAsk(group);
+          deps.openAsk(under, []);
         }, HOLD_ASK_MS);
       }
     },
@@ -558,8 +577,11 @@ export function createTutorGestures(deps: TutorGestureDeps) {
       stopHold();
     },
 
-    /** Pen up: commit the stroke, or drop it (a marker tap or the second tap of a double-tap). */
-    inkUp(): TutorUp {
+    /**
+     * Pen up: commit the stroke, or drop it (a marker tap or the second tap of a double-tap).
+     * `strokeId` is the id the stroke gets when committed (remembered for a first tap's dot).
+     */
+    inkUp(strokeId?: string): TutorUp {
       stopHold();
       const c = cur;
       cur = null;
@@ -574,14 +596,15 @@ export function createTutorGestures(deps: TutorGestureDeps) {
         deps.openCard(c.marker);
         return "discard";
       }
-      if (c.group && deps.getSettings().tutorDoubleTapAsk) {
-        const t: Tap = { id: c.group, t: c.t, x: c.screen.x, y: c.screen.y };
-        if (isDoubleTap(lastTap, t)) {
+      if (c.under && deps.getSettings().tutorDoubleTapAsk) {
+        const first = lastTap;
+        const second = { id: "tap", t: c.t, x: c.screen.x, y: c.screen.y };
+        if (first && isDoubleTap({ id: "tap", t: first.t, x: first.x, y: first.y }, second) && deps.sameGroup(first.under, c.under)) {
           lastTap = null;
-          deps.openAsk(c.group);
+          deps.openAsk(c.under, first.dot ? [first.dot] : []);
           return "discard";
         }
-        lastTap = t;
+        lastTap = { under: c.under, t: c.t, x: c.screen.x, y: c.screen.y, dot: strokeId ?? null };
         return "commit";
       }
       lastTap = null;

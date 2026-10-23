@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
-import { createTutorGestures, DOUBLE_TAP_MS, HOLD_ASK_MS, hitHandle, pointerTool, scaleFromDrag, type TutorGestureDeps } from "../toolInteractions";
+import { createTutorGestures, HOLD_ASK_MS, hitHandle, pointerTool, scaleFromDrag, type TutorGestureDeps } from "../toolInteractions";
 
 const b = { x: 0, y: 0, width: 100, height: 50 };
 const info = { pointerType: "pen", buttons: 1, isBarrel: false, isEraserEnd: false };
@@ -36,7 +36,8 @@ function gestures(over: Partial<TutorGestureDeps> = {}) {
     active: () => true,
     markerAt: vi.fn(() => null),
     inkAt: vi.fn(() => true),
-    groupAt: vi.fn(() => "g"),
+    inkUnder: vi.fn(() => "e"),
+    sameGroup: vi.fn((a: string, b: string) => a === b),
     openCard: vi.fn(),
     openAsk: vi.fn(),
     getSettings: () => DEFAULT_SETTINGS,
@@ -89,11 +90,11 @@ describe("tutor gestures", () => {
     expect(g.selectDown(at, at)).toBe(false);
     expect(deps.openCard).not.toHaveBeenCalled();
     expect(deps.openAsk).not.toHaveBeenCalled();
-    expect(deps.groupAt).not.toHaveBeenCalled();
+    expect(deps.inkUnder).not.toHaveBeenCalled();
   });
 
   it("pen_tap_on_a_marker_blank_area_opens_the_card", () => {
-    const { deps, tap, g } = gestures({ markerAt: vi.fn(() => "m"), inkAt: vi.fn(() => false), groupAt: vi.fn(() => null) });
+    const { deps, tap, g } = gestures({ markerAt: vi.fn(() => "m"), inkAt: vi.fn(() => false), inkUnder: vi.fn(() => null) });
     expect(tap(at)).toBe("discard");
     expect(deps.openCard).toHaveBeenCalledWith("m");
     // The pen uses the marker's own area only (no slop).
@@ -107,7 +108,7 @@ describe("tutor gestures", () => {
   });
 
   it("pen_dot_on_marker_area_over_ink_is_kept", () => {
-    const { deps, tap } = gestures({ markerAt: vi.fn(() => "m"), inkAt: vi.fn(() => true), groupAt: vi.fn(() => null) });
+    const { deps, tap } = gestures({ markerAt: vi.fn(() => "m"), inkAt: vi.fn(() => true), inkUnder: vi.fn(() => null) });
     expect(tap(at)).toBe("commit");
     expect(deps.openCard).not.toHaveBeenCalled();
   });
@@ -127,25 +128,7 @@ describe("tutor gestures", () => {
     expect(gestures().g.selectDown(at, at)).toBe(false);
   });
 
-  it("double_tap_on_ink_opens_ask_and_drops_only_the_second_dot", () => {
-    const { deps, advance, tap } = gestures();
-    expect(tap(at)).toBe("commit"); // the first dot is ink right away
-    advance(150);
-    expect(tap({ x: 12, y: 11 })).toBe("discard");
-    expect(deps.openAsk).toHaveBeenCalledWith("g");
-    // Too slow, too far or off: both taps are ink.
-    const slow = gestures();
-    slow.tap(at);
-    slow.advance(DOUBLE_TAP_MS + 1);
-    expect(slow.tap(at)).toBe("commit");
-    const off = gestures({ getSettings: () => ({ ...DEFAULT_SETTINGS, tutorDoubleTapAsk: false }) });
-    off.tap(at);
-    expect(off.tap(at)).toBe("commit");
-    expect(slow.deps.openAsk).not.toHaveBeenCalled();
-    expect(off.deps.openAsk).not.toHaveBeenCalled();
-  });
-
-  it("tap_then_stroke_on_same_group_keeps_both", () => {
+  it("tap_then_stroke_keeps_both_unit", () => {
     const { g, deps, advance, tap } = gestures();
     expect(tap(at)).toBe("commit");
     advance(100);
@@ -166,7 +149,7 @@ describe("tutor gestures", () => {
     advance(1);
     // The contact (no ink yet) is cancelled; existing strokes are untouched.
     expect(abort).toHaveBeenCalledTimes(1);
-    expect(deps.openAsk).toHaveBeenCalledWith("g");
+    expect(deps.openAsk).toHaveBeenCalledWith("e", []);
     expect(g.inkUp()).toBe("commit"); // nothing pending; caller has no stroke left
 
     const m = gestures();
@@ -184,9 +167,19 @@ describe("tutor gestures", () => {
     const abort3 = vi.fn();
     off.g.inkDown(at, at, abort3);
     off.advance(HOLD_ASK_MS * 2);
-    const blank = gestures({ groupAt: vi.fn(() => null) });
+    const blank = gestures({ inkUnder: vi.fn(() => null) });
     blank.g.inkDown(at, at, abort3);
     blank.advance(HOLD_ASK_MS * 2);
     expect(abort3).not.toHaveBeenCalled();
+  });
+
+  it("select_tap_on_ink_inside_marker_area_selects_the_ink", () => {
+    // The marker's slop area covers the ink, its own tight area does not.
+    const markerAt = vi.fn((_p: { x: number; y: number }, slop?: number) => (slop === 0 ? null : "m"));
+    const overInk = gestures({ markerAt, inkAt: vi.fn(() => true) });
+    expect(overInk.g.selectDown(at, at)).toBe(false); // ink wins: the select tool selects it
+    expect(markerAt).toHaveBeenCalledWith(at, 0);
+    const blank = gestures({ markerAt, inkAt: vi.fn(() => false) });
+    expect(blank.g.selectDown(at, at)).toBe(true);
   });
 });

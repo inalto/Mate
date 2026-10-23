@@ -23,10 +23,11 @@ import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
-import { createToolController, createTutorGestures, hitTest, pointerTool } from "./toolInteractions";
-import { consumeDismissDown, groupOfElement, paneOfStore, useTutorUi } from "../stores/tutor";
-import { tutorActive, useAiStatus } from "../tutor/aiStatus";
-import { drawTutorMarkers, hitTutorMarker, tutorMarkers } from "../tutor/overlay";
+import { createToolController, pointerTool } from "./toolInteractions";
+import { createTutorInk } from "./tutorInk";
+import { consumeDismissDown, paneOfStore } from "../stores/tutor";
+import { useAiStatus } from "../tutor/aiStatus";
+import { drawTutorMarkers } from "../tutor/overlay";
 import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
 
@@ -77,7 +78,7 @@ function createEngine(
   // Pointer interaction state.
   let mode: "none" | "draw" | "pan" | "tool" | "marker" = "none";
   /** Select-tool press on a tutor marker: where and with which tool (decided on up or move). */
-  let markerPress: { p: Point; tool: "cursor" | "lasso" } | null = null;
+  let markerPress: { p: Point; tool: "cursor" | "lasso"; points: Point[] } | null = null;
   let builder: StrokeBuilder | null = null;
   let liveEl: Element | null = null;
   /** Ink to shape for the stroke in progress, and the shape it snapped to (shown instead of it). */
@@ -182,32 +183,7 @@ function createEngine(
 
   // Tutor: markers from this pane's tutor view, and the gestures that open the card or Ask.
   const pane = paneOfStore(store);
-  const tutorView = () => {
-    const v = useTutorViews.getState().views[pane];
-    return v.pageId === pageId ? v : null;
-  };
-  const tutorOn = () => tutorActive(getSettings(), useAiStatus.getState().configured);
-  const markersNow = () => {
-    const v = tutorView();
-    return v && tutorOn() ? tutorMarkers(v, getSettings()) : [];
-  };
-  const tutor = createTutorGestures({
-    active: tutorOn,
-    markerAt: (p, slopPx) => hitTutorMarker(markersNow(), p, st().camera.z, slopPx)?.groupId ?? null,
-    inkAt: (p) => {
-      const s = st();
-      return hitTest(store.spatialIndex(), s.elements, p, 6 / s.camera.z) !== null;
-    },
-    groupAt: (p) => {
-      const v = tutorView();
-      const s = st();
-      const id = v ? hitTest(store.spatialIndex(), s.elements, p, 4 / s.camera.z) : null;
-      return v && id ? groupOfElement(v, id) : null;
-    },
-    openCard: (id) => useTutorUi.getState().openCard(pane, id),
-    openAsk: (id) => useTutorUi.getState().openCard(pane, id, { ask: true }),
-    getSettings,
-  });
+  const { gestures: tutor, markers: markersNow } = createTutorInk({ store, pageId, pane, getSettings });
 
   const tools = createToolController({
     store,
@@ -305,7 +281,7 @@ function createEngine(
           // A press on a tutor marker: a tap opens its card (on up), a drag selects as usual.
           if ((tool === "cursor" || tool === "lasso") && tutor.selectDown(p, worldToScreen(s.camera, p))) {
             mode = "marker";
-            markerPress = { p, tool };
+            markerPress = { p, tool, points: [] };
             return;
           }
           mode = tool === "none" ? "none" : "tool";
@@ -362,11 +338,13 @@ function createEngine(
           if (!snapShape) setLive(builder.preview(predicted));
         } else if (mode === "tool") tools.move(points);
         else if (mode === "marker" && markerPress && points.length > 0) {
+          markerPress.points.push(...points);
           if (tutor.selectMove(worldToScreen(st().camera, points[points.length - 1]))) {
-            // Dragged off the marker: a normal selection gesture from where it started.
+            // Dragged off the marker: a normal selection gesture from where it started, replaying
+            // every point since the press (the lasso keeps its full outline).
             mode = "tool";
             tools.down(markerPress.p, markerPress.tool);
-            tools.move(points);
+            tools.move(markerPress.points);
           }
         }
       },
@@ -379,7 +357,7 @@ function createEngine(
           const stroke = pts.length > 0 ? strokeElement(pts, { pageId, preset: st().preset }) : null;
           // Committed at once, except a tap on a marker's blank area (opens its card) or the second
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
-          const t = tutorStroke && !shape ? tutor.inkUp() : "commit";
+          const t = tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
           if (stroke && t === "commit") {
             if (shape) {
               const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());

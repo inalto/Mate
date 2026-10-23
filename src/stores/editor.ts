@@ -125,7 +125,8 @@ export interface EditorState {
   bindEditSession(commit: () => void): () => void;
   /** Box-wide text formatting for the selected text boxes (replaces matching inline styles). */
   restyleTextBox(patch: Partial<TextAttributes>): void;
-  removeElements(ids: string[]): void;
+  /** Delete elements as one undo entry (`label` defaults to "Delete"). */
+  removeElements(ids: string[], label?: string): void;
   /**
    * Add ready-made elements (already carrying this page's id) as ONE history entry `label`;
    * refused (false, `limitReached` set) when the page would pass the element limit.
@@ -556,9 +557,9 @@ export function createEditorStore(): EditorStore {
       record("Style", actions);
     },
 
-    removeElements(ids) {
+    removeElements(ids, label = "Delete") {
       const cur = get().elements;
-      record("Delete", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+      record(label, ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
     addElements(label, els) {

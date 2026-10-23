@@ -21,8 +21,11 @@ export interface GroupManagerDeps {
 }
 
 export interface GroupManager {
-  /** Latest segmentation; new or re-membered regions become dirty (`clean: true` seeds them clean). */
-  setRegions(regions: Region[], opts?: { clean?: boolean }): void;
+  /**
+   * Latest segmentation; new or re-membered regions become dirty. `clean: true` seeds them all
+   * clean; a set seeds only those ids clean (e.g. a group back to a membership already checked).
+   */
+  setRegions(regions: Region[], opts?: { clean?: boolean | ReadonlySet<string> }): void;
   notePenDown(): void;
   notePenUp(): void;
   /** A committed stroke: dirties its region once segmentation has placed it. */
@@ -182,8 +185,9 @@ export function createGroupManager(deps: GroupManagerDeps): GroupManager {
         if (old) {
           next.set(region.regionId, { ...old, region });
         } else {
-          next.set(region.regionId, { region, dirty: !opts?.clean, dirtiedAt: deps.now() });
-          if (!opts?.clean) changed.add(region.regionId);
+          const clean = opts?.clean === true || (opts?.clean instanceof Set && opts.clean.has(region.regionId));
+          next.set(region.regionId, { region, dirty: !clean, dirtiedAt: deps.now() });
+          if (!clean) changed.add(region.regionId);
         }
       }
       const dropped = [...entries.keys()].filter((id) => !next.has(id));
