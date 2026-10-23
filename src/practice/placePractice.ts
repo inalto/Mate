@@ -1,7 +1,7 @@
 // Puts generated practice questions on new notebook pages: one text box per question (the
 // question, then its LaTeX), stacked top to bottom with room for a handwritten answer below each.
 // A hidden `content.practice` carries the expected answer for the tutor.
-import { PAGE_MODE_SIDE_MARGIN, PAGE_MODE_TOP_MARGIN, PAGE_WIDTH, LIMITS } from "../model/constants";
+import { PAGE_HEIGHT, PAGE_MODE_SIDE_MARGIN, PAGE_MODE_TOP_MARGIN, PAGE_WIDTH, LIMITS } from "../model/constants";
 import type { TextBoxContent } from "../model/content";
 import { showToast } from "../components/Toast";
 import { esc } from "../export/svgUtil";
@@ -66,19 +66,31 @@ export function practiceBox(pageId: string, q: PracticeQuestion, n: number, y: n
   };
 }
 
-/** Element lists, one per page, for `questions` stacked top to bottom (`perPage` boxes at most). */
-export function layoutPractice(pageIds: () => string, questions: PracticeQuestion[], perPage: number, now: string): { pageId: string; els: Element[] }[] {
+/**
+ * Element lists, one per page, for `questions` stacked top to bottom. A new page starts when the
+ * next question and its answer room would cross `pageHeight` minus the bottom margin, or after
+ * `perPage` boxes (an optional override).
+ */
+export function layoutPractice(
+  newPageId: () => string,
+  questions: PracticeQuestion[],
+  opts: { perPage?: number; pageHeight?: number; now: string },
+): { pageId: string; els: Element[] }[] {
+  const perPage = Math.max(1, opts.perPage ?? LIMITS.MAX_ELEMENTS_PER_PAGE);
+  const limit = (opts.pageHeight ?? PAGE_HEIGHT) - PAGE_MODE_TOP_MARGIN;
   const pages: { pageId: string; els: Element[] }[] = [];
   let y = PAGE_MODE_TOP_MARGIN;
   questions.forEach((q, i) => {
-    if (i % perPage === 0) {
-      pages.push({ pageId: pageIds(), els: [] });
+    const probe = practiceBox("", q, i + 1, y, opts.now);
+    const need = (probe.boxHeight ?? 0) + ANSWER_ROOM;
+    const cur = pages[pages.length - 1];
+    if (!cur || cur.els.length >= perPage || (cur.els.length > 0 && y + need > limit)) {
+      pages.push({ pageId: newPageId(), els: [] });
       y = PAGE_MODE_TOP_MARGIN;
     }
     const page = pages[pages.length - 1];
-    const box = practiceBox(page.pageId, q, i + 1, y, now);
-    page.els.push(box);
-    y += (box.boxHeight ?? 0) + ANSWER_ROOM + QUESTION_GAP;
+    page.els.push({ ...probe, pageId: page.pageId, points: [{ ...probe.points[0], y }] });
+    y += need + QUESTION_GAP;
   });
   return pages;
 }
@@ -90,8 +102,10 @@ export interface PlaceResult {
 
 export interface PlaceOptions {
   sectionId: string;
-  /** Boxes per page; defaults to the page element limit (and is never above it). */
+  /** Optional cap on boxes per page; pages otherwise fill by height. Never above the element limit. */
   perPage?: number;
+  /** Height of the new pages; defaults to the standard page height. */
+  pageHeight?: number;
   now?: Date;
   /** When this editor has the new page loaded the boxes go in through it as ONE history entry. */
   editor?: EditorStore;
@@ -99,10 +113,11 @@ export interface PlaceOptions {
 
 /**
  * Creates "Practice — <date>" in `sectionId` and puts the questions on it. At most 20 questions
- * are placed (extras are dropped with a toast). One box per question means a page never nears the
- * 5000 element limit, but should `perPage` be smaller the rest continue on further pages,
- * "Practice — <date> (2)" and so on, never past the limit. All boxes of a page are added in one
- * batch: one undo entry when an editor holds the page, otherwise one persisted write.
+ * are placed (extras are dropped with a toast). Pages fill by height: when the next question and
+ * its answer room would pass the page bottom, it continues on "Practice — <date> (2)" and so on
+ * (never past the 5000 element limit). All boxes of a page are added in one batch: one undo entry
+ * when an editor holds the page, otherwise one persisted write. If anything fails, the pages
+ * created so far are moved to the trash before the error is rethrown.
  */
 export async function placePractice(questions: PracticeQuestion[], opts: PlaceOptions): Promise<PlaceResult> {
   let qs = questions;
@@ -115,22 +130,32 @@ export async function placePractice(questions: PracticeQuestion[], opts: PlaceOp
   const nowD = opts.now ?? new Date();
   const now = nowD.toISOString();
   const title = practicePageTitle(nowD);
-  const { createPage } = useNotebookStore.getState();
+  const { createPage, trash } = useNotebookStore.getState();
 
-  const chunks = Math.ceil(qs.length / perPage);
-  const pages: Page[] = [];
-  for (let i = 0; i < chunks; i++) {
-    pages.push(await createPage(opts.sectionId, i === 0 ? title : `${title} (${i + 1})`));
-  }
-  let next = 0;
-  const laid = layoutPractice(() => pages[next++].id, qs, perPage, now);
-  for (const { pageId, els } of laid) {
-    const ed = opts.editor;
-    if (ed && ed.getState().loadedPageId === pageId) {
-      if (!ed.getState().addElements("Practice questions", els)) throw new Error("This page is full.");
-    } else {
-      await upsertElements(els);
+  const plan = layoutPractice(() => "pending", qs, { perPage, pageHeight: opts.pageHeight, now });
+  const created: Page[] = [];
+  try {
+    for (let i = 0; i < plan.length; i++) {
+      const page = await createPage(opts.sectionId, i === 0 ? title : `${title} (${i + 1})`);
+      created.push(page);
+      for (const el of plan[i].els) el.pageId = page.id;
+      const ed = opts.editor;
+      if (ed && ed.getState().loadedPageId === page.id) {
+        if (!ed.getState().addElements("Practice questions", plan[i].els)) throw new Error("This page is full.");
+      } else {
+        await upsertElements(plan[i].els);
+      }
     }
+  } catch (err) {
+    // Leave no empty "Practice" pages behind.
+    for (const p of created) {
+      try {
+        await trash("page", p.id);
+      } catch {
+        /* best effort */
+      }
+    }
+    throw err;
   }
-  return { pageIds: pages.map((p) => p.id), placed: qs.length };
+  return { pageIds: created.map((p) => p.id), placed: qs.length };
 }

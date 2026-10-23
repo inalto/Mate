@@ -168,6 +168,7 @@ pub fn generate_questions(
     let count = count.clamp(1, MAX_QUESTIONS);
     let reply = provider.complete(&build_practice_request(book_text, count, types, custom_prompt))?;
     let mut qs = parse_questions(&reply)?;
+    // A model may write more than asked; extra questions are silently dropped.
     qs.truncate(count);
     Ok(qs)
 }

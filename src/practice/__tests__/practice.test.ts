@@ -13,7 +13,7 @@ vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ipc);
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
 
-import { LIMITS } from "../../model/constants";
+import { LIMITS, PAGE_HEIGHT } from "../../model/constants";
 import { contentOf, type TextBoxContent } from "../../model/content";
 import { useToastStore } from "../../components/Toast";
 import type { PracticeQuestion } from "../../ipc/practice";
@@ -47,11 +47,13 @@ const createPage = vi.fn(async (sectionId: string, title: string): Promise<Page>
   version: 0,
 }));
 
+const trash = vi.fn(async (_k: string, _id: string) => {});
+
 beforeEach(() => {
   vi.clearAllMocks();
   createPage.mockClear();
   useToastStore.getState().dismiss();
-  useNotebookStore.setState({ createPage } as never);
+  useNotebookStore.setState({ createPage, trash } as never);
 });
 
 describe("practice placement", () => {
@@ -62,10 +64,10 @@ describe("practice placement", () => {
     useNotebookStore.setState({ loaded: true, tree: { bookshelves: [], units: [], sections: [], pages: [] } });
     await s().loadPage("pg-1");
     const before = s().elements.size;
-    const result = await placePractice(questions(5), { sectionId: "sec", editor: store, now: new Date(2026, 9, 23) });
+    const result = await placePractice(questions(3), { sectionId: "sec", editor: store, now: new Date(2026, 9, 23) });
     expect(result.pageIds).toEqual(["pg-1"]);
-    expect(s().elements.size).toBe(before + 5);
-    expect(queue.enqueueUpsert).toHaveBeenCalledTimes(5);
+    expect(s().elements.size).toBe(before + 3);
+    expect(queue.enqueueUpsert).toHaveBeenCalledTimes(3);
     expect(ipc.upsertElements).not.toHaveBeenCalled();
     // one undo removes every box, one redo brings them all back
     expect(s().canUndo).toBe(true);
@@ -73,7 +75,7 @@ describe("practice placement", () => {
     expect(s().elements.size).toBe(0);
     expect(s().canUndo).toBe(false);
     s().redo();
-    expect(s().elements.size).toBe(5);
+    expect(s().elements.size).toBe(3);
     expect(createPage.mock.calls[0][1]).toBe("Practice — 2026-10-23");
     expect(practicePageTitle(new Date(2026, 0, 5))).toBe("Practice — 2026-01-05");
   });
@@ -82,9 +84,8 @@ describe("practice placement", () => {
     const r = await placePractice(questions(25), { sectionId: "sec" });
     expect(r.placed).toBe(20);
     expect(useToastStore.getState().message).toMatch(/up to 20 questions/);
-    expect(createPage).toHaveBeenCalledTimes(1);
+    expect(ipc.upsertElements.mock.calls.flat(2)).toHaveLength(20);
     const els = ipc.upsertElements.mock.calls[0][0];
-    expect(els).toHaveLength(20);
     expect(els.length).toBeLessThanOrEqual(LIMITS.MAX_ELEMENTS_PER_PAGE);
     // stacked top to bottom with room for an answer beneath each
     const ys = els.map((e) => e.points[0].y);
@@ -132,5 +133,30 @@ describe("practice context", () => {
     expect(findPracticeContext({ x: 5000, y: 700, width: 50, height: 20 }, els)).toBeNull();
     expect(findPracticeContext(under(a, 30), [])).toBeNull();
     expect(findPracticeContext(under(a, 30), els.map((e) => ({ ...e, content: {} })))).toBeNull();
+  });
+});
+
+describe("practice pagination and cleanup", () => {
+  it("practice_paginates_by_page_height", async () => {
+    const r = await placePractice(questions(20), { sectionId: "sec" });
+    expect(r.pageIds.length).toBeGreaterThanOrEqual(5);
+    expect(r.placed).toBe(20);
+    const calls = ipc.upsertElements.mock.calls.map((c) => c[0]);
+    expect(calls.flat()).toHaveLength(20);
+    for (const els of calls) {
+      for (const e of els) expect(e.points[0].y + (e.boxHeight ?? 0)).toBeLessThanOrEqual(PAGE_HEIGHT);
+    }
+    expect(createPage.mock.calls[1][1]).toMatch(/\(2\)$/);
+    // a taller page holds more per page
+    ipc.upsertElements.mockClear();
+    const tall = await placePractice(questions(20), { sectionId: "sec", pageHeight: PAGE_HEIGHT * 3 });
+    expect(tall.pageIds.length).toBeLessThan(r.pageIds.length);
+  });
+
+  it("practice_cleans_up_pages_on_failure", async () => {
+    ipc.upsertElements.mockResolvedValueOnce().mockRejectedValueOnce(new Error("disk full"));
+    await expect(placePractice(questions(20), { sectionId: "sec" })).rejects.toThrow("disk full");
+    expect(createPage).toHaveBeenCalledTimes(2);
+    expect(trash.mock.calls).toEqual([["page", "pg-1"], ["page", "pg-2"]]);
   });
 });
