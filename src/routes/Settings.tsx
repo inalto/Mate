@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import AiSettings from "../components/AiSettings";
 import type { BackgroundType, PageMode, ShapeType, Theme } from "../model/types";
 import { SHAPE_LABEL, SHAPE_TYPES } from "../shapes/catalog";
 import { useSettingsStore } from "../stores/settings";
@@ -262,6 +263,11 @@ export default function Settings() {
         <Field label="Erase images" htmlFor="set-erase-images">
           <input id="set-erase-images" type="checkbox" checked={settings.eraserEraseImages} onChange={(e) => void update({ eraserEraseImages: e.target.checked })} />
         </Field>
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section-title">Intelligence</h2>
+        <AiSettings />
       </section>
 
       <section className="settings-group">

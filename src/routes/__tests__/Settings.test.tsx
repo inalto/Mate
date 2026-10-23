@@ -3,6 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/ai", () => ({
+  getAiStatus: vi.fn(async () => ({ configured: false, provider: "anthropic", model: "claude-opus-5-5", consent: false })),
+  setAiKey: vi.fn(),
+  clearAiKey: vi.fn(),
+  testAiKey: vi.fn(),
+}));
 
 import { useSettingsStore } from "../../stores/settings";
 import Settings from "../Settings";
@@ -79,5 +85,17 @@ describe("Settings tool defaults", () => {
     expect(cfg().eraserEraseShapes).toBe(!DEFAULT_SETTINGS.eraserEraseShapes);
     fireEvent.click(screen.getByLabelText("Erase images"));
     expect(cfg().eraserEraseImages).toBe(!DEFAULT_SETTINGS.eraserEraseImages);
+  });
+});
+
+describe("Settings intelligence section", () => {
+  beforeEach(() => useSettingsStore.setState({ settings: DEFAULT_SETTINGS, loaded: true }));
+  afterEach(cleanup);
+
+  it("shows the AI settings, off by default", async () => {
+    render(<Settings />);
+    expect(screen.getByRole("heading", { name: "Intelligence" })).toBeTruthy();
+    expect((screen.getByLabelText(/Nothing is sent until you turn this on/) as HTMLInputElement).checked).toBe(false);
+    expect(await screen.findByText("No key")).toBeTruthy();
   });
 });

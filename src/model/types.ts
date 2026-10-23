@@ -168,6 +168,16 @@ export interface PenPreset {
   sharpness?: number;
 }
 
+export type AiProvider = "anthropic" | "openai";
+
+/** What the UI may know about the AI setup (the key itself never leaves Rust). */
+export interface AiStatus {
+  configured: boolean;
+  provider: AiProvider;
+  model: string;
+  consent: boolean;
+}
+
 export interface Settings {
   settingsVersion: number;
   theme: Theme;
@@ -222,6 +232,9 @@ export interface Settings {
   tutorHoldToAsk: boolean;
   tutorVerdictChangeGate: string;
   aiConsent: boolean | null;
+  aiProvider: AiProvider;
+  /** Empty means the provider's default model (`AI_DEFAULT_MODEL`). */
+  aiModel: string;
   analyticsConsent: boolean;
   trashRetentionDays: number;
   defaultExportFormat: string;
