@@ -86,6 +86,12 @@ impl<'a> ZipSource<'a> {
         Ok(ZipSource { zip, limits: limits.clone(), inflated: 0 })
     }
 
+    /// True if any entry has the encryption flag (general-purpose bit 0) set; reads only the
+    /// central directory, no entry is inflated.
+    pub fn any_encrypted(&mut self) -> bool {
+        (0..self.zip.len()).any(|i| self.zip.by_index_raw(i).is_ok_and(|f| f.encrypted()))
+    }
+
     pub fn limits(&self) -> &ImportLimits {
         &self.limits
     }
@@ -141,6 +147,21 @@ impl<'a> ZipSource<'a> {
         }
         self.inflated += data.len() as u64;
         Ok(Some(data))
+    }
+
+    /// Counts `bytes` a format module produced itself (its own decompression, or a copy of data
+    /// it already holds) against the same `max_unzipped_bytes` budget as [`ZipSource::entry`];
+    /// `Limit` once the total would pass it.
+    pub fn charge(&mut self, bytes: u64) -> Result<(), ImportError> {
+        let total = self.inflated.saturating_add(bytes);
+        if total > self.limits.max_unzipped_bytes {
+            return Err(ImportError::Limit(format!(
+                "it unpacks to more than {}",
+                size_text(self.limits.max_unzipped_bytes)
+            )));
+        }
+        self.inflated = total;
+        Ok(())
     }
 
     /// Up to `n` leading bytes of entry `name` (for sniffing), `None` if absent or unsafe.
@@ -246,6 +267,17 @@ pub(crate) mod tests {
             Err(ImportError::Limit(m)) => assert_eq!(m, "it unpacks to more than 5 bytes"),
             other => panic!("{:?}", other.err()),
         }
+    }
+
+    #[test]
+    fn charge_shares_the_inflated_budget() {
+        let z = make_zip(&[("a", b"0123456789")]);
+        let limits = ImportLimits { max_unzipped_bytes: 25, ..ImportLimits::default() };
+        let mut src = ZipSource::new(&z, &limits).unwrap();
+        src.entry("a").unwrap();
+        src.charge(15).unwrap();
+        assert!(matches!(src.charge(1), Err(ImportError::Limit(_))));
+        assert!(matches!(src.entry("a"), Err(ImportError::Limit(_))));
     }
 
     #[test]
