@@ -135,20 +135,36 @@ pub fn run_reset(
     settings: &Mutex<Settings>,
     wipe: &dyn Fn(&Path) -> io::Result<()>,
 ) -> Result<ResetOutcome, String> {
-    let entries = {
-        let storage = storage.lock().map_err(|e| e.to_string())?;
-        backup_entries(&storage, &data_dir.join("assets")).map_err(|e| e.to_string())?
-    };
+    run_reset_with(data_dir, storage, settings, wipe, &|| {})
+}
+
+/// [`run_reset`] with a hook that runs while the zip is being built (tests use it to probe the
+/// storage lock).
+fn run_reset_with(
+    data_dir: &Path,
+    storage: &Mutex<Storage>,
+    settings: &Mutex<Settings>,
+    wipe: &dyn Fn(&Path) -> io::Result<()>,
+    during_zip: &dyn Fn(),
+) -> Result<ResetOutcome, String> {
+    // The storage lock is held from the snapshot through the swap, so no write can land after the
+    // snapshot and then be deleted without being in the recovery zip.
+    let mut guard = storage.lock().map_err(|e| e.to_string())?;
+    let entries = backup_entries(&guard, &data_dir.join("assets")).map_err(|e| e.to_string())?;
+    during_zip();
     let bytes = zip_backup(&entries).map_err(|e| e.to_string())?;
     let stamp = mate_core::model::now_iso().replace([':', '.'], "-");
     let recovery = data_dir.join(format!("mate-recovery-{stamp}.zip"));
     write_atomically(&recovery, &bytes)?;
-    {
-        // Drop the file connection so the database can be deleted (Windows keeps it locked).
-        let mut storage = storage.lock().map_err(|e| e.to_string())?;
-        *storage = Storage::open_in_memory().map_err(|e| e.to_string())?;
-    }
-    let wipe_error = wipe(data_dir).err().map(|e| e.to_string());
+    // Drop the file connection so the database can be deleted (Windows keeps it locked).
+    *guard = Storage::open_in_memory().map_err(|e| e.to_string())?;
+    drop(guard);
+    // Past the point of no return: a panic here must not skip the restart, so it is treated like
+    // a failed wipe.
+    let wipe_error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        wipe(data_dir).err().map(|e| e.to_string())
+    }))
+    .unwrap_or_else(|_| Some("deleting local data panicked".to_string()));
     if let Ok(mut s) = settings.lock() {
         *s = Settings::default();
     }
@@ -275,5 +291,29 @@ mod tests {
         assert!(!*wiped.lock().unwrap());
         assert_eq!(se.lock().unwrap().theme, "dark");
         assert_eq!(st.lock().unwrap().list_tree().unwrap().units.len(), 1);
+    }
+
+    #[test]
+    fn storage_stays_locked_from_snapshot_to_swap() {
+        let dir = tmp("lock");
+        let (st, se) = fixture(&dir);
+        let probe = || {
+            assert!(
+                matches!(st.try_lock(), Err(std::sync::TryLockError::WouldBlock)),
+                "storage must stay locked while the zip is built"
+            );
+        };
+        run_reset_with(&dir, &st, &se, &wipe_local_data, &probe).unwrap();
+    }
+
+    #[test]
+    fn a_panicking_wiper_is_reported_not_propagated() {
+        let dir = tmp("panic");
+        let (st, se) = fixture(&dir);
+        let boom = |_: &Path| -> io::Result<()> { panic!("boom") };
+        let out = run_reset(&dir, &st, &se, &boom).unwrap();
+        assert_eq!(out.wipe_error.as_deref(), Some("deleting local data panicked"));
+        assert!(dir.join(RESET_MARKER).exists());
+        assert_eq!(se.lock().unwrap().theme, "light");
     }
 }
