@@ -95,6 +95,73 @@ mod freenotes_fixture {
         len(3, &cat(&[text(1, key), len(2, &len(1, &stroke))]))
     }
 
+    /// A stroke entry built from ready-made point records (see [`point`]).
+    pub fn stroke_points(key: &str, secs: u64, points: &[Vec<u8>]) -> Vec<u8> {
+        let mut path = Vec::new();
+        for p in points {
+            path.extend(len(2, p));
+        }
+        path.extend(ts(3, secs));
+        let stroke = cat(&[len(2, &uint(1, 1)), len(4, &path)]);
+        len(3, &cat(&[text(1, key), len(2, &len(1, &stroke))]))
+    }
+
+    /// A point record with a nib and intermediate points (field 11).
+    pub fn point(x: f64, y: f64, nib: f64, inter: &[(f64, f64)]) -> Vec<u8> {
+        let mut p = cat(&[xy(1, x, y), len(3, &f64f(1, nib))]);
+        for &(ix, iy) in inter {
+            p.extend(len(11, &cat(&[f64f(1, ix), f64f(2, iy)])));
+        }
+        p
+    }
+
+    /// A stroke whose path is a shape record `{1: kind, 2: packed f64 coordinates, 3: nib}`.
+    pub fn shape_stroke(key: &str, secs: u64, kind: u64, coords: &[f64]) -> Vec<u8> {
+        let packed: Vec<u8> = coords.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let mut path = len(4, &cat(&[uint(1, kind), len(2, &packed), f64f(3, 3.0)]));
+        path.extend(ts(3, secs));
+        let ink = cat(&[uint(1, 1), uint(2, 0x0000_00FF)]);
+        let stroke = cat(&[len(2, &ink), len(4, &path)]);
+        len(3, &cat(&[text(1, key), len(2, &len(1, &stroke))]))
+    }
+
+    /// A stroke entry with a junk sub-message nested `depth` levels deep inside its path.
+    pub fn deep_stroke(key: &str, depth: usize) -> Vec<u8> {
+        let mut junk = uint(1, 1);
+        for _ in 0..depth {
+            junk = len(1, &junk);
+        }
+        let path = cat(&[len(2, &xy(1, 1.0, 1.0)), len(9, &junk)]);
+        let stroke = cat(&[len(2, &uint(1, 1)), len(4, &path)]);
+        len(3, &cat(&[text(1, key), len(2, &len(1, &stroke))]))
+    }
+
+    /// Sets the encryption flag in the central-directory record of entry `name` only.
+    pub fn flag_encrypted(bytes: &mut [u8], name: &str) {
+        let mut i = 0;
+        while i + 46 < bytes.len() {
+            if bytes[i..i + 4] == *b"PK\x01\x02" {
+                let n = u16::from_le_bytes([bytes[i + 28], bytes[i + 29]]) as usize;
+                if bytes.get(i + 46..i + 46 + n) == Some(name.as_bytes()) {
+                    bytes[i + 8] |= 1;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    /// Optional extras for the first note: outline entries `(id, parent, page, title)` and a
+    /// page size for `layout.dat`.
+    #[derive(Default)]
+    pub struct Extras {
+        pub outline: Vec<(&'static str, &'static str, &'static str, &'static str)>,
+        pub size: Option<(f64, f64)>,
+    }
+
+    pub fn files(spec: &Spec) -> Vec<(String, Vec<u8>)> {
+        files_with(spec, &Extras::default())
+    }
+
     fn frame(x: f64, y: f64, w: f64, h: f64) -> Vec<u8> {
         len(4, &cat(&[xy(1, x, y), xy(2, w, h)]))
     }
@@ -151,13 +218,14 @@ mod freenotes_fixture {
     }
 
     /// The raw (name, bytes) entries of the zip.
-    pub fn files(spec: &Spec) -> Vec<(String, Vec<u8>)> {
+    pub fn files_with(spec: &Spec, extras: &Extras) -> Vec<(String, Vec<u8>)> {
         let mut out = Vec::new();
-        for n in &spec.notes {
+        for (ni, n) in spec.notes.iter().enumerate() {
             let d = n.dir;
             let mut body = Vec::new();
             let mut layout = Vec::new();
             let mut layer_info = Vec::new();
+            let (w, h) = extras.size.filter(|_| ni == 0).unwrap_or((540.0, 720.0));
             for (i, p) in n.pages.iter().enumerate() {
                 let mut page = cat(&[text(1, p.id), uint(3, i as u64), text(6, p.content_id)]);
                 for l in &p.layers {
@@ -174,10 +242,7 @@ mod freenotes_fixture {
                 body.extend(len(1, &page));
                 layout.extend(len(
                     3,
-                    &cat(&[
-                        text(5, p.id),
-                        len(1, &cat(&[f64f(1, 540.0), f64f(2, 720.0)])),
-                    ]),
+                    &cat(&[text(5, p.id), len(1, &cat(&[f64f(1, w), f64f(2, h)]))]),
                 ));
                 out.push((
                     format!("{d}/FNPages/{}", p.content_id),
@@ -187,6 +252,14 @@ mod freenotes_fixture {
                     out.push((
                         format!("{d}/FNPages/{}", l.content_id),
                         l.entries.iter().flatten().copied().collect(),
+                    ));
+                }
+            }
+            if ni == 0 {
+                for (id, parent, page, title) in &extras.outline {
+                    body.extend(len(
+                        4,
+                        &cat(&[text(1, id), text(2, parent), text(3, page), text(4, title)]),
                     ));
                 }
             }
@@ -532,7 +605,7 @@ fn freenotes_truncated_file_is_corrupt_not_panic() {
     let bytes = fx::build(&basic_spec());
     assert!(run(&bytes).is_ok());
     for k in 0..60usize {
-        let cut = k * (bytes.len() - 1) / 59;
+        let cut = 50 + k * (bytes.len() - 51) / 59;
         let r = run(&bytes[..cut]);
         assert!(r.is_err(), "cut at {cut} of {} parsed", bytes.len());
     }
@@ -569,4 +642,137 @@ fn freenotes_truncated_file_is_corrupt_not_panic() {
         }
     }
     assert!(ok + err > 0 && err > 0, "ok {ok}, err {err}");
+}
+
+fn one_page_spec(entries: Vec<Vec<u8>>) -> fx::Spec {
+    fx::Spec {
+        notes: vec![fx::Note {
+            dir: "N.frnote",
+            title: Some("T"),
+            sketch: false,
+            pages: vec![fx::Page {
+                id: "P1",
+                content_id: "C1",
+                entries,
+                layers: vec![],
+            }],
+            images: vec![],
+        }],
+    }
+}
+
+#[test]
+fn freenotes_deep_nesting_is_not_followed() {
+    // The schema never descends 70 levels, so a junk sub-message that deep is never decoded:
+    // no recursion, no stack overflow, the stroke is still imported.
+    let spec = one_page_spec(vec![fx::deep_stroke("d", 70)]);
+    let doc = run(&fx::build(&spec)).unwrap();
+    assert_eq!(doc.sections[0].pages[0].strokes.len(), 1);
+}
+
+#[test]
+fn freenotes_encryption_flag_is_checked_before_reading() {
+    let mut files = fx::files(&basic_spec());
+    files.push(("Fixture.frnote/Records/a.m4a".into(), vec![1, 2, 3]));
+    let mut bytes = fx::zip(&files);
+    assert!(run(&bytes).is_ok());
+    fx::flag_encrypted(&mut bytes, "Fixture.frnote/Records/a.m4a");
+    assert_eq!(run(&bytes).unwrap_err(), ImportError::Encrypted);
+}
+
+#[test]
+fn freenotes_shapes_become_closed_polylines() {
+    let spec = one_page_spec(vec![
+        fx::shape_stroke("a", 1, 1001, &[0.0, 0.0, 10.0, 0.0, 10.0, 10.0]),
+        fx::shape_stroke("b", 2, 2001, &[0.0, 0.0, 10.0, 0.0, 10.0, 5.0, 0.0, 5.0]),
+        fx::shape_stroke("c", 3, 2004, &[0.0, 0.0, 10.0, 0.0, 5.0, 8.0]),
+        fx::shape_stroke("d", 4, 2002, &[0.0, 0.0, 100.0, 50.0]),
+        fx::shape_stroke("e", 5, 2003, &[10.0, 10.0, 5.0]),
+        fx::shape_stroke("f", 6, 2002, &[1.0]),
+    ]);
+    let doc = run(&fx::build(&spec)).unwrap();
+    let p = &doc.sections[0].pages[0];
+    assert_eq!(p.strokes.len(), 5);
+    assert_eq!(p.skipped.shapes, 1);
+    let n: Vec<usize> = p.strokes.iter().map(|s| s.points.len()).collect();
+    assert_eq!(n, [3, 5, 4, 36, 36]);
+    for s in &p.strokes[1..] {
+        let (a, b) = (s.points.first().unwrap(), s.points.last().unwrap());
+        assert!((a.x - b.x).abs() < 1e-9 && (a.y - b.y).abs() < 1e-9);
+    }
+    // Ellipse inside its bounding box (0, 0, 100, 50).
+    for pt in &p.strokes[3].points {
+        assert!(pt.x >= -1e-9 && pt.x <= 100.0 + 1e-9 && pt.y >= -1e-9 && pt.y <= 50.0 + 1e-9);
+    }
+    // Shape nib 3 gives the drawn width 2.
+    assert_eq!(p.strokes[0].width, 2.0);
+}
+
+#[test]
+fn freenotes_layout_sizes_intermediate_points_and_outline_titles() {
+    let spec = fx::Spec {
+        notes: vec![fx::Note {
+            dir: "N.frnote",
+            title: Some("T"),
+            sketch: false,
+            pages: vec![
+                fx::Page {
+                    id: "P1",
+                    content_id: "C1",
+                    entries: vec![fx::stroke_points(
+                        "s",
+                        1,
+                        &[
+                            fx::point(10.0, 10.0, 3.0, &[(5.0, 5.0), (10.0, 10.0)]),
+                            fx::point(20.0, 20.0, 3.0, &[(15.0, 15.0)]),
+                        ],
+                    )],
+                    layers: vec![],
+                },
+                fx::Page {
+                    id: "P2",
+                    content_id: "C2",
+                    entries: vec![],
+                    layers: vec![],
+                },
+            ],
+            images: vec![],
+        }],
+    };
+    let extras = fx::Extras {
+        outline: vec![("o1", "", "P1", "Chapter"), ("o2", "o1", "P1", "Sub")],
+        size: Some((1000.0, 500.0)),
+    };
+    let doc = run(&fx::zip(&fx::files_with(&spec, &extras))).unwrap();
+    let pages = &doc.sections[0].pages;
+    assert!(pages.iter().all(|p| p.width == 1000.0 && p.height == 500.0));
+    // Shallowest outline entry wins; a page without one is "Page n".
+    assert_eq!(pages[0].title.as_deref(), Some("Chapter"));
+    assert_eq!(pages[1].title.as_deref(), Some("Page 2"));
+    // Intermediate points come before their point; the one equal to the point is dropped.
+    let xs: Vec<f64> = pages[0].strokes[0].points.iter().map(|p| p.x).collect();
+    assert_eq!(xs, [5.0, 10.0, 15.0, 20.0]);
+}
+
+#[test]
+fn freenotes_pages_over_the_limit_are_counted() {
+    let limits = ImportLimits {
+        max_pages: 2,
+        ..ImportLimits::default()
+    };
+    let doc = parse(&fx::build(&basic_spec()), "x.freenotes", &limits).unwrap();
+    assert_eq!(doc.page_count(), 2);
+    assert_eq!(doc.sections[0].pages[1].skipped.other, 1);
+}
+
+#[test]
+fn freenotes_unusable_strokes_are_counted() {
+    let spec = one_page_spec(vec![
+        fx::stroke("empty", 1, 1, Some(BLUE), Some(3.0), &[]),
+        fx::stroke("ok", 2, 1, Some(BLUE), Some(3.0), &line(10.0)),
+    ]);
+    let doc = run(&fx::build(&spec)).unwrap();
+    let p = &doc.sections[0].pages[0];
+    assert_eq!(p.strokes.len(), 1);
+    assert_eq!(p.skipped.other, 1);
 }

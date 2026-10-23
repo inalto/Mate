@@ -20,7 +20,32 @@ use super::{
 };
 use crate::model::{PageMode, PenStyle};
 
-type Fields<'a> = Vec<(u32, Wire<'a>)>;
+/// A decoded message: its fields and its nesting depth (0 for a top-level record), so that every
+/// sub-message is read through [`pb::fields_at_depth`] and the nesting limit holds.
+#[derive(Default)]
+struct Fields<'a> {
+    v: Vec<(u32, Wire<'a>)>,
+    depth: u32,
+}
+
+impl<'a> Fields<'a> {
+    fn top(bytes: &'a [u8]) -> Result<Self, ImportError> {
+        Ok(Fields {
+            v: pb::fields(bytes).collect_all()?,
+            depth: 0,
+        })
+    }
+
+    /// The sub-message `bytes` of this message.
+    fn child(&self, bytes: &'a [u8]) -> Result<Fields<'a>, ImportError> {
+        let r = pb::fields_at_depth(bytes, self.depth)?;
+        let depth = r.depth();
+        Ok(Fields {
+            v: r.collect_all()?,
+            depth,
+        })
+    }
+}
 
 const DEFAULT_PAGE: (f64, f64) = (540.0, 720.0);
 /// Spacing table of the paper templates (index 1..=10).
@@ -32,22 +57,21 @@ fn corrupt(msg: &str) -> ImportError {
     ImportError::Corrupt(format!("freenotes: {msg}"))
 }
 
-fn msg(bytes: &[u8]) -> Result<Fields<'_>, ImportError> {
-    pb::fields(bytes).collect_all()
-}
-
 fn first<'a>(f: &Fields<'a>, n: u32) -> Option<Wire<'a>> {
-    f.iter().find(|(k, _)| *k == n).map(|(_, w)| *w)
+    f.v.iter().find(|(k, _)| *k == n).map(|(_, w)| *w)
 }
 
 fn all<'a>(f: &Fields<'a>, n: u32) -> Vec<Wire<'a>> {
-    f.iter().filter(|(k, _)| *k == n).map(|(_, w)| *w).collect()
+    f.v.iter()
+        .filter(|(k, _)| *k == n)
+        .map(|(_, w)| *w)
+        .collect()
 }
 
 /// First LEN field `n` decoded as a message.
 fn sub<'a>(f: &Fields<'a>, n: u32) -> Result<Option<Fields<'a>>, ImportError> {
     match first(f, n).and_then(|w| w.as_bytes()) {
-        Some(b) => msg(b).map(Some),
+        Some(b) => f.child(b).map(Some),
         None => Ok(None),
     }
 }
@@ -109,6 +133,9 @@ fn read(src: &mut ZipSource, name: &str) -> Result<Option<Vec<u8>>, ImportError>
 }
 
 pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocument, ImportError> {
+    if src.any_encrypted() {
+        return Err(ImportError::Encrypted);
+    }
     let bundles = find_bundles(src);
     if bundles.is_empty() {
         return Err(corrupt("no \"<id>.frnote\" bundle found"));
@@ -116,13 +143,20 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
     let mut sections = Vec::new();
     let mut page_mode = PageMode::Page;
     let mut remaining = limits.max_pages;
+    let mut dropped = 0u32;
     for dir in &bundles {
         check_deadline(limits)?;
         let note = parse_note(src, limits, dir, &mut remaining)?;
         if note.canvas {
             page_mode = PageMode::Canvas;
         }
+        dropped += note.dropped;
         sections.push(note.section);
+    }
+    if dropped > 0
+        && let Some(page) = sections.iter_mut().rev().find_map(|s| s.pages.last_mut())
+    {
+        page.skipped.other += dropped;
     }
     let title = if sections.len() == 1 {
         sections[0].title.clone()
@@ -176,6 +210,8 @@ fn find_bundles(src: &ZipSource) -> Vec<String> {
 struct Note {
     section: ImportSection,
     canvas: bool,
+    /// Pages left out because the page limit was reached.
+    dropped: u32,
 }
 
 struct PageRec {
@@ -183,7 +219,8 @@ struct PageRec {
     index: i64,
     content_id: Option<String>,
     layers: Vec<(String, String)>,
-    template: Option<Vec<u8>>,
+    /// Template bytes and the depth of the page message that holds them.
+    template: Option<(Vec<u8>, u32)>,
 }
 
 struct Layer {
@@ -210,11 +247,11 @@ fn parse_note(
 ) -> Result<Note, ImportError> {
     let doc_bytes = read(src, &format!("{dir}document.dat"))?
         .ok_or_else(|| corrupt("a note has no document.dat"))?;
-    let doc = msg(&doc_bytes)?;
+    let doc = Fields::top(&doc_bytes)?;
     let canvas = first(&doc, 3).and_then(|w| w.as_u64()) == Some(1);
     let body = match first(&doc, 4).and_then(|w| w.as_bytes()) {
-        Some(b) => msg(b)?,
-        None => Vec::new(),
+        Some(b) => doc.child(b)?,
+        None => Fields::default(),
     };
 
     let mut pages = Vec::new();
@@ -222,11 +259,11 @@ fn parse_note(
         let b = w
             .as_bytes()
             .ok_or_else(|| corrupt("page record is not a message"))?;
-        let p = msg(b)?;
+        let p = body.child(b)?;
         let mut layers = Vec::new();
         for l in all(&p, 10) {
             if let Some(b) = l.as_bytes() {
-                let l = msg(b)?;
+                let l = p.child(b)?;
                 if let (Some(layer), Some(content)) = (string(&l, 1), string(&l, 2)) {
                     layers.push((layer, content));
                 }
@@ -237,7 +274,9 @@ fn parse_note(
             index: first(&p, 3).and_then(|w| w.as_i64()).unwrap_or(pos as i64),
             content_id: string(&p, 6).filter(|s| !s.is_empty()),
             layers,
-            template: first(&p, 5).and_then(|w| w.as_bytes()).map(<[u8]>::to_vec),
+            template: first(&p, 5)
+                .and_then(|w| w.as_bytes())
+                .map(|t| (t.to_vec(), p.depth)),
         });
     }
     pages.sort_by_key(|p| p.index);
@@ -252,7 +291,7 @@ fn parse_note(
         None => HashMap::new(),
     };
     let meta_title = match read(src, &format!("{dir}metadata.dat"))? {
-        Some(b) => string(&msg(&b)?, 3).filter(|t| !t.trim().is_empty()),
+        Some(b) => string(&Fields::top(&b)?, 3).filter(|t| !t.trim().is_empty()),
         None => None,
     };
     let dir_name = dir.trim_end_matches('/');
@@ -300,9 +339,12 @@ fn parse_note(
     }
 
     let mut out = Vec::new();
+    let mut dropped = 0u32;
+    let mut asset_cache: HashMap<String, Option<Vec<u8>>> = HashMap::new();
     for (i, rec) in pages.iter().enumerate() {
         if *remaining == 0 {
-            break;
+            dropped += 1;
+            continue;
         }
         *remaining -= 1;
         check_deadline(limits)?;
@@ -319,8 +361,8 @@ fn parse_note(
             height: h,
             background: rec
                 .template
-                .as_deref()
-                .map(background_of)
+                .as_ref()
+                .map(|(t, d)| background_of(t, *d))
                 .transpose()?
                 .unwrap_or_default(),
             ..ImportPage::default()
@@ -353,7 +395,14 @@ fn parse_note(
                 Kind::Text(t) => page.texts.push(t),
                 Kind::Image(id, frame) => {
                     let bytes = match asset_names.get(&id) {
-                        Some(name) => read(src, name)?,
+                        Some(name) => match asset_cache.get(name) {
+                            Some(b) => b.clone(),
+                            None => {
+                                let b = read(src, name)?;
+                                asset_cache.insert(name.clone(), b.clone());
+                                b
+                            }
+                        },
                         None => None,
                     };
                     match bytes {
@@ -380,6 +429,7 @@ fn parse_note(
             pages: out,
         },
         canvas,
+        dropped,
     })
 }
 
@@ -393,7 +443,7 @@ fn outline_titles(body: &Fields<'_>) -> Result<HashMap<String, String>, ImportEr
     let mut by_id: HashMap<String, O> = HashMap::new();
     for w in all(body, 4) {
         let Some(b) = w.as_bytes() else { continue };
-        let o = msg(b)?;
+        let o = body.child(b)?;
         let (Some(id), Some(page)) = (string(&o, 1), string(&o, 3)) else {
             continue;
         };
@@ -438,9 +488,10 @@ fn outline_titles(body: &Fields<'_>) -> Result<HashMap<String, String>, ImportEr
 
 fn layout_sizes(bytes: &[u8]) -> Result<HashMap<String, (f64, f64)>, ImportError> {
     let mut out = HashMap::new();
-    for w in all(&msg(bytes)?, 3) {
+    let top = Fields::top(bytes)?;
+    for w in all(&top, 3) {
         let Some(b) = w.as_bytes() else { continue };
-        let rec = msg(b)?;
+        let rec = top.child(b)?;
         let Some(id) = string(&rec, 5) else { continue };
         if let Some((w, h)) = pair(&rec, 1)?
             && w > 0.0
@@ -454,9 +505,10 @@ fn layout_sizes(bytes: &[u8]) -> Result<HashMap<String, (f64, f64)>, ImportError
 
 fn layer_info(bytes: &[u8]) -> Result<HashMap<String, Layer>, ImportError> {
     let mut out = HashMap::new();
-    for (i, w) in all(&msg(bytes)?, 3).into_iter().enumerate() {
+    let top = Fields::top(bytes)?;
+    for (i, w) in all(&top, 3).into_iter().enumerate() {
         let Some(b) = w.as_bytes() else { continue };
-        let l = msg(b)?;
+        let l = top.child(b)?;
         let Some(id) = string(&l, 1) else { continue };
         out.insert(
             id,
@@ -491,8 +543,14 @@ fn content_ids(rec: &PageRec, layers: &HashMap<String, Layer>) -> Vec<String> {
     out
 }
 
-fn background_of(template: &[u8]) -> Result<ImportBackground, ImportError> {
-    let t = msg(template)?;
+fn background_of(
+    template: &[u8],
+    template_parent_depth: u32,
+) -> Result<ImportBackground, ImportError> {
+    let t = Fields {
+        v: pb::fields_at_depth(template, template_parent_depth)?.collect_all()?,
+        depth: template_parent_depth + 1,
+    };
     if first(&t, 2).and_then(|w| w.as_u64()).unwrap_or(0) != 0 {
         return Ok(ImportBackground::Plain);
     }
@@ -550,14 +608,17 @@ fn read_content(
     items: &mut Vec<Item>,
     skipped: &mut ImportSkipped,
 ) -> Result<(), ImportError> {
-    let rec = msg(bytes)?;
+    let rec = Fields::top(bytes)?;
     for w in all(&rec, 3) {
         let Some(b) = w.as_bytes() else { continue };
-        let entry = msg(b)?;
+        let entry = rec.child(b)?;
         let key = string(&entry, 1).unwrap_or_default();
         let Some(value) = sub(&entry, 2)? else {
             continue;
         };
+        if first(&value, 5).is_some() {
+            skipped.other += 1;
+        }
         let Some(stroke) = sub(&value, 1)? else {
             continue;
         };
@@ -578,7 +639,7 @@ fn read_content(
     }
     for w in all(&rec, 4) {
         let Some(b) = w.as_bytes() else { continue };
-        let entry = msg(b)?;
+        let entry = rec.child(b)?;
         let key = string(&entry, 1).unwrap_or_default();
         let Some(value) = sub(&entry, 2)? else {
             continue;
@@ -644,7 +705,7 @@ fn read_text(
     let mut font_size = None;
     let mut color = "#000000".to_string();
     if let Some(run) = all(&rich, 2).first().and_then(|r| r.as_bytes()) {
-        let run = msg(run)?;
+        let run = rich.child(run)?;
         font_size = sub(&run, 1)?.and_then(|f| num(&f, 1)).filter(|s| *s > 0.0);
         if let Some(c) = sub(&run, 5)?
             .and_then(|c| first(&c, 1))
@@ -687,12 +748,13 @@ fn read_stroke(
     let pencil = !highlighter && ink_type == Some(3);
 
     let Some(path) = sub(stroke, 4)? else {
+        skipped.other += 1;
         return Ok(None);
     };
     let mut pts: Vec<Pt> = Vec::new();
     for w in all(&path, 2) {
         let Some(b) = w.as_bytes() else { continue };
-        let p = msg(b)?;
+        let p = path.child(b)?;
         let Some((x, y)) = pair(&p, 1)? else { continue };
         let nib = sub(&p, 3)?.and_then(|n| num(&n, 1));
         let muted = num(&p, 5).is_some_and(|v| v <= 0.0);
@@ -700,7 +762,7 @@ fn read_stroke(
         // Intermediate points come before the point itself.
         for im in all(&p, 11) {
             if let Some(b) = im.as_bytes() {
-                let q = msg(b)?;
+                let q = p.child(b)?;
                 if let (Some(ix), Some(iy)) = (num(&q, 1), num(&q, 2))
                     && (ix, iy) != (x, y)
                 {
@@ -723,31 +785,40 @@ fn read_stroke(
         });
     }
     let mut shape_points: Option<Vec<ImportPoint>> = None;
+    let mut shape_nib = None;
     if let Some(shape) = sub(&path, 4)? {
-        match first(&shape, 1).and_then(|w| w.as_u64()) {
-            Some(1001 | 1002) => {
-                if let Some(c) = first(&shape, 2).map(|w| w.packed_f64()).transpose()? {
+        shape_nib = num(&shape, 3).filter(|n| *n > 0.0);
+        let kind = first(&shape, 1).and_then(|w| w.as_u64());
+        if matches!(kind, Some(1001 | 1002 | 2001..=2004)) {
+            let c = match first(&shape, 2) {
+                Some(w) => w.packed_f64()?,
+                None => Vec::new(),
+            };
+            match shape_outline(kind.unwrap_or(0), &c) {
+                Some(poly) => {
                     shape_points = Some(
-                        c.chunks_exact(2)
-                            .map(|p| ImportPoint {
-                                x: p[0],
-                                y: p[1],
+                        poly.into_iter()
+                            .map(|(x, y)| ImportPoint {
+                                x,
+                                y,
                                 pressure: Some(1.0),
                             })
                             .collect(),
                     );
                 }
+                None => {
+                    skipped.shapes += 1;
+                    return Ok(None);
+                }
             }
-            // Rect, ellipse, circle and triangle coordinate layouts are not pinned down.
-            Some(2001..=2004) => {
-                skipped.shapes += 1;
-                return Ok(None);
-            }
-            _ => {}
         }
     }
 
-    let max_nib = pts.iter().filter_map(|p| p.nib).fold(0.0_f64, f64::max);
+    let max_nib = pts
+        .iter()
+        .filter_map(|p| p.nib)
+        .chain(shape_nib)
+        .fold(0.0_f64, f64::max);
     let nib_w = if max_nib > 0.0 { max_nib } else { DEFAULT_NIB };
     let width = (2.0 * nib_w - 4.0).max(1.0);
 
@@ -794,6 +865,7 @@ fn read_stroke(
             .collect(),
     };
     if points.is_empty() {
+        skipped.other += 1;
         return Ok(None);
     }
     Ok(Some(ImportStroke {
@@ -817,4 +889,53 @@ fn read_stroke(
         },
         z_index: 0,
     }))
+}
+
+/// Number of points of an approximated ellipse (the last one repeats the first).
+const ELLIPSE_POINTS: usize = 36;
+
+/// The polyline of a shape record from its packed coordinates.
+///
+/// 1001/1002: the coordinate pairs as they are. 2001 rectangle: four corners (8 values) or
+/// `x, y, w, h` (4 values), closed. 2004 triangle: three corners (6 values), closed. 2002 ellipse
+/// and 2003 circle: [`ELLIPSE_POINTS`] points on the bounding box `x, y, w, h` (4 values; a circle
+/// may also give `cx, cy, r`). Anything else is `None`.
+fn shape_outline(kind: u64, c: &[f64]) -> Option<Vec<(f64, f64)>> {
+    if c.iter().any(|v| !v.is_finite()) {
+        return None;
+    }
+    let closed = |mut v: Vec<(f64, f64)>| {
+        if let Some(&f) = v.first() {
+            v.push(f);
+        }
+        v
+    };
+    let pairs =
+        |c: &[f64]| -> Vec<(f64, f64)> { c.chunks_exact(2).map(|p| (p[0], p[1])).collect() };
+    match (kind, c.len()) {
+        (1001 | 1002, n) if n >= 2 => Some(pairs(c)),
+        (2001, 8) | (2004, 6) => Some(closed(pairs(c))),
+        (2001, 4) => Some(closed(vec![
+            (c[0], c[1]),
+            (c[0] + c[2], c[1]),
+            (c[0] + c[2], c[1] + c[3]),
+            (c[0], c[1] + c[3]),
+        ])),
+        (2002 | 2003, 4) | (2003, 3) => {
+            let (cx, cy, rx, ry) = if c.len() == 3 {
+                (c[0], c[1], c[2], c[2])
+            } else {
+                (c[0] + c[2] / 2.0, c[1] + c[3] / 2.0, c[2] / 2.0, c[3] / 2.0)
+            };
+            Some(
+                (0..ELLIPSE_POINTS)
+                    .map(|i| {
+                        let a = std::f64::consts::TAU * i as f64 / (ELLIPSE_POINTS - 1) as f64;
+                        (cx + rx * a.cos(), cy + ry * a.sin())
+                    })
+                    .collect(),
+            )
+        }
+        _ => None,
+    }
 }
