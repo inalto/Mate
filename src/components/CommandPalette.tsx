@@ -12,6 +12,7 @@ import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 import { formatKeys } from "../keys/keybindings";
 import { isMacPlatform } from "../keys/platform";
+import { useFocusedEditor } from "../stores/focusedEditor";
 import { useKeyMap } from "../keys/useKeyMap";
 import { showToast } from "./Toast";
 import { actionScore, DISABLED_HINT, fuzzyScore, QUICK_ACTIONS, type QuickAction } from "./paletteActions";
@@ -71,6 +72,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   const currentPageId = useTabsStore((s) => focusedPageId(s));
   const inEditor = useLocation().pathname.startsWith("/edit/") && !!currentPageId;
   const keyMap = useKeyMap();
+  const selectionSize = useFocusedEditor()((s) => s.selection.size);
   const [query, setQuery] = useState("");
   // Hits are tied to the query that produced them: while the next query is still debounced, the
   // old hits are not shown and Enter cannot activate one.
@@ -84,6 +86,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   const panelSeq = useRef(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   // Read during the first render, before autoFocus moves focus into the dialog.
+  const skipRestoreRef = useRef(false);
   const openerRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
   const close = () => useChromeStore.getState().closePalette();
   /** Drops the panel and any answer still in flight for it. */
@@ -98,7 +101,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     const seq = panelSeq;
     return () => {
       seq.current++;
-      before?.focus?.();
+      if (!skipRestoreRef.current) before?.focus?.();
     };
   }, []);
 
@@ -222,8 +225,10 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
       .filter((x) => x.score > 0)
       .sort((x, y) => y.score - x.score)
       .map(({ a, score }): { score: number; item: Item } => {
-        const ok = a.scope === "global" || (a.scope === "page" ? !!currentPageId : inEditor);
-        const first = a.shortcut ? keyMap[a.shortcut]?.[0] : undefined;
+        const ok =
+          a.scope === "global" ||
+          (a.scope === "page" ? !!currentPageId : a.scope === "selection" ? inEditor && selectionSize > 0 : inEditor);
+        const all = a.shortcut ? keyMap[a.shortcut] ?? [] : [];
         return {
           score,
           item: {
@@ -231,13 +236,13 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
             section: "Quick actions",
             label: a.label,
             quick: a,
-            keys: first ? formatKeys(first, isMacPlatform()) : "",
+            keys: all.map((k) => formatKeys(k, isMacPlatform())).join(" / "),
             disabled: !ok,
             hint: !ok && a.scope !== "global" ? DISABLED_HINT[a.scope] : undefined,
           },
         };
       });
-    if (quick.length) blocks.push({ score: q ? quick[0].score : 0.5, items: quick.map((x) => x.item) });
+    if (quick.length) blocks.push({ score: q ? quick[0].score : 500, items: quick.map((x) => x.item) });
 
     const needsPage = !currentPageId;
     const actions: [string, () => void, boolean][] = [
@@ -250,13 +255,13 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     for (const [label, run, disabled] of actions) {
       if (!q || label.toLowerCase().includes(q)) acts.push({ key: `action:${label}`, section: "Actions", label, run, disabled });
     }
-    if (acts.length) blocks.push({ score: q ? 40 : 0.7, items: acts });
+    if (acts.length) blocks.push({ score: q ? 40 : 100, items: acts });
 
     // Sections ordered by their best match; the order is stable for equal scores.
     return blocks.sort((a, b) => b.score - a.score).flatMap((b) => b.items);
     // runAction and navigate are stable enough for a list rebuilt on every query/hit change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, pages, hits, currentPageId, inEditor, keyMap]);
+  }, [query, pages, hits, currentPageId, inEditor, keyMap, selectionSize]);
 
   // Keep the active row in view while arrowing through a long list.
   useEffect(() => {
@@ -270,6 +275,8 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     else if (item.section === "Quick actions") {
       if (item.disabled) return;
       // Close first: the keyboard dispatcher ignores actions while the palette is open.
+      // The shortcuts overlay takes focus itself; restoring the opener would steal it.
+      if (item.quick.id === "help.shortcuts") skipRestoreRef.current = true;
       close();
       item.quick.run(navigate);
     } else if (!item.disabled) item.run();

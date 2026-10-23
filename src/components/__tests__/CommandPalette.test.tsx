@@ -321,4 +321,53 @@ describe("CommandPalette quick actions", () => {
     fireEvent.change(input(), { target: { value: "settings" } });
     expect(screen.getByRole("option", { name: /Open settings/ }).getAttribute("aria-disabled")).toBeNull();
   });
+
+  it("empty_query_section_order", () => {
+    withTree();
+    renderPalette();
+    open();
+    const heads = [...document.querySelectorAll(".palette-heading")].map((h) => h.textContent);
+    expect(heads).toEqual(["Recent pages", "Quick actions", "Actions"]);
+  });
+
+  it("group_needs_a_selection", () => {
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "group" } });
+    const row = () => screen.getByRole("option", { name: /^Group/ });
+    expect(row().getAttribute("aria-disabled")).toBe("true");
+    expect(row().textContent).toContain("Select something first");
+    act(() => useEditorStore.setState({ selection: new Set(["a"]) }));
+    expect(row().getAttribute("aria-disabled")).toBeNull();
+    act(() => useEditorStore.setState({ selection: new Set() }));
+  });
+
+  it("insert_actions_call_store_methods", () => {
+    const addTable = vi.fn(() => "t");
+    const addTextBox = vi.fn(() => "x");
+    useEditorStore.setState({ addTable, addTextBox } as never);
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "insert table" } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(addTable).toHaveBeenCalledTimes(1);
+    open();
+    fireEvent.change(input(), { target: { value: "insert text box" } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(addTextBox).toHaveBeenCalledTimes(1);
+  });
+
+  it("shortcuts_action_keeps_overlay_focus", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "keyboard shortcuts" } });
+    const focus = vi.spyOn(opener, "focus");
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(useChromeStore.getState().shortcutsOpen).toBe(true);
+    expect(focus).not.toHaveBeenCalled();
+    opener.remove();
+  });
 });

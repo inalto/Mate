@@ -8,8 +8,8 @@ import { getFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 
-/** editor: needs the editor route; page: needs an open page; global: always available. */
-export type QuickScope = "editor" | "page" | "global";
+/** selection: editor with a non-empty selection; editor: needs the editor route; page: needs an open page; global: always available. */
+export type QuickScope = "editor" | "selection" | "page" | "global";
 
 export interface QuickAction {
   id: string;
@@ -60,8 +60,8 @@ export const QUICK_ACTIONS: QuickAction[] = [
   plain("zoom.out", "editor", ["shrink"]),
   plain("zoom.reset", "editor", ["100%", "actual size"]),
   plain("selectAll", "editor"),
-  plain("group", "editor"),
-  plain("ungroup", "editor"),
+  plain("group", "selection"),
+  plain("ungroup", "selection"),
   plain("save", "editor", ["flush"]),
   {
     id: "insert.text",
@@ -81,7 +81,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     scope: "page",
     run: (navigate) => {
       const cur = currentSection();
-      if (cur) void useNotebookStore.getState().createPage(cur.sectionId, "Untitled").then((p) => navigate(`/edit/${p.id}`));
+      if (cur) void useNotebookStore.getState().createPage(cur.sectionId, `Page ${useNotebookStore.getState().tree.pages.filter((p) => p.sectionId === cur.sectionId).length + 1}`).then((p) => navigate(`/edit/${p.id}`));
     },
   },
   {
@@ -94,7 +94,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
       if (!cur) return;
       const nb = useNotebookStore.getState();
       void nb
-        .createSection(cur.unitId, "Untitled")
+        .createSection(cur.unitId, `Section ${useNotebookStore.getState().tree.sections.filter((x) => x.unitId === cur.unitId).length + 1}`)
         .then((sec) => nb.createPage(sec.id, "Page 1"))
         .then((p) => navigate(`/edit/${p.id}`));
     },
@@ -103,12 +103,12 @@ export const QUICK_ACTIONS: QuickAction[] = [
   plain("help.shortcuts", "global", ["keys", "keyboard", "help"]),
   { id: "go.settings", label: "Open settings", synonyms: ["preferences", "options"], scope: "global", run: (n) => n("/settings") },
   { id: "go.library", label: "Open library", synonyms: ["books", "notebooks"], scope: "global", run: (n) => n("/library") },
-  { id: "go.graph", label: "Go to graph", synonyms: ["open graph", "map", "links"], scope: "global", run: (n) => n("/graph") },
 ];
 
 /** Hint shown on a disabled action. */
 export const DISABLED_HINT: Record<Exclude<QuickScope, "global">, string> = {
   editor: "Open a page in the editor first",
+  selection: "Select something first",
   page: "Open a page first",
 };
 
