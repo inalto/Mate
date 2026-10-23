@@ -42,8 +42,19 @@ pub const MAX_PAGES_PER_IMPORT: usize = 2000;
 pub const MAX_ZIP_ENTRIES: usize = 20_000;
 /// Most bytes a zip-based source may inflate to (declared and actually read).
 pub const MAX_UNZIPPED_BYTES: u64 = 1024 * 1024 * 1024;
-/// How long one import may take.
+/// How long parsing one file may take (placing its pages gets the same time again).
 pub const IMPORT_DEADLINE: Duration = Duration::from_secs(60);
+/// Most ink points one imported file may produce; past it the import fails with `Limit`.
+pub const MAX_POINTS_PER_DOCUMENT: u64 = 20_000_000;
+/// Most elements (strokes, text boxes, images) one imported file may produce; past it the import
+/// fails with `Limit`.
+pub const MAX_ELEMENTS_PER_DOCUMENT: u64 = 2_000_000;
+/// Most elements one imported page keeps (Mate's per-page limit); the rest are counted in
+/// [`ImportSkipped::other`] and never built.
+pub const MAX_ELEMENTS_PER_PAGE: usize = 5000;
+const _: () = assert!(MAX_ELEMENTS_PER_PAGE as i64 == crate::storage::elements::MAX_ELEMENTS_PER_PAGE);
+/// Parsers check the deadline once per this many elements (admitted or skipped).
+const ELEMENTS_PER_DEADLINE_CHECK: u64 = 1024;
 
 const MIB: u64 = 1024 * 1024;
 
@@ -82,6 +93,10 @@ pub struct ImportLimits {
     pub max_pages: usize,
     pub max_zip_entries: usize,
     pub max_unzipped_bytes: u64,
+    /// Most ink points the whole document may hold ([`MAX_POINTS_PER_DOCUMENT`]).
+    pub max_points: u64,
+    /// Most elements the whole document may hold ([`MAX_ELEMENTS_PER_DOCUMENT`]).
+    pub max_elements: u64,
     /// Parsing fails with [`ImportError::Limit`] once this instant has passed.
     pub deadline: Option<Instant>,
 }
@@ -95,6 +110,8 @@ impl Default for ImportLimits {
             max_pages: MAX_PAGES_PER_IMPORT,
             max_zip_entries: MAX_ZIP_ENTRIES,
             max_unzipped_bytes: MAX_UNZIPPED_BYTES,
+            max_points: MAX_POINTS_PER_DOCUMENT,
+            max_elements: MAX_ELEMENTS_PER_DOCUMENT,
             deadline: Some(Instant::now() + IMPORT_DEADLINE),
         }
     }
@@ -120,12 +137,105 @@ pub fn max_file_bytes(source: ImportSource) -> u64 {
 /// `Limit` once `limits.deadline` has passed.
 pub fn check_deadline(limits: &ImportLimits) -> Result<(), ImportError> {
     match limits.deadline {
-        Some(d) if Instant::now() >= d => Err(ImportError::Limit(format!(
-            "reading it took longer than {} seconds",
-            IMPORT_DEADLINE.as_secs()
-        ))),
+        Some(d) if Instant::now() >= d => Err(deadline_passed()),
         _ => Ok(()),
     }
+}
+
+/// What a parser may still produce: points and elements over the whole document, elements on
+/// the current page. Every parser admits each element through [`ImportBudget::admit`] before
+/// keeping it, so the output stays bounded whatever the file declares.
+#[derive(Debug, Clone)]
+pub struct ImportBudget {
+    max_points: u64,
+    max_elements: u64,
+    deadline: Option<Instant>,
+    points: u64,
+    elements: u64,
+    on_page: usize,
+    /// Admitted and skipped elements, for the periodic deadline check.
+    seen: u64,
+}
+
+impl ImportBudget {
+    pub fn new(limits: &ImportLimits) -> ImportBudget {
+        ImportBudget {
+            max_points: limits.max_points,
+            max_elements: limits.max_elements,
+            deadline: limits.deadline,
+            points: 0,
+            elements: 0,
+            on_page: 0,
+            seen: 0,
+        }
+    }
+
+    /// A new page starts: its element count goes back to zero.
+    pub fn start_page(&mut self) {
+        self.on_page = 0;
+    }
+
+    /// True when the current page already holds [`MAX_ELEMENTS_PER_PAGE`] elements; the caller
+    /// then calls [`ImportBudget::skip`] instead of building the element.
+    pub fn page_full(&self) -> bool {
+        self.on_page >= MAX_ELEMENTS_PER_PAGE
+    }
+
+    /// Counts one element left out for the page limit in `skipped.other`.
+    pub fn skip(&mut self, skipped: &mut ImportSkipped) -> Result<(), ImportError> {
+        skipped.other = skipped.other.saturating_add(1);
+        self.tick()
+    }
+
+    /// Admits one element with `points` ink points: `Ok(false)` (counted in `skipped.other`)
+    /// when the page is full, `Limit` when the document would pass its point or element budget
+    /// or the deadline has passed.
+    pub fn admit(&mut self, points: usize, skipped: &mut ImportSkipped) -> Result<bool, ImportError> {
+        if self.page_full() {
+            self.skip(skipped)?;
+            return Ok(false);
+        }
+        self.tick()?;
+        self.elements += 1;
+        if self.elements > self.max_elements {
+            return Err(ImportError::Limit(format!(
+                "it holds more than {} items; the most Mate imports from one file is {}",
+                self.max_elements, self.max_elements
+            )));
+        }
+        self.points = self.points.saturating_add(points as u64);
+        if self.points > self.max_points {
+            return Err(ImportError::Limit(format!(
+                "its ink has more than {} points; the most Mate imports from one file is {}",
+                self.max_points, self.max_points
+            )));
+        }
+        self.on_page += 1;
+        Ok(true)
+    }
+
+    pub fn points(&self) -> u64 {
+        self.points
+    }
+
+    pub fn elements(&self) -> u64 {
+        self.elements
+    }
+
+    fn tick(&mut self) -> Result<(), ImportError> {
+        self.seen += 1;
+        if self.seen.is_multiple_of(ELEMENTS_PER_DEADLINE_CHECK)
+            && let Some(d) = self.deadline
+            && Instant::now() >= d
+        {
+            return Err(deadline_passed());
+        }
+        Ok(())
+    }
+}
+
+fn deadline_passed() -> ImportError {
+    ImportError::Limit(format!("reading it took longer than {} seconds", IMPORT_DEADLINE.as_secs()))
 }
 
 /// Lower-case extension of `filename` (without the dot), if any.
@@ -147,7 +257,7 @@ fn unsupported(filename: &str) -> ImportError {
 fn zip_source_from_extension(filename: &str) -> Option<ImportSource> {
     match extension(filename)?.as_str() {
         "goodnotes" => Some(ImportSource::GoodNotes),
-        "note" | "nbn" => Some(ImportSource::Notability),
+        "note" => Some(ImportSource::Notability),
         "freenotes" | "freenotesv2" | "freebackup" => Some(ImportSource::Freenotes),
         "sdocx" => Some(ImportSource::SamsungNotes),
         _ => None,
@@ -314,6 +424,59 @@ mod tests {
         let d = ImportLimits::default();
         assert_eq!((d.max_pages, d.max_zip_entries, d.max_unzipped_bytes), (2000, 20_000, 1 << 30));
         assert!(d.deadline.is_some());
+    }
+
+    #[test]
+    fn import_budget_counts_pages_points_and_elements() {
+        let limits = ImportLimits { max_points: 100, max_elements: 6000, ..ImportLimits::default() };
+        let mut b = ImportBudget::new(&limits);
+        let mut skipped = ImportSkipped::default();
+        for _ in 0..MAX_ELEMENTS_PER_PAGE {
+            assert_eq!(b.admit(0, &mut skipped), Ok(true));
+        }
+        assert!(b.page_full());
+        assert_eq!(b.admit(0, &mut skipped), Ok(false));
+        b.skip(&mut skipped).unwrap();
+        assert_eq!(skipped.other, 2);
+        assert_eq!(b.elements(), MAX_ELEMENTS_PER_PAGE as u64);
+
+        b.start_page();
+        assert!(!b.page_full());
+        assert_eq!(b.admit(60, &mut skipped), Ok(true));
+        match b.admit(41, &mut skipped) {
+            Err(ImportError::Limit(m)) => assert!(m.contains("100 points"), "{m}"),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(b.points(), 101);
+
+        // The element budget holds across pages.
+        let limits = ImportLimits { max_elements: 3, ..ImportLimits::default() };
+        let mut b = ImportBudget::new(&limits);
+        for page in 0..3 {
+            b.start_page();
+            assert_eq!(b.admit(1, &mut skipped), Ok(true), "page {page}");
+        }
+        b.start_page();
+        assert!(matches!(b.admit(1, &mut skipped), Err(ImportError::Limit(m)) if m.contains("items")));
+
+        // The deadline is checked every 1024 elements, skipped ones included.
+        let past = ImportLimits {
+            deadline: Some(Instant::now() - Duration::from_secs(1)),
+            ..ImportLimits::default()
+        };
+        let mut b = ImportBudget::new(&past);
+        let mut skipped = ImportSkipped::default();
+        let mut failed = None;
+        for i in 0..2048 {
+            let r = if b.page_full() { b.skip(&mut skipped).map(|_| false) } else { b.admit(1, &mut skipped) };
+            if r.is_err() {
+                failed = Some(i);
+                break;
+            }
+        }
+        assert_eq!(failed, Some(1023));
+        let d = ImportLimits::default();
+        assert_eq!((d.max_points, d.max_elements), (20_000_000, 2_000_000));
     }
 
     #[test]

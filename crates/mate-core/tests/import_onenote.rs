@@ -278,14 +278,17 @@ fn onenote_crate_panic_becomes_corrupt() {
 
 #[test]
 fn onepkg_mid_size_notebook_is_not_rejected_by_the_work_bound() {
-    // 20 sections of 6 MiB in one folder (120 MiB): a realistic notebook under the 256 MiB cap.
-    let section = vec![0u8; 6 * 1024 * 1024];
+    // The real-size case (20 sections of 6 MiB under the 1 GiB budget) scaled down to an 8 MiB
+    // budget: 16 files of 96 KiB in one folder are 48 blocks of 32 KiB, read once per file:
+    // 24 MiB of work, within 4 × 8 MiB. Counting 64 KiB per block (48 MiB) would reject it.
+    let section = vec![0u8; 96 * 1024];
     let mut names: Vec<String> = vec!["Notebook.onetoc2".into()];
-    names.extend((0..19).map(|i| format!("Section {i}.one")));
+    names.extend((0..15).map(|i| format!("Section {i}.one")));
     let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &section[..])).collect();
     let cab = build_cab_with(&files, cab::CompressionType::None);
+    let limits = ImportLimits { max_unzipped_bytes: 8 << 20, ..ImportLimits::default() };
     // The zero-filled sections are damaged, but the package passes the pre-check.
-    match parse(&cab, "big.onepkg", &ImportLimits::default()) {
+    match parse(&cab, "big.onepkg", &limits) {
         Err(ImportError::Limit(msg)) => panic!("rejected by a limit: {msg}"),
         Err(ImportError::Corrupt(_)) => {}
         other => panic!("expected Corrupt, got {other:?}"),

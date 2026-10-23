@@ -20,9 +20,9 @@ use std::cell::Cell;
 use std::collections::HashSet;
 
 use super::{
-    ImportBackground, ImportDocument, ImportError, ImportImage, ImportLimits, ImportPage,
-    ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ImportText, ZipSource,
-    base_name, check_deadline, zipsrc::is_safe_name,
+    ImportBackground, ImportBudget, ImportDocument, ImportError, ImportImage, ImportLimits,
+    ImportPage, ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ImportText,
+    ZipSource, base_name, check_deadline, zipsrc::is_safe_name,
 };
 use crate::model::{PageMode, PenStyle};
 
@@ -37,6 +37,8 @@ const HIGHLIGHTER_OPACITY: f64 = 0.5;
 const SESSION_FILE: &str = "Session.plist";
 const CYCLE: &str = "keyed archive references itself (cycle)";
 const BEHIND_TEXT_KEY: &str = "NBNoteTakingSessionIsHighlighterBehindTextKey";
+/// Largest single data blob read (curve arrays, widths, colours, ...).
+const MAX_BLOB_BYTES: usize = 64 * 1024 * 1024;
 
 fn corrupt(msg: impl Into<String>) -> ImportError {
     ImportError::Corrupt(msg.into())
@@ -503,6 +505,29 @@ impl<'a> Archive<'a> {
         }
     }
 
+    /// The first element of an array (as [`Archive::items`]) without collecting the others.
+    fn first_item(&self, o: &Obj<'a>) -> Result<Option<(Obj<'a>, usize)>, ImportError> {
+        match o.val {
+            Val::Array(r) => Ok((r.len() > 0).then(|| (o.clone(), r.get(0)))),
+            Val::Dict(keys, values) => {
+                if let Some(raw) = self.direct(o, "NS.objects")? {
+                    let list = self.child(&o.path, raw)?;
+                    return match list.val {
+                        Val::Array(r) => Ok((r.len() > 0).then(|| (list.clone(), r.get(0)))),
+                        _ => Err(corrupt("keyed archive array is malformed")),
+                    };
+                }
+                for i in 0..keys.len() {
+                    if self.p.object(keys.get(i))?.is_str("NS.object.0") {
+                        return Ok(Some((o.clone(), values.get(i))));
+                    }
+                }
+                Ok(None)
+            }
+            _ => Ok(None),
+        }
+    }
+
     /// A string: plain, `NS.string`, or UTF-8 `NS.bytes`.
     fn string(&self, o: &Obj<'a>) -> Result<Option<String>, ImportError> {
         if let Some(t) = o.val.text() {
@@ -527,19 +552,26 @@ impl<'a> Archive<'a> {
         Ok(None)
     }
 
-    /// Raw bytes: a plist `<data>` or an `NS.data` wrapper.
+    /// Raw bytes: a plist `<data>` or an `NS.data` wrapper; `Limit` past [`MAX_BLOB_BYTES`].
     fn data(&self, o: &Obj<'a>) -> Result<Option<&'a [u8]>, ImportError> {
-        match o.val {
-            Val::Data(d) => Ok(Some(d)),
+        let d = match o.val {
+            Val::Data(d) => Some(d),
             Val::Dict(..) => match self.direct(o, "NS.data")? {
                 Some(raw) => match self.child(&o.path, raw)?.val {
-                    Val::Data(d) => Ok(Some(d)),
-                    _ => Ok(None),
+                    Val::Data(d) => Some(d),
+                    _ => None,
                 },
-                None => Ok(None),
+                None => None,
             },
-            _ => Ok(None),
+            _ => None,
+        };
+        if d.is_some_and(|d| d.len() > MAX_BLOB_BYTES) {
+            return Err(ImportError::Limit(format!(
+                "one of its data blocks is larger than {} MiB",
+                MAX_BLOB_BYTES >> 20
+            )));
         }
+        Ok(d)
     }
 
     fn class_name(&self, o: &Obj<'a>) -> Result<Option<String>, ImportError> {
@@ -572,7 +604,7 @@ impl<'a> Archive<'a> {
     }
 }
 
-/// What the flat scans of `$objects` find (as Derive does).
+/// What the flat scan of `$objects` finds.
 struct Scan<'a> {
     session: Option<Obj<'a>>,
     page_width: Option<f64>,
@@ -676,6 +708,8 @@ struct Ink {
     strokes: Vec<ImportStroke>,
     max_y: f64,
     shapes: u32,
+    /// Strokes past the page limit.
+    skipped: ImportSkipped,
 }
 
 /// Appends the strokes of one curves dictionary.
@@ -684,6 +718,7 @@ fn read_curves<'a>(
     curves: &Obj<'a>,
     highlighter_behind_text: bool,
     ink: &mut Ink,
+    budget: &mut ImportBudget,
 ) -> Result<(), ImportError> {
     let field = |key: &str| -> Result<&'a [u8], ImportError> {
         let d = match a.get(curves, key)? {
@@ -748,6 +783,10 @@ fn read_curves<'a>(
             node_at += k;
             s
         });
+        if budget.page_full() {
+            budget.skip(&mut ink.skipped)?;
+            continue;
+        }
 
         let rgba = [colors[4 * i], colors[4 * i + 1], colors[4 * i + 2], colors[4 * i + 3]];
         let highlighter = is_highlighter(rgba, highlighter_behind_text);
@@ -768,7 +807,7 @@ fn read_curves<'a>(
             .filter(|(x, y)| x.is_finite() && y.is_finite())
             .map(|(x, y)| ImportPoint { x, y, pressure: None })
             .collect();
-        if pts.is_empty() {
+        if pts.is_empty() || !budget.admit(pts.len(), &mut ink.skipped)? {
             continue;
         }
         for p in &pts {
@@ -815,11 +854,18 @@ struct Media {
     images: Vec<ImportImage>,
     max_y: f64,
     other: u32,
+    /// Items past the page limit.
+    skipped: ImportSkipped,
 }
 
 /// A text box. One without text is dropped silently; one without a position is skipped and
 /// counted (as images are).
-fn read_text<'a>(a: &Archive<'a>, obj: &Obj<'a>, media: &mut Media) -> Result<(), ImportError> {
+fn read_text<'a>(
+    a: &Archive<'a>,
+    obj: &Obj<'a>,
+    media: &mut Media,
+    budget: &mut ImportBudget,
+) -> Result<(), ImportError> {
     let Some(attributed) = a.at(obj, &["textStore", "attributedString"])? else {
         return Ok(());
     };
@@ -833,21 +879,23 @@ fn read_text<'a>(a: &Archive<'a>, obj: &Obj<'a>, media: &mut Media) -> Result<()
     };
     let size = a.string_at(obj, &["unscaledContentSize"])?.as_deref().and_then(pair);
     let (mut font_size, mut color) = (None, None);
-    if let Some(ranges) = a.get(&attributed, "subRangesKey")? {
-        let (list, raws) = a.items(&ranges)?;
-        if let Some(&first) = raws.first() {
-            let first = a.child(&list.path, first)?;
-            font_size = a
-                .at(&first, &["subRangeFontKey", "NSFontSizeAttribute"])?
-                .and_then(|o| o.val.number())
-                .filter(|s| *s > 0.0);
-            color = a
-                .string_at(&first, &["subRangeColorCrossPlatformKey"])?
-                .as_deref()
-                .and_then(cross_platform_color);
-        }
+    if let Some(ranges) = a.get(&attributed, "subRangesKey")?
+        && let Some((list, first)) = a.first_item(&ranges)?
+    {
+        let first = a.child(&list.path, first)?;
+        font_size = a
+            .at(&first, &["subRangeFontKey", "NSFontSizeAttribute"])?
+            .and_then(|o| o.val.number())
+            .filter(|s| *s > 0.0);
+        color = a
+            .string_at(&first, &["subRangeColorCrossPlatformKey"])?
+            .as_deref()
+            .and_then(cross_platform_color);
     }
     let width = size.map(|(w, _)| w).filter(|w| *w > 0.0);
+    if !budget.admit(0, &mut media.skipped)? {
+        return Ok(());
+    }
     media.max_y = media.max_y.max(y + size.map_or(0.0, |(_, h)| h.max(0.0)));
     media.texts.push(ImportText {
         x,
@@ -866,6 +914,7 @@ fn read_image<'a>(
     dir: &str,
     src: &mut ZipSource,
     media: &mut Media,
+    budget: &mut ImportBudget,
 ) -> Result<(), ImportError> {
     let Some(snapshot) =
         a.at(obj, &["figure", "FigureBackgroundObjectKey", "kImageObjectSnapshotKey"])?
@@ -883,6 +932,9 @@ fn read_image<'a>(
         return Ok(());
     };
     let path = if dir.is_empty() { rel } else { format!("{dir}/{rel}") };
+    if budget.page_full() {
+        return budget.skip(&mut media.skipped);
+    }
     let bytes = if w > 0.0 && h > 0.0 && is_safe_name(&path) { read(src, &path)? } else { None };
     let Some(bytes) = bytes else {
         media.other += 1;
@@ -893,6 +945,9 @@ fn read_image<'a>(
         media.other += 1;
         return Ok(());
     };
+    if !budget.admit(0, &mut media.skipped)? {
+        return Ok(());
+    }
     media.max_y = media.max_y.max(y + h);
     media.images.push(ImportImage {
         x,
@@ -912,13 +967,14 @@ fn read_media<'a>(
     dir: &str,
     src: &mut ZipSource,
     media: &mut Media,
+    budget: &mut ImportBudget,
 ) -> Result<(), ImportError> {
     if !matches!(item.val, Val::Dict(..)) {
         return Ok(()); // `$null` and other placeholders
     }
     match a.class_name(item)?.as_deref() {
-        Some("TextBlockMediaObject") => read_text(a, item, media),
-        Some("ImageMediaObject") => read_image(a, item, dir, src, media),
+        Some("TextBlockMediaObject") => read_text(a, item, media, budget),
+        Some("ImageMediaObject") => read_image(a, item, dir, src, media, budget),
         _ => {
             media.other += 1;
             Ok(())
@@ -985,12 +1041,21 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
         return Err(corrupt("missing curvespoints"));
     }
 
-    let mut ink = Ink { strokes: Vec::new(), max_y: 0.0, shapes: 0 };
+    let mut budget = ImportBudget::new(limits);
+    budget.start_page();
+    let mut ink =
+        Ink { strokes: Vec::new(), max_y: 0.0, shapes: 0, skipped: ImportSkipped::default() };
     for c in &found.curves {
-        read_curves(&a, c, found.highlighter_behind_text, &mut ink)?;
+        read_curves(&a, c, found.highlighter_behind_text, &mut ink, &mut budget)?;
     }
 
-    let mut media = Media { texts: Vec::new(), images: Vec::new(), max_y: 0.0, other: 0 };
+    let mut media = Media {
+        texts: Vec::new(),
+        images: Vec::new(),
+        max_y: 0.0,
+        other: 0,
+        skipped: ImportSkipped::default(),
+    };
     let mut background = ImportBackground::Plain;
     if let Some(session) = &found.session {
         background = paper(&a, session)?;
@@ -1000,7 +1065,7 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
             for raw in raws {
                 let result = a.child(&list.path, raw).and_then(|item| {
                     if seen.insert(item.idx) {
-                        read_media(&a, &item, &dir, src, &mut media)
+                        read_media(&a, &item, &dir, src, &mut media, &mut budget)
                     } else {
                         Ok(()) // the same object listed twice
                     }
@@ -1033,7 +1098,11 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
         skipped: ImportSkipped {
             tables: 0,
             shapes: ink.shapes,
-            other: media.other.saturating_add(u32::try_from(pdfs).unwrap_or(u32::MAX)),
+            other: media
+                .other
+                .saturating_add(ink.skipped.other)
+                .saturating_add(media.skipped.other)
+                .saturating_add(u32::try_from(pdfs).unwrap_or(u32::MAX)),
         },
     };
     Ok(ImportDocument {

@@ -25,7 +25,10 @@ use onenote_parser::section::{Section, SectionEntry};
 use onenote_parser::{FileSystem, Parser};
 use typed_path::{PathType, TypedPath, TypedPathBuf};
 
-use super::{CAB_MAGIC, ImportDocument, ImportError, ImportLimits, ImportSkipped, check_deadline};
+use super::{
+    CAB_MAGIC, ImportBudget, ImportDocument, ImportError, ImportLimits, ImportSkipped,
+    check_deadline,
+};
 use adapter::{ImageView, InkView, OutlineView, PageView, SectionView, StrokeView};
 
 /// Longest crate error message carried into [`ImportError::Corrupt`].
@@ -251,10 +254,11 @@ impl FileSystem for MemFs<'_> {
 /// What extraction may still produce: image bytes, starting at `max_unzipped_bytes` (an image
 /// blob can be referenced many times, so the file size alone does not bound what reading every
 /// image allocates), and pages over all sections, starting at `max_pages` (pages past it are not
-/// read at all, images included).
+/// read at all, images included), and the points and elements of the whole document.
 struct Budget {
     left: u64,
     pages_left: usize,
+    output: ImportBudget,
 }
 
 impl Budget {
@@ -262,6 +266,7 @@ impl Budget {
         Budget {
             left: limits.max_unzipped_bytes,
             pages_left: limits.max_pages,
+            output: ImportBudget::new(limits),
         }
     }
 }
@@ -323,34 +328,56 @@ fn extract_page(
         height: page.height(),
         ..PageView::default()
     };
+    budget.output.start_page();
     for content in page.contents() {
         match content {
             PageContent::Outline(outline) => extract_outline(outline, &mut view, limits, budget)?,
-            PageContent::Image(image) => match extract_image(image, limits, budget)? {
-                Some(img) => view.images.push(img),
-                None => view.skipped.other += 1,
-            },
-            PageContent::Ink(ink) => extract_ink(ink, 0.0, 0.0, &mut view.inks),
+            PageContent::Image(image) => {
+                if budget.output.page_full() {
+                    budget.output.skip(&mut view.skipped)?;
+                    continue;
+                }
+                match extract_image(image, limits, budget)? {
+                    Some(img) => {
+                        if budget.output.admit(0, &mut view.skipped)? {
+                            view.images.push(img);
+                        }
+                    }
+                    None => view.skipped.other += 1,
+                }
+            }
+            PageContent::Ink(ink) => {
+                extract_ink(ink, 0.0, 0.0, &mut view.inks, &mut budget.output, &mut view.skipped)?
+            }
             PageContent::EmbeddedFile(_) | PageContent::Unknown => view.skipped.other += 1,
         }
     }
     Ok(view)
 }
 
-/// Flattens an ink tree; container offsets are relative to the parent, so they add up.
-fn extract_ink(ink: &Ink, parent_h: f32, parent_v: f32, out: &mut Vec<InkView>) {
+/// Flattens an ink tree; container offsets are relative to the parent, so they add up. Every
+/// stroke is admitted through `output` (past the page limit it is counted, not read).
+fn extract_ink(
+    ink: &Ink,
+    parent_h: f32,
+    parent_v: f32,
+    out: &mut Vec<InkView>,
+    output: &mut ImportBudget,
+    skipped: &mut ImportSkipped,
+) -> Result<(), ImportError> {
     let h = parent_h + ink.offset_horizontal().unwrap_or(0.0);
     let v = parent_v + ink.offset_vertical().unwrap_or(0.0);
-    let strokes: Vec<StrokeView> = ink
-        .ink_strokes()
-        .iter()
-        .map(|s| StrokeView {
+    let strokes = admit_strokes(
+        ink.ink_strokes(),
+        |s| StrokeView {
             points: s.absolute_path().iter().map(|p| (p.x(), p.y())).collect(),
             color: s.color(),
             transparency: s.transparency(),
             width: s.width(),
-        })
-        .collect();
+        },
+        output,
+        skipped,
+    )?;
     if !strokes.is_empty() {
         out.push(InkView {
             offset_horizontal: h,
@@ -359,8 +386,31 @@ fn extract_ink(ink: &Ink, parent_h: f32, parent_v: f32, out: &mut Vec<InkView>) 
         });
     }
     for child in ink.child_groups() {
-        extract_ink(child, h, v, out);
+        extract_ink(child, h, v, out, output, skipped)?;
     }
+    Ok(())
+}
+
+/// The views of `strokes` that `output` admits; a stroke past the page limit is counted in
+/// `skipped` without being read.
+fn admit_strokes<S>(
+    strokes: &[S],
+    read: impl Fn(&S) -> StrokeView,
+    output: &mut ImportBudget,
+    skipped: &mut ImportSkipped,
+) -> Result<Vec<StrokeView>, ImportError> {
+    let mut out = Vec::new();
+    for s in strokes {
+        if output.page_full() {
+            output.skip(skipped)?;
+            continue;
+        }
+        let view = read(s);
+        if output.admit(view.points.len(), skipped)? {
+            out.push(view);
+        }
+    }
+    Ok(out)
 }
 
 fn extract_outline(
@@ -395,7 +445,9 @@ fn extract_outline(
             .unwrap_or((adapter::DEFAULT_IMAGE_SIZE_PX / adapter::HALF_INCH_TO_PX) as f32);
         page.images.push(img);
     }
-    if view.paragraphs.iter().any(|p| !p.trim().is_empty()) {
+    if view.paragraphs.iter().any(|p| !p.trim().is_empty())
+        && budget.output.admit(0, &mut page.skipped)?
+    {
         page.outlines.push(view);
     }
     Ok(())
@@ -425,8 +477,16 @@ impl OutlineWalk<'_> {
                                 self.view.paragraphs.push(visible_text(text));
                             }
                             Content::Image(image) => {
+                                if self.budget.output.page_full() {
+                                    self.budget.output.skip(self.skipped)?;
+                                    continue;
+                                }
                                 match extract_image(image, self.limits, self.budget)? {
-                                    Some(img) => self.images.push(img),
+                                    Some(img) => {
+                                        if self.budget.output.admit(0, self.skipped)? {
+                                            self.images.push(img);
+                                        }
+                                    }
                                     None => self.skipped.other += 1,
                                 }
                             }
@@ -818,5 +878,45 @@ pub mod adapter {
             images,
             skipped: p.skipped,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn onenote_document_point_budget_is_enforced() {
+        let view = |n: &usize| StrokeView {
+            points: vec![(0.0, 0.0); *n],
+            color: None,
+            transparency: None,
+            width: 1.0,
+        };
+        let limits = ImportLimits { max_points: 10_000, ..ImportLimits::default() };
+        let mut output = ImportBudget::new(&limits);
+        let mut skipped = ImportSkipped::default();
+
+        // A page past the element limit: the extra strokes are counted, never read.
+        output.start_page();
+        let read = std::cell::Cell::new(0usize);
+        let counted = |n: &usize| {
+            read.set(read.get() + 1);
+            view(n)
+        };
+        let kept = admit_strokes(&[1usize; 5010], counted, &mut output, &mut skipped).unwrap();
+        assert_eq!((kept.len(), read.get(), skipped.other), (5000, 5000, 10));
+
+        // The next pages share the document's point budget.
+        let mut result = Ok(Vec::new());
+        for _ in 0..10 {
+            output.start_page();
+            result = admit_strokes(&[1000usize; 2], view, &mut output, &mut skipped);
+            if result.is_err() {
+                break;
+            }
+        }
+        assert!(matches!(result, Err(ImportError::Limit(m)) if m.contains("points")));
+        assert!(output.points() > 10_000 && output.points() <= 12_000, "{}", output.points());
     }
 }

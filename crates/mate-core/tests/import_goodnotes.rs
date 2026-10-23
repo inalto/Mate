@@ -831,16 +831,37 @@ fn goodnotes_point_budget_limits_amplification() {
     assert_eq!(page.strokes.len(), 1);
     assert_eq!(page.strokes[0].color, "#0000ff");
     assert_eq!(page.skipped.other, 1);
+}
 
+#[test]
+fn goodnotes_document_point_budget_is_enforced() {
     // Just under the stroke budget (780 · 64 + 1 = 49 921 points) but repeated over 110
-    // strokes: the file budget (5 000 000 points) stops the import.
+    // strokes: a 5 000 000-point document budget stops the import (the default is 20 000 000).
     let blob = amplifying_blob(780);
     let elements: Vec<fx::Pb> =
         (0..110).map(|i| fx::blob_stroke(&format!("s{i}"), blob.clone())).collect();
-    match import(&fx::build(&one_page_spec(elements, Vec::new()))) {
+    let bytes = fx::build(&one_page_spec(elements, Vec::new()));
+    let limits = ImportLimits { max_points: 5_000_000, ..ImportLimits::for_source(ImportSource::GoodNotes) };
+    let started = std::time::Instant::now();
+    match parse(&bytes, "notebook.goodnotes", &limits) {
         Err(ImportError::Limit(m)) => assert!(m.contains("points"), "{m}"),
         other => panic!("{:?}", other.map(|d| d.page_count())),
     }
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+    // Under the default budget the same file imports.
+    assert_eq!(import(&bytes).unwrap().sections[0].pages[0].strokes.len(), 110);
+
+    // Past the per-page element limit, strokes are counted, not built.
+    let elements: Vec<fx::Pb> = (0..5010)
+        .map(|i| {
+            let mut s = fx::abc(1, (i % 500) as f32).remove(0);
+            s.id = Some(format!("p{i}"));
+            fx::stroke_element(&s)
+        })
+        .collect();
+    let doc = import(&fx::build(&one_page_spec(elements, Vec::new()))).unwrap();
+    let page = &pages(&doc)[0];
+    assert_eq!((page.strokes.len(), page.skipped.other), (5000, 10));
 }
 
 #[test]

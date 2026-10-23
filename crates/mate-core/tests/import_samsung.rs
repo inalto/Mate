@@ -517,3 +517,41 @@ fn samsung_implausible_page_size_skips_only_that_page() {
     assert_eq!(pages.len(), 2);
     assert_eq!(pages[1].skipped.other, 1);
 }
+
+#[test]
+fn samsung_document_point_budget_is_enforced() {
+    use samsung_fixture::{PageSpec, StrokeSpec, Style};
+    let stroke = |n: usize| StrokeSpec {
+        points: (0..n).map(|i| (10.0 + (i % 2) as f64, 20.0)).collect(),
+        pressure: vec![1; n],
+        style: Style::Pen([0, 0, 0], 4.0),
+    };
+    // One page of 100 strokes × 2 000 points, listed 60 times in pageIdInfo.dat: 12 000 000
+    // points from one small page entry.
+    let mut spec = samsung_fixture::basic();
+    spec.images.clear();
+    spec.pages = vec![PageSpec { id: "p1".into(), strokes: (0..100).map(|_| stroke(2000)).collect() }];
+    let mut parts = samsung_fixture::parts(&spec);
+    let ids = parts.iter_mut().find(|(n, _)| n == "pageIdInfo.dat").unwrap();
+    let mut buf = vec![0u8; 32];
+    buf.extend_from_slice(&60u16.to_le_bytes());
+    for _ in 0..60 {
+        buf.extend_from_slice(&2u16.to_le_bytes());
+        buf.extend(b"p\x001\x00");
+    }
+    ids.1 = buf;
+    let bytes = samsung_fixture::zip_parts(&parts);
+    let lim = ImportLimits { max_points: 1_000_000, ..limits() };
+    let started = std::time::Instant::now();
+    match parse(&bytes, "x.sdocx", &lim) {
+        Err(ImportError::Limit(m)) => assert!(m.contains("points"), "{m}"),
+        other => panic!("{:?}", other.map(|d| d.page_count())),
+    }
+    assert!(started.elapsed().as_secs() < 5, "{:?}", started.elapsed());
+
+    // Strokes past the per-page limit are counted, not decoded.
+    spec.pages = vec![PageSpec { id: "p1".into(), strokes: (0..5010).map(|_| stroke(4)).collect() }];
+    let doc = parse(&samsung_fixture::build(&spec), "x.sdocx", &limits()).unwrap();
+    let page = &doc.sections[0].pages[0];
+    assert_eq!((page.strokes.len(), page.skipped.other), (5000, 10));
+}

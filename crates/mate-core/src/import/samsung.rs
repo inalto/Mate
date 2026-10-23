@@ -8,8 +8,8 @@
 //! counts and by the buffer length, and a damaged stroke stops its page (earlier strokes stay).
 
 use super::{
-    ImportBackground, ImportDocument, ImportError, ImportImage, ImportLimits, ImportPage,
-    ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ZipSource,
+    ImportBackground, ImportBudget, ImportDocument, ImportError, ImportImage, ImportLimits,
+    ImportPage, ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ZipSource,
     check_deadline,
 };
 use crate::model::{PageMode, PenStyle};
@@ -29,7 +29,6 @@ const MAX_IMAGE_PLACEMENTS: usize = 1000;
 const MAX_COORD: f64 = 1.0e7;
 const MIN_PAGE: f64 = 1.0;
 const MAX_PAGE: f64 = 1_000_000.0;
-
 
 fn corrupt(what: &str) -> ImportError {
     ImportError::Corrupt(format!("Samsung Notes: {what}"))
@@ -169,8 +168,9 @@ struct DecodedPage {
     lost: u32,
 }
 
-/// One `.page` file.
-fn decode_page(buf: &[u8], dark: bool) -> Result<DecodedPage, ImportError> {
+/// One `.page` file. Strokes past the page limit are not decoded (they count as lost); the
+/// document budget is charged for every stroke kept.
+fn decode_page(buf: &[u8], dark: bool, budget: &mut ImportBudget) -> Result<DecodedPage, ImportError> {
     let header = usize_from(u32_at(buf, 0)?);
     let width = f64::from(u32_at(buf, 22)?);
     let height = f64::from(u32_at(buf, 26)?);
@@ -178,9 +178,17 @@ fn decode_page(buf: &[u8], dark: bool) -> Result<DecodedPage, ImportError> {
     let cap = usize_from(declared).min(buf.len() / MIN_STROKE_BYTES + 1);
     let mut strokes = Vec::new();
     let mut h = add(header, 181)?;
+    budget.start_page();
+    let mut over = ImportSkipped::default();
     for _ in 0..cap {
+        if budget.page_full() {
+            break;
+        }
         match decode_stroke(buf, h, dark, strokes.len()) {
             Ok((stroke, next)) => {
+                if !budget.admit(stroke.points.len(), &mut over)? {
+                    break;
+                }
                 strokes.push(stroke);
                 h = next;
             }
@@ -351,11 +359,12 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
 
     let mut pages: Vec<ImportPage> = Vec::new();
     let mut bad_pages = 0u32;
+    let mut budget = ImportBudget::new(limits);
     for (n, id) in ids.iter().enumerate().take(limits.max_pages) {
         check_deadline(limits)?;
         let Some(entry) = find_entry(src, &format!("{id}.page")) else { continue };
         let Some(buf) = src.entry(&entry)? else { continue };
-        let page = decode_page(&buf, header.dark)?;
+        let page = decode_page(&buf, header.dark, &mut budget)?;
         let width = if page.width > 0.0 { page.width } else { header.width };
         let height = if page.height > 0.0 { page.height } else { header.height };
         if !(MIN_PAGE..=MAX_PAGE).contains(&width) || !(MIN_PAGE..=MAX_PAGE).contains(&height) {
@@ -385,7 +394,7 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
         last.skipped.other = last.skipped.other.saturating_add(dropped);
     }
 
-    place_images(src, &note, &header, &mut pages)?;
+    place_images(src, &note, &header, &mut pages, &mut budget)?;
 
     Ok(ImportDocument {
         source: ImportSource::SamsungNotes,
@@ -406,6 +415,7 @@ fn place_images(
     note: &[u8],
     header: &NoteHeader,
     pages: &mut [ImportPage],
+    budget: &mut ImportBudget,
 ) -> Result<(), ImportError> {
     let (placements, extra) = image_placements(note);
     if placements.is_empty() && extra == 0 {
@@ -416,6 +426,9 @@ fn place_images(
         None => Vec::new(),
     };
     let target = pages.iter().position(|p| !p.strokes.is_empty()).unwrap_or(0);
+    // The images join that page's strokes under the per-page limit.
+    budget.start_page();
+    let mut page_room = crate::import::MAX_ELEMENTS_PER_PAGE.saturating_sub(pages[target].strokes.len());
     let (pw, ph) = (pages[target].width, pages[target].height);
     let sx = if header.width > 0.0 { pw / header.width } else { 1.0 };
     let sy = if header.height > 0.0 { ph / header.height } else { 1.0 };
@@ -441,7 +454,12 @@ fn place_images(
             None => None,
         };
         match loaded {
-            Some((bytes, mime)) if used.saturating_add(bytes.len()) <= byte_budget => {
+            Some((bytes, mime))
+                if used.saturating_add(bytes.len()) <= byte_budget
+                    && page_room > 0
+                    && budget.admit(0, &mut ImportSkipped::default())? =>
+            {
+                page_room -= 1;
                 used += bytes.len();
                 pages[target].images.push(ImportImage {
                     x: l * sx,

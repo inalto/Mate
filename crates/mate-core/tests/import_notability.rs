@@ -424,7 +424,7 @@ fn notability_note_is_one_page_sized_by_content() {
     assert!(page.strokes.is_empty() && page.texts.is_empty() && page.images.is_empty());
     assert_eq!(page.width, 540.0);
 
-    // No curves dictionary at all: Corrupt (as in Derive).
+    // No curves dictionary at all: Corrupt.
     let mut none = basic();
     none.strokes = None;
     assert!(matches!(import(&build(&none)), Err(ImportError::Corrupt(_))));
@@ -620,4 +620,78 @@ fn notability_encrypted_entry_is_reported() {
     }
     let r = import(&bytes);
     assert!(matches!(r, Err(ImportError::Encrypted)), "{r:?}");
+}
+
+#[test]
+fn notability_document_point_budget_is_enforced() {
+    let long = |y: f32| Stroke {
+        points: (0..10_000).map(|i| (i as f32 * 0.1, y)).collect(),
+        rgba: [0, 0, 0, 0xFF],
+        width: 2.0,
+    };
+    let spec = Spec {
+        strokes: Some(vec![long(10.0), long(20.0), long(30.0)]),
+        fractional: None,
+        text: false,
+        image: false,
+        ..basic()
+    };
+    let bytes = build(&spec);
+    let limits = ImportLimits { max_points: 25_000, ..ImportLimits::default() };
+    let started = std::time::Instant::now();
+    match parse(&bytes, "Fixture.note", &limits) {
+        Err(ImportError::Limit(m)) => assert!(m.contains("points"), "{m}"),
+        other => panic!("{:?}", other.map(|d| d.page_count())),
+    }
+    assert!(started.elapsed().as_secs() < 2, "{:?}", started.elapsed());
+    assert_eq!(import(&bytes).unwrap().sections[0].pages[0].strokes.len(), 3);
+
+    // The note is one page: strokes past the per-page limit are counted, not built.
+    let short = |i: usize| Stroke {
+        points: vec![(1.0, i as f32), (2.0, i as f32), (3.0, i as f32), (4.0, i as f32)],
+        rgba: [0, 0, 0, 0xFF],
+        width: 2.0,
+    };
+    let spec = Spec { strokes: Some((0..5010).map(short).collect()), ..spec };
+    let doc = import(&build(&spec)).unwrap();
+    let page = &doc.sections[0].pages[0];
+    assert_eq!((page.strokes.len(), page.skipped.other), (5000, 10));
+}
+
+#[test]
+fn notability_data_blob_over_64_mib_is_refused() {
+    // {"$objects": [{curvesnumpoints, curvespoints (64 MiB + 8 bytes), curveswidth, curvescolors}]}.
+    let pairs: u32 = (64 << 20) / 8 + 1;
+    let data = |bytes: &[u8]| {
+        let mut v = vec![0x4F, 0x12];
+        v.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+        v.extend_from_slice(bytes);
+        v
+    };
+    let mut points = vec![0x4F, 0x12];
+    points.extend_from_slice(&(pairs * 8).to_be_bytes());
+    points.resize(points.len() + pairs as usize * 8, 0);
+    let plist = assemble(
+        &[
+            vec![0xD1, 1, 2],
+            ascii("$objects"),
+            vec![0xA1, 3],
+            vec![0xD4, 4, 5, 6, 7, 8, 9, 10, 11],
+            [&[0x5F, 0x10, 15][..], b"curvesnumpoints"].concat(),
+            ascii("curvespoints"),
+            ascii("curveswidth"),
+            ascii("curvescolors"),
+            data(&(pairs as i32).to_le_bytes()),
+            points,
+            data(&2.0f32.to_le_bytes()),
+            data(&[0, 0, 0, 0xFF]),
+        ],
+        0,
+    );
+    let started = std::time::Instant::now();
+    match import(&notability_fixture::zip_with(&plist)) {
+        Err(ImportError::Limit(m)) => assert!(m.contains("64 MiB"), "{m}"),
+        other => panic!("{:?}", other.map(|d| d.page_count())),
+    }
+    assert!(started.elapsed().as_secs() < 5, "{:?}", started.elapsed());
 }

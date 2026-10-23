@@ -776,3 +776,92 @@ fn freenotes_unusable_strokes_are_counted() {
     assert_eq!(p.strokes.len(), 1);
     assert_eq!(p.skipped.other, 1);
 }
+
+/// A deflated zip of one note whose `n_pages` pages all show content record `C1`.
+fn shared_content_zip(n_pages: usize, content: &[u8], images: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    use std::io::{Cursor, Write};
+    let mut body = Vec::new();
+    for i in 0..n_pages {
+        body.extend(fx::len(
+            1,
+            &fx::cat(&[fx::text(1, &format!("P{i}")), fx::uint(3, i as u64), fx::text(6, "C1")]),
+        ));
+    }
+    let doc = fx::cat(&[fx::text(2, "doc"), fx::len(4, &body)]);
+    let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let opts = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .compression_level(Some(9));
+    let mut files: Vec<(String, &[u8])> = vec![
+        ("N.frnote/document.dat".into(), &doc),
+        ("N.frnote/FNPages/C1".into(), content),
+    ];
+    for (name, bytes) in images {
+        files.push((format!("N.frnote/Images/{name}"), bytes));
+    }
+    for (name, data) in files {
+        w.start_file(name.as_str(), opts).unwrap();
+        w.write_all(data).unwrap();
+    }
+    w.finish().unwrap().into_inner()
+}
+
+#[test]
+fn freenotes_shared_asset_references_are_bounded() {
+    // One 16 MiB picture referenced by 64 image items on one page: a ~17 KiB file.
+    let mut big = PNG.to_vec();
+    big.resize(16 << 20, 0);
+    let refs: Vec<u8> = (0..64)
+        .flat_map(|k| fx::image_object(&format!("k{k}"), 1, "big", 0.0, 0.0, 10.0, 10.0))
+        .collect();
+    let one_page = shared_content_zip(1, &refs, &[("big", big.clone())]);
+    assert!(one_page.len() < 64 * 1024, "{}", one_page.len());
+    let started = std::time::Instant::now();
+    let doc = run(&one_page).unwrap();
+    assert!(started.elapsed() < std::time::Duration::from_secs(1), "{:?}", started.elapsed());
+    let page = &doc.sections[0].pages[0];
+    // The page shows the picture once; the other references are counted.
+    assert_eq!((page.images.len(), page.skipped.other), (1, 63));
+    assert_eq!(page.images[0].bytes.len(), 16 << 20);
+
+    // The same picture on many pages: every copy is charged to the unzip budget.
+    let many_pages = shared_content_zip(64, &refs[..refs.len() / 64], &[("big", big)]);
+    let limits = ImportLimits { max_unzipped_bytes: 64 << 20, ..ImportLimits::default() };
+    let started = std::time::Instant::now();
+    let r = parse(&many_pages, "x.freenotes", &limits);
+    assert!(matches!(r, Err(ImportError::Limit(_))), "{:?}", r.map(|d| d.page_count()));
+    assert!(started.elapsed() < std::time::Duration::from_secs(1), "{:?}", started.elapsed());
+}
+
+#[test]
+fn freenotes_document_point_budget_is_enforced() {
+    // 200 pages share one ~1 MiB content record of 25 000 ellipses (36 points each): a 4 KiB
+    // file that would build 180 000 000 points.
+    let ellipse = fx::shape_stroke("k", 1, 2003, &[10.0, 10.0, 5.0]);
+    let content = ellipse.repeat(25_000);
+    let bytes = shared_content_zip(200, &content, &[]);
+    assert!(bytes.len() < 16 * 1024, "{}", bytes.len());
+    // A smaller document budget keeps the test light; the rule is the same at 20 000 000.
+    let limits = ImportLimits { max_points: 1_000_000, ..ImportLimits::default() };
+    let started = std::time::Instant::now();
+    match parse(&bytes, "x.freenotes", &limits) {
+        Err(ImportError::Limit(m)) => assert!(m.contains("points"), "{m}"),
+        other => panic!("{:?}", other.map(|d| d.page_count())),
+    }
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "{:?}", started.elapsed());
+
+    // One such page under the default budget: 5 000 strokes kept, the rest counted.
+    let one = shared_content_zip(1, &content, &[]);
+    let doc = run(&one).unwrap();
+    let page = &doc.sections[0].pages[0];
+    assert_eq!((page.strokes.len(), page.skipped.other), (5000, 20_000));
+
+    // The element budget: 2-point strokes on many pages.
+    let short = fx::stroke("s", 1, 1, Some(BLUE), Some(3.0), &[(1.0, 1.0), (2.0, 2.0)]);
+    let bytes = shared_content_zip(30, &short.repeat(5000), &[]);
+    let limits = ImportLimits { max_elements: 100_000, ..ImportLimits::default() };
+    match parse(&bytes, "x.freenotes", &limits) {
+        Err(ImportError::Limit(m)) => assert!(m.contains("items"), "{m}"),
+        other => panic!("{:?}", other.map(|d| d.page_count())),
+    }
+}

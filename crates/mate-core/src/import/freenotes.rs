@@ -14,9 +14,9 @@ use std::collections::{HashMap, HashSet};
 
 use super::pb::{self, Wire};
 use super::{
-    ImportBackground, ImportDocument, ImportError, ImportImage, ImportLimits, ImportPage,
-    ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ImportText, ZipSource,
-    check_deadline,
+    ImportBackground, ImportBudget, ImportDocument, ImportError, ImportImage, ImportLimits,
+    ImportPage, ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ImportText,
+    ZipSource, check_deadline,
 };
 use crate::model::{PageMode, PenStyle};
 
@@ -144,9 +144,10 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
     let mut page_mode = PageMode::Page;
     let mut remaining = limits.max_pages;
     let mut dropped = 0u32;
+    let mut budget = ImportBudget::new(limits);
     for dir in &bundles {
         check_deadline(limits)?;
-        let note = parse_note(src, limits, dir, &mut remaining)?;
+        let note = parse_note(src, limits, &mut budget, dir, &mut remaining)?;
         if note.canvas {
             page_mode = PageMode::Canvas;
         }
@@ -156,7 +157,7 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
     if dropped > 0
         && let Some(page) = sections.iter_mut().rev().find_map(|s| s.pages.last_mut())
     {
-        page.skipped.other += dropped;
+        page.skipped.other = page.skipped.other.saturating_add(dropped);
     }
     let title = if sections.len() == 1 {
         sections[0].title.clone()
@@ -242,6 +243,7 @@ fn stem_of(base: &str) -> &str {
 fn parse_note(
     src: &mut ZipSource,
     limits: &ImportLimits,
+    budget: &mut ImportBudget,
     dir: &str,
     remaining: &mut usize,
 ) -> Result<Note, ImportError> {
@@ -340,6 +342,8 @@ fn parse_note(
 
     let mut out = Vec::new();
     let mut dropped = 0u32;
+    // Asset bytes by entry name, read once; every copy handed to a page is charged to the zip
+    // budget, and a page shows each asset at most once.
     let mut asset_cache: HashMap<String, Option<Vec<u8>>> = HashMap::new();
     for (i, rec) in pages.iter().enumerate() {
         if *remaining == 0 {
@@ -348,6 +352,7 @@ fn parse_note(
         }
         *remaining -= 1;
         check_deadline(limits)?;
+        budget.start_page();
         let (w, h) = sizes.get(&rec.id).copied().unwrap_or(DEFAULT_PAGE);
         let mut page = ImportPage {
             source_id: rec.id.clone(),
@@ -379,12 +384,13 @@ fn parse_note(
                     let Some(bytes) = read(src, name)? else {
                         continue;
                     };
-                    read_content(&bytes, layer_no, &mut seq, &mut items, &mut page.skipped)?;
+                    read_content(&bytes, layer_no, &mut seq, &mut items, &mut page.skipped, budget)?;
                 }
             }
         }
         items.sort_by(|a, b| (a.layer, a.at, &a.key, a.seq).cmp(&(b.layer, b.at, &b.key, b.seq)));
         let count = items.len() as i64;
+        let mut placed_assets: HashSet<String> = HashSet::new();
         for (rank, item) in items.into_iter().enumerate() {
             let z = rank as i64 - count;
             match item.kind {
@@ -394,17 +400,23 @@ fn parse_note(
                 }
                 Kind::Text(t) => page.texts.push(t),
                 Kind::Image(id, frame) => {
-                    let bytes = match asset_names.get(&id) {
-                        Some(name) => match asset_cache.get(name) {
-                            Some(b) => b.clone(),
-                            None => {
-                                let b = read(src, name)?;
-                                asset_cache.insert(name.clone(), b.clone());
-                                b
-                            }
-                        },
-                        None => None,
+                    let Some(name) = asset_names.get(&id) else {
+                        page.skipped.other = page.skipped.other.saturating_add(1);
+                        continue;
                     };
+                    if !placed_assets.insert(name.clone()) {
+                        // The same picture again on this page.
+                        page.skipped.other = page.skipped.other.saturating_add(1);
+                        continue;
+                    }
+                    if !asset_cache.contains_key(name) {
+                        let b = read(src, name)?;
+                        asset_cache.insert(name.clone(), b);
+                    }
+                    let bytes = asset_cache.get(name).cloned().flatten();
+                    if let Some(b) = &bytes {
+                        src.charge(b.len() as u64)?;
+                    }
                     match bytes {
                         Some(bytes) => page.images.push(ImportImage {
                             x: frame.0,
@@ -414,7 +426,7 @@ fn parse_note(
                             mime: sniff_image(&bytes),
                             bytes,
                         }),
-                        None => page.skipped.other += 1,
+                        None => page.skipped.other = page.skipped.other.saturating_add(1),
                     }
                 }
             }
@@ -607,10 +619,15 @@ fn read_content(
     seq: &mut usize,
     items: &mut Vec<Item>,
     skipped: &mut ImportSkipped,
+    budget: &mut ImportBudget,
 ) -> Result<(), ImportError> {
     let rec = Fields::top(bytes)?;
     for w in all(&rec, 3) {
         let Some(b) = w.as_bytes() else { continue };
+        if budget.page_full() {
+            budget.skip(skipped)?;
+            continue;
+        }
         let entry = rec.child(b)?;
         let key = string(&entry, 1).unwrap_or_default();
         let Some(value) = sub(&entry, 2)? else {
@@ -626,7 +643,9 @@ fn read_content(
             Some(path) => timestamp(&path, 3)?.unwrap_or(MISSING_AT),
             None => MISSING_AT,
         };
-        if let Some(s) = read_stroke(&stroke, skipped)? {
+        if let Some(s) = read_stroke(&stroke, skipped)?
+            && budget.admit(s.points.len(), skipped)?
+        {
             *seq += 1;
             items.push(Item {
                 layer,
@@ -639,6 +658,10 @@ fn read_content(
     }
     for w in all(&rec, 4) {
         let Some(b) = w.as_bytes() else { continue };
+        if budget.page_full() {
+            budget.skip(skipped)?;
+            continue;
+        }
         let entry = rec.child(b)?;
         let key = string(&entry, 1).unwrap_or_default();
         let Some(value) = sub(&entry, 2)? else {
@@ -669,6 +692,9 @@ fn read_content(
         };
         match kind {
             Some(kind) => {
+                if !budget.admit(0, skipped)? {
+                    continue;
+                }
                 *seq += 1;
                 items.push(Item {
                     layer,

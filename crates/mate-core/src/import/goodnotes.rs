@@ -24,8 +24,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use super::pb::{self, Wire};
 use super::zipsrc::is_safe_name;
 use super::{
-    ImportBackground, ImportDocument, ImportError, ImportImage, ImportLimits, ImportPage,
-    ImportPoint, ImportSection, ImportSource, ImportStroke, ImportText, ZipSource,
+    ImportBackground, ImportBudget, ImportDocument, ImportError, ImportImage, ImportLimits,
+    ImportPage, ImportPoint, ImportSection, ImportSource, ImportStroke, ImportText, ZipSource,
     check_deadline,
 };
 use crate::model::{PageMode, PenStyle};
@@ -52,8 +52,6 @@ const BOARD_MAX_SIDE: f64 = 50_000.0;
 const BOARD_LINE_HEIGHT: f64 = 30.0;
 /// Points one stroke may flatten to; a stroke past it is skipped and counted.
 const MAX_POINTS_PER_STROKE: usize = 50_000;
-/// Points one file may flatten to; past it the import fails with `Limit`.
-const MAX_POINTS_PER_FILE: usize = 5_000_000;
 /// The path builder checks the deadline once per this many curves.
 const CURVES_PER_DEADLINE_CHECK: usize = 1024;
 /// Per-point and family widths above this are dropped.
@@ -1691,8 +1689,8 @@ struct Importer<'s, 'z> {
     /// Attachment bytes by zip path (read once).
     files: HashMap<String, Option<Vec<u8>>>,
     pending_images: Vec<PendingImage>,
-    /// Points emitted over the whole file.
-    points: usize,
+    /// Points and elements over the whole file, elements on the current page.
+    budget: ImportBudget,
 }
 
 impl Importer<'_, '_> {
@@ -1712,6 +1710,7 @@ impl Importer<'_, '_> {
             elements.push(m);
         }
         let hidden = Hidden::read(&elements);
+        self.budget.start_page();
         self.read_strokes(&elements, &hidden, page)?;
         self.read_texts(&elements, &hidden, page)?;
         self.read_images(&elements, &hidden, page_index, page)?;
@@ -1786,6 +1785,10 @@ impl Importer<'_, '_> {
             if i.is_multiple_of(256) {
                 check_deadline(&self.limits)?;
             }
+            if self.budget.page_full() {
+                self.budget.skip(&mut page.skipped)?;
+                continue;
+            }
             let decoded = match element.blob.filter(|b| is_path_blob(b)) {
                 Some(blob) => match unwrap_path_blob(blob, self.src)? {
                     Some(payload) => decode_payload(&payload, &self.limits)?,
@@ -1846,14 +1849,8 @@ impl Importer<'_, '_> {
                     })
                     .filter(|p| p.x.is_finite() && p.y.is_finite())
                     .collect();
-                if points.len() < 2 {
+                if points.len() < 2 || !self.budget.admit(points.len(), &mut page.skipped)? {
                     continue;
-                }
-                self.points += points.len();
-                if self.points > MAX_POINTS_PER_FILE {
-                    return Err(ImportError::Limit(format!(
-                        "its strokes have more than {MAX_POINTS_PER_FILE} points"
-                    )));
                 }
                 page.strokes.push(ImportStroke {
                     points,
@@ -1899,8 +1896,16 @@ impl Importer<'_, '_> {
             if t.varint(4) == Some(1) {
                 continue;
             }
+            if self.budget.page_full() {
+                self.budget.skip(&mut page.skipped)?;
+                continue;
+            }
             match read_text(&t, self.src)? {
-                Some(text) if text.x.is_finite() && text.y.is_finite() => page.texts.push(text),
+                Some(text) if text.x.is_finite() && text.y.is_finite() => {
+                    if self.budget.admit(0, &mut page.skipped)? {
+                        page.texts.push(text);
+                    }
+                }
                 Some(_) => page.skipped.other += 1,
                 None if is_box_shape(&t) => page.skipped.shapes += 1,
                 None => {}
@@ -1942,6 +1947,10 @@ impl Importer<'_, '_> {
                 page.skipped.other += 1;
                 continue;
             }
+            if self.budget.page_full() {
+                self.budget.skip(&mut page.skipped)?;
+                continue;
+            }
             let Some(bytes) = self.load_attachment(&path)? else {
                 continue;
             };
@@ -1949,6 +1958,9 @@ impl Importer<'_, '_> {
             if mime == Some("application/pdf") {
                 // PDF stickers are not imported.
                 page.skipped.other += 1;
+                continue;
+            }
+            if !self.budget.admit(0, &mut page.skipped)? {
                 continue;
             }
             self.pending_images.push(PendingImage {
@@ -2136,7 +2148,7 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
         attachments,
         files: HashMap::new(),
         pending_images: Vec::new(),
-        points: 0,
+        budget: ImportBudget::new(limits),
     };
     let mut pages: Vec<ImportPage> = Vec::with_capacity(order.len());
     for (i, path) in order.iter().enumerate() {
