@@ -27,7 +27,13 @@ export default function KeybindingsSection() {
         return;
       }
       const keys = parseKeyEvent(e, mac);
-      if (!keys) return; // a bare modifier: wait for the rest of the combo
+      if (!keys) {
+        // A bare modifier waits for the rest of the combo; Ctrl on macOS / Meta elsewhere is unsupported.
+        if (!["Control", "Shift", "Alt", "Meta", "AltGraph", "CapsLock", "OS"].includes(e.key)) {
+          setWarning(mac ? "Use Cmd (not Ctrl) as the modifier." : "The Windows/Meta key cannot be used.");
+        }
+        return;
+      }
       const shown = formatKeys(keys, mac);
       if (isReservedCombo(keys)) {
         setWarning(`${shown} is reserved and cannot be used. Press another combination.`);

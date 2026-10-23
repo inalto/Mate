@@ -19,15 +19,23 @@ function Overlay() {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      useChromeStore.getState().setShortcutsOpen(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation(); // closes the overlay only, nothing behind it
+        useChromeStore.getState().setShortcutsOpen(false);
+      } else if (e.key === "Tab") {
+        const focusable = [...(ref.current?.querySelectorAll<HTMLElement>("button:not([disabled])") ?? [])];
+        e.preventDefault();
+        if (focusable.length === 0) return;
+        const i = focusable.indexOf(document.activeElement as HTMLElement);
+        focusable[e.shiftKey ? (i <= 0 ? focusable.length - 1 : i - 1) : i === focusable.length - 1 ? 0 : i + 1].focus();
+      }
     };
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     ref.current?.focus();
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       before?.focus?.();
     };
   }, []);

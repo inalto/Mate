@@ -86,3 +86,15 @@ describe("ShortcutHelp", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("ShortcutHelp focus", () => {
+  it("help_overlay_blocks_editor_shortcuts_and_traps_focus_tab_cycles", () => {
+    render(<ShortcutHelp />);
+    act(() => useChromeStore.getState().setShortcutsOpen(true));
+    const close = screen.getByRole("button", { name: "Close" });
+    close.focus();
+    const tab = fireEvent.keyDown(window, { key: "Tab" });
+    expect(tab).toBe(false); // prevented: focus stays inside the dialog
+    expect(document.activeElement).toBe(close);
+  });
+});

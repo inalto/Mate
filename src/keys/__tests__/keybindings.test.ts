@@ -1,3 +1,4 @@
+import { matchShortcut, DEFAULT_SHORTCUTS } from "../shortcuts";
 import { describe, expect, it } from "vitest";
 import { ACTION_META, ACTIONS } from "../actions";
 import {
@@ -22,10 +23,10 @@ describe("keybindings", () => {
   });
 
   it("reserved_keys_cannot_be_bound", () => {
-    for (const k of ["Escape", "Tab", "Enter", "Space", "P", "7", "Shift+P", "Ctrl+Tab", "Ctrl+Enter"]) {
+    for (const k of ["Escape", "Tab", "Enter", "Space", "P", "7", "Shift+P", "Ctrl+Tab", "Ctrl+Enter", "Ctrl+Space", "Shift+Space", "Alt+Space"]) {
       expect(isReservedCombo(k), k).toBe(true);
     }
-    for (const k of ["Ctrl+P", "Alt+7", "F2", "Delete", "Ctrl+Space", "Alt+Space", "?"]) {
+    for (const k of ["Ctrl+P", "Alt+7", "F2", "Delete", "?"]) {
       expect(isReservedCombo(k), k).toBe(false);
     }
   });
@@ -69,5 +70,13 @@ describe("keybindings", () => {
       }
     }
     expect(ACTIONS.length).toBe(Object.keys(ACTION_META).length);
+  });
+
+  it("space_combos_are_reserved_and_pan_matches_exactly", () => {
+    const e = (init: KeyboardEventInit) => new KeyboardEvent("keydown", { code: "Space", key: " ", ...init });
+    expect(matchShortcut(DEFAULT_SHORTCUTS, e({}), false)?.action).toBe("pan");
+    expect(matchShortcut(DEFAULT_SHORTCUTS, e({ ctrlKey: true }), false)).toBeNull();
+    expect(matchShortcut(DEFAULT_SHORTCUTS, e({ shiftKey: true }), false)).toBeNull();
+    expect(isReservedCombo("Ctrl+Shift+Space")).toBe(true);
   });
 });

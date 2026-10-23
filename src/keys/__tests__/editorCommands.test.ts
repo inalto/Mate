@@ -108,7 +108,18 @@ describe("runEditorShortcut", () => {
     expect(elementsQueue.flushAll).toHaveBeenCalled();
     runEditorShortcut("help.shortcuts", {});
     expect(useChromeStore.getState().shortcutsOpen).toBe(true);
+    useChromeStore.setState({ shortcutsOpen: false });
     runEditorShortcut("window.openPage", {});
     expect(openPageInWindow).toHaveBeenCalledWith("b");
+  });
+
+  it("help_overlay_blocks_editor_shortcuts_and_traps_focus", () => {
+    useChromeStore.setState({ shortcutsOpen: true });
+    for (const a of ["delete", "undo", "cut", "escape", "duplicate", "save", "page.next"]) runEditorShortcut(a as never, {});
+    expect(spies.select).not.toHaveBeenCalled();
+    expect(elementsQueue.flushAll).not.toHaveBeenCalled();
+    expect(focused()).toBe("b");
+    runEditorShortcut("help.shortcuts", {});
+    expect(useChromeStore.getState().shortcutsOpen).toBe(true);
   });
 });

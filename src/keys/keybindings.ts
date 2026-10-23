@@ -92,7 +92,7 @@ export function isReservedCombo(keys: string): boolean {
   const p = parse(keys);
   if (p.key === "Escape" || p.key === "Tab" || p.key === "Enter") return true;
   const bare = !p.ctrl && !p.alt;
-  if (p.key === "Space") return bare && !p.shift;
+  if (p.key === "Space") return true; // Space is the pan key: any combination with it would be taken by pan
   return bare && isLetterOrDigit(p.key);
 }
 

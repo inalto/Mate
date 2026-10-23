@@ -88,7 +88,6 @@ export function matchShortcut(map: ShortcutMap, e: KeyboardEvent, mac: boolean):
   if (otherMod) return null;
   for (const b of map) {
     if (b.code !== undefined ? e.code !== b.code : (e.key ?? "").toLowerCase() !== b.key?.toLowerCase()) continue;
-    if (b.hold) return b; // held keys ignore modifiers
     if (!!b.mod !== mod || (!b.anyShift && !!b.shift !== e.shiftKey) || !!b.alt !== e.altKey) continue;
     return b;
   }

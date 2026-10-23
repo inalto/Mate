@@ -122,6 +122,8 @@ function runChromeShortcut(action: string): boolean {
 export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   // While the command palette is open it owns the keyboard; only reopening it is allowed.
   if (useChromeStore.getState().paletteOpen && action !== "palette.open") return;
+  // Likewise the shortcut help overlay: only closing/reopening it is allowed.
+  if (useChromeStore.getState().shortcutsOpen && action !== "help.shortcuts" && action !== "palette.open") return;
   if (runChromeShortcut(action)) return;
   const s = getFocusedEditor().getState();
   // Ctrl+D: the page when the sidebar has focus or nothing is selected, else the selection.
