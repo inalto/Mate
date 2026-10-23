@@ -15,6 +15,7 @@ import { drawElement } from "../renderers/registry";
 import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
+import ZoomIndicator from "./ZoomIndicator";
 import { paintBackground, type SurfaceColors } from "./background";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
@@ -555,9 +556,12 @@ export default function CanvasView({ pageId, store = useEditorStore }: { pageId:
   }, [theme, invertImages]);
 
   return (
-    <div ref={hostRef} className="canvas-view" data-testid="canvas-view">
-      <canvas ref={staticRef} className="canvas-layer" />
-      <canvas ref={liveRef} className="canvas-layer canvas-live" />
-    </div>
+    <>
+      <div ref={hostRef} className="canvas-view" data-testid="canvas-view">
+        <canvas ref={staticRef} className="canvas-layer" />
+        <canvas ref={liveRef} className="canvas-layer canvas-live" />
+      </div>
+      <ZoomIndicator store={store} />
+    </>
   );
 }

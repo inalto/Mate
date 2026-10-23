@@ -24,6 +24,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { pickAndInsertImage } from "../images/insert";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
+import type { ShortcutAction } from "../keys/actions";
 import type { PenPreset } from "../model/types";
 import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
@@ -31,6 +32,7 @@ import { useSettingsStore } from "../stores/settings";
 import PresetMenu from "./PresetMenu";
 import { SHAPE_LABEL } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
+import { useShortcutHint } from "./shortcutHints";
 import { useDismiss } from "./useDismiss";
 
 const INK_LABEL: Record<InkType, string> = { pen: "Pen", "fountain-pen": "Fountain pen", highlighter: "Highlighter" };
@@ -46,14 +48,15 @@ function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number
   const [open, setOpen] = useState(false);
   const active = ed((s) => isInkTool(s.tool) && s.preset.id === preset.id);
   const s = ed.getState;
+  const hint = useShortcutHint("preset.slot", INK_LABEL[preset.type], { suffix: " · right-click to remove", keyIndex: index });
   return (
     <div ref={ref} className="tb-anchor">
       <button
         type="button"
+        {...hint}
         className={active ? "tb-btn tb-slot active" : "tb-btn tb-slot"}
         aria-pressed={active}
         aria-label={`${INK_LABEL[preset.type]} ${preset.color}`}
-        title={`${INK_LABEL[preset.type]} (Alt+${index + 1}) · right-click to remove`}
         onClick={() => (active ? setOpen((o) => !o) : s().setPreset(preset))}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -124,6 +127,7 @@ function EraserButton() {
       .catch((err) => console.error("saving eraser settings failed", err));
   };
   useDismiss(ref, open, close);
+  const hint = useShortcutHint("tool.eraser", "Eraser");
   return (
     <div ref={ref} className="tb-anchor">
       <button
@@ -131,7 +135,7 @@ function EraserButton() {
         className={active ? "tb-btn active" : "tb-btn"}
         aria-pressed={active}
         aria-label="Eraser"
-        title="Eraser (E)"
+        {...hint}
         onClick={() => (active ? (open ? close() : setOpen(true)) : ed.getState().setTool("eraser"))}
       >
         <Eraser size={18} />
@@ -198,6 +202,7 @@ function ShapeButton() {
   const active = ed((s) => s.tool === "shape");
   const type = useSettingsStore((s) => s.settings.defaultShapeType);
   useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.shape", `Shape: ${SHAPE_LABEL[type]}`);
   return (
     <div ref={ref} className="tb-anchor">
       <button
@@ -205,7 +210,7 @@ function ShapeButton() {
         className={active ? "tb-btn active" : "tb-btn"}
         aria-pressed={active}
         aria-label="Shape"
-        title={`Shape: ${SHAPE_LABEL[type]} (S)`}
+        {...hint}
         onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("shape"))}
       >
         <ShapeIcon type={type} />
@@ -224,6 +229,7 @@ function InsertSpaceButton() {
   const mode = ed((s) => s.spaceMode);
   const cut = ed((s) => s.spaceCutImages);
   useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.insertSpace", "Insert space");
   return (
     <div ref={ref} className="tb-anchor">
       <button
@@ -231,7 +237,7 @@ function InsertSpaceButton() {
         className={active ? "tb-btn active" : "tb-btn"}
         aria-pressed={active}
         aria-label="Insert space"
-        title="Insert space (N)"
+        {...hint}
         onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("insert-space"))}
       >
         <ArrowsVertical size={18} />
@@ -267,6 +273,32 @@ function InsertSpaceButton() {
   );
 }
 
+/** Toolbar button whose tooltip carries the action's shortcut (settings.shortcutHintMode). */
+function HintButton({
+  action,
+  label,
+  className = "tb-btn",
+  pressed,
+  disabled,
+  onClick,
+  children,
+}: {
+  action: ShortcutAction;
+  label: string;
+  className?: string;
+  pressed?: boolean;
+  disabled?: boolean;
+  onClick(): void;
+  children: ReactNode;
+}) {
+  const hint = useShortcutHint(action, label);
+  return (
+    <button type="button" className={className} aria-pressed={pressed} aria-label={label} disabled={disabled} onClick={onClick} {...hint}>
+      {children}
+    </button>
+  );
+}
+
 export default function Toolbar() {
   const ed = useFocusedEditor();
   const presets = useSettingsStore((s) => s.settings.toolbarPresets);
@@ -276,17 +308,16 @@ export default function Toolbar() {
   const zoom = ed((s) => s.camera.z);
   const s = ed.getState;
 
-  const toolBtn = (id: "cursor" | "lasso" | "text", label: string, icon: ReactNode) => (
-    <button
-      type="button"
+  const toolBtn = (id: "cursor" | "lasso" | "text", action: ShortcutAction, label: string, icon: ReactNode) => (
+    <HintButton
+      action={action}
+      label={label}
       className={tool === id ? "tb-btn active" : "tb-btn"}
-      aria-pressed={tool === id}
-      aria-label={label}
-      title={label}
+      pressed={tool === id}
       onClick={() => s().setTool(id)}
     >
       {icon}
-    </button>
+    </HintButton>
   );
 
   return (
@@ -302,7 +333,7 @@ export default function Toolbar() {
       <span className="tb-sep" />
       <EraserButton />
       <ShapeButton />
-      {toolBtn("text", "Text (T)", <TextT size={18} />)}
+      {toolBtn("text", "tool.text", "Text", <TextT size={18} />)}
       <button type="button" className="tb-btn" aria-label="Insert image…" title="Insert image…" onClick={() => void pickAndInsertImage()}>
         <ImageSquare size={18} />
       </button>
@@ -318,26 +349,26 @@ export default function Toolbar() {
       <button type="button" className="tb-btn" aria-label="Insert graph" title="Insert graph" onClick={() => s().addGraph()}>
         <ChartLine size={18} />
       </button>
-      {toolBtn("cursor", "Select (V)", <Cursor size={18} />)}
-      {toolBtn("lasso", "Lasso (L)", <Lasso size={18} />)}
+      {toolBtn("cursor", "tool.cursor", "Select", <Cursor size={18} />)}
+      {toolBtn("lasso", "tool.lasso", "Lasso", <Lasso size={18} />)}
       <InsertSpaceButton />
       <span className="tb-sep" />
-      <button type="button" className="tb-btn" aria-label="Undo" title="Undo" disabled={!canUndo} onClick={() => s().undo()}>
+      <HintButton action="undo" label="Undo" disabled={!canUndo} onClick={() => s().undo()}>
         <ArrowUUpLeft size={18} />
-      </button>
-      <button type="button" className="tb-btn" aria-label="Redo" title="Redo" disabled={!canRedo} onClick={() => s().redo()}>
+      </HintButton>
+      <HintButton action="redo" label="Redo" disabled={!canRedo} onClick={() => s().redo()}>
         <ArrowUUpRight size={18} />
-      </button>
+      </HintButton>
       <span className="tb-sep" />
-      <button type="button" className="tb-btn" aria-label="Zoom out" onClick={() => zoomStep(1 / ZOOM_STEP)}>
+      <HintButton action="zoom.out" label="Zoom out" onClick={() => zoomStep(1 / ZOOM_STEP)}>
         <Minus size={16} />
-      </button>
-      <button type="button" className="tb-btn tb-zoom" aria-label="Reset zoom" onClick={() => zoomStep(null)}>
+      </HintButton>
+      <HintButton action="zoom.reset" label="Reset zoom" className="tb-btn tb-zoom" onClick={() => zoomStep(null)}>
         {Math.round(zoom * 100)}%
-      </button>
-      <button type="button" className="tb-btn" aria-label="Zoom in" onClick={() => zoomStep(ZOOM_STEP)}>
+      </HintButton>
+      <HintButton action="zoom.in" label="Zoom in" onClick={() => zoomStep(ZOOM_STEP)}>
         <Plus size={16} />
-      </button>
+      </HintButton>
     </div>
   );
 }
