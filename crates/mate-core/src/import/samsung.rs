@@ -27,6 +27,10 @@ const STYLE_WINDOW: usize = 512;
 const MIN_STROKE_BYTES: usize = 100;
 const MAX_IMAGE_PLACEMENTS: usize = 1000;
 const MAX_COORD: f64 = 1.0e7;
+const MIN_PAGE: f64 = 1.0;
+const MAX_PAGE: f64 = 50_000.0;
+/// Most placements resolved per media file; the rest are counted as skipped.
+const MAX_PLACEMENTS_PER_FILE: usize = 500;
 
 fn corrupt(what: &str) -> ImportError {
     ImportError::Corrupt(format!("Samsung Notes: {what}"))
@@ -122,7 +126,8 @@ struct Style {
 }
 
 /// Searches backwards from `g - 6` (not below `u`) for the style block
-/// `[2|3, 0, 1|3, 0, 0, 0]`.
+/// `[2|3, 0, 1|3, 0, 0, 0]`. This is a heuristic: pressure or colour bytes can mimic the
+/// pattern, in which case the stroke gets a wrong colour/width (never an error).
 fn style_block(buf: &[u8], u: usize, g: usize) -> Option<Style> {
     let start = g.checked_sub(6)?;
     let lowest = u.max(start.saturating_sub(STYLE_WINDOW));
@@ -183,7 +188,11 @@ fn decode_page(buf: &[u8], dark: bool) -> Result<DecodedPage, ImportError> {
             Err(_) => break,
         }
     }
-    let lost = declared.saturating_sub(u32::try_from(strokes.len()).unwrap_or(u32::MAX));
+    // The declared count is untrusted: no more strokes can exist than the buffer could hold.
+    let possible = u32::try_from(buf.len() / MIN_STROKE_BYTES).unwrap_or(u32::MAX);
+    let lost = declared
+        .min(possible)
+        .saturating_sub(u32::try_from(strokes.len()).unwrap_or(u32::MAX));
     Ok(DecodedPage { width, height, strokes, lost })
 }
 
@@ -327,6 +336,10 @@ fn find_entry(src: &ZipSource, base: &str) -> Option<String> {
     src.names().into_iter().find(|n| n.rsplit('/').next() == Some(base))
 }
 
+/// Parses a Samsung Notes zip. Best effort, so callers should treat the result as approximate:
+/// images are attached to the first page that has strokes (the note-level placement carries no
+/// page), typed text is not detected, and placements or strokes that cannot be decoded are counted
+/// in `ImportSkipped.other` of the page they would have gone to.
 pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocument, ImportError> {
     let note_name = find_entry(src, NOTE).ok_or_else(|| corrupt("note.note is missing"))?;
     let ids_name = find_entry(src, PAGE_IDS).ok_or_else(|| corrupt("pageIdInfo.dat is missing"))?;
@@ -343,8 +356,8 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
         let page = decode_page(&buf, header.dark)?;
         let width = if page.width > 0.0 { page.width } else { header.width };
         let height = if page.height > 0.0 { page.height } else { header.height };
-        if !(width > 0.0 && height > 0.0) {
-            return Err(corrupt("a page has no size"));
+        if !(MIN_PAGE..=MAX_PAGE).contains(&width) || !(MIN_PAGE..=MAX_PAGE).contains(&height) {
+            return Err(corrupt("a page has an implausible size"));
         }
         pages.push(ImportPage {
             source_id: id.clone(),
@@ -360,6 +373,11 @@ pub fn parse(src: &mut ZipSource, limits: &ImportLimits) -> Result<ImportDocumen
     }
     if pages.is_empty() {
         return Err(corrupt("none of the listed pages could be read"));
+    }
+    // Pages beyond the limit are counted on the last kept page, not silently dropped.
+    let dropped = u32::try_from(ids.len().saturating_sub(limits.max_pages)).unwrap_or(u32::MAX);
+    if let Some(last) = pages.last_mut() {
+        last.skipped.other = last.skipped.other.saturating_add(dropped);
     }
 
     place_images(src, &note, &header, &mut pages)?;
@@ -396,6 +414,9 @@ fn place_images(
     let (pw, ph) = (pages[target].width, pages[target].height);
     let sx = if header.width > 0.0 { pw / header.width } else { 1.0 };
     let sy = if header.height > 0.0 { ph / header.height } else { 1.0 };
+    let mut per_index: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+    let mut cache: std::collections::HashMap<u32, Option<(Vec<u8>, &'static str)>> =
+        std::collections::HashMap::new();
     let mut seen: Vec<(u32, [u64; 4])> = Vec::new();
     for (l, t, r, b, idx) in placements {
         let key = (idx, [l.to_bits(), t.to_bits(), r.to_bits(), b.to_bits()]);
@@ -403,26 +424,40 @@ fn place_images(
             continue;
         }
         seen.push(key);
-        let resolved = index
-            .iter()
-            .find(|(i, _)| *i == idx)
-            .and_then(|(_, name)| image_mime(name).map(|m| (name.clone(), m)));
-        let bytes = match &resolved {
-            Some((name, _)) => src.entry(&format!("media/{name}"))?,
-            None => None,
+        let count = per_index.entry(idx).or_insert(0);
+        *count += 1;
+        let skip = |pages: &mut [ImportPage]| {
+            pages[target].skipped.other = pages[target].skipped.other.saturating_add(1);
         };
-        match (resolved, bytes) {
-            (Some((_, mime)), Some(bytes)) if !bytes.is_empty() => {
-                pages[target].images.push(ImportImage {
-                    x: l * sx,
-                    y: t * sy,
-                    width: (r - l) * sx,
-                    height: (b - t) * sy,
-                    bytes,
-                    mime: Some(mime.into()),
-                });
-            }
-            _ => pages[target].skipped.other += 1,
+        if *count > MAX_PLACEMENTS_PER_FILE {
+            skip(pages);
+            continue;
+        }
+        // Each media file is read once per index.
+        if let std::collections::hash_map::Entry::Vacant(e) = cache.entry(idx) {
+            let resolved = index
+                .iter()
+                .find(|(i, _)| *i == idx)
+                .and_then(|(_, name)| image_mime(name).map(|m| (name.clone(), m)));
+            let loaded = match resolved {
+                Some((name, mime)) => src
+                    .entry(&format!("media/{name}"))?
+                    .filter(|b| !b.is_empty())
+                    .map(|b| (b, mime)),
+                None => None,
+            };
+            e.insert(loaded);
+        }
+        match cache.get(&idx) {
+            Some(Some((bytes, mime))) => pages[target].images.push(ImportImage {
+                x: l * sx,
+                y: t * sy,
+                width: (r - l) * sx,
+                height: (b - t) * sy,
+                bytes: bytes.clone(),
+                mime: Some((*mime).into()),
+            }),
+            _ => skip(pages),
         }
     }
     Ok(())

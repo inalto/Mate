@@ -386,12 +386,9 @@ fn samsung_truncated_file_is_corrupt_not_panic() {
     // Truncated zips.
     for i in 0..60 {
         let cut = full.len() * i / 60;
-        match parse(&full[..cut], "x.sdocx", &limits()) {
-            Ok(doc) => {
-                let n: usize = doc.sections[0].pages.iter().map(|p| p.strokes.len()).sum();
-                assert!(n <= total);
-            }
-            Err(_) => {}
+        if let Ok(doc) = parse(&full[..cut], "x.sdocx", &limits()) {
+            let n: usize = doc.sections[0].pages.iter().map(|p| p.strokes.len()).sum();
+            assert!(n <= total);
         }
     }
 
@@ -427,7 +424,7 @@ fn samsung_truncated_file_is_corrupt_not_panic() {
             }
             let at = (rng.next() % len as u64) as usize;
             // Half the time hit the structural area near the front of the file.
-            let at = if rng.next() % 2 == 0 { at % 400.min(len) } else { at };
+            let at = if rng.next().is_multiple_of(2) { at % 400.min(len) } else { at };
             damaged[k].1[at] = rng.next() as u8;
         }
         match parse(&samsung_fixture::zip_parts(&damaged), "x.sdocx", &limits()) {
@@ -458,4 +455,45 @@ fn samsung_hostile_lengths_do_not_allocate_or_loop() {
     }
     let r = parse(&samsung_fixture::zip_parts(&parts), "x.sdocx", &limits());
     assert!(matches!(r, Err(ImportError::Corrupt(_))), "{r:?}");
+}
+
+#[test]
+fn samsung_hostile_stroke_count_does_not_overflow() {
+    let mut spec = samsung_fixture::basic();
+    spec.dangling_placement = true;
+    let mut parts = samsung_fixture::parts(&spec);
+    let page = &mut parts.iter_mut().find(|(n, _)| n == "p1.page").unwrap().1;
+    page[202..206].copy_from_slice(&u32::MAX.to_le_bytes());
+    let doc = parse(&samsung_fixture::zip_parts(&parts), "x.sdocx", &limits()).unwrap();
+    let p = &doc.sections[0].pages[0];
+    assert_eq!(p.strokes.len(), 3);
+    // Bounded by what the buffer could hold, plus the one dangling placement.
+    assert!(p.skipped.other >= 1 && p.skipped.other < 100, "{}", p.skipped.other);
+
+    // No decodable stroke at all, count u32::MAX, plus an unresolvable placement.
+    let page = &mut parts.iter_mut().find(|(n, _)| n == "p1.page").unwrap().1;
+    page.truncate(281);
+    let doc = parse(&samsung_fixture::zip_parts(&parts), "x.sdocx", &limits()).unwrap();
+    assert!(doc.sections[0].pages.iter().all(|p| p.skipped.other < 100));
+}
+
+#[test]
+fn samsung_repeated_media_index_is_read_once() {
+    let mut spec = samsung_fixture::basic();
+    spec.images = vec![(1, "img1.png".into(), vec![7u8; 1 << 20], [50.0, 300.0, 150.0, 350.0])];
+    let mut parts = samsung_fixture::parts(&spec);
+    let note = &mut parts.iter_mut().find(|(n, _)| n == "note.note").unwrap().1;
+    let first = note[48..48 + 140].to_vec();
+    for k in 0..1000u32 {
+        let mut rec = first.clone();
+        // A distinct bbox per placement, same media index.
+        rec[11 + 24..11 + 32].copy_from_slice(&(400.0 + f64::from(k)).to_le_bytes());
+        note.extend_from_slice(&rec);
+    }
+    // 1 MiB x 1001 would need ~1 GiB; a budget of 8 MiB only passes if the file is read once.
+    let lim = ImportLimits { max_unzipped_bytes: 8 << 20, ..limits() };
+    let doc = parse(&samsung_fixture::zip_parts(&parts), "x.sdocx", &lim).unwrap();
+    let p = &doc.sections[0].pages[0];
+    assert_eq!(p.images.len(), 500);
+    assert_eq!(p.skipped.other, 500);
 }
