@@ -6,6 +6,7 @@
 pub mod anthropic;
 pub mod keystore;
 pub mod mock;
+pub mod practice;
 pub mod prompts;
 pub mod provider;
 pub mod verdict;

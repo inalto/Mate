@@ -80,6 +80,29 @@ impl Storage {
         Ok(lines.join("\n"))
     }
 
+    /// The recognised text of every non-trashed page of the book (unit) `unit_id`, in book order
+    /// (sections, then pages), one page after another separated by a blank line. Pages with no
+    /// recognised text are skipped.
+    pub fn unit_recognised_text(&self, unit_id: &str) -> Result<String> {
+        let tree = self.list_tree()?;
+        let mut sections: Vec<_> = tree.sections.iter().filter(|s| s.unit_id == unit_id).collect();
+        sections.sort_by_key(|s| s.order_index);
+        let mut parts = Vec::new();
+        for section in sections {
+            let mut pages: Vec<_> = tree.pages.iter().filter(|p| p.section_id == section.id).collect();
+            pages.sort_by_key(|p| p.order_index);
+            for page in pages {
+                let text = self.page_recognised_text(&page.id)?;
+                if !text.trim().is_empty() {
+                    parts.push(text);
+                }
+            }
+        }
+        Ok(parts.join("
+
+"))
+    }
+
     /// Every live page with recognised search text, for the similarity model. The text is the
     /// page's `recognition_fts` content (one entry per stroke group) joined by newlines.
     pub fn page_documents(&self) -> Result<Vec<PageDoc>> {

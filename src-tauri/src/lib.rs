@@ -2,7 +2,7 @@ mod commands;
 mod state;
 
 use commands::{
-  ai, archive, assets, elements, export, lifecycle, notebook, pdf, recognition, recognize, settings,
+  ai, archive, assets, elements, export, lifecycle, notebook, pdf, practice, recognition, recognize, settings,
   semantics, thumbnails,
 };
 use state::AppState;
@@ -77,6 +77,7 @@ pub fn run() {
       semantics::suggest_title,
       semantics::related_pages,
       semantics::page_graph,
+      practice::practice_generate,
       settings::get_settings,
       settings::set_settings,
       ai::set_ai_key,

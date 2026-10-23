@@ -5,6 +5,7 @@ import { exportUnitArchive } from "../ipc/archive";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
 import type { Unit } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
+import PracticeDialog from "./PracticeDialog";
 
 export const COVER_PALETTE = [
   "#4a5d4e",
@@ -33,6 +34,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
   const thumbsReady = useThumbnailsReady();
   const [menu, setMenu] = useState<MenuMode>("closed");
   const [renaming, setRenaming] = useState(false);
+  const [practising, setPractising] = useState(false);
   const [draft, setDraft] = useState(unit.title);
 
   // The cover shows the thumbnail of the book's first page that has one.
@@ -124,6 +126,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
                 {unit.isFavourite ? "Unfavourite" : "Favourite"}
               </button>
               <button role="menuitem" onClick={() => setMenu("shelf")}>Move to shelf</button>
+              <button role="menuitem" onClick={act(async () => setPractising(true))}>Practice from this book…</button>
               <button role="menuitem" onClick={act(exportBook)}>Export book…</button>
               <button role="menuitem" onClick={act(() => trash("unit", unit.id))}>Delete</button>
             </>
@@ -154,6 +157,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
           )}
         </div>
       )}
+      {practising && <PracticeDialog unit={unit} onClose={() => setPractising(false)} />}
     </div>
   );
 }

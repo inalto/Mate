@@ -126,6 +126,11 @@ export interface EditorState {
   /** Box-wide text formatting for the selected text boxes (replaces matching inline styles). */
   restyleTextBox(patch: Partial<TextAttributes>): void;
   removeElements(ids: string[]): void;
+  /**
+   * Add ready-made elements (already carrying this page's id) as ONE history entry `label`;
+   * refused (false, `limitReached` set) when the page would pass the element limit.
+   */
+  addElements(label: string, els: Element[]): boolean;
   setTool(tool: ToolId): void;
   setPreset(preset: PenPreset): void;
   setCamera(camera: Camera): void;
@@ -554,6 +559,12 @@ export function createEditorStore(): EditorStore {
     removeElements(ids) {
       const cur = get().elements;
       record("Delete", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+    },
+
+    addElements(label, els) {
+      if (els.length === 0) return false;
+      closeEdit();
+      return record(label, els.map((el): Action => ({ type: "add", el })));
     },
 
     setTool(tool) {

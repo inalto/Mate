@@ -204,3 +204,17 @@ fn empty_page_and_provider_errors_are_readable() {
     assert_eq!(err, AiError::Disabled.to_string());
     assert!(storage.lock().unwrap().get_page_semantics("p1").unwrap().is_none());
 }
+
+#[test]
+fn unit_text_joins_pages_in_book_order_and_skips_empty_and_trashed() {
+    let mut st = with_pages(&["p2", "p3", "p4"]);
+    recognise(&mut st, "p1", "a", 0.0, 0.0, "first page");
+    recognise(&mut st, "p3", "a", 0.0, 0.0, "third page");
+    recognise(&mut st, "p4", "a", 0.0, 0.0, "trashed page");
+    st.soft_delete(mate_core::storage::EntityKind::Page, "p4").unwrap();
+    let unit_id = st.list_tree().unwrap().sections.iter().find(|s| s.id == "sec1").unwrap().unit_id.clone();
+    assert_eq!(st.unit_recognised_text(&unit_id).unwrap(), "first page
+
+third page");
+    assert_eq!(st.unit_recognised_text("nope").unwrap(), "");
+}
