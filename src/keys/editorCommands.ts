@@ -10,6 +10,7 @@ import type { Page } from "../model/types";
 import type { ShortcutDispatch } from "./shortcuts";
 import { openPageInWindow } from "./windowBridge";
 import { noteShortcutUse } from "../components/shortcutHints";
+import { modalAllows } from "./modalGuard";
 
 export const ZOOM_STEP = 1.2;
 
@@ -121,15 +122,9 @@ function runChromeShortcut(action: string): boolean {
 }
 
 export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
-  // While any dialog, overlay, palette or menu is open it owns the keyboard. Only the palette
-  // and the shortcut help may be toggled by their own shortcut (Escape is handled by the modal).
-  const chrome = useChromeStore.getState();
-  if (chrome.modalDepth > 0) {
-    const toggles =
-      (action === "palette.open" && (chrome.paletteOpen || chrome.shortcutsOpen)) ||
-      (action === "help.shortcuts" && chrome.shortcutsOpen);
-    if (!toggles) return;
-  }
+  // While any dialog, overlay, palette or menu is open it owns the keyboard (see modalAllows:
+  // only the palette/help toggles and a pan release get through).
+  if (!modalAllows(action, detail.phase)) return;
   noteShortcutUse(action);
   if (runChromeShortcut(action)) return;
   const s = getFocusedEditor().getState();

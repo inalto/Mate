@@ -11,6 +11,7 @@ import TopBar from "../components/TopBar";
 import OverlayLayer from "../overlay/OverlayLayer";
 import { preloadBoxEditors } from "../overlay/boxEditors";
 import { runEditorShortcut, startNewTab } from "../keys/editorCommands";
+import { ignoredInPageWindow } from "../keys/modalGuard";
 import { bindLiveShortcuts } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
 import { editorForPane } from "../stores/focusedEditor";
@@ -20,9 +21,6 @@ import { useSettingsStore } from "../stores/settings";
 import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
 import TutorController from "../tutor/TutorController";
-
-/** Shortcuts that act on the main window's tabs or sidebar: a page window has neither. */
-const tabOrSidebarAction = (action: string): boolean => action.startsWith("tab.") || action.startsWith("sidebar.");
 
 export default function Editor() {
   const { pageId } = useParams();
@@ -80,7 +78,7 @@ export default function Editor() {
   useEffect(
     () =>
       bindLiveShortcuts((action, detail) =>
-        pageWindow && tabOrSidebarAction(action)
+        pageWindow && ignoredInPageWindow(action)
           ? undefined
           : action === "tab.new"
             ? startNewTab(navigate)

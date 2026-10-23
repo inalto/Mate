@@ -3,7 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect } from "react";
 import { bindLiveShortcuts } from "../keys/shortcuts";
 import ShortcutHelp from "../keys/ShortcutHelp";
-import { useChromeStore } from "../stores/chrome";
+import { runGlobalShortcut } from "../keys/modalGuard";
 import { isImportPath } from "../ipc/import";
 import { useImportStore } from "../stores/importStore";
 import CommandPalette from "./CommandPalette";
@@ -25,13 +25,8 @@ export default function Shell() {
   // first and marks the event handled, so this only fires elsewhere.
   useEffect(
     () =>
-      bindLiveShortcuts(
-        (action) =>
-          action === "palette.open"
-            ? useChromeStore.getState().openPalette()
-            : useChromeStore.getState().setShortcutsOpen(true),
-        ["palette.open", "help.shortcuts"],
-      ),
+      // Behind the same modal check as the editor: an open dialog or menu owns the keyboard.
+      bindLiveShortcuts((action) => runGlobalShortcut(action), ["palette.open", "help.shortcuts"]),
     [],
   );
 

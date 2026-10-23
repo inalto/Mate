@@ -31,6 +31,7 @@ beforeEach(() => {
       "ungroupSelection",
       "selectAll",
       "select",
+      "setPanHold",
     ].map((k) => [k, vi.fn()]),
   );
   useEditorStore.setState({ ...spies, selection: new Set<string>(), viewport: { width: 800, height: 600 } } as never);
@@ -140,5 +141,15 @@ describe("runEditorShortcut", () => {
     expect(useChromeStore.getState().modalDepth).toBe(0);
     runEditorShortcut("selectAll", {});
     expect(spies.selectAll).toHaveBeenCalled();
+  });
+
+  it("pan_release_passes_modal_guard", () => {
+    // Space went down before a menu opened (or the window lost focus while a dialog was open):
+    // the release must still end the pan, else pen strokes keep panning.
+    useChromeStore.setState({ modalDepth: 1 });
+    runEditorShortcut("pan", { phase: "down" });
+    expect(spies.setPanHold).not.toHaveBeenCalled(); // a new pan does not start under a modal
+    runEditorShortcut("pan", { phase: "up" });
+    expect(spies.setPanHold).toHaveBeenCalledWith(false);
   });
 });
