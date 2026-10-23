@@ -220,6 +220,12 @@ pub fn parse(
     limits: &ImportLimits,
 ) -> Result<ImportDocument, ImportError> {
     check_deadline(limits)?;
+    if bytes.len() as u64 > limits.max_file_bytes {
+        return Err(ImportError::Limit(format!(
+            "files over {} MiB are not imported",
+            limits.max_file_bytes / MIB
+        )));
+    }
     let source = sniff(bytes, filename)?;
     let cap = limits.max_file_bytes.min(max_file_bytes(source));
     if bytes.len() as u64 > cap {

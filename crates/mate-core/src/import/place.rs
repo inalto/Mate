@@ -2,7 +2,9 @@
 //!
 //! Every source page is scaled so its width maps onto Mate's 1080-unit sheet (`s = 1080 /
 //! width`; `page_width` stays `None`, `page_height = height * s`); coordinates are clamped to the
-//! page, pressure defaults to 0.5 and points get synthetic timestamps 10 ms apart. Each page and
+//! page, pressure defaults to 0.5 and points get synthetic timestamps 10 ms apart. A page whose
+//! width gives an unusable scale is imported unscaled (with a warning); page heights are capped
+//! at [`MAX_PAGE_HEIGHT`]; an element with a non-finite coordinate or size is skipped and counted. Each page and
 //! its elements are written in one transaction, so a failure part-way keeps the pages already
 //! placed (the failure becomes a report warning); a failure before any page landed rolls back
 //! what this call created (the new unit or new sections, and stored images).
@@ -28,6 +30,12 @@ use crate::storage::{EntityKind, Result, Storage, StorageError};
 pub const SHEET_WIDTH: f64 = 1080.0;
 /// Page height used when the source page has no usable height.
 const DEFAULT_SHEET_HEIGHT: f64 = 1440.0;
+/// Tallest page an import creates (20 sheet widths); taller sources are cut off at it.
+pub const MAX_PAGE_HEIGHT: f64 = 20.0 * SHEET_WIDTH;
+/// Scales outside this range (source pages narrower than ~0.1 or wider than ~10 million units)
+/// are treated as a missing width: the page is imported unscaled.
+const MIN_SCALE: f64 = 1e-4;
+const MAX_SCALE: f64 = 1e4;
 const DEFAULT_PRESSURE: f64 = 0.5;
 /// Synthetic time between consecutive points of imported ink, in ms.
 const POINT_INTERVAL_MS: f64 = 10.0;
@@ -67,10 +75,15 @@ pub struct ImportReport {
     pub images: usize,
     /// Elements past the per-page limit, and strokes with too many points.
     pub elements_skipped_limit: usize,
+    /// Elements with non-finite coordinates or sizes (never written).
+    pub elements_skipped_invalid: usize,
     pub tables_skipped: usize,
     pub shapes_skipped: usize,
     /// Human-readable notes: unreadable images, items not imported, an early stop.
     pub warnings: Vec<String>,
+    /// Technical details behind the warnings (e.g. the storage error that stopped the import),
+    /// for logs rather than the user.
+    pub details: Vec<String>,
 }
 
 /// Places `doc` into `target`. `file_fingerprint` identifies the source file (16 hex digits,
@@ -136,14 +149,15 @@ pub fn place_document(
         unit_id: unit_id.clone(),
         next_section_order: sections.len() as i64,
         existing: HashMap::new(),
-        top_level_pages: HashMap::new(),
+        next_page_order: HashMap::new(),
         created_sections: Vec::new(),
         filled_sections: HashSet::new(),
         report: ImportReport { unit_id: unit_id.clone(), ..ImportReport::default() },
     };
     for p in tree.pages.iter().filter(|p| sections.contains(p.section_id.as_str())) {
         if p.parent_id.is_none() {
-            *placer.top_level_pages.entry(p.section_id.clone()).or_default() += 1;
+            let next = placer.next_page_order.entry(p.section_id.clone()).or_default();
+            *next = (*next).max(p.order_index + 1);
         }
         if let Some(fp) = p
             .import_metadata
@@ -180,10 +194,12 @@ pub fn place_document(
             }
             report.section_ids.retain(|s| placer.filled_sections.contains(s));
             if let Err(e) = outcome {
+                let n = report.pages_imported;
                 report.warnings.push(format!(
-                    "The import stopped after {} pages: {e}",
-                    report.pages_imported
+                    "The import stopped after {n} {} because a page could not be saved.",
+                    if n == 1 { "page" } else { "pages" }
                 ));
+                report.details.push(format!("page write failed: {e}"));
             }
             Ok(report)
         }
@@ -199,8 +215,8 @@ struct Placer<'a> {
     next_section_order: i64,
     /// Page fingerprint → section holding it, for pages already in the unit.
     existing: HashMap<String, String>,
-    /// Section id → number of its top-level pages (the next page's order index).
-    top_level_pages: HashMap<String, i64>,
+    /// Section id → order index for its next top-level page (max existing + 1).
+    next_page_order: HashMap<String, i64>,
     created_sections: Vec<String>,
     /// Sections that received a page during this call.
     filled_sections: HashSet<String>,
@@ -243,7 +259,7 @@ impl Placer<'_> {
                         s
                     }
                 };
-                let order = self.top_level_pages.get(&sid).copied().unwrap_or(0);
+                let order = self.next_page_order.get(&sid).copied().unwrap_or(0);
                 let built = self.build_page(page, pi, &sid, order, &fp);
                 if let Err(e) = storage.upsert_page_with_elements(&built.page, &built.elements) {
                     for id in &built.assets {
@@ -251,7 +267,7 @@ impl Placer<'_> {
                     }
                     return Err(e);
                 }
-                *self.top_level_pages.entry(sid.clone()).or_default() += 1;
+                self.next_page_order.insert(sid.clone(), order + 1);
                 self.filled_sections.insert(sid.clone());
                 self.existing.insert(fp, sid);
                 let r = &mut self.report;
@@ -281,6 +297,12 @@ impl Placer<'_> {
             self.report.warnings.push(format!(
                 "Only the first {MAX_PAGES_PER_IMPORT} pages were imported; {} were left out.",
                 self.report.pages_skipped_limit
+            ));
+        }
+        if self.report.elements_skipped_invalid > 0 {
+            self.report.warnings.push(format!(
+                "{} items were left out because their position or size was unreadable.",
+                self.report.elements_skipped_invalid
             ));
         }
         if self.report.elements_skipped_limit > 0 {
@@ -325,17 +347,20 @@ impl Placer<'_> {
         fingerprint: &str,
     ) -> BuiltPage {
         let source = self.doc.source;
-        let scale = if page.width.is_finite() && page.width > 0.0 {
-            SHEET_WIDTH / page.width
+        let scale = SHEET_WIDTH / page.width;
+        let scale = if scale.is_finite() && (MIN_SCALE..=MAX_SCALE).contains(&scale) {
+            scale
         } else {
             self.report.warnings.push(format!(
-                "Page {} of \"{}\" had no width; it was imported unscaled.",
+                "Page {} of \"{}\" had no usable width; it was imported unscaled.",
                 index + 1,
                 page.title.as_deref().unwrap_or(&page.source_id)
             ));
             1.0
         };
-        let page_height = Some(page.height * scale).filter(|h| h.is_finite() && *h > 0.0);
+        let page_height = Some(page.height * scale)
+            .filter(|h| h.is_finite() && *h > 0.0)
+            .map(|h| h.clamp(1.0, MAX_PAGE_HEIGHT));
         let max_y = page_height.unwrap_or(DEFAULT_SHEET_HEIGHT);
         let page_id = new_id();
         let title = page
@@ -371,8 +396,9 @@ impl Placer<'_> {
             })),
         };
 
-        let px = |x: f64| (x * scale).clamp(0.0, SHEET_WIDTH);
-        let py = |y: f64| (y * scale).clamp(0.0, max_y);
+        // Scaled, clamped coordinates; `None` when not finite (the element is then skipped).
+        let px = |x: f64| Some(x * scale).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, SHEET_WIDTH));
+        let py = |y: f64| Some(y * scale).filter(|v| v.is_finite()).map(|v| v.clamp(0.0, max_y));
         let fp = |i: usize| element_fingerprint(source, &page.source_id, i);
         let cap = MAX_ELEMENTS_PER_PAGE as usize;
         let mut out = BuiltPage {
@@ -413,9 +439,15 @@ impl Placer<'_> {
         // Images first (they are usually backgrounds), then ink in z order, then text.
         for (i, img) in page.images.iter().enumerate() {
             let (w, h) = (img.width * scale, img.height * scale);
+            let (Some(x), Some(y)) = (px(img.x), py(img.y)) else {
+                self.report.elements_skipped_invalid += 1;
+                continue;
+            };
             if !(w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0) {
+                self.report.elements_skipped_invalid += 1;
                 continue;
             }
+            let (w, h) = (w.min(SHEET_WIDTH), h.min(max_y));
             if out.elements.len() >= cap {
                 self.report.elements_skipped_limit += 1;
                 continue;
@@ -430,7 +462,7 @@ impl Placer<'_> {
                 }
             };
             out.assets.push(info.id.clone());
-            let mut e = base(&page_id, ElementType::Image, px(img.x), py(img.y));
+            let mut e = base(&page_id, ElementType::Image, x, y);
             e.width = w;
             e.height = Some(h);
             e.image_url = Some(info.id);
@@ -448,19 +480,24 @@ impl Placer<'_> {
                 self.report.elements_skipped_limit += 1;
                 continue;
             }
-            let points: Vec<Point> = s
+            let start = clock;
+            let points: Option<Vec<Point>> = s
                 .points
                 .iter()
-                .filter(|p| p.x.is_finite() && p.y.is_finite())
                 .map(|p| {
                     clock += POINT_INTERVAL_MS;
                     let pressure = p
                         .pressure
                         .filter(|v| v.is_finite())
                         .map_or(DEFAULT_PRESSURE, |v| v.clamp(0.0, 1.0));
-                    point(px(p.x), py(p.y), pressure, clock)
+                    Some(point(px(p.x)?, py(p.y)?, pressure, clock))
                 })
                 .collect();
+            let Some(points) = points else {
+                clock = start;
+                self.report.elements_skipped_invalid += 1;
+                continue;
+            };
             if points.is_empty() {
                 continue;
             }
@@ -482,14 +519,17 @@ impl Placer<'_> {
 
         for (i, t) in page.texts.iter().enumerate() {
             let text = t.text.trim_end();
-            if text.trim().is_empty() || !(t.x.is_finite() && t.y.is_finite()) {
+            if text.trim().is_empty() {
                 continue;
             }
+            let (Some(x), Some(y)) = (px(t.x), py(t.y)) else {
+                self.report.elements_skipped_invalid += 1;
+                continue;
+            };
             if out.elements.len() >= cap {
                 self.report.elements_skipped_limit += 1;
                 continue;
             }
-            let (x, y) = (px(t.x), py(t.y));
             let font_size = t
                 .font_size
                 .map(|f| f * scale)
@@ -500,7 +540,7 @@ impl Placer<'_> {
                 .map(|w| w * scale)
                 .filter(|w| w.is_finite() && *w > 0.0)
                 .unwrap_or(SHEET_WIDTH - x)
-                .max(40.0);
+                .clamp(40.0, SHEET_WIDTH);
             let lines = text.lines().count().max(1) as f64;
             let color = normalize_color(&t.color);
             let mut e = base(&page_id, ElementType::TextBox, x, y);

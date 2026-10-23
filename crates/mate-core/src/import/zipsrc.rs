@@ -23,8 +23,10 @@ fn corrupt(e: ZipError) -> ImportError {
     ImportError::Corrupt(format!("zip: {e}"))
 }
 
-fn mib(bytes: u64) -> u64 {
-    bytes / (1024 * 1024)
+/// "N MiB" for budgets of at least 1 MiB, "N bytes" below.
+fn size_text(bytes: u64) -> String {
+    const MIB: u64 = 1024 * 1024;
+    if bytes >= MIB { format!("{} MiB", bytes / MIB) } else { format!("{bytes} bytes") }
 }
 
 /// False for names that could escape a directory if ever extracted: `..` components, absolute
@@ -38,9 +40,23 @@ pub fn is_safe_name(name: &str) -> bool {
         && !name.split(['/', '\\']).any(|part| part == "..")
 }
 
+/// Entry count from the end-of-central-directory record; `None` when absent or when the real
+/// count lives in a zip64 record (0xFFFF).
+fn declared_entry_count(bytes: &[u8]) -> Option<usize> {
+    const EOCD: [u8; 4] = [0x50, 0x4b, 0x05, 0x06];
+    // The record is 22 bytes plus a comment of at most 65 535 bytes.
+    let start = bytes.len().saturating_sub(22 + 0xFFFF);
+    let pos = (start..=bytes.len().checked_sub(22)?)
+        .rev()
+        .find(|&i| bytes[i..i + 4] == EOCD)?;
+    let total = u16::from_le_bytes([bytes[pos + 10], bytes[pos + 11]]);
+    (total != 0xFFFF).then_some(usize::from(total))
+}
+
 impl<'a> ZipSource<'a> {
     /// Opens `bytes` as a zip: `Corrupt` if it is not one, `Limit` if it has more than
-    /// `limits.max_zip_entries` entries or declares more than `limits.max_unzipped_bytes`.
+    /// `limits.max_zip_entries` entries or declares more than `limits.max_unzipped_bytes`;
+    /// `Corrupt` if two entries share a name.
     pub fn new(bytes: &'a [u8], limits: &ImportLimits) -> Result<ZipSource<'a>, ImportError> {
         check_deadline(limits)?;
         let mut zip = ZipArchive::new(Cursor::new(bytes)).map_err(corrupt)?;
@@ -51,14 +67,19 @@ impl<'a> ZipSource<'a> {
                 limits.max_zip_entries
             )));
         }
+        // The zip crate indexes entries by name, so a repeated name silently hides an entry:
+        // compare with the count the end-of-central-directory record declares.
+        if declared_entry_count(bytes).is_some_and(|n| n != zip.len()) {
+            return Err(ImportError::Corrupt("zip: duplicate entry names".into()));
+        }
         let mut declared: u64 = 0;
         for i in 0..zip.len() {
             let size = zip.by_index_raw(i).map_err(corrupt)?.size();
             declared = declared.saturating_add(size);
             if declared > limits.max_unzipped_bytes {
                 return Err(ImportError::Limit(format!(
-                    "it unpacks to more than {} MiB",
-                    mib(limits.max_unzipped_bytes)
+                    "it unpacks to more than {}",
+                    size_text(limits.max_unzipped_bytes)
                 )));
             }
         }
@@ -98,8 +119,8 @@ impl<'a> ZipSource<'a> {
         let budget = self.limits.max_unzipped_bytes.saturating_sub(self.inflated);
         let over = || {
             ImportError::Limit(format!(
-                "it unpacks to more than {} MiB",
-                mib(self.limits.max_unzipped_bytes)
+                "it unpacks to more than {}",
+                size_text(self.limits.max_unzipped_bytes)
             ))
         };
         let file = match self.zip.by_name(name) {
@@ -199,6 +220,32 @@ pub(crate) mod tests {
         src.entry("a").unwrap();
         src.entry("b").unwrap();
         assert!(matches!(src.entry("a"), Err(ImportError::Limit(_))));
+    }
+
+    #[test]
+    fn rejects_duplicate_names_and_words_small_budgets_in_bytes() {
+        // Write "aa" and "ab", then rename the second to "aa" in both headers.
+        let mut z = make_zip(&[("aa", b"1"), ("ab", b"2")]);
+        let mut renamed = 0;
+        for i in 0..z.len() - 1 {
+            if z[i] == b'a' && z[i + 1] == b'b' {
+                z[i + 1] = b'a';
+                renamed += 1;
+            }
+        }
+        assert_eq!(renamed, 2);
+        match ZipSource::new(&z, &ImportLimits::default()) {
+            Err(ImportError::Corrupt(m)) => assert!(m.contains("duplicate"), "{m}"),
+            Err(e) => panic!("{e:?}"),
+            Ok(_) => panic!("duplicate names accepted"),
+        }
+
+        let z = make_zip(&[("a", b"0123456789")]);
+        let limits = ImportLimits { max_unzipped_bytes: 5, ..ImportLimits::default() };
+        match ZipSource::new(&z, &limits) {
+            Err(ImportError::Limit(m)) => assert_eq!(m, "it unpacks to more than 5 bytes"),
+            other => panic!("{:?}", other.err()),
+        }
     }
 
     #[test]

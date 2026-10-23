@@ -285,8 +285,23 @@ impl<'a> Iterator for Reader<'a> {
 }
 
 /// The fields of a top-level message, in order.
+///
+/// To read a sub-message (a `Wire::Len` field), use [`Reader::nested`] on the parent reader, or
+/// [`fields_at_depth`] with the parent's depth, never a fresh `fields(...)`: only then does the
+/// [`MAX_DEPTH`] limit hold for crafted, deeply nested input.
 pub fn fields(bytes: &[u8]) -> Reader<'_> {
     Reader::new(bytes)
+}
+
+/// The fields of a sub-message whose parent is at `parent_depth` (0 for a top-level message);
+/// `Corrupt` past [`MAX_DEPTH`]. Equivalent to `parent.nested(bytes)` for code that passes depths
+/// rather than readers through recursive decoders.
+pub fn fields_at_depth(bytes: &[u8], parent_depth: u32) -> Result<Reader<'_>, ImportError> {
+    let depth = parent_depth.saturating_add(1);
+    if depth > MAX_DEPTH {
+        return Err(corrupt("messages nested too deeply"));
+    }
+    Ok(Reader { buf: bytes, pos: 0, depth, failed: false })
 }
 
 #[cfg(test)]
@@ -416,6 +431,34 @@ mod tests {
         assert!(matches!(walk(fields(&nest(70))), Err(ImportError::Corrupt(_))));
         assert_eq!(walk(fields(&nest(64))).unwrap(), 64);
         assert!(matches!(walk(fields(&nest(65))), Err(ImportError::Corrupt(_))));
+    }
+
+    #[test]
+    fn fields_at_depth_enforces_the_limit() {
+        fn walk_depths(bytes: &[u8], parent_depth: u32) -> Result<u32, ImportError> {
+            let r = fields_at_depth(bytes, parent_depth)?;
+            let me = r.depth();
+            let mut deepest = me;
+            for f in r {
+                if let (1, Wire::Len(b)) = f? {
+                    deepest = deepest.max(walk_depths(b, me)?);
+                }
+            }
+            Ok(deepest)
+        }
+        let top = |m: &[u8]| -> Result<u32, ImportError> {
+            let mut deepest = 0;
+            for f in fields(m) {
+                if let (1, Wire::Len(b)) = f? {
+                    deepest = deepest.max(walk_depths(b, 0)?);
+                }
+            }
+            Ok(deepest)
+        };
+        assert_eq!(top(&nest(64)).unwrap(), 64);
+        assert!(matches!(top(&nest(65)), Err(ImportError::Corrupt(_))));
+        assert!(matches!(fields_at_depth(&[], MAX_DEPTH), Err(ImportError::Corrupt(_))));
+        assert_eq!(fields_at_depth(&[], 0).unwrap().depth(), 1);
     }
 
     #[test]

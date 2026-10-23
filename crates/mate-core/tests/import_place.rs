@@ -359,7 +359,12 @@ fn failure_before_the_first_page_rolls_back_the_new_unit_and_images() {
     let report =
         place_document(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, "1").unwrap();
     assert_eq!(report.pages_imported, 1);
-    assert!(report.warnings.iter().any(|w| w.contains("stopped after 1 pages")), "{:?}", report.warnings);
+    assert!(
+        report.warnings.iter().any(|w| w == "The import stopped after 1 page because a page could not be saved."),
+        "{:?}",
+        report.warnings
+    );
+    assert!(report.details.iter().any(|d| d.contains("disk full")), "{:?}", report.details);
     let tree = st.list_tree().unwrap();
     let pages: Vec<_> = tree.pages.iter().collect();
     assert_eq!(pages.len(), 1);
@@ -413,5 +418,184 @@ fn image_assets_are_stored_and_referenced() {
     assert!((img.points[0].x - 108.0).abs() < 1e-9);
     assert!(st.referenced_asset_ids().unwrap().contains(id));
     assert_eq!(std::fs::read_dir(&assets).unwrap().count(), 1);
+    let _ = std::fs::remove_dir_all(&assets);
+}
+
+/// Every stored coordinate and size of the page's elements is finite.
+fn assert_all_finite(st: &Storage, page_id: &str) {
+    for e in st.load_elements(page_id).expect("page loads back") {
+        assert!(e.width.is_finite() && e.height.is_none_or(f64::is_finite), "{e:?}");
+        assert!(e.box_width.is_none_or(f64::is_finite) && e.box_height.is_none_or(f64::is_finite));
+        for p in &e.points {
+            assert!(p.x.is_finite() && p.y.is_finite() && p.pressure.is_finite() && p.timestamp.is_finite());
+        }
+    }
+}
+
+fn odd_page(id: &str, width: f64, height: f64) -> ImportPage {
+    let mut p = letter_page(id);
+    p.width = width;
+    p.height = height;
+    p.strokes.push(ImportStroke {
+        points: vec![
+            ImportPoint { x: 1.0, y: 1.0, pressure: Some(f64::NAN) },
+            ImportPoint { x: f64::MAX, y: 1e300, pressure: Some(2.0) },
+        ],
+        ..stroke(&[], "#000", false, PenStyle::Pen)
+    });
+    p.strokes.push(stroke(&[(f64::NAN, 1.0)], "#000", false, PenStyle::Pen));
+    p.images.push(ImportImage {
+        x: f64::INFINITY,
+        y: 0.0,
+        width: 10.0,
+        height: 10.0,
+        bytes: PNG.to_vec(),
+        mime: None,
+    });
+    p.images.push(ImportImage { x: 0.0, y: 0.0, width: 1e9, height: 1e9, bytes: PNG.to_vec(), mime: None });
+    p
+}
+
+#[test]
+fn non_finite_scale_never_writes_nan() {
+    let mut st = Storage::open_in_memory().unwrap();
+    let assets = tmp_assets("nan");
+    let doc = ImportDocument {
+        sections: vec![ImportSection {
+            source_id: "s".into(),
+            title: "S".into(),
+            pages: vec![
+                odd_page("tiny", 1e-310, 792.0),
+                odd_page("small", 1e-30, 1e9),
+                odd_page("zero", 0.0, 0.0),
+                odd_page("nan", f64::NAN, f64::INFINITY),
+            ],
+        }],
+        ..sample_doc()
+    };
+    let report =
+        place_document(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, "3").unwrap();
+    assert_eq!(report.pages_imported, 4);
+    // Per page: the NaN stroke and the image at x = inf are skipped as invalid.
+    assert_eq!(report.elements_skipped_invalid, 4 * 2);
+    assert!(report.warnings.iter().any(|w| w.contains("no usable width")));
+    let tree = st.list_tree().unwrap();
+    for page in &tree.pages {
+        let h = page.page_height.unwrap_or(1440.0);
+        assert!(h.is_finite() && h > 0.0 && h <= 21_600.0, "{h}");
+        assert_all_finite(&st, &page.id);
+        let els = st.load_elements(&page.id).unwrap();
+        let big = els.iter().find(|e| e.r#type == ElementType::Image).unwrap();
+        assert!(big.width <= 1080.0 && big.height.unwrap() <= h);
+        for e in &els {
+            for p in &e.points {
+                assert!((0.0..=1080.0).contains(&p.x) && (0.0..=h).contains(&p.y));
+                assert!((0.0..=1.0).contains(&p.pressure));
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&assets);
+}
+
+#[test]
+fn tall_source_page_height_is_capped() {
+    let mut st = Storage::open_in_memory().unwrap();
+    let assets = tmp_assets("tall");
+    let mut page = letter_page("scroll");
+    page.height = 612.0 * 100.0; // 100 sheet widths tall
+    page.strokes.push(stroke(&[(10.0, 612.0 * 99.0)], "#000", false, PenStyle::Pen));
+    let doc = ImportDocument {
+        sections: vec![ImportSection { source_id: "s".into(), title: "S".into(), pages: vec![page] }],
+        ..sample_doc()
+    };
+    place_document(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, "4").unwrap();
+    let page = &st.list_tree().unwrap().pages[0];
+    assert_eq!(page.page_height, Some(20.0 * 1080.0));
+    let els = st.load_elements(&page.id).unwrap();
+    assert!(els.iter().flat_map(|e| &e.points).all(|p| p.y <= 20.0 * 1080.0));
+    assert_all_finite(&st, &page.id);
+}
+
+#[test]
+fn new_pages_follow_the_highest_order_index() {
+    let mut st = Storage::open_in_memory().unwrap();
+    let assets = tmp_assets("order");
+    let doc = sample_doc();
+    let fp = file_fingerprint(b"ordered");
+    let first =
+        place_document(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, &fp).unwrap();
+    // Leave a gap: the second page of "Cells" moves to order 7.
+    let tree = st.list_tree().unwrap();
+    let mut moved = tree
+        .pages
+        .iter()
+        .find(|p| p.section_id == first.section_ids[0] && p.order_index == 1)
+        .unwrap()
+        .clone();
+    moved.order_index = 7;
+    st.upsert_page(&moved).unwrap();
+
+    let mut grown = sample_doc();
+    grown.sections[0].pages.push(letter_page("p9"));
+    place_document(&mut st, &grown, PlaceTarget::ExistingUnit { unit_id: first.unit_id }, &assets, &fp)
+        .unwrap();
+    let p9 = st
+        .list_tree()
+        .unwrap()
+        .pages
+        .into_iter()
+        .find(|p| p.import_metadata.as_ref().is_some_and(|m| m["sourcePageId"] == "p9"))
+        .unwrap();
+    assert_eq!(p9.order_index, 8);
+}
+
+#[test]
+fn import_metadata_survives_an_archive_round_trip() {
+    let mut st = Storage::open_in_memory().unwrap();
+    let assets = tmp_assets("archive");
+    let report = place_document(
+        &mut st,
+        &sample_doc(),
+        PlaceTarget::NewUnit { title: None },
+        &assets,
+        &file_fingerprint(b"archived"),
+    )
+    .unwrap();
+    let before: Vec<_> = st
+        .list_tree()
+        .unwrap()
+        .pages
+        .into_iter()
+        .map(|p| p.import_metadata.unwrap())
+        .collect();
+    let bytes = mate_core::archive::export_unit(&st, &report.unit_id, &assets).unwrap();
+
+    let mut other = Storage::open_in_memory().unwrap();
+    let imported = mate_core::archive::import_archive(&mut other, &bytes, &assets).unwrap();
+    assert_eq!(imported.pages, 3);
+    let mut after: Vec<_> = other
+        .list_tree()
+        .unwrap()
+        .pages
+        .into_iter()
+        .map(|p| p.import_metadata.expect("importMetadata kept"))
+        .collect();
+    let key = |m: &serde_json::Value| m["sourcePageId"].as_str().unwrap().to_owned();
+    let mut before = before;
+    before.sort_by_key(key);
+    after.sort_by_key(key);
+    assert_eq!(before, after);
+
+    // Re-importing the same source file into the restored unit finds every page.
+    let unit_id = other.list_tree().unwrap().units[0].id.clone();
+    let again = place_document(
+        &mut other,
+        &sample_doc(),
+        PlaceTarget::ExistingUnit { unit_id },
+        &assets,
+        &file_fingerprint(b"archived"),
+    )
+    .unwrap();
+    assert_eq!(again.pages_skipped_duplicate, 3);
     let _ = std::fs::remove_dir_all(&assets);
 }
