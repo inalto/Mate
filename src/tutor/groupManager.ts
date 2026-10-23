@@ -16,7 +16,11 @@ export interface GroupManagerDeps {
   clearTimer(handle: unknown): void;
   onFire(group: Region, reason: FireReason): void;
   /** A region was dropped (member removed, or replaced by re-segmentation): its result is stale. */
-  onInvalidate?(regionId: string): void;
+  /**
+   * `wasClean`: the region had no pending check (not dirty, not in flight) when it was dropped, so
+   * its last result still described its ink.
+   */
+  onInvalidate?(regionId: string, wasClean: boolean): void;
   cfg?: SegmentationConfig;
 }
 
@@ -150,7 +154,7 @@ export function createGroupManager(deps: GroupManagerDeps): GroupManager {
     if (!e) return;
     entries.delete(regionId);
     for (const id of e.region.elementIds) if (byElement.get(id) === regionId) byElement.delete(id);
-    deps.onInvalidate?.(regionId);
+    deps.onInvalidate?.(regionId, !e.dirty && !inFlight.has(regionId));
   }
 
   function noteElementsChanged(change: string[] | ElementsChange): void {
@@ -190,11 +194,11 @@ export function createGroupManager(deps: GroupManagerDeps): GroupManager {
           if (!clean) changed.add(region.regionId);
         }
       }
-      const dropped = [...entries.keys()].filter((id) => !next.has(id));
+      const dropped = [...entries.values()].filter((e) => !next.has(e.region.regionId));
       entries = next;
       byElement = new Map();
       for (const r of regions) for (const id of r.elementIds) byElement.set(id, r.regionId);
-      for (const id of dropped) deps.onInvalidate?.(id);
+      for (const e of dropped) deps.onInvalidate?.(e.region.regionId, !e.dirty && !inFlight.has(e.region.regionId));
       earlyFire(prevDirty, changed);
       recheckNeighbours(changed);
       schedule();

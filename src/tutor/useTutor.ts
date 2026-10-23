@@ -120,7 +120,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
    * If the same membership comes back with its ink untouched, the verdict is shown again and the
    * group is not re-sent. Entries go when any member's ink changes.
    */
-  const stash = new Map<string, Recognition>();
+  const stash = new Map<string, { rec: Recognition; revision: string }>();
   const STASH_LIMIT = 200;
 
   const emit = (next: Partial<TutorView>) => {
@@ -139,6 +139,17 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   };
 
   const elementsNow = () => store.getState().elements.values();
+  /** Edit stamp of a set of elements (ids, versions, update times, point counts). */
+  const memberRevision = (ids: readonly string[]): string => {
+    const els = store.getState().elements;
+    return [...ids]
+      .sort()
+      .map((id) => {
+        const e = els.get(id);
+        return e ? `${id}@${e.version}:${e.updatedAt}:${e.points.length}` : `${id}@gone`;
+      })
+      .join(",");
+  };
 
   function resegment(): Region[] {
     const regions = segment(elementsNow());
@@ -161,22 +172,36 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     const change = pendingChange;
     pendingChange = null;
     if (!manager || disposed || !change) return;
+    // Any change to a member (ink, style, erase) makes its group's shown verdict stale: drop it
+    // and any remembered copy. The manager still dirties the group, so it is checked again.
     const touched = new Set([...change.updated, ...change.removed]);
-    for (const [id, r] of stash) if (r.elementIds.some((e) => touched.has(e))) stash.delete(id);
+    for (const [id, s] of stash) if (s.rec.elementIds.some((e) => touched.has(e))) stash.delete(id);
+    const recs = new Map(view.recognitions);
+    let dropped = false;
+    for (const [id, r] of recs) {
+      if (r.elementIds.some((e) => touched.has(e))) {
+        recs.delete(id);
+        dropped = true;
+      }
+    }
     const regions = resegment();
     const back = new Set<string>();
-    const restored = new Map(view.recognitions);
+    const els = store.getState().elements;
     for (const r of regions) {
       const old = stash.get(r.regionId);
-      if (!old || restored.has(r.regionId) || old.elementIds.length !== r.elementIds.length) continue;
+      if (!old || recs.has(r.regionId) || old.rec.elementIds.length !== r.elementIds.length) continue;
       const members = new Set(r.elementIds);
-      if (!old.elementIds.every((e) => members.has(e))) continue;
+      if (!old.rec.elementIds.every((e) => members.has(e))) continue;
       stash.delete(r.regionId);
+      // Same members, same ink as when it was remembered, and checked after every member's last
+      // change: the verdict still holds.
+      if (old.revision !== memberRevision(old.rec.elementIds)) continue;
+      if (!old.rec.elementIds.every((e) => { const el = els.get(e); return !!el && Date.parse(el.updatedAt) <= old.rec.capturedAt; })) continue;
       requested.delete(r.regionId);
-      restored.set(r.regionId, old);
+      recs.set(r.regionId, old.rec);
       back.add(r.regionId);
     }
-    if (back.size > 0) emit({ recognitions: restored });
+    if (dropped || back.size > 0) emit({ recognitions: recs });
     manager.setRegions(regions, { clean: back });
     manager.noteElementsChanged(change);
   }
@@ -256,12 +281,13 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       setTimer,
       clearTimer,
       onFire: (region) => fire(token, region),
-      onInvalidate: (regionId) => {
+      onInvalidate: (regionId, wasClean) => {
         if (token !== pageToken) return;
         const rec = view.recognitions.get(regionId);
-        if (rec) {
+        // Only a verdict with no pending recheck still describes the ink; remember its revision.
+        if (rec && wasClean) {
           stash.delete(regionId);
-          stash.set(regionId, rec);
+          stash.set(regionId, { rec, revision: memberRevision(rec.elementIds) });
           if (stash.size > STASH_LIMIT) stash.delete(stash.keys().next().value!);
         }
         emit({

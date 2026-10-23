@@ -41,7 +41,7 @@ async function setup() {
   await store.getState().loadPage("pg");
   const gid = segmentPage([glyph])[0].regionId;
   const stored: Recognition = {
-    pageId: "pg", strokeGroupId: gid, elementIds: ["ink"], bounds: { x: 100, y: 100, width: 28, height: 30 }, capturedAt: 1,
+    pageId: "pg", strokeGroupId: gid, elementIds: ["ink"], bounds: { x: 100, y: 100, width: 28, height: 30 }, capturedAt: Date.now(),
     source: "auto", userOverride: false, provider: "anthropic", model: "m", createdAt: "", updatedAt: "",
     description: "", latex: "x=1", correct: false, domain: "algebra", errorNature: "slip", hint: "Look again.",
     explanation: null, nextSteps: null, focusSpan: null, illegible: false, transcription: null, code: "ALGEBRA", kind: "math",
@@ -120,5 +120,27 @@ describe("tutor gestures on real ink", () => {
     store.getState().addElement(el("stroke", [[100, 100], [130, 104]]));
     expect(store.getState().elements.size).toBe(3);
     expect(useTutorUi.getState().card).toBeNull();
+  });
+
+  it("edited_group_is_not_restored_and_is_rechecked", async () => {
+    const { gid, g } = await setup();
+    // Move the glyph (same membership, new ink): its verdict is stale and a recheck is pending.
+    store.getState().select(["ink"]);
+    store.getState().moveSelection(5, 0);
+    store.getState().select([]);
+    await vi.advanceTimersByTimeAsync(60);
+    expect(session.getView().recognitions.has(gid)).toBe(false);
+    // Double-tap inside the settle window: the group vanishes and re-forms with the same members.
+    const Q = { x: P.x + 5, y: P.y };
+    expect(await tap(g, Q)).toBe("commit");
+    await vi.advanceTimersByTimeAsync(60);
+    expect(await tap(g, { x: Q.x + 1, y: Q.y + 1 })).toBe("discard");
+    await vi.advanceTimersByTimeAsync(60);
+    expect(session.getView().regions.has(gid)).toBe(true);
+    // No stale verdict comes back, and the pending recheck still happens.
+    expect(session.getView().recognitions.has(gid)).toBe(false);
+    expect(recognize).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(recognize).toHaveBeenCalledTimes(1);
   });
 });
