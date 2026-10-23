@@ -1,0 +1,181 @@
+/* Command palette */
+.palette-backdrop {
+  place-items: start center;
+  padding-top: 12vh;
+}
+
+.palette {
+  width: min(640px, 92vw);
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.palette-input {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.palette-input input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.palette-list,
+.palette-panel {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.palette-heading {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.palette-item {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.palette-item.active {
+  background: var(--color-surface-2);
+}
+
+.palette-item[aria-disabled="true"] {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.palette-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.palette-hit-title {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.palette-snippet {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.palette-mark {
+  background: none;
+  color: var(--color-primary);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.palette-text {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.palette-related {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.palette-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.palette-row:hover {
+  background: var(--color-surface-2);
+}
+
+/* Graph */
+.graph-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-6);
+  box-sizing: border-box;
+}
+
+.graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.graph-header h1 {
+  margin: 0;
+}
+
+.graph-cutoff {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.graph-empty {
+  max-width: 420px;
+  color: var(--color-text-muted);
+}
+
+.graph-svg {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-1);
+}
+
+.graph-edge {
+  stroke: var(--color-border);
+  stroke-linecap: round;
+}
+
+.graph-node {
+  cursor: pointer;
+  outline: none;
+}
+
+.graph-node circle {
+  fill: var(--color-primary);
+  stroke: var(--color-surface-1);
+  stroke-width: 2;
+}
+
+.graph-node:hover circle,
+.graph-node:focus-visible circle {
+  stroke: var(--color-text);
+}
+
+.graph-node text {
+  fill: var(--color-text);
+  font-size: 13px;
+  paint-order: stroke;
+  stroke: var(--color-surface-1);
+  stroke-width: 3px;
+}

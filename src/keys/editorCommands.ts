@@ -62,6 +62,9 @@ function runChromeShortcut(action: string): boolean {
       return true;
     case "tab.new":
       return true;
+    case "palette.open":
+      useChromeStore.getState().openPalette();
+      return true;
   }
   return false;
 }

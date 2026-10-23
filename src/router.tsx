@@ -13,6 +13,7 @@ export const router = createBrowserRouter([
       { path: "/", element: <Home /> },
       { path: "/library", element: <Library /> },
       { path: "/trash", element: <Trash /> },
+      { path: "/graph", lazy: async () => ({ Component: (await import("./routes/Graph")).default }) },
       { path: "/settings", element: <Settings /> },
       { path: "/edit/:pageId", element: <Editor /> },
     ],

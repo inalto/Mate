@@ -11,6 +11,7 @@ import ExportDialog from "./ExportDialog";
 import { useDismiss } from "./useDismiss";
 
 const SHORTCUT_HELP: [string, string][] = [
+  ["Search and actions", "Ctrl+K"],
   ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"],
   ["New tab / Close tab", "Ctrl+T / Ctrl+W"],
   ["Move tab", "Alt+Shift+←/→"],
@@ -42,6 +43,8 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
         <div className="menu menu-right" role="menu">
           <button role="menuitem" disabled={!pageId} onClick={pick(onExport)}>Export page…</button>
           <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPageSettings(pageId))}>Page settings</button>
+          <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPalette("title"))}>Suggest title</button>
+          <button role="menuitem" onClick={pick(() => chrome().openPalette())}>Search and actions…</button>
           <button role="menuitem" onClick={pick(() => navigate("/settings"))}>Settings</button>
           <button role="menuitem" onClick={pick(() => chrome().setShortcutsOpen(true))}>Keyboard shortcuts</button>
         </div>

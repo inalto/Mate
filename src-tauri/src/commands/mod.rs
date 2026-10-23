@@ -8,5 +8,6 @@ pub mod notebook;
 pub mod pdf;
 pub mod recognition;
 pub mod recognize;
+pub mod semantics;
 pub mod settings;
 pub mod thumbnails;

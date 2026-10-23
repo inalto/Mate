@@ -3,7 +3,7 @@ mod state;
 
 use commands::{
   ai, archive, assets, elements, export, lifecycle, notebook, pdf, recognition, recognize, settings,
-  thumbnails,
+  semantics, thumbnails,
 };
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -73,6 +73,10 @@ pub fn run() {
       recognition::search_recognition,
       recognition::record_learning_event,
       recognize::recognize_group,
+      semantics::summarize_page,
+      semantics::suggest_title,
+      semantics::related_pages,
+      semantics::page_graph,
       settings::get_settings,
       settings::set_settings,
       ai::set_ai_key,

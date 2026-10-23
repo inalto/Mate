@@ -1,5 +1,8 @@
-import { Books, Gear, House, Trash } from "@phosphor-icons/react";
+import { Books, Gear, House, ShareNetwork, Trash } from "@phosphor-icons/react";
 import { useEffect } from "react";
+import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
+import { useChromeStore } from "../stores/chrome";
+import CommandPalette from "./CommandPalette";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
@@ -13,6 +16,16 @@ export default function Shell() {
     void useSettingsStore.getState().load();
     void useNotebookStore.getState().load();
   }, []);
+  // Ctrl/Cmd+K works on every route. In the editor its own shortcut binding opens the palette
+  // first and marks the event handled, so this only fires elsewhere.
+  useEffect(
+    () =>
+      bindShortcuts(
+        DEFAULT_SHORTCUTS.filter((b) => b.action === "palette.open"),
+        () => useChromeStore.getState().openPalette(),
+      ),
+    [],
+  );
 
   return (
     <div className="shell">
@@ -23,6 +36,9 @@ export default function Shell() {
         </NavLink>
         <NavLink to="/library" className={link} aria-label="Library" title="Library">
           <Books size={22} />
+        </NavLink>
+        <NavLink to="/graph" className={link} aria-label="Graph" title="Graph">
+          <ShareNetwork size={22} />
         </NavLink>
         <NavLink to="/trash" className={link} aria-label="Trash" title="Trash">
           <Trash size={22} />
@@ -36,6 +52,7 @@ export default function Shell() {
       <main className="shell-main">
         <Outlet />
       </main>
+      <CommandPalette />
     </div>
   );
 }

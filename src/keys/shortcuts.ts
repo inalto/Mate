@@ -37,7 +37,8 @@ export type ShortcutAction =
   | "page.moveUp"
   | "page.moveDown"
   | "page.promote"
-  | "page.demote";
+  | "page.demote"
+  | "palette.open";
 
 export interface ShortcutBinding {
   action: ShortcutAction;
@@ -110,6 +111,7 @@ export const DEFAULT_SHORTCUTS: ShortcutMap = [
   { action: "page.moveDown", key: "ArrowDown", alt: true },
   { action: "page.promote", key: "ArrowLeft", alt: true },
   { action: "page.demote", key: "ArrowRight", alt: true },
+  { action: "palette.open", key: "k", mod: true },
 ];
 
 export function isMacPlatform(): boolean {
