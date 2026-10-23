@@ -23,11 +23,11 @@ Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core c
 
 The AI tutor reads your handwritten maths, checks it and points out mistakes. It is **off by default** and needs a key from your own AI provider.
 
-- **What it does:** marks each checked group of ink as right or wrong (ink is never changed), offers a hint, then an explanation and next steps on request, and answers questions about a line. It also summarises a page, suggests a title, finds related pages and can generate practice questions from a book.
+- **What it does:** underlines mistakes (and optionally ticks correct work) in each checked group of ink (ink is never changed), offers a hint, then an explanation and next steps on request, and answers questions about a line. It also summarises a page, suggests a title, finds related pages and can generate practice questions from a book.
 - **Nothing is sent until you turn it on.** Mate makes no AI call until you tick the permission under Settings → Intelligence *and* save a key. Turning the permission off stops all AI calls straight away.
 - **Providers:** Anthropic (default model `claude-opus-5-5`) and OpenAI (default model `gpt-5`; enter any model name you have access to). Choose one under Settings → Intelligence.
 - **Keys** are stored in the OS keychain (Windows Credential Manager, macOS Keychain or Linux Secret Service). They are not written to `settings.json`, not logged and never shown again after saving.
-- **What is sent:** when a group of ink is checked, a PNG of that group only, plus the recognised text of up to 11 nearby lines. A question about a line sends that line's recognised text, its verdict and your question, without the image. Summaries and titles send recognised page text only. Search, related pages and the graph run on your machine.
+- **What is sent:** when a group of ink is checked, a PNG of that group only, plus the recognised text of up to 11 nearby lines. A question about a line sends that line's recognised text, its verdict and your question, and up to 11 nearby recognised lines, without the image. Summaries and titles send recognised page text only. Search, related pages and the graph run on your machine.
 - **Turn it off:** untick the permission, switch the Tutor off under Settings → Tutor, or remove the key under Settings → Intelligence.
 
 Details are in the wiki: [AI tutor](https://github.com/inalto/Mate/wiki/AI-Tutor).
