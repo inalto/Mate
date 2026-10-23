@@ -283,7 +283,7 @@ fn import_rejects_zip_bomb_and_rolls_back() {
     let bomb = zip_bomb();
     let err = parse(&bomb, "bomb.sdocx", &ImportLimits::default()).unwrap_err();
     assert!(matches!(err, ImportError::Limit(_)), "{err:?}");
-    assert!(err.to_string().contains("1024 MiB"), "{err}");
+    assert!(err.to_string().contains("1,024 MiB"), "{err}");
 
     let tree = st.list_tree().unwrap();
     assert_eq!(tree.units.len(), units_before);

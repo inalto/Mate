@@ -234,7 +234,7 @@ impl<'a> Bplist<'a> {
         let s = before.saturating_add(n);
         self.steps.set(s);
         if s > self.max_steps {
-            return Err(ImportError::Limit("its note data takes too long to read".into()));
+            return Err(ImportError::Limit("its note data is too complex: reading it would take longer than Mate allows (the time budget)".into()));
         }
         if s / 4096 != before / 4096 {
             check_deadline(self.limits)?;
@@ -384,7 +384,7 @@ impl<'a> Archive<'a> {
         let total = self.blob_bytes.get().saturating_add(n as u64);
         self.blob_bytes.set(total);
         if total > self.max_blob_bytes {
-            return Err(ImportError::Limit("its note data is repeated too often".into()));
+            return Err(ImportError::Limit("its note data reuses the same large blocks too many times (the size budget for repeated data)".into()));
         }
         Ok(())
     }
