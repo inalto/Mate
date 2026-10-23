@@ -117,11 +117,35 @@ impl<'a> Val<'a> {
         }
     }
 
+    /// Whether this string equals `s`, in time bounded by `s` (lengths first, no allocation).
     fn is_str(&self, s: &str) -> bool {
-        match self {
-            Val::Ascii(b) => *b == s.as_bytes(),
-            Val::Utf16(_) => self.text().is_some_and(|t| t == s),
+        match *self {
+            Val::Ascii(b) => b == s.as_bytes(),
+            Val::Utf16(b) => {
+                b.len() / 2 == s.encode_utf16().count()
+                    && b.chunks_exact(2)
+                        .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                        .eq(s.encode_utf16())
+            }
             _ => false,
+        }
+    }
+
+    /// The rest of this string after `prefix` (ASCII), when that rest is at most `max` units
+    /// long; the work is bounded by `prefix.len() + max`.
+    fn suffix_after(&self, prefix: &str, max: usize) -> Option<String> {
+        let p = prefix.as_bytes();
+        match *self {
+            Val::Ascii(b) if b.len() <= p.len() + max => {
+                b.strip_prefix(p).map(|rest| String::from_utf8_lossy(rest).into_owned())
+            }
+            Val::Utf16(b) if b.len() / 2 <= p.len() + max => {
+                let units: Vec<u16> =
+                    b.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+                let rest = units.strip_prefix(&p.iter().map(|&c| u16::from(c)).collect::<Vec<_>>()[..])?;
+                Some(String::from_utf16_lossy(rest))
+            }
+            _ => None,
         }
     }
 
@@ -199,12 +223,18 @@ impl<'a> Bplist<'a> {
     }
 
     fn step(&self) -> Result<(), ImportError> {
-        let s = self.steps.get() + 1;
+        self.steps_n(1)
+    }
+
+    /// Charges `n` steps; checks the deadline each time the count crosses a multiple of 4096.
+    fn steps_n(&self, n: u64) -> Result<(), ImportError> {
+        let before = self.steps.get();
+        let s = before.saturating_add(n);
         self.steps.set(s);
         if s > self.max_steps {
             return Err(ImportError::Limit("its note data takes too long to read".into()));
         }
-        if s.is_multiple_of(4096) {
+        if s / 4096 != before / 4096 {
             check_deadline(self.limits)?;
         }
         Ok(())
@@ -288,13 +318,16 @@ impl<'a> Bplist<'a> {
                 let n = if kind == 0x6 { len.checked_mul(2) } else { Some(len) }
                     .ok_or_else(|| corrupt("Session.plist: bad string length"))?;
                 let b = self.slice(start, n)?;
+                // Long strings and blobs cost in proportion to their length.
+                self.steps_n((n / 4096) as u64)?;
                 match kind {
                     0x4 => Val::Data(b),
                     0x5 => Val::Ascii(b),
                     _ => Val::Utf16(b),
                 }
             }
-            0x8 => Val::Uid(be(self.slice(offset + 1, usize::from(low) + 1)?)),
+            0x8 if low <= 7 => Val::Uid(be(self.slice(offset + 1, usize::from(low) + 1)?)),
+            0x8 => return Err(corrupt("Session.plist: bad UID")),
             0xA | 0xC => {
                 let (len, start) = self.length(offset, low)?;
                 Val::Array(self.refs(start, len)?)
@@ -428,8 +461,7 @@ impl<'a> Archive<'a> {
         }
         for i in 0..keys.len() {
             let name = self.p.object(keys.get(i))?;
-            let Some(name) = name.text() else { continue };
-            let Some(suffix) = name.strip_prefix("NS.key.") else { continue };
+            let Some(suffix) = name.suffix_after("NS.key.", 20) else { continue };
             let k = self.child(&o.path, values.get(i))?;
             if k.val.is_str(key) || self.string(&k)?.as_deref() == Some(key) {
                 return match self.direct(o, &format!("NS.object.{suffix}"))? {
@@ -459,10 +491,8 @@ impl<'a> Archive<'a> {
                 let n = keys.len();
                 let mut slots: Vec<Option<usize>> = vec![None; n];
                 for i in 0..n {
-                    let Val::Ascii(name) = self.p.object(keys.get(i))? else { continue };
-                    let Some(index) = name.strip_prefix(b"NS.object.") else { continue };
-                    let index =
-                        std::str::from_utf8(index).ok().and_then(|s| s.parse::<usize>().ok());
+                    let name = self.p.object(keys.get(i))?;
+                    let index = name.suffix_after("NS.object.", 20).and_then(|s| s.parse::<usize>().ok());
                     if let Some(index) = index.filter(|x| *x < n) {
                         slots[index] = Some(values.get(i));
                     }

@@ -536,6 +536,44 @@ fn notability_shared_object_bomb_is_bounded() {
 }
 
 #[test]
+fn notability_long_utf16_keys_are_bounded() {
+    // One dictionary in $objects: "curvespoints" plus 8 000 keys that all reference the same
+    // 64 Ki-unit UTF-16 string starting "NS.key.". Comparing or decoding that string per key
+    // would take minutes; the import must end within the deadline.
+    const K: u16 = 8_000;
+    const L: u32 = 65_536;
+    let mut long = vec![0x6F, 0x12];
+    long.extend_from_slice(&L.to_be_bytes());
+    let text: Vec<u16> = "NS.key.".encode_utf16().chain(std::iter::repeat(u16::from(b'A'))).take(L as usize).collect();
+    long.extend(text.iter().flat_map(|u| u.to_be_bytes()));
+    let mut dict = vec![0xDF, 0x11];
+    dict.extend_from_slice(&(K + 1).to_be_bytes());
+    dict.push(6);
+    dict.extend(std::iter::repeat_n(4u8, K as usize));
+    dict.extend(std::iter::repeat_n(5u8, K as usize + 1));
+    let plist = assemble(
+        &[
+            vec![0xD1, 1, 2],
+            ascii("$objects"),
+            vec![0xA1, 3],
+            dict,
+            long,
+            ascii("v"),
+            ascii("curvespoints"),
+        ],
+        0,
+    );
+    let limits = ImportLimits {
+        deadline: Some(std::time::Instant::now() + std::time::Duration::from_secs(1)),
+        ..ImportLimits::default()
+    };
+    let started = std::time::Instant::now();
+    let r = parse(&notability_fixture::zip_with(&plist), "Fixture.note", &limits);
+    assert!(matches!(r, Err(ImportError::Limit(_) | ImportError::Corrupt(_))), "{r:?}");
+    assert!(started.elapsed().as_secs_f64() < 2.0, "{:?}", started.elapsed());
+}
+
+#[test]
 fn notability_many_media_objects_is_linear() {
     let spec = Spec { filler_media: 50_000, ..basic() };
     let bytes = build(&spec);
