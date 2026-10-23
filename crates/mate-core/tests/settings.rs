@@ -35,6 +35,53 @@ fn load_corrupt_or_partial_file() {
 }
 
 #[test]
+fn one_wrong_typed_field_keeps_the_rest() {
+    let dir = tempdir();
+    let p = dir.join("settings.json");
+    std::fs::write(
+        &p,
+        r#"{"theme":"dark","defaultPenWidth":"wide","pinchToZoom":false,"keybindings":[{"action":"a","keys":"Mod+K"}]}"#,
+    )
+    .unwrap();
+    let s = Settings::load(&p);
+    assert_eq!(s.theme, "dark");
+    assert_eq!(s.default_pen_width, 4.11);
+    assert!(!s.pinch_to_zoom);
+    assert_eq!(s.keybindings.len(), 1);
+}
+
+#[test]
+fn phase5_defaults() {
+    let s = Settings::default();
+    assert!(s.keybindings.is_empty());
+    assert!(!s.onboarding_done);
+    assert_eq!(s.last_seen_version, "");
+    assert_eq!(s.playground_page_id, None);
+    assert!(s.pen_haptics);
+    assert!(s.check_updates_on_startup);
+}
+
+/// The TS defaults (`npm run dump:settings-defaults`) must equal the Rust defaults.
+#[test]
+fn settings_defaults_match_between_rust_and_ts() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/settings-defaults.json");
+    let ts: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let rust = serde_json::to_value(Settings::default()).unwrap();
+    // JSON has no int/float split: `20` (TS) and `20.0` (Rust) are the same default.
+    fn norm(v: serde_json::Value) -> serde_json::Value {
+        use serde_json::Value;
+        match v {
+            Value::Number(n) => serde_json::json!(n.as_f64()),
+            Value::Array(a) => Value::Array(a.into_iter().map(norm).collect()),
+            Value::Object(o) => Value::Object(o.into_iter().map(|(k, v)| (k, norm(v))).collect()),
+            other => other,
+        }
+    }
+    assert_eq!(norm(rust), norm(ts), "regenerate with `npm run dump:settings-defaults` after changing defaults");
+}
+
+#[test]
 fn save_then_load_round_trips() {
     let dir = tempdir();
     let p = dir.join("settings.json");

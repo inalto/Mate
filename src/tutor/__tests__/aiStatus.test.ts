@@ -2,7 +2,7 @@
 // mounted, e.g. while the user fixes the model in Settings.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/ai", () => ({
   getAiStatus: vi.fn(async () => ({ configured: true, provider: "anthropic", model: "m", consent: true })),
 }));

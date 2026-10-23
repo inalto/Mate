@@ -1,0 +1,143 @@
+.settings-screen {
+  max-width: 1100px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.settings-nav {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+}
+
+.settings-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-nav button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-nav button:hover,
+.settings-nav button[aria-current="true"] {
+  background: var(--color-surface-2);
+}
+
+.settings-nav button[aria-current="true"] {
+  font-weight: 600;
+}
+
+.settings-nav-title {
+  display: block;
+  padding: 0 var(--space-2) var(--space-1);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.settings-hits {
+  margin-top: var(--space-1) !important;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+}
+
+.settings-hits li.muted {
+  padding: var(--space-2);
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.settings-section {
+  scroll-margin-top: var(--space-4);
+}
+
+.settings-section-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.srow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+}
+
+.srow-label {
+  width: 200px;
+  flex: none;
+}
+
+.srow-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.srow-hint {
+  font-size: 12px;
+}
+
+.srow-flash {
+  animation: srow-flash 1.5s ease-out;
+}
+
+@keyframes srow-flash {
+  0%,
+  60% {
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .srow-flash {
+    animation: none;
+    background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+}
+
+@media (max-width: 720px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-nav {
+    position: static;
+    max-height: none;
+  }
+  .srow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

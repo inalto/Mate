@@ -11,7 +11,7 @@ const queue = vi.hoisted(() => ({
 const ipc = vi.hoisted(() => ({ upsertElements: vi.fn(async (_els: Element[]) => {}), loadElements: vi.fn(async () => [] as Element[]) }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ipc);
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { LIMITS, PAGE_HEIGHT, PAGE_MODE_TOP_MARGIN } from "../../model/constants";
 import { contentOf, type TextBoxContent } from "../../model/content";

@@ -1,5 +1,7 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -52,6 +54,14 @@ impl CloseGate {
         id
     }
 
+    /// The window was destroyed: a window reopened under the same label starts with no attempt
+    /// (a stale unacknowledged one would let its first close skip the flush). The counter is kept
+    /// so a late watchdog of the old window can never match a new attempt id.
+    pub fn forget_window(&mut self) {
+        self.current = None;
+        self.exit_pending = false;
+    }
+
     /// Called after the main window was destroyed: true exactly once if an app quit is pending.
     pub fn take_exit_after_destroy(&mut self) -> bool {
         std::mem::take(&mut self.exit_pending)
@@ -94,8 +104,20 @@ impl CloseGate {
     }
 }
 
-fn gate(state: &AppState) -> std::sync::MutexGuard<'_, CloseGate> {
-    state.close_attempt.lock().unwrap_or_else(|e| e.into_inner())
+/// One close gate per window label: every window (the main one and each page window) runs its own
+/// handshake with its own webview. Attempt ids are per window.
+#[derive(Default)]
+pub struct CloseGates(Mutex<HashMap<String, CloseGate>>);
+
+impl CloseGates {
+    pub fn with<R>(&self, label: &str, f: impl FnOnce(&mut CloseGate) -> R) -> R {
+        let mut map = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        f(map.entry(label.to_owned()).or_default())
+    }
+}
+
+fn gate<R>(state: &AppState, label: &str, f: impl FnOnce(&mut CloseGate) -> R) -> R {
+    state.close_attempt.with(label, f)
 }
 
 fn eval_js(window: &Window, js: String) {
@@ -110,20 +132,15 @@ pub fn start_close_attempt(window: &Window) -> bool {
     start_attempt(window, false)
 }
 
-/// Handles a user-initiated `RunEvent::ExitRequested` (macOS Cmd+Q / app menu "Quit" / Dock quit,
-/// which never send `CloseRequested`). Same contract as `start_close_attempt`: true = the exit was
-/// prevented and the frontend flushes first; `complete_close_attempt` then destroys the window and
-/// exits the app.
-pub fn start_exit_attempt(window: &Window) -> bool {
-    start_attempt(window, true)
-}
-
-fn start_attempt(window: &Window, exit: bool) -> bool {
+/// Starts `window`'s own handshake. `exit`: a user-initiated `RunEvent::ExitRequested` (macOS Cmd+Q
+/// / app menu "Quit" / Dock quit, which never send `CloseRequested`) on the main window, so the app
+/// exits once `complete_close_attempt` destroyed it. True =
+/// the frontend flushes first; false = the window should close now (its frontend never answered the
+/// previous attempt).
+pub(crate) fn start_attempt(window: &Window, exit: bool) -> bool {
     let state = window.state::<AppState>();
-    let id = {
-        let mut g = gate(&state);
-        if exit { g.on_exit_requested() } else { g.on_close_requested() }
-    };
+    let label = window.label().to_owned();
+    let id = gate(&state, &label, |g| if exit { g.on_exit_requested() } else { g.on_close_requested() });
     let Some(id) = id else {
         return false;
     };
@@ -134,25 +151,30 @@ fn start_attempt(window: &Window, exit: bool) -> bool {
     std::thread::spawn(move || {
         std::thread::sleep(WATCHDOG);
         let state = window.state::<AppState>();
-        let expiry = gate(&state).expire(id);
+        let expiry = gate(&state, &label, |g| g.expire(id));
         if expiry == Expiry::Acknowledged {
             // Mate is still saving: tell the frontend to surface it.
             eval_js(&window, format!(
                 "window.__mateCloseAttemptCancelled && window.__mateCloseAttemptCancelled({id})"
             ));
+            // A page window that could not flush holds up a pending main-window close: cancel it.
+            crate::windows::secondary_refused(window.app_handle(), &label);
         }
     });
     true
 }
 
 #[tauri::command]
-pub fn close_attempt_started(state: State<'_, AppState>, attempt_id: u64) -> bool {
-    gate(&state).acknowledge(attempt_id)
+pub fn close_attempt_started(window: Window, state: State<'_, AppState>, attempt_id: u64) -> bool {
+    gate(&state, window.label(), |g| g.acknowledge(attempt_id))
 }
 
 #[tauri::command]
-pub fn cancel_close_attempt(state: State<'_, AppState>, attempt_id: u64) {
-    gate(&state).clear_if_current(attempt_id);
+pub fn cancel_close_attempt(window: Window, state: State<'_, AppState>, attempt_id: u64) {
+    if gate(&state, window.label(), |g| g.clear_if_current(attempt_id)) {
+        // The frontend could not flush (it shows why); a pending main-window close waits no more.
+        crate::windows::secondary_refused(window.app_handle(), window.label());
+    }
 }
 
 #[tauri::command]
@@ -164,15 +186,17 @@ pub fn complete_close_attempt(
 ) -> Result<(), String> {
     // `force` is the user's explicit "Close anyway" after a recovery file was written; the attempt
     // was already cancelled at that point, so it is no longer current.
-    let current = gate(&state).clear_if_current(attempt_id);
+    let label = window.label().to_owned();
+    let current = gate(&state, &label, |g| g.clear_if_current(attempt_id));
     if !current && force != Some(true) {
         return Err("stale close attempt".into());
     }
+    crate::windows::mark_dying(window.app_handle(), &label);
     window.destroy().map_err(|e| e.to_string())?;
     // A quit (Cmd+Q) was prevented to flush first. Destroying the last window usually ends the
     // app on its own (it emits ExitRequested again, which then finds no main window and is let
     // through); exit explicitly in case it does not. The gate hands this out once.
-    if gate(&state).take_exit_after_destroy() {
+    if gate(&state, &label, |g| g.take_exit_after_destroy()) {
         window.app_handle().exit(0);
     }
     Ok(())
@@ -214,6 +238,39 @@ fn write_recovery(dir: &Path, name: &str, contents: &str) -> Result<RecoveryArti
         path: path.to_string_lossy().into_owned(),
         size: contents.len() as u64,
     })
+}
+
+/// Recovery files kept per kind; older ones are deleted at startup.
+pub const KEEP_RECOVERY_FILES: usize = 10;
+
+/// Deletes all but the `keep` newest recovery files: the reset zips (`mate-recovery-*.zip`, in
+/// the data dir) and the close-time json files (`mate-recovery-*.json`, in `recovery/` and, from
+/// Phase 1, next to the database). Each kind is counted across those folders. Returns how many
+/// files were removed; a file that cannot be removed is left and ignored.
+pub fn prune_recovery_files(data_dir: &Path, keep: usize) -> usize {
+    let mut removed = 0;
+    for ext in ["zip", "json"] {
+        let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> = Vec::new();
+        for dir in [data_dir.to_path_buf(), data_dir.join("recovery")] {
+            let Ok(entries) = fs::read_dir(&dir) else { continue };
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let ours = name.starts_with("mate-recovery-") && name.ends_with(&format!(".{ext}"));
+                let Ok(meta) = entry.metadata() else { continue };
+                if ours && meta.is_file() {
+                    files.push((meta.modified().unwrap_or(std::time::UNIX_EPOCH), entry.path()));
+                }
+            }
+        }
+        // Newest first; the name (it carries a timestamp) breaks ties between equal mtimes.
+        files.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+        for (_, path) in files.into_iter().skip(keep) {
+            if fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    removed
 }
 
 #[tauri::command]
@@ -285,6 +342,81 @@ mod tests {
         let c = g.on_close_requested().unwrap();
         assert!(g.clear_if_current(c));
         assert!(!g.take_exit_after_destroy());
+    }
+
+    #[test]
+    fn each_window_has_its_own_gate() {
+        let gates = CloseGates::default();
+        let main = gates.with("main", |g| g.on_close_requested()).unwrap();
+        let page = gates.with("page-p1", |g| g.on_close_requested()).unwrap();
+        // An unacknowledged attempt in one window does not let another window's close through.
+        assert!(gates.with("page-p1", |g| g.acknowledge(page)));
+        assert!(gates.with("main", |g| g.is_current(main)));
+        assert!(gates.with("page-p1", |g| g.clear_if_current(page)));
+        assert_eq!(gates.with("main", |g| g.on_close_requested()), None);
+    }
+
+    #[test]
+    fn reopened_page_window_gets_a_fresh_gate() {
+        let gates = CloseGates::default();
+        // The page window never answered and was destroyed (fail open).
+        let old = gates.with("page-p1", |g| g.on_close_requested()).unwrap();
+        assert_eq!(gates.with("page-p1", |g| g.on_close_requested()), None);
+        gates.with("page-p1", |g| g.forget_window());
+        // Reopened under the same label: its first close runs the flush handshake again.
+        let new = gates.with("page-p1", |g| g.on_close_requested()).unwrap();
+        assert!(new > old, "ids never repeat, so a late watchdog cannot hit the new attempt");
+        assert_eq!(gates.with("page-p1", |g| g.expire(old)), Expiry::Stale);
+        assert!(gates.with("page-p1", |g| g.is_current(new)));
+    }
+
+    #[test]
+    fn prune_keeps_the_ten_newest_recovery_files_of_each_kind() {
+        let dir = std::env::temp_dir().join(format!("mate-prune-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("recovery")).unwrap();
+        let t0 = std::time::SystemTime::now() - Duration::from_secs(10_000);
+        let put = |path: std::path::PathBuf, age: u64| {
+            fs::write(&path, "x").unwrap();
+            let f = fs::File::options().write(true).open(&path).unwrap();
+            f.set_modified(t0 + Duration::from_secs(age)).unwrap();
+        };
+        for i in 0..13 {
+            put(dir.join(format!("mate-recovery-{i:02}.zip")), i);
+        }
+        for i in 0..7 {
+            put(dir.join("recovery").join(format!("mate-recovery-j{i:02}.json")), 100 + i);
+        }
+        for i in 0..6 {
+            put(dir.join(format!("mate-recovery-k{i:02}.json")), 200 + i); // next to the DB
+        }
+        put(dir.join("mate.db"), 0);
+        put(dir.join("settings.json"), 0);
+        put(dir.join("recovery").join("notes.json"), 0);
+
+        assert_eq!(prune_recovery_files(&dir, KEEP_RECOVERY_FILES), 3 + 3);
+        let left = |d: &Path, ext: &str| {
+            let mut v: Vec<String> = fs::read_dir(d)
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.starts_with("mate-recovery-") && n.ends_with(ext))
+                .collect();
+            v.sort();
+            v
+        };
+        let zips = left(&dir, ".zip");
+        assert_eq!(zips.len(), 10);
+        assert_eq!(zips[0], "mate-recovery-03.zip"); // the three oldest went
+        // 13 json files across both folders: the 3 oldest (j00..j02) went.
+        assert_eq!(left(&dir.join("recovery"), ".json").len(), 4);
+        assert_eq!(left(&dir, ".json").len(), 6);
+        assert!(dir.join("mate.db").exists() && dir.join("settings.json").exists());
+        assert!(dir.join("recovery").join("notes.json").exists());
+        // Idempotent, and a missing directory is fine.
+        assert_eq!(prune_recovery_files(&dir, KEEP_RECOVERY_FILES), 0);
+        assert_eq!(prune_recovery_files(&dir.join("nope"), KEEP_RECOVERY_FILES), 0);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

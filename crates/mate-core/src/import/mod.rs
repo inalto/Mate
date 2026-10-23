@@ -199,15 +199,17 @@ impl ImportBudget {
         self.elements += 1;
         if self.elements > self.max_elements {
             return Err(ImportError::Limit(format!(
-                "it holds more than {} items; the most Mate imports from one file is {}",
-                self.max_elements, self.max_elements
+                "it holds more than {} items (strokes, text boxes, images and shapes); the most Mate imports from one file is {}",
+                fmt_count(self.max_elements),
+                fmt_count(self.max_elements)
             )));
         }
         self.points = self.points.saturating_add(points as u64);
         if self.points > self.max_points {
             return Err(ImportError::Limit(format!(
                 "its ink has more than {} points; the most Mate imports from one file is {}",
-                self.max_points, self.max_points
+                fmt_count(self.max_points),
+                fmt_count(self.max_points)
             )));
         }
         self.on_page += 1;
@@ -232,6 +234,19 @@ impl ImportBudget {
         }
         Ok(())
     }
+}
+
+/// A count with thousands separators ("1,234,567") for messages shown to the user.
+pub(crate) fn fmt_count(n: u64) -> String {
+    let digits = n.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 fn deadline_passed() -> ImportError {
@@ -289,8 +304,9 @@ pub fn sniff(bytes: &[u8], filename: &str) -> Result<ImportSource, ImportError> 
         .map_err(|e| ImportError::Corrupt(format!("zip: {e}")))?;
     if zip.len() > MAX_ZIP_ENTRIES {
         return Err(ImportError::Limit(format!(
-            "it contains {} files; the most Mate reads is {MAX_ZIP_ENTRIES}",
-            zip.len()
+            "it contains {} files; the most Mate reads is {}",
+            fmt_count(zip.len() as u64),
+            fmt_count(MAX_ZIP_ENTRIES as u64)
         )));
     }
     let names: Vec<String> = zip
@@ -338,7 +354,7 @@ pub fn parse(
     if bytes.len() as u64 > limits.max_file_bytes {
         return Err(ImportError::Limit(format!(
             "files over {} MiB are not imported",
-            limits.max_file_bytes / MIB
+            fmt_count(limits.max_file_bytes / MIB)
         )));
     }
     let source = sniff(bytes, filename)?;
@@ -347,7 +363,7 @@ pub fn parse(
         return Err(ImportError::Limit(format!(
             "{} files over {} MiB are not imported",
             source.display_name(),
-            cap / MIB
+            fmt_count(cap / MIB)
         )));
     }
     let zip = || ZipSource::new(bytes, limits);
@@ -397,6 +413,31 @@ mod tests {
             sniff(b"PK\x03\x04garbage", "notes.goodnotes").map_err(|e| matches!(e, ImportError::Corrupt(_))),
             Err(true)
         );
+    }
+
+    #[test]
+    fn counts_get_thousands_separators() {
+        for (n, s) in [(0, "0"), (999, "999"), (1000, "1,000"), (12_345, "12,345"), (5_000_000, "5,000,000"), (1_234_567_890, "1,234,567,890")] {
+            assert_eq!(fmt_count(n), s);
+        }
+        let limits = ImportLimits { max_points: 5_000, max_elements: 6000, ..ImportLimits::default() };
+        let mut b = ImportBudget::new(&limits);
+        let mut skipped = ImportSkipped::default();
+        match b.admit(6_000, &mut skipped) {
+            Err(ImportError::Limit(m)) => assert!(m.contains("5,000 points"), "{m}"),
+            other => panic!("{other:?}"),
+        }
+        let few = ImportLimits { max_elements: 1_000, ..ImportLimits::default() };
+        let mut b = ImportBudget::new(&few);
+        let mut skipped = ImportSkipped::default();
+        let err = (0..1_001).find_map(|_| {
+            b.start_page();
+            b.admit(1, &mut skipped).err()
+        });
+        match err {
+            Some(ImportError::Limit(m)) => assert!(m.contains("1,000 items") && m.contains("text boxes"), "{m}"),
+            other => panic!("{other:?}"),
+        }
     }
 
     #[test]

@@ -1,8 +1,9 @@
 import { Books, Gear, House, ShareNetwork, Trash } from "@phosphor-icons/react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect } from "react";
-import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
-import { useChromeStore } from "../stores/chrome";
+import { bindLiveShortcuts } from "../keys/shortcuts";
+import ShortcutHelp from "../keys/ShortcutHelp";
+import { runGlobalShortcut } from "../keys/modalGuard";
 import { isImportPath } from "../ipc/import";
 import { useImportStore } from "../stores/importStore";
 import CommandPalette from "./CommandPalette";
@@ -24,10 +25,8 @@ export default function Shell() {
   // first and marks the event handled, so this only fires elsewhere.
   useEffect(
     () =>
-      bindShortcuts(
-        DEFAULT_SHORTCUTS.filter((b) => b.action === "palette.open"),
-        () => useChromeStore.getState().openPalette(),
-      ),
+      // Behind the same modal check as the editor: an open dialog or menu owns the keyboard.
+      bindLiveShortcuts((action) => runGlobalShortcut(action), ["palette.open", "help.shortcuts"]),
     [],
   );
 
@@ -82,6 +81,7 @@ export default function Shell() {
       </main>
       <CommandPalette />
       <ImportDialog />
+      <ShortcutHelp />
     </div>
   );
 }

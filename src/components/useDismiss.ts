@@ -1,7 +1,9 @@
 import { useEffect, useRef, type RefObject } from "react";
+import { useModal } from "./useModal";
 
 /** Close on pointer-down outside `ref` or Escape while `open`. */
 export function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void): void {
+  useModal(open);
   const cb = useRef(onClose);
   useEffect(() => {
     cb.current = onClose;

@@ -1,16 +1,18 @@
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
+import { closeThisWindow, isPageWindow, setThisWindowTitle } from "../ipc/windows";
 import CanvasView from "../canvas/CanvasView";
 import PageSettingsDialog from "../components/PageSettingsDialog";
 import SelectionBar from "../components/SelectionBar";
 import Sidebar from "../components/Sidebar";
 import TabBar from "../components/TabBar";
 import Toolbar from "../components/Toolbar";
-import TopBar, { ShortcutsDialog } from "../components/TopBar";
+import TopBar from "../components/TopBar";
 import OverlayLayer from "../overlay/OverlayLayer";
 import { preloadBoxEditors } from "../overlay/boxEditors";
 import { runEditorShortcut, startNewTab } from "../keys/editorCommands";
-import { bindShortcuts, DEFAULT_SHORTCUTS } from "../keys/shortcuts";
+import { ignoredInPageWindow } from "../keys/modalGuard";
+import { bindLiveShortcuts } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
 import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
@@ -22,6 +24,9 @@ import TutorController from "../tutor/TutorController";
 
 export default function Editor() {
   const { pageId } = useParams();
+  // `?window=1`: this page has its own window. No sidebar, no tabs; closing the window is the exit.
+  const pageWindow = isPageWindow();
+  const pageTitle = useNotebookStore((s) => s.tree.pages.find((p) => p.id === pageId)?.title);
   const navigate = useNavigate();
   const tab = useTabsStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const pageSettingsFor = useChromeStore((s) => s.pageSettingsFor);
@@ -39,10 +44,21 @@ export default function Editor() {
       useTabsStore.subscribe((s, prev) => {
         const next = focusedPageId(s);
         if (next === focusedPageId(prev)) return;
+        if (pageWindow) {
+          // The page was deleted: its window has nothing left to show.
+          if (next === null) closeThisWindow();
+          else navigate(`/edit/${next}?window=1`, { replace: true });
+          return;
+        }
         navigate(next === null ? "/" : `/edit/${next}`, { replace: true });
       }),
-    [navigate],
+    [navigate, pageWindow],
   );
+
+  // A page window is titled after its page (kept in step with renames).
+  useEffect(() => {
+    if (pageWindow && pageTitle !== undefined) setThisWindowTitle(pageTitle.trim() || "Untitled");
+  }, [pageWindow, pageTitle]);
 
   // Drop tabs for pages that were deleted; keep open panes' page records (mode, background) fresh.
   useEffect(() => {
@@ -61,10 +77,14 @@ export default function Editor() {
 
   useEffect(
     () =>
-      bindShortcuts(DEFAULT_SHORTCUTS, (action, detail) =>
-        action === "tab.new" ? startNewTab(navigate) : runEditorShortcut(action, detail),
+      bindLiveShortcuts((action, detail) =>
+        pageWindow && ignoredInPageWindow(action)
+          ? undefined
+          : action === "tab.new"
+            ? startNewTab(navigate)
+            : runEditorShortcut(action, detail),
       ),
-    [navigate],
+    [navigate, pageWindow],
   );
   useEffect(() => watchThumbnails(), []);
   // Box editors are separate chunks: fetch them once the editor is up, ahead of the first edit.
@@ -78,11 +98,11 @@ export default function Editor() {
   if (!pageId || !tab || !tab.panes.some((p) => p.pageId === pageId)) return null;
 
   return (
-    <div className="editor-shell">
+    <div className={pageWindow ? "editor-shell page-window" : "editor-shell"}>
       <TopBar />
-      <TabBar />
+      {!pageWindow && <TabBar />}
       <div className={leftHanded ? "editor-row reverse" : "editor-row"}>
-        <Sidebar />
+        {!pageWindow && <Sidebar />}
         <div className="editor">
           <div className={tab.panes.length === 2 ? "panes split" : "panes"}>
             {tab.panes.map((pane, i) => (
@@ -107,7 +127,6 @@ export default function Editor() {
       {settingsPage && (
         <PageSettingsDialog key={settingsPage.id} page={settingsPage} onClose={() => useChromeStore.getState().openPageSettings(null)} />
       )}
-      <ShortcutsDialog />
     </div>
   );
 }

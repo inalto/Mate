@@ -13,6 +13,7 @@ import { loadElements, upsertElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { gcAssets } from "../ipc/assets";
 import { useSettingsStore } from "./settings";
+import { sheetSizeFor } from "../canvas/camera";
 
 export interface ShelfGroup {
   shelf: Bookshelf | null;
@@ -242,6 +243,13 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
         version: 0,
         ...overrides,
       };
+      // Paper pages get their sheet from the default aspect/orientation at creation, so changing
+      // the defaults later never reshapes existing pages.
+      if (page.mode === "page" && page.pageWidth === undefined && page.pageHeight === undefined) {
+        const size = sheetSizeFor(settings.defaultPageAspectRatio, settings.defaultPageOrientation);
+        page.pageWidth = size.width;
+        page.pageHeight = size.height;
+      }
       await savePage(page);
       return page;
     },

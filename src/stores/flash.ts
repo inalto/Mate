@@ -11,7 +11,7 @@ export interface FlashRequest {
   at: number;
 }
 
-/** A flash older than this is dropped when read (no layer was there to show and clear it). */
+/** A flash older than this is dropped, on read and by a timer from the write (no layer was there to show it). */
 export const FLASH_EXPIRY_MS = 5000;
 
 /** The flash request if it is still fresh at `now`. */
@@ -24,9 +24,16 @@ interface FlashState {
   clearFlash(): void;
 }
 
-export const useFlashStore = create<FlashState>((set) => ({
+export const useFlashStore = create<FlashState>((set, get) => ({
   flash: null,
-  flashGroup: (pageId, groupId, bounds) => set({ flash: { pageId, groupId, bounds, at: Date.now() } }),
+  flashGroup: (pageId, groupId, bounds) => {
+    const at = Date.now();
+    set({ flash: { pageId, groupId, bounds, at } });
+    // Dropped on write too: an unclaimed flash goes away once it is too old, even if nobody reads it.
+    setTimeout(() => {
+      if (get().flash?.at === at) set({ flash: null });
+    }, FLASH_EXPIRY_MS + 1);
+  },
   clearFlash: () => set({ flash: null }),
 }));
 

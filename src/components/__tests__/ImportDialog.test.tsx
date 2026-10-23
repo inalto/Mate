@@ -23,7 +23,7 @@ vi.mock("@tauri-apps/api/webview", () => ({
 }));
 const seeded = vi.hoisted(() => ({ tree: null as unknown }));
 vi.mock("../../ipc/notebook", () => ({ getNotebookTree: vi.fn(async () => seeded.tree) }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(async () => ({})), setSettings: vi.fn(async () => undefined) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(async () => ({})), patchSettings: vi.fn(async () => undefined) }));
 
 import { open } from "@tauri-apps/plugin-dialog";
 import { MemoryRouter } from "react-router";

@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invokeAi } from "./aiCall";
 
 export const QUESTION_TYPES = ["multiple-choice", "multi-select", "true-false", "fill-in-blank", "short-answer"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
@@ -33,4 +33,4 @@ export const practiceGenerate = (
   types: QuestionType[],
   customPrompt?: string,
 ): Promise<PracticeQuestion[]> =>
-  invoke("practice_generate", { unitId, count, types, customPrompt: customPrompt?.trim() || null });
+  invokeAi("practice_generate", { unitId, count, types, customPrompt: customPrompt?.trim() || null });

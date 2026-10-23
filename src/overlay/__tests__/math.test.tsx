@@ -32,7 +32,7 @@ const queue = vi.hoisted(() => ({
 const loaded = vi.hoisted(() => ({ els: [] as Element[] }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.els) }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { MathfieldElement } from "mathlive";
 import { isTypingTarget } from "../../keys/shortcuts";

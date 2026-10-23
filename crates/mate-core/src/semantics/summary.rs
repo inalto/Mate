@@ -21,6 +21,22 @@ const TITLE_SYSTEM: &str = "You name pages in a student's notebook. You are give
 recognised from one page, in reading order (LaTeX for maths). Reply with one short, specific \
 title of at most six words. Reply with the title only: no quotes, no trailing full stop.";
 
+/// Why a summary or title could not be made: the provider's own failure (kept typed, so the app
+/// can tell a rejected key from a busy service) or anything else, already worded for the user.
+#[derive(Debug, thiserror::Error)]
+pub enum SummaryError {
+    #[error("{0}")]
+    Ai(#[from] AiError),
+    #[error("{0}")]
+    Other(String),
+}
+
+impl From<String> for SummaryError {
+    fn from(s: String) -> Self {
+        SummaryError::Other(s)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Task {
     Summary,
@@ -81,7 +97,7 @@ pub fn generate_for_page(
     provider: &dyn Provider,
     page_id: &str,
     task: Task,
-) -> Result<Generated, String> {
+) -> Result<Generated, SummaryError> {
     let (text, hash, existing) = {
         let st = storage.lock().map_err(|e| e.to_string())?;
         let text = st.page_recognised_text(page_id).map_err(|e| e.to_string())?;
@@ -89,9 +105,9 @@ pub fn generate_for_page(
         (text, hash, st.get_page_semantics(page_id).map_err(|e| e.to_string())?)
     };
     if text.trim().is_empty() {
-        return Err(
+        return Err(SummaryError::Other(
             "Nothing on this page has been recognised yet. Write something and let the tutor read it first.".into(),
-        );
+        ));
     }
     let fresh = existing.filter(|s| s.content_hash.as_deref() == Some(hash.as_str()));
     let cached = fresh.as_ref().and_then(|s| match task {
@@ -101,7 +117,7 @@ pub fn generate_for_page(
     if let Some(text) = cached {
         return Ok(Generated { text, cached: true });
     }
-    let out = generate(provider, task, &text).map_err(|e| e.to_string())?;
+    let out = generate(provider, task, &text)?;
     let mut sem = fresh.unwrap_or_else(|| PageSemantics {
         page_id: page_id.to_string(),
         summary: None,

@@ -11,7 +11,7 @@ const queue = vi.hoisted(() => ({
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 const loadElements = vi.hoisted(() => vi.fn(async (): Promise<Element[]> => []));
 vi.mock("../../ipc/elements", () => ({ loadElements }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { hitTest } from "../../canvas/toolInteractions";
 import { DEFAULT_SETTINGS, PAGE_WIDTH } from "../../model/constants";

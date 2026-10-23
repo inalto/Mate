@@ -1,5 +1,5 @@
 import { DotsThree } from "@phosphor-icons/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { exportUnitArchive } from "../ipc/archive";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
@@ -7,6 +7,7 @@ import type { Unit } from "../model/types";
 import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import PracticeDialog from "./PracticeDialog";
+import { useDismiss } from "./useDismiss";
 
 export const COVER_PALETTE = [
   "#4a5d4e",
@@ -75,13 +76,16 @@ export default function BookCard({ unit }: { unit: Unit }) {
     }
   };
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  useDismiss(cardRef, menu !== "closed", () => setMenu("closed"));
+
   const act = (fn: () => Promise<void>) => async () => {
     setMenu("closed");
     await fn();
   };
 
   return (
-    <div className="book-card" onContextMenu={(e) => { e.preventDefault(); setMenu("main"); }}>
+    <div ref={cardRef} className="book-card" onContextMenu={(e) => { e.preventDefault(); setMenu("main"); }}>
       <button
         type="button"
         className="book-cover"

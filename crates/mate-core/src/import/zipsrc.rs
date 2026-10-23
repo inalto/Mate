@@ -26,7 +26,7 @@ fn corrupt(e: ZipError) -> ImportError {
 /// "N MiB" for budgets of at least 1 MiB, "N bytes" below.
 fn size_text(bytes: u64) -> String {
     const MIB: u64 = 1024 * 1024;
-    if bytes >= MIB { format!("{} MiB", bytes / MIB) } else { format!("{bytes} bytes") }
+    if bytes >= MIB { format!("{} MiB", super::fmt_count(bytes / MIB)) } else { format!("{bytes} bytes") }
 }
 
 /// False for names that could escape a directory if ever extracted: `..` components, absolute
@@ -48,7 +48,12 @@ fn declared_entry_count(bytes: &[u8]) -> Option<usize> {
     let start = bytes.len().saturating_sub(22 + 0xFFFF);
     let pos = (start..=bytes.len().checked_sub(22)?)
         .rev()
-        .find(|&i| bytes[i..i + 4] == EOCD)?;
+        // A real record's comment length reaches exactly the end of the file; "PK" inside
+        // a comment (or elsewhere) is not a record.
+        .find(|&i| {
+            bytes[i..i + 4] == EOCD
+                && i + 22 + usize::from(u16::from_le_bytes([bytes[i + 20], bytes[i + 21]])) == bytes.len()
+        })?;
     let total = u16::from_le_bytes([bytes[pos + 10], bytes[pos + 11]]);
     (total != 0xFFFF).then_some(usize::from(total))
 }
@@ -63,8 +68,8 @@ impl<'a> ZipSource<'a> {
         if zip.len() > limits.max_zip_entries {
             return Err(ImportError::Limit(format!(
                 "it contains {} files; the most Mate reads is {}",
-                zip.len(),
-                limits.max_zip_entries
+                super::fmt_count(zip.len() as u64),
+                super::fmt_count(limits.max_zip_entries as u64)
             )));
         }
         // The zip crate indexes entries by name, so a repeated name silently hides an entry:
@@ -199,6 +204,29 @@ pub(crate) mod tests {
             w.write_all(data).unwrap();
         }
         w.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn eocd_signature_inside_the_comment_is_not_a_duplicate_name() {
+        // A comment holding a look-alike record (declaring 7 entries) followed by more text.
+        let mut fake = vec![0x50, 0x4b, 0x05, 0x06];
+        fake.extend_from_slice(&[0, 0, 0, 0, 7, 0, 7, 0]); // disks, entries on disk, total entries
+        fake.extend_from_slice(&[0; 10]); // size, offset, comment length 0
+        fake.extend_from_slice(b" tail");
+        let mut w = ZipWriter::new(Cursor::new(Vec::new()));
+        let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+        w.start_file("a", opts).unwrap();
+        w.write_all(b"1").unwrap();
+        w.start_file("b", opts).unwrap();
+        w.write_all(b"2").unwrap();
+        w.set_raw_comment(fake.clone().into());
+        let z = w.finish().unwrap().into_inner();
+        // The look-alike is the last signature in the file but does not end at the file's end.
+        let last = z.windows(4).rposition(|w| w == [0x50, 0x4b, 0x05, 0x06]).unwrap();
+        assert_ne!(last + 22, z.len());
+        assert_eq!(declared_entry_count(&z), Some(2));
+        let src = ZipSource::new(&z, &ImportLimits::default()).unwrap();
+        assert_eq!(src.names(), vec!["a", "b"]);
     }
 
     #[test]

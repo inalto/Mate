@@ -1,5 +1,6 @@
 // "Practice from this book": pick how many questions and of which kinds, preview what the AI
 // wrote, then add them to a new page in the book.
+import { useModal } from "./useModal";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import {
@@ -18,6 +19,7 @@ import { showToast } from "./Toast";
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 export default function PracticeDialog({ unit, onClose }: { unit: Unit; onClose(): void }) {
+  useModal();
   const navigate = useNavigate();
   const [count, setCount] = useState(5);
   const [types, setTypes] = useState<QuestionType[]>([...QUESTION_TYPES]);

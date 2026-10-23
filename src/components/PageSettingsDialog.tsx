@@ -1,4 +1,5 @@
 // Per-page settings: infinite canvas or paper sheets, sheet size, background. Saved with upsertPage.
+import { useModal } from "./useModal";
 import { useState } from "react";
 import { ASPECT_PRESET_HEIGHTS, PAGE_WIDTH } from "../model/constants";
 import type { AspectPreset, BackgroundType, Page, PageMode } from "../model/types";
@@ -28,6 +29,7 @@ function sheetOf(page: Page, defaultAspect: string, defaultOrientation: string):
 }
 
 export default function PageSettingsDialog({ page, onClose }: { page: Page; onClose(): void }) {
+  useModal();
   const cfg = useSettingsStore((s) => s.settings);
   const initial = sheetOf(page, cfg.defaultPageAspectRatio, cfg.defaultPageOrientation);
   const [mode, setMode] = useState<PageMode>(page.mode);

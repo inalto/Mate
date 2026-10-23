@@ -3,7 +3,15 @@
 import type { Point } from "../model/types";
 import { screenToWorld, type Camera, type Vec2 } from "./camera";
 
-export type PalmRejection = "off" | "low" | "high";
+/**
+ * settings.palmRejection. Rules for a touch contact (pen and mouse are never rejected):
+ * - "off": every touch is accepted (draws with drawWithFinger, else pans/pinches).
+ * - "standard" ("low" is the legacy name): rejected when its contact diameter exceeds 40 px, its
+ *   radius exceeds 45 px, or a stylus was seen (down, move or hover) in the last 2 s.
+ * - "high": as standard, with a 20 px diameter threshold.
+ * A touch that lands while a pen/mouse stroke is open is always rejected (resting hand).
+ */
+export type PalmRejection = "off" | "standard" | "low" | "high";
 
 export interface PointerInfo {
   pointerType: string;
@@ -58,7 +66,7 @@ export function pointerInfo(e: PointerEvent): PointerInfo {
   };
 }
 
-/** Palm test for a touch contact: diameter above 20 px (high) / 40 px (low), or radius > 45 px. */
+/** Palm test for a touch contact: diameter above 20 px (high) / 40 px (standard), or radius > 45 px. */
 export function isPalmContact(e: Pick<PointerEvent, "width" | "height">, mode: PalmRejection): boolean {
   if (mode === "off") return false;
   const diameter = Math.max(e.width || 0, e.height || 0);

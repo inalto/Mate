@@ -42,6 +42,14 @@ fn default_toolbar_presets() -> Vec<PenPreset> {
     ]
 }
 
+/// A user override of one action's key binding (`keys` is a chord string such as `"Mod+Shift+K"`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeybindingOverride {
+    pub action: String,
+    pub keys: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -115,13 +123,22 @@ pub struct Settings {
     pub ai_provider: String,
     /// Empty means the provider's default model (`ai::default_model`).
     pub ai_model: String,
-    pub analytics_consent: bool,
     pub trash_retention_days: u32,
     pub default_export_format: String,
     // Mate additions
     /// Most recent first, max 6 entries.
     pub recent_colors: Vec<String>,
     pub toolbar_presets: Vec<PenPreset>,
+    // Phase 5
+    /// Per-action key binding overrides (empty means all defaults).
+    pub keybindings: Vec<KeybindingOverride>,
+    pub onboarding_done: bool,
+    /// App version whose release notes were last shown; empty before the first run.
+    pub last_seen_version: String,
+    /// The Playground page created by onboarding, if any.
+    pub playground_page_id: Option<String>,
+    pub pen_haptics: bool,
+    pub check_updates_on_startup: bool,
 }
 
 impl Default for Settings {
@@ -184,20 +201,54 @@ impl Default for Settings {
             ai_consent: None,
             ai_provider: s("anthropic"),
             ai_model: String::new(),
-            analytics_consent: false,
             trash_retention_days: 30,
             default_export_format: s("pdf"),
             recent_colors: Vec::new(),
             toolbar_presets: default_toolbar_presets(),
+            keybindings: Vec::new(),
+            onboarding_done: false,
+            last_seen_version: String::new(),
+            playground_page_id: None,
+            pen_haptics: true,
+            check_updates_on_startup: true,
         }
     }
 }
 
 impl Settings {
+    /// Parses a settings file. A field with the wrong type falls back to its default instead of
+    /// discarding the whole file; only non-JSON or non-object input is an error.
+    pub fn from_json_lenient(text: &str) -> Result<Settings, serde_json::Error> {
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        if let Ok(s) = serde_json::from_value::<Settings>(value.clone()) {
+            return Ok(s);
+        }
+        let serde_json::Value::Object(file) = value else {
+            return serde_json::from_value(value); // error: not an object
+        };
+        let defaults = serde_json::to_value(Settings::default())?;
+        let serde_json::Value::Object(mut merged) = defaults else {
+            return Ok(Settings::default());
+        };
+        for (key, val) in file {
+            let Some(old) = merged.get(&key).cloned() else {
+                continue; // unknown key
+            };
+            merged.insert(key.clone(), val);
+            if serde_json::from_value::<Settings>(serde_json::Value::Object(merged.clone()))
+                .is_err()
+            {
+                eprintln!("settings: ignoring wrong-typed value for \"{key}\"; using its default");
+                merged.insert(key, old); // wrong type: keep the default
+            }
+        }
+        serde_json::from_value(serde_json::Value::Object(merged))
+    }
+
     /// Reads settings from `path`; a missing or unparsable file yields the defaults.
     pub fn load(path: &Path) -> Settings {
         match fs::read_to_string(path) {
-            Ok(text) => serde_json::from_str(&text).unwrap_or_else(|e| {
+            Ok(text) => Self::from_json_lenient(&text).unwrap_or_else(|e| {
                 eprintln!(
                     "settings: could not parse {}: {e}; using defaults",
                     path.display()

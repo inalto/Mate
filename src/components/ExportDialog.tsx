@@ -1,4 +1,5 @@
 // Export the current page as PNG, SVG, PDF or LaTeX, or its book as a `.mate` archive.
+import { useModal } from "./useModal";
 import { useState } from "react";
 import { exportPage } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
@@ -21,6 +22,7 @@ const initialFormat = (setting: string): Format =>
   FORMATS.some(([f]) => f === setting) ? (setting as Format) : "pdf";
 
 export default function ExportDialog({ pageId, onClose }: { pageId: string; onClose(): void }) {
+  useModal();
   const defaultFormat = useSettingsStore((s) => s.settings.defaultExportFormat);
   const unitId = useNotebookStore((s) => {
     const page = s.tree.pages.find((p) => p.id === pageId);

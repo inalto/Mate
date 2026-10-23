@@ -26,6 +26,9 @@ jobs:
           - os: ubuntu-22.04
             args: ""
     runs-on: ${{ matrix.os }}
+    env:
+      # Only whether the secret exists; the key itself is passed to the tauri-action step alone.
+      HAS_SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,9 +51,16 @@ jobs:
 
       - run: npm ci
 
+      - name: Skip updater artifacts when no signing key is configured
+        if: env.HAS_SIGNING_KEY != 'true'
+        run: node -e "const f='src-tauri/tauri.conf.json',fs=require('fs'),c=JSON.parse(fs.readFileSync(f,'utf8'));c.bundle.createUpdaterArtifacts=false;fs.writeFileSync(f,JSON.stringify(c,null,2))"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # One-time setup: see README "Updates". Without the key, installers still build, unsigned and without updater artifacts.
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: "Mate v__VERSION__"
@@ -61,4 +71,6 @@ jobs:
             macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
           releaseDraft: false
           prerelease: false
+          # Uploads latest.json (versions, signatures, URLs) next to the installers when signing is on.
+          includeUpdaterJson: true
           args: ${{ matrix.args }}

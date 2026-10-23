@@ -10,7 +10,7 @@ const queue = vi.hoisted(() => ({
 }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { createEditorStore, type EditorStore } from "../editor";

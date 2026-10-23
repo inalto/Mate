@@ -187,8 +187,9 @@ fn check_cabinet(bytes: &[u8], limits: &ImportLimits) -> Result<(), ImportError>
     let max_entries = limits.max_zip_entries.min(MAX_ONEPKG_ENTRIES);
     if stats.entries > max_entries {
         return Err(ImportError::Limit(format!(
-            "it contains {} files; the most Mate reads is {max_entries}",
-            stats.entries
+            "it contains {} files; the most Mate reads is {}",
+            super::fmt_count(stats.entries as u64),
+            super::fmt_count(max_entries as u64)
         )));
     }
     if let Some(name) = stats.duplicate {

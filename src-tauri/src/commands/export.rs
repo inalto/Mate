@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use tauri::AppHandle;
@@ -37,6 +38,7 @@ fn filter_for(name: &str) -> Option<(&'static str, &'static str)> {
         "png" => Some(("PNG image", "png")),
         "svg" => Some(("SVG image", "svg")),
         "mate" => Some(("Mate archive", "mate")),
+        "zip" => Some(("Zip archive", "zip")),
         _ => None,
     }
 }
@@ -49,11 +51,27 @@ pub fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .ok_or_else(|| "invalid export path".to_string())?
         .to_string_lossy();
     let tmp = path.with_file_name(format!("{file_name}.tmp"));
-    fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+    let written = (|| {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all() // data on disk before the rename makes it visible
+    })();
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
     fs::rename(&tmp, path).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         e.to_string()
-    })
+    })?;
+    // Make the rename itself durable (directories cannot be opened for sync on Windows).
+    #[cfg(unix)]
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty())
+        && let Ok(d) = fs::File::open(dir)
+    {
+        let _ = d.sync_all();
+    }
+    Ok(())
 }
 
 /// Shows a native save dialog (off the async runtime) and returns the chosen path.
@@ -129,6 +147,16 @@ mod tests {
         assert_eq!(filter_for("x.PNG"), Some(("PNG image", "png")));
         assert_eq!(filter_for("x.mate"), Some(("Mate archive", "mate")));
         assert_eq!(filter_for("x"), None);
+    }
+
+    #[test]
+    fn failed_rename_leaves_no_temp_file() {
+        let dir = std::env::temp_dir().join(format!("mate-export-fail-{}", std::process::id()));
+        let target = dir.join("out.zip");
+        fs::create_dir_all(&target).unwrap(); // a directory in the way makes the rename fail
+        assert!(write_atomically(&target, b"x").is_err());
+        assert!(!dir.join("out.zip.tmp").exists());
+        assert!(target.is_dir());
     }
 
     #[test]

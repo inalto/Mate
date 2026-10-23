@@ -15,8 +15,13 @@ vi.mock("../../ipc/notebook", () => ({
   purgeEntity: vi.fn(async () => {}),
   purgeTrashOlderThan: vi.fn(async () => 0),
 }));
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/windows", () => ({
+  openPageWindow: vi.fn(async () => "page-p2"),
+  isPageWindow: () => false,
+}));
 
+import { openPageWindow } from "../../ipc/windows";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
 import Sidebar from "../Sidebar";
@@ -81,5 +86,13 @@ describe("Sidebar", () => {
     fireEvent.contextMenu(screen.getByRole("button", { name: "Child" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
     expect(trash).toHaveBeenCalledWith("page", "p2");
+  });
+
+  it("sidebar_menu_opens_page_window", () => {
+    renderSidebar();
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Child" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Open in new window" }));
+    expect(openPageWindow).toHaveBeenCalledWith("p2");
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

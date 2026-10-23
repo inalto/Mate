@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { invokeAi } from "./aiCall";
 
 export interface SummaryResult {
   summary: string;
@@ -37,10 +38,10 @@ export interface PageGraph {
  * Summary of the page's recognised text. Needs AI consent and a key: rejects with a readable
  * message otherwise. Never automatic; call only on an explicit request.
  */
-export const summarizePage = (pageId: string): Promise<SummaryResult> => invoke("summarize_page", { pageId });
+export const summarizePage = (pageId: string): Promise<SummaryResult> => invokeAi("summarize_page", { pageId });
 
 /** A short title for the page, with the same gating and caching as `summarizePage`. */
-export const suggestTitle = (pageId: string): Promise<TitleResult> => invoke("suggest_title", { pageId });
+export const suggestTitle = (pageId: string): Promise<TitleResult> => invokeAi("suggest_title", { pageId });
 
 /** Pages with similar recognised text (local TF-IDF, no network), best first. */
 export const relatedPages = (pageId: string, limit = 8): Promise<RelatedPage[]> =>

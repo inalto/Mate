@@ -15,6 +15,7 @@ import { renderOrder } from "../tools/zorder";
 import { isPdfPlacement } from "../model/content";
 import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import type { PointerInfo } from "./input";
+import { gridSpacingOf, snapDelta, snapPoint } from "./snap";
 
 export type Corner = "nw" | "ne" | "sw" | "se";
 export type PointerTool = ToolId | "pan" | "none";
@@ -26,6 +27,8 @@ const MIN_SCALE = 0.05;
 const LASSO_STEP_PX = 3;
 /** A shape drag shorter than this (screen px) is a click and adds nothing. */
 const MIN_SHAPE_DRAG_PX = 3;
+/** A selection move starts once the pointer has travelled this far (screen px); before that the delta stays zero (a tap, or a pen's pressure-only moves, never snaps an element). */
+const MOVE_START_PX = 2;
 /** Second click within this time (ms) and distance (screen px) on the same element is a double-click. */
 export const DOUBLE_TAP_MS = 400;
 const DOUBLE_TAP_PX = 8;
@@ -113,7 +116,7 @@ type Gesture =
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
   | { kind: "shape"; start: Vec2; end: Vec2 }
-  | { kind: "move"; start: Vec2; delta: Vec2; orig: Element[]; lifted: boolean }
+  | { kind: "move"; start: Vec2; delta: Vec2; orig: Element[]; lifted: boolean; anchor: Vec2 | null; started: boolean }
   | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } };
 
 export interface ToolDeps {
@@ -171,6 +174,26 @@ export function createToolController(deps: ToolDeps) {
     deps.invalidate();
   };
 
+  /** `p` on the page grid when settings.snapToGrid is on (read live), else `p`. */
+  const snap = (p: Vec2): Vec2 => (deps.getSettings().snapToGrid ? snapPoint(p, gridSpacingOf(st().page)) : p);
+  /**
+   * The point a snapped move aligns to the grid: the minimum x/y over the moved elements' anchor
+   * points (a shape's box corner, a box's origin, a stroke's leftmost/topmost sample), so a snapped
+   * shape stays snapped when moved.
+   */
+  const anchorOf = (els: Element[]): Vec2 | null => {
+    let x = Infinity;
+    let y = Infinity;
+    for (const e of els) for (const q of e.points) {
+      x = Math.min(x, q.x);
+      y = Math.min(y, q.y);
+    }
+    return Number.isFinite(x) && Number.isFinite(y) ? { x, y } : null;
+  };
+  /** Move delta, snapped so the moved bounds' top-left lands on the grid when snapToGrid is on. */
+  const moveDelta = (anchor: Vec2 | null, d: Vec2): Vec2 =>
+    anchor && deps.getSettings().snapToGrid ? snapDelta(anchor, d, gridSpacingOf(st().page)) : d;
+
   /** The shape being dragged, as an element (for the live preview). */
   const shapePreview = (start: Vec2, end: Vec2): Element[] => {
     const style = shapeStyleOf(deps.getSettings());
@@ -194,13 +217,14 @@ export function createToolController(deps: ToolDeps) {
       g = { kind: "space", lineY: p.y, dy: 0, lifted: false };
       preview = [];
     } else if (tool === "shape") {
-      g = { kind: "shape", start: p, end: p };
+      const q = snap(p);
+      g = { kind: "shape", start: q, end: q };
       preview = [];
     } else if (tool === "text") {
       // Text tool: a text box under the pointer opens for editing; empty canvas gets a new box.
       const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
       if (hit && s.elements.get(hit)?.type === "text-box") s.beginEdit(hit);
-      else s.addTextBox(p);
+      else s.addTextBox(snap(p));
       g = { kind: "idle" };
     } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
       g = { kind: "idle" };
@@ -213,12 +237,13 @@ export function createToolController(deps: ToolDeps) {
         preview = orig;
         lift(orig);
       } else if (b && rectContains(b, p, HIT_SLOP_PX / s.camera.z)) {
-        g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false };
+        g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false };
       } else {
         const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
         if (hit) {
           s.select([hit]);
-          g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig: [st().elements.get(hit)!], lifted: false };
+          const orig = [st().elements.get(hit)!];
+          g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false };
         } else {
           s.select([]);
           g = { kind: "lasso", points: [p] };
@@ -265,17 +290,21 @@ export function createToolController(deps: ToolDeps) {
         break;
       }
       case "shape":
-        g.end = p;
+        g.end = snap(p);
         preview = shapePreview(g.start, g.end);
         break;
-      case "move":
-        g.delta = { x: p.x - g.start.x, y: p.y - g.start.y };
+      case "move": {
+        const raw = { x: p.x - g.start.x, y: p.y - g.start.y };
+        if (!g.started && Math.hypot(raw.x, raw.y) * z < MOVE_START_PX) break;
+        g.started = true;
+        g.delta = moveDelta(g.anchor, raw);
         if (!g.lifted && (g.delta.x !== 0 || g.delta.y !== 0)) {
           g.lifted = true;
           lift(g.orig);
         }
         preview = translateElements(g.orig, g.delta.x, g.delta.y);
         break;
+      }
       case "scale":
         g.t = scaleFromDrag(g.bounds, g.corner, p, shift);
         preview = scaleElements(g.orig, g.t.origin, g.t.sx, g.t.sy);

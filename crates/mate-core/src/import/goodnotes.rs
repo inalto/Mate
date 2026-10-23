@@ -1098,8 +1098,11 @@ fn apply_nib_records(paths: &mut [Vec<Sample>], encoding: Encoding, nibs: Option
                 };
             }
             Encoding::Aspect => {
-                if let Some(nib) = nib {
-                    sample.width = sample.normal.and_then(|n| nib_span(nib.p, nib.q, nib.theta, n));
+                // A record whose width is outside 0..=MAX_WIDTH is not trusted: the point keeps
+                // the geometric width it already has.
+                let span = nib.and_then(|nib| sample.normal.and_then(|n| nib_span(nib.p, nib.q, nib.theta, n)));
+                if let Some(w) = span.filter(|w| (0.0..=MAX_WIDTH).contains(w)) {
+                    sample.width = Some(w);
                 }
             }
             Encoding::Plain | Encoding::Wide => {}
@@ -2486,6 +2489,10 @@ mod tests {
         assert_eq!(&w[..2], &[Some(2.0), Some(2.0)]);
         assert!((w[2].unwrap() - 1.0).abs() < 1e-6, "{w:?}");
         assert_eq!(stroke_width(&d, 0), 2.0);
+        // 13b. A record whose W is outside 0-60 (here 100) leaves the geometric width alone.
+        let huge = [10.0, 0.0, 50.0, 1.0, 0.0, 0.0, std::f32::consts::FRAC_PI_2];
+        let d = decode(&pressure(2, &[4, 5], &move_b, &curve_b, &huge)).unwrap();
+        assert_eq!(widths(&d.paths[0]), vec![Some(2.0); 3]);
         // 14. Version 2 with mixed flag sets is unreadable.
         let bad = pressure(2, &[0, 5], &[0.0, 0.0, 1.0], &[5.0, 0.0, 1.0, 10.0, 0.0, 1.0], &[]);
         assert_eq!(decode(&bad).err(), Some(Unreadable::Invalid("unknown pressure variant")));

@@ -156,6 +156,9 @@ export interface EditorState {
   /** Align (>= 2 selected) or distribute (>= 3 selected) the selection; one history entry each. */
   alignSelection(mode: AlignMode): void;
   distributeSelection(axis: DistributeAxis): void;
+  /** Tag >= 2 selected elements with one `uiGroupId` / clear it from the selection; one history entry each. */
+  groupSelection(): void;
+  ungroupSelection(): void;
   /** Add a graph below the single selected equation, plotting its LaTeX; one "Graph" entry. */
   graphFromSelectedEquation(): string | null;
   scaleSelection(origin: Vec2, sx: number, sy: number): void;
@@ -682,6 +685,15 @@ export function createEditorStore(): EditorStore {
     distributeSelection(axis) {
       if (get().selection.size < 3) return;
       transformSelection("Distribute", (els) => distributeElements(els, axis));
+    },
+    groupSelection() {
+      if (get().selection.size < 2) return;
+      const uiGroupId = crypto.randomUUID();
+      transformSelection("Group", (els) => els.map((el) => ({ ...el, uiGroupId })));
+    },
+    ungroupSelection() {
+      if (!selectedElements().some((el) => el.uiGroupId)) return;
+      transformSelection("Ungroup", (els) => els.map((el) => ({ ...el, uiGroupId: undefined })));
     },
     graphFromSelectedEquation() {
       const s = get();

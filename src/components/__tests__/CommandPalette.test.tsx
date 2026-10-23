@@ -9,6 +9,11 @@ vi.mock("../../ipc/recognition", async (orig) => ({
   searchRecognition: vi.fn(async () => []),
   getRecognitions: vi.fn(async () => []),
 }));
+const win = vi.hoisted(() => ({ page: false }));
+vi.mock("../../ipc/windows", () => ({
+  isPageWindow: () => win.page,
+  openPageWindow: vi.fn(async () => "page-p2"),
+}));
 vi.mock("../../ipc/semantics", () => ({
   summarizePage: vi.fn(),
   suggestTitle: vi.fn(),
@@ -18,7 +23,9 @@ vi.mock("../../ipc/semantics", () => ({
 
 import { getRecognitions, searchRecognition, SNIPPET_CLOSE, SNIPPET_OPEN } from "../../ipc/recognition";
 import { relatedPages, suggestTitle, summarizePage } from "../../ipc/semantics";
+import { openPageWindow } from "../../ipc/windows";
 import { useChromeStore } from "../../stores/chrome";
+import { useEditorStore } from "../../stores/editor";
 import { useFlashStore } from "../../stores/flash";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
@@ -74,7 +81,10 @@ beforeEach(() => {
     activeTabId: "t1",
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  win.page = false;
+});
 
 describe("CommandPalette", () => {
   it("palette_shows_fts_hits", async () => {
@@ -249,5 +259,179 @@ describe("CommandPalette", () => {
     const ev = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
     expect(matchShortcut(DEFAULT_SHORTCUTS, ev({ key: "k", ctrlKey: true }), false)?.action).toBe("palette.open");
     expect(matchShortcut(DEFAULT_SHORTCUTS, ev({ key: "k", metaKey: true }), true)?.action).toBe("palette.open");
+  });
+});
+
+describe("CommandPalette quick actions", () => {
+  const withTree = () =>
+    useNotebookStore.setState({
+      tree: {
+        bookshelves: [],
+        units: [{ id: "u1", title: "Maths" } as never],
+        sections: [{ id: "s1", unitId: "u1", title: "Algebra" } as never],
+        pages: [
+          { ...page("p1", "Quadratics"), updatedAt: "2026-03-01T00:00:00.000Z" },
+          { ...page("p2", "Cell biology"), updatedAt: "2026-02-01T00:00:00.000Z" },
+        ],
+      },
+    });
+
+  it("palette_lists_quick_actions_with_bindings", () => {
+    renderPalette();
+    open();
+    const pen = screen.getByRole("option", { name: /Switch to pen/ });
+    expect(pen.textContent).toContain("P");
+    expect(screen.getByRole("option", { name: /Zoom in/ }).textContent).toContain("Ctrl+=");
+    expect(screen.getByText("Quick actions")).toBeTruthy();
+    for (const l of ["Insert table", "New page", "Open settings", "Keyboard shortcuts", "Open page in new window"]) {
+      expect(screen.getByRole("option", { name: new RegExp(l) })).toBeTruthy();
+    }
+    // "pen" ranks the pen switch first among quick actions.
+    fireEvent.change(input(), { target: { value: "pen" } });
+    expect(screen.getAllByRole("option")[0].textContent).toContain("Switch to pen");
+  });
+
+  it("palette_recent_pages", () => {
+    withTree();
+    renderPalette();
+    open();
+    expect(screen.getByText("Recent pages")).toBeTruthy();
+    const opts = screen.getAllByRole("option");
+    expect(opts[0].textContent).toContain("Quadratics");
+    expect(opts[0].textContent).toContain("Maths › Algebra");
+    expect(opts[1].textContent).toContain("Cell biology");
+  });
+
+  it("palette_action_switches_tool", () => {
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "eraser" } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(useEditorStore.getState().tool).toBe("eraser");
+    expect(useChromeStore.getState().paletteOpen).toBe(false);
+  });
+
+  it("editor_actions_disabled_outside_editor", () => {
+    useEditorStore.getState().setTool("pen");
+    render(
+      <MemoryRouter initialEntries={["/library"]}>
+        <CommandPalette />
+      </MemoryRouter>,
+    );
+    open();
+    fireEvent.change(input(), { target: { value: "eraser" } });
+    const row = screen.getByRole("option", { name: /Switch to eraser/ });
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    expect(row.textContent).toContain("Open a page in the editor first");
+    fireEvent.click(row);
+    expect(useEditorStore.getState().tool).toBe("pen");
+    expect(useChromeStore.getState().paletteOpen).toBe(true);
+    // Global actions stay enabled.
+    fireEvent.change(input(), { target: { value: "settings" } });
+    expect(screen.getByRole("option", { name: /Open settings/ }).getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("page_window_palette_is_single_page", () => {
+    win.page = true;
+    renderPalette();
+    open();
+    // Nothing that leaves the page: no settings/library/graph, no new page or section, no "new window".
+    for (const q of ["settings", "library", "graph", "new page", "new section", "window"]) {
+      fireEvent.change(input(), { target: { value: q } });
+      expect(screen.queryByRole("option", { name: /Open settings|Open library|Open graph|New page|New section|new window/i })).toBeNull();
+    }
+    // Page tools stay.
+    fireEvent.change(input(), { target: { value: "eraser" } });
+    expect(screen.getByRole("option", { name: /Switch to eraser/ })).toBeTruthy();
+    // Picking another page opens it in its own window; this one stays on its page.
+    fireEvent.change(input(), { target: { value: "cell" } });
+    fireEvent.click(screen.getByRole("option", { name: /Cell biology/ }));
+    expect(openPageWindow).toHaveBeenCalledWith("p2");
+    expect(screen.getByTestId("where").textContent).toBe("/edit/p1");
+    expect(useChromeStore.getState().paletteOpen).toBe(false);
+  });
+
+  it("empty_query_section_order", () => {
+    withTree();
+    renderPalette();
+    open();
+    const heads = [...document.querySelectorAll(".palette-heading")].map((h) => h.textContent);
+    expect(heads).toEqual(["Recent pages", "Quick actions", "Actions"]);
+  });
+
+  it("group_needs_a_selection", () => {
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "group" } });
+    const row = () => screen.getByRole("option", { name: /^Group/ });
+    expect(row().getAttribute("aria-disabled")).toBe("true");
+    expect(row().textContent).toContain("Select something first");
+    act(() => useEditorStore.setState({ selection: new Set(["a"]) }));
+    expect(row().getAttribute("aria-disabled")).toBeNull();
+    act(() => useEditorStore.setState({ selection: new Set() }));
+  });
+
+  it("insert_actions_call_store_methods", () => {
+    const addTable = vi.fn(() => "t");
+    const addTextBox = vi.fn(() => "x");
+    useEditorStore.setState({ addTable, addTextBox } as never);
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "insert table" } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(addTable).toHaveBeenCalledTimes(1);
+    open();
+    fireEvent.change(input(), { target: { value: "insert text box" } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(addTextBox).toHaveBeenCalledTimes(1);
+  });
+
+  it("shortcuts_action_keeps_overlay_focus", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "keyboard shortcuts" } });
+    const focus = vi.spyOn(opener, "focus");
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(useChromeStore.getState().shortcutsOpen).toBe(true);
+    expect(focus).not.toHaveBeenCalled();
+    opener.remove();
+  });
+
+  it("does_not_restore_focus_to_the_opener_after_navigating_to_a_page", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "cell" } });
+    const focus = vi.spyOn(opener, "focus");
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(screen.getByTestId("where").textContent).toBe("/edit/p2");
+    expect(focus).not.toHaveBeenCalled();
+    opener.remove();
+  });
+
+  it("escape_still_restores_focus_to_the_opener", () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    renderPalette();
+    open();
+    const focus = vi.spyOn(opener, "focus");
+    fireEvent.keyDown(input(), { key: "Escape" });
+    expect(focus).toHaveBeenCalled();
+    opener.remove();
+  });
+
+  it("counts_as_a_modal_while_open", () => {
+    renderPalette();
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+    open();
+    expect(useChromeStore.getState().modalDepth).toBe(1);
+    fireEvent.keyDown(input(), { key: "Escape" });
+    expect(useChromeStore.getState().modalDepth).toBe(0);
   });
 });

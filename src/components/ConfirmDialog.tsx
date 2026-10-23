@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+import { useModal } from "./useModal";
 
 interface Props {
   title: string;
@@ -9,9 +10,38 @@ interface Props {
 }
 
 export default function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCancel }: Props) {
+  useModal();
+  const ref = useRef<HTMLDivElement>(null);
+  const cancel = useRef(onCancel);
+  useEffect(() => {
+    cancel.current = onCancel;
+  });
+  // Focus moves in on open (to Cancel, the safe choice), stays inside, and returns to the opener.
+  useEffect(() => {
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    ref.current?.querySelector<HTMLElement>("button")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        cancel.current();
+      } else if (e.key === "Tab") {
+        const items = [...(ref.current?.querySelectorAll<HTMLElement>("button:not([disabled])") ?? [])];
+        e.preventDefault();
+        if (items.length === 0) return;
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        items[e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i === items.length - 1 ? 0 : i + 1].focus();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      before?.focus?.();
+    };
+  }, []);
   return (
     <div className="backdrop">
-      <div className="card dialog" role="alertdialog" aria-modal="true" aria-label={title}>
+      <div ref={ref} className="card dialog" role="alertdialog" aria-modal="true" aria-label={title}>
         <h2>{title}</h2>
         <p>{children}</p>
         <div className="dialog-actions">

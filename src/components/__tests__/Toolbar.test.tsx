@@ -2,13 +2,13 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
-vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
 
 const pick = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("../../images/insert", () => ({ pickAndInsertImage: pick }));
 
-import { setSettings } from "../../ipc/settings";
+import { patchSettings } from "../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { useEditorStore } from "../../stores/editor";
 import { flushSettings, useSettingsStore } from "../../stores/settings";
@@ -77,9 +77,9 @@ describe("Toolbar", () => {
 
   it("text_tool_button", () => {
     renderBar();
-    fireEvent.click(screen.getByRole("button", { name: "Text (T)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Text" }));
     expect(useEditorStore.getState().tool).toBe("text");
-    expect(screen.getByRole("button", { name: "Text (T)" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Text" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("shape_tool_menu_sets_and_persists_shape_defaults", async () => {
@@ -105,10 +105,10 @@ describe("Toolbar", () => {
     });
     fireEvent.click(within(menu).getByRole("button", { name: "No fill" }));
     expect(cfg().defaultShapeFillColor).toBe("transparent");
-    expect(setSettings).not.toHaveBeenCalled();
+    expect(patchSettings).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Shape" })); // closes and saves
     expect(screen.queryByRole("dialog", { name: "Shape options" })).toBeNull();
     await flushSettings();
-    expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({ defaultShapeType: "star", defaultShapeStrokeWidth: 6.5 }));
+    expect(patchSettings).toHaveBeenCalledWith(expect.objectContaining({ defaultShapeType: "star", defaultShapeStrokeWidth: 6.5 }));
   });
 });

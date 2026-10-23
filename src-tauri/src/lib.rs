@@ -1,9 +1,10 @@
 mod commands;
 mod state;
+mod windows;
 
 use commands::{
-  ai, archive, ask, assets, elements, export, import, lifecycle, notebook, open_files, pdf, practice, recognition, recognize, settings,
-  semantics, thumbnails,
+  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, notebook, open_files, pdf, practice, recognition, recognize, settings,
+  semantics, thumbnails, updater,
 };
 use state::AppState;
 use tauri::{Manager, RunEvent, WindowEvent};
@@ -25,13 +26,22 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
-    .on_window_event(|window, event| {
-      if let WindowEvent::CloseRequested { api, .. } = event {
+    .plugin(tauri_plugin_updater::Builder::new().build())
+    .on_window_event(|window, event| match event {
+      WindowEvent::CloseRequested { api, .. } => {
         // Fail open: if the frontend never acknowledged the previous attempt, let the window close.
-        if lifecycle::start_close_attempt(window) {
+        // The main window first closes every page window through its own handshake.
+        let prevent = if window.label() == crate::windows::MAIN_LABEL {
+          crate::windows::request_main_close(window.app_handle(), false)
+        } else {
+          lifecycle::start_close_attempt(window)
+        };
+        if prevent {
           api.prevent_close();
         }
       }
+      WindowEvent::Destroyed => crate::windows::window_destroyed(window.app_handle(), window.label()),
+      _ => {}
     })
     .setup(|app| {
       if cfg!(debug_assertions) {
@@ -42,6 +52,8 @@ pub fn run() {
         )?;
       }
       let state = AppState::init(app.handle())?;
+      // Old recovery files are not kept forever.
+      commands::lifecycle::prune_recovery_files(&state.data_dir, commands::lifecycle::KEEP_RECOVERY_FILES);
       app.manage(state);
       app.manage(pdf::PendingOpenFile::new(pdf::pdf_from_args(
         std::env::args(),
@@ -50,6 +62,7 @@ pub fn run() {
       let cwd = std::env::current_dir().unwrap_or_default();
       app.manage(open_files::PendingImportFiles::new(open_files::import_paths_from_args(std::env::args(), &cwd)));
       app.manage(import::ImportControl::default());
+      app.manage(crate::windows::PageWindows::default());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -79,7 +92,7 @@ pub fn run() {
       semantics::page_graph,
       practice::practice_generate,
       settings::get_settings,
-      settings::set_settings,
+      settings::patch_settings,
       ai::set_ai_key,
       ai::clear_ai_key,
       ai::get_ai_status,
@@ -100,10 +113,21 @@ pub fn run() {
       export::write_export_file,
       archive::export_unit_archive,
       archive::import_unit_archive,
+      archive::export_backup,
+      archive::reset_local_data,
+      archive::take_reset_incomplete,
       lifecycle::close_attempt_started,
       lifecycle::cancel_close_attempt,
       lifecycle::complete_close_attempt,
       lifecycle::write_recovery_artifact,
+      commands::windows::open_page_window,
+      commands::windows::focus_page_window,
+      commands::windows::list_page_windows,
+      haptics::pen_haptics_pulse,
+      updater::check_for_update,
+      updater::install_update,
+      updater::relaunch,
+      updater::report_flush,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
@@ -121,8 +145,8 @@ pub fn run() {
       // the main window. On Windows/Linux this event fires after the last window was destroyed,
       // when there is no main window any more, so it passes through unchanged.
       if let RunEvent::ExitRequested { api, code: None, .. } = event
-        && let Some(main) = app.get_webview_window("main")
-        && lifecycle::start_exit_attempt(&main.as_ref().window())
+        && app.get_webview_window(crate::windows::MAIN_LABEL).is_some()
+        && crate::windows::request_main_close(app, true)
       {
         api.prevent_exit();
       }

@@ -25,7 +25,7 @@ const navigate = vi.hoisted(() => vi.fn());
 vi.mock("react-router", async (orig) => ({ ...(await orig<typeof import("react-router")>()), useNavigate: () => navigate }));
 vi.mock("../../ipc/settings", () => ({
   getSettings: vi.fn(),
-  setSettings: vi.fn(async () => {}),
+  patchSettings: vi.fn(async () => {}),
 }));
 
 import { exportUnitArchive, importUnitArchive } from "../../ipc/archive";

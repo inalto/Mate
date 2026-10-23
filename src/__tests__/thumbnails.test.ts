@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
+vi.mock("../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../ipc/notebook", () => ({}));
 vi.mock("../ipc/thumbnails", () => ({ saveThumbnail: vi.fn(async () => ({ path: "x", version: 3 })) }));
 

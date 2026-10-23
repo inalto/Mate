@@ -325,9 +325,20 @@ export interface Settings {
   aiProvider: AiProvider;
   /** Empty means the provider's default model (`AI_DEFAULT_MODEL`). */
   aiModel: string;
-  analyticsConsent: boolean;
   trashRetentionDays: number;
   defaultExportFormat: string;
   recentColors: string[];
   toolbarPresets: PenPreset[];
+  /** Per-action key overrides; empty means all defaults. */
+  keybindings: KeybindingOverride[];
+  onboardingDone: boolean;
+  lastSeenVersion: string;
+  playgroundPageId: string | null;
+  penHaptics: boolean;
+  checkUpdatesOnStartup: boolean;
+}
+
+export interface KeybindingOverride {
+  action: string;
+  keys: string;
 }

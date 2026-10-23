@@ -72,6 +72,18 @@ export function sheetSize(page: Page, defaultAspect: string = "a4"): { width: nu
   };
 }
 
+/**
+ * Sheet size for an aspect preset and orientation (settings.defaultPageAspectRatio /
+ * defaultPageOrientation): the long side is the preset height, landscape swaps the sides
+ * (a square stays square). Unknown presets fall back to A4.
+ */
+export function sheetSizeFor(aspect: string, orientation: string): { width: number; height: number } {
+  const preset = (aspect in ASPECT_PRESET_HEIGHTS ? aspect : "a4") as AspectPreset;
+  const long = ASPECT_PRESET_HEIGHTS[preset];
+  const landscape = orientation === "landscape" && preset !== "square";
+  return landscape ? { width: long, height: PAGE_WIDTH } : { width: PAGE_WIDTH, height: long };
+}
+
 /** Number of sheets: enough to hold content down to `contentBottom`, plus one blank sheet. */
 export function sheetCountFor(contentBottom: number, sheetHeight: number): number {
   if (!(contentBottom > 0)) return 1;

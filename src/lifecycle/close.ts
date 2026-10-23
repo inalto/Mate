@@ -2,6 +2,7 @@
 // destroys the window only when we confirm via `complete_close_attempt`.
 import { showToast } from "../components/Toast";
 import { elementsQueue } from "../ipc/elementsQueue";
+import { isPageWindow } from "../ipc/windows";
 import * as lifecycle from "../ipc/lifecycle";
 import { endAllEdits } from "../overlay/useEditSession";
 import { flushSettings } from "../stores/settings";
@@ -17,10 +18,15 @@ declare global {
   interface Window {
     __mateFlushAndClose?: (attemptId: number) => Promise<void>;
     __mateCloseAttemptCancelled?: (attemptId: number) => void;
+    /** Main window: its close was cancelled because a page window could not save. */
+    __mateCloseRefused?: () => void;
   }
 }
 
 const safeSet = (k: string, v: string) => {
+  // The clean-exit flag describes the app session, which the main window owns: a page window
+  // closing is not the app exiting.
+  if (isPageWindow()) return;
   try {
     localStorage.setItem(k, v);
   } catch {
@@ -43,6 +49,7 @@ let recoveryPageId: string | null = null;
 
 /** Call once at startup: remembers the page that was open if the last session did not exit cleanly. */
 export function initRecovery(): void {
+  if (isPageWindow()) return;
   const clean = consumeCleanExit();
   recoveryPageId = clean ? null : focusedPageId(useTabsStore.getState());
 }
@@ -50,6 +57,9 @@ export const getRecoveryPageId = (): string | null => recoveryPageId;
 export const dismissRecovery = (): void => {
   recoveryPageId = null;
 };
+
+/** The "Close anyway" offer lapses after this long (the situation it described has moved on). */
+export const CLOSE_ANYWAY_EXPIRY_MS = 30_000;
 
 export function installCloseHandler(): void {
   let current: number | null = null;
@@ -95,7 +105,7 @@ export function installCloseHandler(): void {
               safeSet(CLEAN_EXIT_KEY, "0"); // not a clean exit: the recovery card shows next launch
               void lifecycle.completeCloseAttempt(id, true).catch((err) => console.error("close anyway failed", err));
             },
-          });
+          }, { expiresAfterMs: CLOSE_ANYWAY_EXPIRY_MS });
         }
       }
       return;
@@ -114,7 +124,7 @@ export function installCloseHandler(): void {
     } catch (err) {
       console.error("complete_close_attempt failed", err);
       try {
-        localStorage.removeItem(CLEAN_EXIT_KEY); // we are still running
+        if (!isPageWindow()) localStorage.removeItem(CLEAN_EXIT_KEY); // we are still running
       } catch {
         // ignore
       }
@@ -126,6 +136,10 @@ export function installCloseHandler(): void {
     current = null;
     showToast(STILL_SAVING_TOAST);
   };
+
+  // Closing the main window first closes every page window; one could not save, so Mate stays open
+  // (that window says why).
+  window.__mateCloseRefused = () => showToast(SAFE_CLOSE_TOAST);
 
   // Best-effort flush on reload / navigation away (e.g. dev reloads).
   const bestEffort = () => {
