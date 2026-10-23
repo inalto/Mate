@@ -33,8 +33,10 @@ const MAX_DETAIL_CHARS: usize = 160;
 const MIB: u64 = 1024 * 1024;
 /// Most files a `.onepkg` may hold (real exports hold a `.onetoc2` and tens of sections).
 pub const MAX_ONEPKG_ENTRIES: usize = 512;
-/// Uncompressed size of one CAB data block (CFDATA), at most.
-const CAB_BLOCK_BYTES: u64 = 65_536;
+/// Uncompressed size of one CAB data block (CFDATA): 32 KiB for MSZIP and LZX (the CAB spec's
+/// maximum, and what `cab`'s writer produces). A hostile file with up-to-64 KiB blocks reaches at
+/// most twice the work budget.
+const CAB_BLOCK_BYTES: u64 = 32_768;
 /// Decompression work allowed for a `.onepkg`, as a multiple of `max_unzipped_bytes`.
 const CAB_WORK_FACTOR: u64 = 4;
 

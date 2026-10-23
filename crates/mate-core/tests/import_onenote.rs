@@ -276,11 +276,31 @@ fn onenote_crate_panic_becomes_corrupt() {
     }
 }
 
+#[test]
+fn onepkg_mid_size_notebook_is_not_rejected_by_the_work_bound() {
+    // 20 sections of 6 MiB in one folder (120 MiB): a realistic notebook under the 256 MiB cap.
+    let section = vec![0u8; 6 * 1024 * 1024];
+    let mut names: Vec<String> = vec!["Notebook.onetoc2".into()];
+    names.extend((0..19).map(|i| format!("Section {i}.one")));
+    let files: Vec<(&str, &[u8])> = names.iter().map(|n| (n.as_str(), &section[..])).collect();
+    let cab = build_cab_with(&files, cab::CompressionType::None);
+    // The zero-filled sections are damaged, but the package passes the pre-check.
+    match parse(&cab, "big.onepkg", &ImportLimits::default()) {
+        Err(ImportError::Limit(msg)) => panic!("rejected by a limit: {msg}"),
+        Err(ImportError::Corrupt(_)) => {}
+        other => panic!("expected Corrupt, got {other:?}"),
+    }
+}
+
 fn build_cab(files: &[(&str, &[u8])]) -> Vec<u8> {
+    build_cab_with(files, cab::CompressionType::MsZip)
+}
+
+fn build_cab_with(files: &[(&str, &[u8])], ctype: cab::CompressionType) -> Vec<u8> {
     use std::io::{Cursor, Write};
     let mut builder = cab::CabinetBuilder::new();
     {
-        let folder = builder.add_folder(cab::CompressionType::MsZip);
+        let folder = builder.add_folder(ctype);
         for (name, _) in files {
             folder.add_file(*name);
         }
