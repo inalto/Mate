@@ -18,7 +18,11 @@ pub use recognition::{Bounds, LearningEvent, Recognition, RecognitionSource, Ups
 pub use search::{SNIPPET_CLOSE, SNIPPET_OPEN, SearchHit};
 
 /// Ordered migrations: `MIGRATIONS[i]` brings the schema from version `i` to `i + 1`.
-const MIGRATIONS: [&str; 2] = [include_str!("schema.sql"), include_str!("schema_v2.sql")];
+const MIGRATIONS: [&str; 3] = [
+    include_str!("schema.sql"),
+    include_str!("schema_v2.sql"),
+    include_str!("schema_v3.sql"),
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
