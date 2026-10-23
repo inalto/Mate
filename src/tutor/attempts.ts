@@ -45,3 +45,16 @@ export function createAttemptLedger(): AttemptLedger {
 
 /** Shared ledger for the app session (all editor panes use it). */
 export const sessionAttempts = createAttemptLedger();
+
+const keyListeners = new Set<() => void>();
+
+/** Run `cb` after an API key is saved or removed. Returns an unsubscribe. */
+export function onKeyChanged(cb: () => void): () => void {
+  keyListeners.add(cb);
+  return () => keyListeners.delete(cb);
+}
+
+/** Called by src/ipc/ai after a key was saved or removed. */
+export function notifyKeyChanged(): void {
+  for (const cb of keyListeners) cb();
+}

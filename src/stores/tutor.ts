@@ -80,6 +80,24 @@ interface TutorUiState {
 
 let seq = 0;
 
+/** Set while the pointer-down that closed the card is being dispatched (cleared right after). */
+let dismissingDown = false;
+
+/** The card is being closed by a pointer-down outside it: the canvas should ignore that press. */
+export function noteDismissDown(): void {
+  dismissingDown = true;
+  setTimeout(() => {
+    dismissingDown = false;
+  }, 0);
+}
+
+/** True (once) when the current pointer-down only closed the tutor card. */
+export function consumeDismissDown(): boolean {
+  const d = dismissingDown;
+  dismissingDown = false;
+  return d;
+}
+
 const viewOf = (pane: PaneIndex) => useTutorViews.getState().views[pane];
 
 /** Fire-and-forget telemetry; a failure never bothers the user. */

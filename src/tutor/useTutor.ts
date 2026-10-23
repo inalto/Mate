@@ -8,6 +8,7 @@ import type { Recognition, Settings } from "../model/types";
 import type { EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import { sessionAttempts } from "./attempts";
+import { tutorActive, useAiStatus } from "./aiStatus";
 import { createGroupManager, type GroupManager } from "./groupManager";
 import { defaultPipelineDeps, revisionOf, runRecognition, type PipelineDeps, type RecognitionOutcome, type UncheckedKind } from "./pipeline";
 import { segmentPage } from "./segmentation";
@@ -42,6 +43,8 @@ export const EMPTY_TUTOR_VIEW: TutorView = { pageId: null, recognitions: new Map
 export interface TutorSessionDeps {
   pipeline?: PipelineDeps;
   settings?: () => Settings;
+  /** A key is stored for the provider (`get_ai_status`); defaults to the cached status. */
+  aiConfigured?: () => boolean | null;
   loadRecognitions?: (pageId: string) => Promise<Recognition[]>;
   /** Pen events source; defaults to window pointer events on a canvas. Returns an unsubscribe. */
   watchPen?: (down: () => void, up: () => void) => () => void;
@@ -61,6 +64,8 @@ export interface TutorSession {
   check(groupId: string, opts?: { retry?: boolean }): boolean;
   /** Replace a shown verdict (e.g. after "Mark as correct"); ignored for unknown groups. */
   setRecognition(rec: Recognition): void;
+  /** Consent, the tutor switch or the key status may have changed: start or stop the tutor. */
+  reactivate(): void;
   dispose(): void;
 }
 
@@ -92,6 +97,10 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   const pipeline = deps.pipeline ?? defaultPipelineDeps;
   const settings = deps.settings ?? (() => useSettingsStore.getState().settings);
   const load = deps.loadRecognitions ?? getRecognitions;
+  const aiConfigured = deps.aiConfigured ?? (() => useAiStatus.getState().configured);
+  /** Nothing is segmented, shown or sent unless consent, the tutor switch and a key all hold. */
+  const isActive = () => tutorActive(settings(), aiConfigured());
+  let active = false;
   const segment = deps.segment ?? segmentPage;
   const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = deps.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
@@ -215,7 +224,8 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     manager = null;
     clearTimers();
     emit({ ...EMPTY_TUTOR_VIEW, pageId });
-    if (!pageId) return;
+    active = isActive();
+    if (!pageId || !active) return;
     const token = pageToken;
     const m = createGroupManager({
       now: deps.now ?? (() => Date.now()),
@@ -237,13 +247,19 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     load(pageId)
       .then((recs) => {
         if (disposed || token !== pageToken) return;
-        emit({ recognitions: new Map(recs.map((r) => [r.strokeGroupId, r])) });
+        // Results that arrived while loading are kept when they are newer than the stored ones.
+        const merged = new Map(view.recognitions);
+        for (const r of recs) {
+          const cur = merged.get(r.strokeGroupId);
+          if (!cur || cur.capturedAt < r.capturedAt) merged.set(r.strokeGroupId, r);
+        }
+        emit({ recognitions: merged });
       })
       .catch((e) => console.error("loading tutor results failed", e));
   }
 
   const unsubElements = store.onElementsChanged((change) => {
-    if (!manager || disposed) return;
+    if (!manager || disposed || !active) return;
     pendingChange = pendingChange ? mergeChanges(pendingChange, change) : change;
     if (batchTimer === undefined) batchTimer = setTimer(flushChanges, RESEGMENT_BATCH_MS);
   });
@@ -280,6 +296,10 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       }
       requested.add(groupId);
       return manager.redirty(groupId);
+    },
+    reactivate() {
+      if (disposed || isActive() === active) return;
+      openPage(store.getState().loadedPageId);
     },
     setRecognition(rec) {
       if (disposed || rec.pageId !== view.pageId || !view.recognitions.has(rec.strokeGroupId)) return;
@@ -331,6 +351,7 @@ export function showRecognition(rec: Recognition): void {
  */
 export function useTutor(store: EditorStore, pane: PaneIndex): void {
   useEffect(() => {
+    useAiStatus.getState().ensure();
     const session = createTutorSession(store);
     sessions.set(pane, session);
     const publish = () => useTutorViews.getState().setView(pane, session.getView());
@@ -341,10 +362,14 @@ export function useTutor(store: EditorStore, pane: PaneIndex): void {
       const a = s.settings;
       const b = prev.settings;
       if (a.aiProvider !== b.aiProvider || a.aiModel !== b.aiModel || a.aiConsent !== b.aiConsent) sessionAttempts.clearAuthBlock();
+      if (a.aiProvider !== b.aiProvider || a.aiConsent !== b.aiConsent) void useAiStatus.getState().refresh();
+      session.reactivate();
     });
+    const unsubStatus = useAiStatus.subscribe(() => session.reactivate());
     return () => {
       unsub();
       unsubSettings();
+      unsubStatus();
       if (sessions.get(pane) === session) sessions.delete(pane);
       session.dispose();
       useTutorViews.getState().setView(pane, EMPTY_TUTOR_VIEW);

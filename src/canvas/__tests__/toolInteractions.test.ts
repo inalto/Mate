@@ -33,7 +33,9 @@ function gestures(over: Partial<TutorGestureDeps> = {}) {
   const timers: { at: number; fn: () => void; id: number }[] = [];
   let n = 0;
   const deps: TutorGestureDeps = {
+    active: () => true,
     markerAt: vi.fn(() => null),
+    inkAt: vi.fn(() => true),
     groupAt: vi.fn(() => "g"),
     openCard: vi.fn(),
     openAsk: vi.fn(),
@@ -61,79 +63,111 @@ function gestures(over: Partial<TutorGestureDeps> = {}) {
     }
     t = end;
   };
-  return { g: createTutorGestures(deps), deps, advance };
+  const g = createTutorGestures(deps);
+  /** A quick pen tap at screen `s` (world = screen here). */
+  const tap = (s: { x: number; y: number }) => {
+    g.inkDown(s, s, vi.fn());
+    advance(60);
+    return g.inkUp();
+  };
+  return { g, deps, advance, tap };
 }
 
 const at = { x: 10, y: 10 };
 
 describe("tutor gestures", () => {
-  it("marker_tap_opens_the_card_without_a_stroke", () => {
-    const { g, deps, advance } = gestures({ markerAt: vi.fn(() => "m") });
-    // Select tools: on pointer-down.
-    expect(g.markerDown(at)).toBe(true);
-    expect(deps.openCard).toHaveBeenCalledWith("m");
-    // Pen: a quick tap on the marker opens the card and drops the dot.
-    vi.mocked(deps.openCard).mockClear();
-    expect(g.inkDown(at, at, vi.fn())).toBe(false);
+  it("gestures_inactive_without_consent", () => {
+    const { g, deps, advance, tap } = gestures({ active: () => false, markerAt: vi.fn(() => "m"), inkAt: vi.fn(() => false) });
+    expect(tap(at)).toBe("commit"); // even a tap on a marker's blank area stays ink
     advance(100);
-    expect(g.inkUp(vi.fn())).toBe("discard");
+    expect(tap(at)).toBe("commit");
+    const abort = vi.fn();
+    g.inkDown(at, at, abort);
+    advance(HOLD_ASK_MS * 3);
+    expect(g.inkUp()).toBe("commit");
+    expect(abort).not.toHaveBeenCalled();
+    expect(g.selectDown(at, at)).toBe(false);
+    expect(deps.openCard).not.toHaveBeenCalled();
+    expect(deps.openAsk).not.toHaveBeenCalled();
+    expect(deps.groupAt).not.toHaveBeenCalled();
+  });
+
+  it("pen_tap_on_a_marker_blank_area_opens_the_card", () => {
+    const { deps, tap, g } = gestures({ markerAt: vi.fn(() => "m"), inkAt: vi.fn(() => false), groupAt: vi.fn(() => null) });
+    expect(tap(at)).toBe("discard");
     expect(deps.openCard).toHaveBeenCalledWith("m");
+    // The pen uses the marker's own area only (no slop).
+    expect(deps.markerAt).toHaveBeenCalledWith(at, 0);
     // A stroke that starts on the marker and moves is just ink.
     vi.mocked(deps.openCard).mockClear();
     g.inkDown(at, at, vi.fn());
     g.inkMove({ x: 40, y: 10 });
-    expect(g.inkUp(vi.fn())).toBe("commit");
+    expect(g.inkUp()).toBe("commit");
     expect(deps.openCard).not.toHaveBeenCalled();
-    // No marker under the pointer: select tools carry on.
-    expect(gestures().g.markerDown(at)).toBe(false);
   });
 
-  it("double_tap_on_ink_opens_ask", () => {
-    const { g, deps, advance } = gestures();
-    const first = vi.fn();
-    g.inkDown(at, at, vi.fn());
-    advance(80);
-    expect(g.inkUp(first)).toBe("defer");
+  it("pen_dot_on_marker_area_over_ink_is_kept", () => {
+    const { deps, tap } = gestures({ markerAt: vi.fn(() => "m"), inkAt: vi.fn(() => true), groupAt: vi.fn(() => null) });
+    expect(tap(at)).toBe("commit");
+    expect(deps.openCard).not.toHaveBeenCalled();
+  });
+
+  it("select_drag_from_squiggle_band_does_not_open_card", () => {
+    const { g, deps } = gestures({ markerAt: vi.fn(() => "m") });
+    expect(g.selectDown(at, at)).toBe(true);
+    expect(deps.openCard).not.toHaveBeenCalled(); // decided on up
+    expect(g.selectMove({ x: 12, y: 11 })).toBe(false);
+    expect(g.selectMove({ x: 60, y: 10 })).toBe(true); // becomes a normal drag
+    g.selectUp();
+    expect(deps.openCard).not.toHaveBeenCalled();
+    // A press that never moves opens the card on up.
+    g.selectDown(at, at);
+    g.selectUp();
+    expect(deps.openCard).toHaveBeenCalledWith("m");
+    expect(gestures().g.selectDown(at, at)).toBe(false);
+  });
+
+  it("double_tap_on_ink_opens_ask_and_drops_only_the_second_dot", () => {
+    const { deps, advance, tap } = gestures();
+    expect(tap(at)).toBe("commit"); // the first dot is ink right away
     advance(150);
-    expect(g.inkDown(at, { x: 12, y: 11 }, vi.fn())).toBe(true);
+    expect(tap({ x: 12, y: 11 })).toBe("discard");
     expect(deps.openAsk).toHaveBeenCalledWith("g");
-    // The first tap's dot is never drawn.
-    advance(DOUBLE_TAP_MS * 2);
-    expect(first).not.toHaveBeenCalled();
+    // Too slow, too far or off: both taps are ink.
+    const slow = gestures();
+    slow.tap(at);
+    slow.advance(DOUBLE_TAP_MS + 1);
+    expect(slow.tap(at)).toBe("commit");
+    const off = gestures({ getSettings: () => ({ ...DEFAULT_SETTINGS, tutorDoubleTapAsk: false }) });
+    off.tap(at);
+    expect(off.tap(at)).toBe("commit");
+    expect(slow.deps.openAsk).not.toHaveBeenCalled();
+    expect(off.deps.openAsk).not.toHaveBeenCalled();
   });
 
-  it("single_tap_on_ink_is_drawn_after_the_double_tap_window", () => {
-    const { g, deps, advance } = gestures();
-    const commit = vi.fn();
+  it("tap_then_stroke_on_same_group_keeps_both", () => {
+    const { g, deps, advance, tap } = gestures();
+    expect(tap(at)).toBe("commit");
+    advance(100);
     g.inkDown(at, at, vi.fn());
+    g.inkMove({ x: 30, y: 12 });
     advance(50);
-    expect(g.inkUp(commit)).toBe("defer");
-    advance(DOUBLE_TAP_MS);
-    expect(commit).toHaveBeenCalledTimes(1);
+    expect(g.inkUp()).toBe("commit");
     expect(deps.openAsk).not.toHaveBeenCalled();
-    // Off: taps are committed at once.
-    const off = gestures({ getSettings: () => ({ ...DEFAULT_SETTINGS, tutorDoubleTapAsk: false }) });
-    off.g.inkDown(at, at, vi.fn());
-    expect(off.g.inkUp(vi.fn())).toBe("commit");
-    // A new stroke elsewhere commits the waiting tap first.
-    const h = gestures();
-    const dot = vi.fn();
-    h.g.inkDown(at, at, vi.fn());
-    h.g.inkUp(dot);
-    vi.mocked(h.deps.groupAt).mockReturnValue(null);
-    expect(h.g.inkDown({ x: 500, y: 500 }, { x: 500, y: 500 }, vi.fn())).toBe(false);
-    expect(dot).toHaveBeenCalledTimes(1);
   });
 
   it("hold_still_opens_ask_but_a_moving_hold_is_a_stroke", () => {
     const { g, deps, advance } = gestures();
     const abort = vi.fn();
     g.inkDown(at, at, abort);
+    g.inkMove({ x: 12, y: 12 }); // jitter within the slop
     advance(HOLD_ASK_MS - 1);
     expect(abort).not.toHaveBeenCalled();
     advance(1);
+    // The contact (no ink yet) is cancelled; existing strokes are untouched.
     expect(abort).toHaveBeenCalledTimes(1);
     expect(deps.openAsk).toHaveBeenCalledWith("g");
+    expect(g.inkUp()).toBe("commit"); // nothing pending; caller has no stroke left
 
     const m = gestures();
     const abort2 = vi.fn();
@@ -143,14 +177,13 @@ describe("tutor gestures", () => {
     m.advance(HOLD_ASK_MS * 2);
     expect(abort2).not.toHaveBeenCalled();
     expect(m.deps.openAsk).not.toHaveBeenCalled();
-    expect(m.g.inkUp(vi.fn())).toBe("commit");
+    expect(m.g.inkUp()).toBe("commit");
 
     // Off, or not on ink: no hold.
     const off = gestures({ getSettings: () => ({ ...DEFAULT_SETTINGS, tutorHoldToAsk: false }) });
     const abort3 = vi.fn();
     off.g.inkDown(at, at, abort3);
     off.advance(HOLD_ASK_MS * 2);
-    expect(abort3).not.toHaveBeenCalled();
     const blank = gestures({ groupAt: vi.fn(() => null) });
     blank.g.inkDown(at, at, abort3);
     blank.advance(HOLD_ASK_MS * 2);

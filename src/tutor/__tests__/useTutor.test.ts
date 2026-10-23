@@ -93,6 +93,7 @@ function harness(settings: Settings, recognize: PipelineDeps["recognize"]) {
     pipeline,
     segment,
     settings: () => settings,
+    aiConfigured: () => true,
     loadRecognitions: async () => [],
     watchPen: (down: () => void, up: () => void) => {
       pen = { down, up };
@@ -292,6 +293,51 @@ describe("tutor session", () => {
     session.check(gid, { retry: true });
     await h.advance(2000);
     expect(recognize).toHaveBeenCalledTimes(2);
+    session.dispose();
+  });
+  it("inactive_without_consent_or_key_segments_nothing", async () => {
+    const recognize = vi.fn(async () => result);
+    let configured: boolean | null = false;
+    const h = harness(on, recognize);
+    const load = vi.fn(async () => []);
+    const fs = fakeStore([glyph("old", 0, 0)]);
+    h.segment.mockClear();
+    const session = createTutorSession(fs.store, { ...h.deps, aiConfigured: () => configured, loadRecognitions: load });
+    fs.add(glyph("a", 0, 400));
+    h.pen().down();
+    h.pen().up();
+    await h.advance(5000);
+    expect(h.segment).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+    expect(session.getView().regions.size).toBe(0);
+    expect(recognize).not.toHaveBeenCalled();
+    // A key is saved: the page is segmented (seeded clean) and its verdicts loaded.
+    configured = true;
+    session.reactivate();
+    await h.advance(0);
+    expect(h.segment).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledWith("pg");
+    expect(session.getView().regions.size).toBe(2);
+    expect(recognize).not.toHaveBeenCalled();
+    session.dispose();
+  });
+
+  it("page_load_keeps_newer_results", async () => {
+    let releaseLoad!: (r: never[]) => void;
+    const h = harness(on, vi.fn(async () => result));
+    const stored = (correct: boolean, capturedAt: number) => ({ ...result, correct, pageId: "pg", strokeGroupId: "", elementIds: ["a"], bounds: { x: 0, y: 0, width: 10, height: 10 }, capturedAt, source: "auto" as const, userOverride: false, createdAt: "", updatedAt: "" });
+    const fs = fakeStore([]);
+    const session = createTutorSession(fs.store, { ...h.deps, now: () => 50_000, loadRecognitions: () => new Promise((r) => (releaseLoad = r as never)) });
+    fs.add(glyph("a", 0, 0));
+    h.pen().up();
+    await h.advance(2000);
+    const gid = [...session.getView().recognitions.keys()][0];
+    expect(gid).toBeTruthy();
+    // The stored row for the same group is older than the live result: the live one stays.
+    releaseLoad([{ ...stored(false, 1), strokeGroupId: gid }, { ...stored(false, 1), strokeGroupId: "other" }] as never);
+    await h.advance(0);
+    expect(session.getView().recognitions.get(gid)?.correct).toBe(true);
+    expect(session.getView().recognitions.has("other")).toBe(true);
     session.dispose();
   });
 });

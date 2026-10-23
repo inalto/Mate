@@ -11,7 +11,7 @@ vi.mock("../../ipc/ask", () => ask);
 
 import { useToastStore } from "../../components/Toast";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
-import { useTutorUi } from "../../stores/tutor";
+import { consumeDismissDown, useTutorUi } from "../../stores/tutor";
 import TutorCard from "../TutorCard";
 import { EMPTY_TUTOR_VIEW, useTutorViews } from "../useTutor";
 import { recognition, viewWith } from "./fixtures";
@@ -76,9 +76,12 @@ describe("TutorCard", () => {
       fireEvent.click(screen.getAllByRole("button", { name: "Ask" }).at(-1)!);
     });
     expect(useToastStore.getState().message).toBe("AI checking is off. Turn it on in Settings.");
-    // Over 500 characters: the submit is disabled.
+    // Over 500 characters: the submit is disabled, and Ctrl+Enter is refused the same way.
+    ask.tutorAsk.mockClear();
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "x".repeat(501) } });
     expect((screen.getAllByRole("button", { name: "Ask" }).at(-1) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.keyDown(screen.getByLabelText("Your question"), { key: "Enter", ctrlKey: true });
+    expect(ask.tutorAsk).not.toHaveBeenCalled();
   });
 
   it("closes_on_escape_and_outside_tap", () => {
@@ -90,6 +93,9 @@ describe("TutorCard", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("dialog")).toBeNull();
+    // That press only closed the card: the canvas ignores it (no stray dot).
+    expect(consumeDismissDown()).toBe(true);
+    expect(consumeDismissDown()).toBe(false);
   });
 
   it("mark_as_correct_and_unchecked_try_again", async () => {

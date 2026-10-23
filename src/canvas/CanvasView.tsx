@@ -24,7 +24,8 @@ import { createInkSnap, drawSnapFlash, inkSnapAllowed, snapShapeElement, SNAP_FL
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
 import { createToolController, createTutorGestures, hitTest, pointerTool } from "./toolInteractions";
-import { groupOfElement, paneOfStore, useTutorUi } from "../stores/tutor";
+import { consumeDismissDown, groupOfElement, paneOfStore, useTutorUi } from "../stores/tutor";
+import { tutorActive, useAiStatus } from "../tutor/aiStatus";
 import { drawTutorMarkers, hitTutorMarker, tutorMarkers } from "../tutor/overlay";
 import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
@@ -74,7 +75,9 @@ function createEngine(
   let disposed = false;
 
   // Pointer interaction state.
-  let mode: "none" | "draw" | "pan" | "tool" = "none";
+  let mode: "none" | "draw" | "pan" | "tool" | "marker" = "none";
+  /** Select-tool press on a tutor marker: where and with which tool (decided on up or move). */
+  let markerPress: { p: Point; tool: "cursor" | "lasso" } | null = null;
   let builder: StrokeBuilder | null = null;
   let liveEl: Element | null = null;
   /** Ink to shape for the stroke in progress, and the shape it snapped to (shown instead of it). */
@@ -183,13 +186,18 @@ function createEngine(
     const v = useTutorViews.getState().views[pane];
     return v.pageId === pageId ? v : null;
   };
+  const tutorOn = () => tutorActive(getSettings(), useAiStatus.getState().configured);
   const markersNow = () => {
     const v = tutorView();
-    const cfg = getSettings();
-    return v && cfg.tutorEnabled ? tutorMarkers(v, cfg) : [];
+    return v && tutorOn() ? tutorMarkers(v, getSettings()) : [];
   };
   const tutor = createTutorGestures({
-    markerAt: (p) => hitTutorMarker(markersNow(), p, st().camera.z)?.groupId ?? null,
+    active: tutorOn,
+    markerAt: (p, slopPx) => hitTutorMarker(markersNow(), p, st().camera.z, slopPx)?.groupId ?? null,
+    inkAt: (p) => {
+      const s = st();
+      return hitTest(store.spatialIndex(), s.elements, p, 6 / s.camera.z) !== null;
+    },
     groupAt: (p) => {
       const v = tutorView();
       const s = st();
@@ -281,6 +289,11 @@ function createEngine(
       onDown(p, info) {
         const s = ready();
         if (!s) return;
+        // This press closed the tutor card: it only dismisses (no dot, no selection).
+        if (consumeDismissDown()) {
+          mode = "none";
+          return;
+        }
         const { tool, temp } = pointerTool(s.tool, s.panHold, info, getSettings());
         if (temp) s.pushTempTool(temp);
         if (tool === "pan") {
@@ -289,9 +302,10 @@ function createEngine(
           return;
         }
         if (!isInkTool(tool)) {
-          // A tap on a tutor marker opens its card instead of starting a selection.
-          if ((tool === "cursor" || tool === "lasso") && tutor.markerDown(p)) {
-            mode = "none";
+          // A press on a tutor marker: a tap opens its card (on up), a drag selects as usual.
+          if ((tool === "cursor" || tool === "lasso") && tutor.selectDown(p, worldToScreen(s.camera, p))) {
+            mode = "marker";
+            markerPress = { p, tool };
             return;
           }
           mode = tool === "none" ? "none" : "tool";
@@ -306,12 +320,7 @@ function createEngine(
           mode = "none";
           setLive(null);
         };
-        if (tutorStroke && tutor.inkDown(p, worldToScreen(s.camera, p), abortForAsk)) {
-          // Second tap of a double-tap on ink: Ask is open; no stroke.
-          tutorStroke = false;
-          mode = "none";
-          return;
-        }
+        if (tutorStroke) tutor.inkDown(p, worldToScreen(s.camera, p), abortForAsk);
         if (!s.beginStroke()) {
           // Page full: the editor route shows a toast when limitReached flips.
           tutor.cancel();
@@ -352,6 +361,14 @@ function createEngine(
           if (tutorStroke && points.length > 0) tutor.inkMove(worldToScreen(st().camera, points[points.length - 1]));
           if (!snapShape) setLive(builder.preview(predicted));
         } else if (mode === "tool") tools.move(points);
+        else if (mode === "marker" && markerPress && points.length > 0) {
+          if (tutor.selectMove(worldToScreen(st().camera, points[points.length - 1]))) {
+            // Dragged off the marker: a normal selection gesture from where it started.
+            mode = "tool";
+            tools.down(markerPress.p, markerPress.tool);
+            tools.move(points);
+          }
+        }
       },
       onUp(p) {
         if (mode === "draw" && builder) {
@@ -360,12 +377,9 @@ function createEngine(
           const raw = builder.points();
           const pts = builder.finish();
           const stroke = pts.length > 0 ? strokeElement(pts, { pageId, preset: st().preset }) : null;
-          // A tap on a marker opens its card (the dot is dropped); a tap on ink waits briefly for
-          // a second tap (double-tap opens Ask) and is drawn after all if none comes.
-          const late = () => {
-            if (stroke && ready() && !scribbleErased(raw)) commit(stroke);
-          };
-          const t = tutorStroke && !shape ? tutor.inkUp(late) : "commit";
+          // Committed at once, except a tap on a marker's blank area (opens its card) or the second
+          // tap of a double-tap on ink (opens Ask); see createTutorGestures.
+          const t = tutorStroke && !shape ? tutor.inkUp() : "commit";
           if (stroke && t === "commit") {
             if (shape) {
               const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());
@@ -373,6 +387,8 @@ function createEngine(
             } else if (!scribbleErased(raw)) commit(stroke);
           }
         } else if (mode === "tool") tools.up();
+        else if (mode === "marker") tutor.selectUp();
+        markerPress = null;
         if (tutorStroke) tutor.cancel(); // a snapped shape or an aborted stroke: clear any hold
         tutorStroke = false;
         endStroke();
@@ -385,6 +401,7 @@ function createEngine(
         if (mode === "tool") tools.cancel();
         tutor.cancel();
         tutorStroke = false;
+        markerPress = null;
         st().popTempTool();
         endStroke();
         builder = null;
@@ -451,6 +468,7 @@ function createEngine(
   const unsubscribeSettings = useSettingsStore.subscribe((s, prev) => {
     if (s.settings !== prev.settings) requestLive();
   });
+  const unsubscribeAiStatus = useAiStatus.subscribe(() => requestLive());
   const unsubscribeSnapshots = boxSnapshots.subscribe(() => {
     cache.invalidate();
     requestStatic();
@@ -479,6 +497,7 @@ function createEngine(
       unsubscribe();
       unsubscribeTutor();
       unsubscribeSettings();
+      unsubscribeAiStatus();
       unsubscribeSnapshots();
       ro?.disconnect();
       window.removeEventListener("resize", resize);

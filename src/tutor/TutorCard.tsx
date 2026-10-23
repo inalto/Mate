@@ -5,10 +5,9 @@
 // overlay clip, positioned from the group's page-unit bounds and clamped to the viewport.
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
-import { useDismiss } from "../components/useDismiss";
 import { renderLatex } from "../math/katex";
 import type { EditorStore } from "../stores/editor";
-import { groupState, useTutorUi, type PaneIndex } from "../stores/tutor";
+import { groupState, noteDismissDown, useTutorUi, type PaneIndex } from "../stores/tutor";
 import { MAX_QUESTION_CHARS } from "./ask";
 import { useTutorViews } from "./useTutor";
 import "../styles/tutor.css";
@@ -37,7 +36,25 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
   const g = open ? groupState(view, card.groupId) : null;
   const rec = g?.recognition;
 
-  useDismiss(ref, open, () => ui().closeCard());
+  // Esc or a press outside closes the card; that press does nothing else on the canvas.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        noteDismissDown();
+        ui().closeCard();
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") ui().closeCard();
+    };
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, ui]);
 
   // The page changed under the card, or its group is gone: close it.
   useEffect(() => {
@@ -101,6 +118,7 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
               : "This looks unfinished.";
   const canAsk = !!rec && !g.inFlight;
   const tooLong = [...card.question].length > MAX_QUESTION_CHARS;
+  const canSubmit = canAsk && !card.busy && !tooLong && card.question.trim() !== "";
 
   return (
     <div
@@ -181,7 +199,7 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
           className="tutor-card-ask"
           onSubmit={(e) => {
             e.preventDefault();
-            void ui().submitAsk();
+            if (canSubmit) void ui().submitAsk();
           }}
         >
           <label htmlFor={`${titleId}-q`}>Your question</label>
@@ -196,13 +214,13 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
-                void ui().submitAsk();
+                if (canSubmit) void ui().submitAsk();
               }
             }}
           />
           {tooLong ? <p className="tutor-card-error">Keep the question under {MAX_QUESTION_CHARS} characters.</p> : null}
           {!canAsk ? <p className="muted">{g.inFlight ? "Checking this note first…" : "This note needs to be checked before you can ask about it."}</p> : null}
-          <button type="submit" className="btn btn-primary" disabled={!canAsk || card.busy || tooLong || card.question.trim() === ""}>
+          <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
             {card.busy ? "Asking…" : "Ask"}
           </button>
         </form>

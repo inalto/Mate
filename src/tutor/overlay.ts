@@ -131,9 +131,12 @@ export function squigglePoints(groupId: string, b: GroupBounds, z: number): Vec2
   return pts;
 }
 
-/** The marker under world point `p` (topmost first), or null. */
-export function hitTutorMarker(markers: readonly TutorMarker[], p: Vec2, z: number): TutorMarker | null {
-  const slop = HIT_SLOP_PX / z;
+/**
+ * The marker under world point `p` (topmost first), or null. `slopPx` widens the hit area (screen
+ * px): select tools use the default, the pen uses 0 (the marker's own area only).
+ */
+export function hitTutorMarker(markers: readonly TutorMarker[], p: Vec2, z: number, slopPx = HIT_SLOP_PX): TutorMarker | null {
+  const slop = slopPx / z;
   for (let i = markers.length - 1; i >= 0; i--) {
     const m = markers[i];
     if (m.kind === "squiggle") {

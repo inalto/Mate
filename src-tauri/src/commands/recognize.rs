@@ -380,10 +380,36 @@ mod tests {
         assert_eq!(other_peak.load(Ordering::SeqCst), 1);
     }
 
+    /// Blocks every call until released; counts calls.
+    struct Held {
+        calls: Arc<AtomicUsize>,
+        released: Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+    }
+
+    impl Provider for Held {
+        fn id(&self) -> &'static str {
+            "mock"
+        }
+        fn recognize(&self, _req: &RecognizeRequest) -> Result<Verdict, AiError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let (lock, cv) = &*self.released;
+            let mut open = lock.lock().unwrap();
+            while !*open {
+                open = cv.wait(open).unwrap();
+            }
+            Ok(Verdict::default())
+        }
+        fn complete(&self, _req: &TextRequest) -> Result<String, AiError> {
+            Err(AiError::Disabled)
+        }
+    }
+
     #[test]
     fn consent_off_stops_queued_requests() {
         let gates = Arc::new(PageGates::default());
-        let (p, _, calls) = slow();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let released = Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+        let p: Arc<dyn Provider> = Arc::new(Held { calls: calls.clone(), released: released.clone() });
         let on = Arc::new(AtomicBool::new(true));
         let results = tauri::async_runtime::block_on(async {
             let mut tasks = Vec::new();
@@ -393,9 +419,21 @@ mod tests {
                     run_gated(&gates, "page", gate_on(p, on), req()).await
                 }));
             }
-            // The first two hold the page's slots; the third is queued when consent goes off.
-            tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_millis(30))).await.unwrap();
+            // Wait until the first two hold the page's slots (the third is queued behind them).
+            let c = calls.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                while c.load(Ordering::SeqCst) < 2 {
+                    std::thread::yield_now();
+                }
+            })
+            .await
+            .unwrap();
             on.store(false, Ordering::SeqCst);
+            {
+                let (lock, cv) = &*released;
+                *lock.lock().unwrap() = true;
+                cv.notify_all();
+            }
             let mut out = Vec::new();
             for t in tasks {
                 out.push(t.await.unwrap());
