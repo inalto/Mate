@@ -2399,6 +2399,7 @@ dependencies = [
  "keyring",
  "lz4_flex",
  "onenote_parser",
+ "plist",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",
