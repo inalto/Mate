@@ -30,6 +30,8 @@ pub use model::{
 };
 pub use place::{ImportReport, PlaceTarget, place_document};
 pub use zipsrc::ZipSource;
+/// OneNote's raw-value → import-model mapping, public for its unit tests.
+pub use onenote::adapter as onenote_adapter;
 
 /// Most pages one import places; the rest are counted as skipped.
 pub const MAX_PAGES_PER_IMPORT: usize = 2000;
