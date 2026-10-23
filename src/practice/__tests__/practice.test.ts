@@ -13,14 +13,14 @@ vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ipc);
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), setSettings: vi.fn(async () => {}) }));
 
-import { LIMITS, PAGE_HEIGHT } from "../../model/constants";
+import { LIMITS, PAGE_HEIGHT, PAGE_MODE_TOP_MARGIN } from "../../model/constants";
 import { contentOf, type TextBoxContent } from "../../model/content";
 import { useToastStore } from "../../components/Toast";
 import type { PracticeQuestion } from "../../ipc/practice";
 import { createEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { findPracticeContext, practiceOf } from "../practiceContext";
-import { placePractice, practicePageTitle } from "../placePractice";
+import { ANSWER_ROOM, QUESTION_GAP, placePractice, practicePageTitle } from "../placePractice";
 
 const q = (i: number): PracticeQuestion => ({
   problemText: `Differentiate x^${i}`,
@@ -99,7 +99,13 @@ describe("practice placement", () => {
   });
 
   it("splits across further pages when a page cannot hold them all", async () => {
-    const r = await placePractice(questions(7), { sectionId: "sec", perPage: 3 });
+    // A page height that holds exactly three questions with their answer room.
+    await placePractice(questions(1), { sectionId: "sec" });
+    const h = ipc.upsertElements.mock.calls[0][0][0].boxHeight ?? 0;
+    createPage.mockClear();
+    ipc.upsertElements.mockClear();
+    const pageHeight = 2 * PAGE_MODE_TOP_MARGIN + 3 * (h + ANSWER_ROOM + QUESTION_GAP);
+    const r = await placePractice(questions(7), { sectionId: "sec", pageHeight });
     expect(r.pageIds).toHaveLength(3);
     expect(createPage.mock.calls.map((c) => c[1])).toEqual([
       expect.stringMatching(/^Practice — \d{4}-\d\d-\d\d$/),

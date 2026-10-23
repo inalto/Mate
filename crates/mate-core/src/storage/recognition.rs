@@ -227,6 +227,9 @@ fn existing(conn: &Connection, page_id: &str, group_id: &str) -> Result<Option<E
         .optional()?)
 }
 
+/// How far ahead of this clock a capture stamp may be.
+const MAX_CAPTURE_SKEW_MS: i64 = 60_000;
+
 fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<UpsertOutcome> {
     if rec.page_id.is_empty() || rec.stroke_group_id.is_empty() || rec.element_ids.is_empty() {
         return Err(StorageError::Limit(
@@ -235,6 +238,12 @@ fn upsert_in(conn: &Connection, rec: &Recognition) -> Result<UpsertOutcome> {
     }
     if rec.captured_at <= 0 {
         return Err(StorageError::Limit("recognition needs capturedAt (ms since the epoch)".into()));
+    }
+    // A capture stamp from a skewed clock far ahead would make every later result for this ink
+    // look older, so it would be reported stale forever: refuse it instead.
+    let now_ms = i64::try_from(time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000).unwrap_or(i64::MAX);
+    if rec.captured_at > now_ms.saturating_add(MAX_CAPTURE_SKEW_MS) {
+        return Err(StorageError::Limit("recognition capturedAt is in the future".into()));
     }
     if is_stale(conn, rec)? {
         return Ok(UpsertOutcome::Stale);
@@ -384,8 +393,8 @@ impl Storage {
     ///
     /// When stored: `code`/`kind` are re-derived; `created_at` is kept from the first insert; a
     /// user override survives a re-recognition of the same element set; older groups sharing an
-    /// element are superseded. Errors only on invalid input (empty ids, `captured_at <= 0`) or
-    /// a database failure.
+    /// element are superseded. Errors only on invalid input (empty ids, `captured_at <= 0` or
+    /// more than 60 s in the future) or a database failure.
     pub fn upsert_recognition(&mut self, rec: &Recognition) -> Result<UpsertOutcome> {
         let tx = self.conn.transaction()?;
         let outcome = upsert_in(&tx, rec)?;
@@ -497,7 +506,7 @@ mod tests {
             element_ids: ids.iter().map(|s| s.to_string()).collect(),
             bounds: Bounds::default(),
             verdict: Verdict { latex: "x".into(), ..Verdict::default() },
-            captured_at: 1_900_000_000_000,
+            captured_at: i64::try_from(time::OffsetDateTime::now_utc().unix_timestamp_nanos() / 1_000_000).unwrap(),
             source: RecognitionSource::Auto,
             user_override: false,
             provider: String::new(),

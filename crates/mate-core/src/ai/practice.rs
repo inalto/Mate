@@ -8,9 +8,8 @@ use super::provider::{AiError, Provider, TextRequest};
 
 /// At most this many questions per request.
 pub const MAX_QUESTIONS: usize = 20;
-/// At most this many characters of the book's text are sent.
-pub const MAX_INPUT_CHARS: usize = 8_000;
-const TRUNCATED_NOTE: &str = "\n(truncated)";
+/// At most this many characters of the book's text are sent (the shared cap and truncation).
+pub use crate::semantics::summary::{MAX_INPUT_CHARS, truncate_input};
 const MAX_CUSTOM_PROMPT_CHARS: usize = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -86,14 +85,6 @@ pub fn schema() -> Value {
             }
         }
     })
-}
-
-/// Keeps the first [`MAX_INPUT_CHARS`] characters, appending "(truncated)" when it cut anything.
-pub fn truncate_input(text: &str) -> String {
-    match text.char_indices().nth(MAX_INPUT_CHARS) {
-        None => text.to_string(),
-        Some((end, _)) => format!("{}{TRUNCATED_NOTE}", &text[..end]),
-    }
 }
 
 /// The provider request for `count` questions (clamped to 1..=20) of the given `types` (all five

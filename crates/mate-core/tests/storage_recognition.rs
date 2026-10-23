@@ -340,6 +340,24 @@ fn fresh_result_is_stored() {
 }
 
 #[test]
+fn captured_at_far_in_the_future_is_an_error_not_stale() {
+    let mut st = seeded();
+    ink(&mut st, &["a", "b"]);
+    tick();
+    let mut r = rec("p1", "g1", &["a", "b"], verdict("x=1", "skewed", None));
+    r.captured_at = now_ms() + 61_000;
+    assert!(st.upsert_recognition(&r).is_err());
+    assert!(st.get_recognitions("p1").unwrap().is_empty());
+    // A later, correctly stamped result is still stored (the bad one left nothing behind).
+    let ok = rec("p1", "g1", &["a", "b"], verdict("x=1", "fine", None));
+    assert_eq!(st.upsert_recognition(&ok).unwrap(), UpsertOutcome::Stored);
+    // Small skew (within a minute) is accepted.
+    let mut near = rec("p1", "g1", &["a", "b"], verdict("x=2", "near", None));
+    near.captured_at = now_ms() + 30_000;
+    assert_eq!(st.upsert_recognition(&near).unwrap(), UpsertOutcome::Stored);
+}
+
+#[test]
 fn stale_result_after_erase_is_rejected() {
     let mut st = seeded();
     ink(&mut st, &["a", "b"]);

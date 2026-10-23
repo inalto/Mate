@@ -68,15 +68,15 @@ export function practiceBox(pageId: string, q: PracticeQuestion, n: number, y: n
 
 /**
  * Element lists, one per page, for `questions` stacked top to bottom. A new page starts when the
- * next question and its answer room would cross `pageHeight` minus the bottom margin, or after
- * `perPage` boxes (an optional override).
+ * next question and its answer room would cross `pageHeight` minus the bottom margin (or, in
+ * theory, at the per-page element limit).
  */
 export function layoutPractice(
   newPageId: () => string,
   questions: PracticeQuestion[],
-  opts: { perPage?: number; pageHeight?: number; now: string },
+  opts: { pageHeight?: number; now: string },
 ): { pageId: string; els: Element[] }[] {
-  const perPage = Math.max(1, opts.perPage ?? LIMITS.MAX_ELEMENTS_PER_PAGE);
+  const perPage = LIMITS.MAX_ELEMENTS_PER_PAGE;
   const limit = (opts.pageHeight ?? PAGE_HEIGHT) - PAGE_MODE_TOP_MARGIN;
   const pages: { pageId: string; els: Element[] }[] = [];
   let y = PAGE_MODE_TOP_MARGIN;
@@ -102,8 +102,6 @@ export interface PlaceResult {
 
 export interface PlaceOptions {
   sectionId: string;
-  /** Optional cap on boxes per page; pages otherwise fill by height. Never above the element limit. */
-  perPage?: number;
   /** Height of the new pages; defaults to the standard page height. */
   pageHeight?: number;
   now?: Date;
@@ -126,13 +124,12 @@ export async function placePractice(questions: PracticeQuestion[], opts: PlaceOp
     showToast(`A practice page holds up to ${MAX_PRACTICE_QUESTIONS} questions; the rest were left out.`);
   }
   if (qs.length === 0) return { pageIds: [], placed: 0 };
-  const perPage = Math.max(1, Math.min(opts.perPage ?? LIMITS.MAX_ELEMENTS_PER_PAGE, LIMITS.MAX_ELEMENTS_PER_PAGE));
   const nowD = opts.now ?? new Date();
   const now = nowD.toISOString();
   const title = practicePageTitle(nowD);
   const { createPage, trash } = useNotebookStore.getState();
 
-  const plan = layoutPractice(() => "pending", qs, { perPage, pageHeight: opts.pageHeight, now });
+  const plan = layoutPractice(() => "pending", qs, { pageHeight: opts.pageHeight, now });
   const created: Page[] = [];
   try {
     for (let i = 0; i < plan.length; i++) {

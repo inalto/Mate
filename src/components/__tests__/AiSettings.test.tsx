@@ -68,8 +68,18 @@ describe("AiSettings", () => {
     for (const call of vi.mocked(setSettings).mock.calls) expect(JSON.stringify(call)).not.toContain(SECRET);
   });
 
+  it("does not claim the key works when consent is off (nothing was sent)", async () => {
+    status.configured = true;
+    render(<AiSettings />);
+    expect(await screen.findByText("Key saved")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Test key" }));
+    expect(await screen.findByText("Key saved (not tested — turn on consent to test)")).toBeTruthy();
+    expect(screen.queryByText("Key works.")).toBeNull();
+  });
+
   it("removes and tests the key", async () => {
     status.configured = true;
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, aiConsent: true } });
     render(<AiSettings />);
     expect(await screen.findByText("Key saved")).toBeTruthy();
 

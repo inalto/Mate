@@ -139,7 +139,13 @@ export default function AiSettings() {
           type="button"
           className="btn"
           disabled={busy || !configured}
-          onClick={() => void run(() => testAiKey(provider), "Key works.")}
+          onClick={() =>
+            void run(
+              () => testAiKey(provider),
+              // Without consent Rust only checks that a key is stored; nothing is sent.
+              settings.aiConsent === true ? "Key works." : "Key saved (not tested — turn on consent to test)",
+            )
+          }
         >
           Test key
         </button>

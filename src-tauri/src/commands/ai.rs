@@ -67,7 +67,7 @@ pub fn status(store: &dyn KeyStore, settings: &Settings) -> Result<AiStatus, Str
     })
 }
 
-/// For now: succeeds when a non-empty key is stored. A later task makes this a real 1-token ping.
+/// Succeeds when a non-empty key is stored for `provider` (no network).
 pub fn test_key(store: &dyn KeyStore, provider: &str) -> Result<(), String> {
     check_provider(provider)?;
     if has_key(store, provider)? {
@@ -105,7 +105,8 @@ pub async fn get_ai_status(state: State<'_, AppState>) -> Result<AiStatus, Strin
 }
 
 /// With AI consent on, a minimal real request (a few output tokens) checks the key with the
-/// service; without consent it only checks that a key is stored, so nothing leaves the device.
+/// service, for every provider; without consent it only checks that a key is stored, so nothing
+/// leaves the device.
 #[tauri::command]
 pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result<(), String> {
     let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
@@ -113,17 +114,27 @@ pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result
     let cache = state.providers.clone();
     // The provider (a blocking HTTP client) is built and used only on the blocking pool.
     tauri::async_runtime::spawn_blocking(move || {
-        test_key(store.as_ref(), &provider)?;
-        if settings.ai_consent != Some(true) || provider == "openai" {
-            return Ok(());
-        }
-        let key = store.get(&provider)?.unwrap_or_default();
-        let model = if settings.ai_provider == provider { settings.ai_model.clone() } else { String::new() };
-        let model = effective_model(&provider, &model);
-        ping(cache.get(&provider, &model, &key).as_ref())
+        check_key(store.as_ref(), &settings, &provider, |p, m, k| cache.get(p, m, k))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// "Test key": the stored-key check, then (with consent) one tiny request through `make`.
+pub fn check_key(
+    store: &dyn KeyStore,
+    settings: &Settings,
+    provider: &str,
+    make: impl FnOnce(&str, &str, &str) -> Arc<dyn Provider>,
+) -> Result<(), String> {
+    test_key(store, provider)?;
+    if settings.ai_consent != Some(true) {
+        return Ok(());
+    }
+    let key = store.get(provider)?.unwrap_or_default();
+    let model = if settings.ai_provider == provider { settings.ai_model.clone() } else { String::new() };
+    let model = effective_model(provider, &model);
+    ping(make(provider, &model, &key).as_ref())
 }
 
 /// A reply cut off by the tiny token budget still proves the key works.
@@ -185,6 +196,37 @@ mod tests {
         assert!(ping(&garbled).is_err());
         let bad = MockProvider::new(vec![]).with_text(vec![Err(AiError::Auth)]);
         assert_eq!(ping(&bad).unwrap_err(), AiError::Auth.to_string());
+    }
+
+    #[test]
+    fn test_key_pings_every_provider_only_with_consent() {
+        use mate_core::ai::mock::MockProvider;
+        let store = MemoryStore::default();
+        store.set("anthropic", "k").unwrap();
+        store.set("openai", "bogus").unwrap();
+        let rejecting = || -> Arc<dyn Provider> { Arc::new(MockProvider::new(vec![]).with_text(vec![Err(AiError::Auth)])) };
+        let mut settings = Settings::default();
+        // No consent: nothing is sent, a stored key is enough.
+        for p in ["anthropic", "openai"] {
+            let mut called = false;
+            let r = check_key(&store, &settings, p, |_, _, _| {
+                called = true;
+                rejecting()
+            });
+            assert!(r.is_ok());
+            assert!(!called, "{p} must not be contacted without consent");
+        }
+        // Consent: both providers are asked, so a bogus key is reported.
+        settings.ai_consent = Some(true);
+        for p in ["anthropic", "openai"] {
+            let mut asked = None;
+            let r = check_key(&store, &settings, p, |prov, _, key| {
+                asked = Some((prov.to_string(), key.to_string()));
+                rejecting()
+            });
+            assert_eq!(r.unwrap_err(), AiError::Auth.to_string());
+            assert_eq!(asked.unwrap(), (p.to_string(), store.get(p).unwrap().unwrap()));
+        }
     }
 
     #[test]

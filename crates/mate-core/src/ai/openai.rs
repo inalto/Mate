@@ -124,6 +124,8 @@ impl OpenAiProvider {
             404 => Err(Failure::Final(AiError::UnknownModel)),
             400 | 413 | 422 => Err(Failure::Final(AiError::Rejected(api_message(&text, status)))),
             408 => Err(Failure::Transient(AiError::Network("the request timed out".into()), retry_after)),
+            // An exhausted quota also comes back as 429; waiting does not fix it.
+            429 if is_quota_exhausted(&text) => Err(Failure::Final(AiError::Billing)),
             429 => Err(Failure::Transient(AiError::RateLimited, retry_after)),
             500..=599 => {
                 Err(Failure::Transient(AiError::Network(format!("the service answered {status}")), retry_after))
@@ -142,6 +144,13 @@ fn network_error(e: &reqwest::Error) -> AiError {
         "the request failed"
     };
     AiError::Network(what.to_string())
+}
+
+/// A 429 whose `error.code` (or `error.type`) is `insufficient_quota`: out of credit, not busy.
+fn is_quota_exhausted(body: &str) -> bool {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .is_some_and(|v| ["code", "type"].iter().any(|k| v["error"][k].as_str() == Some("insufficient_quota")))
 }
 
 /// The API's own error message (never contains the key), shortened.

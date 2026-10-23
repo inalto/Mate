@@ -202,6 +202,22 @@ fn openai_refusal_and_cut_off_are_final() {
 }
 
 #[test]
+fn openai_429_insufficient_quota_is_billing_without_retry() {
+    let quota = r#"{"error":{"message":"You exceeded your current quota","type":"insufficient_quota","code":"insufficient_quota"}}"#;
+    let (base, seen) = stub(vec![(429, quota.into()), ok_reply(&verdict_json())]);
+    assert!(matches!(provider(&base).recognize(&request()), Err(AiError::Billing)));
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    // Only the code alone also counts; any other 429 stays a rate limit.
+    let code_only = r#"{"error":{"message":"quota","code":"insufficient_quota"}}"#;
+    let (base, _) = stub(vec![(429, code_only.into())]);
+    assert!(matches!(provider(&base).recognize(&request()), Err(AiError::Billing)));
+    let busy = r#"{"error":{"message":"Rate limit reached","type":"requests","code":"rate_limit_exceeded"}}"#;
+    let (base, seen) = stub(vec![(429, busy.into()), ok_reply(&verdict_json())]);
+    assert!(provider(&base).recognize(&request()).is_ok());
+    assert_eq!(seen.lock().unwrap().len(), 2);
+}
+
+#[test]
 fn openai_retries_429_and_5xx_then_gives_up() {
     let busy = r#"{"error":{"message":"slow down"}}"#;
     let (base, seen) = stub(vec![(429, busy.into()), (503, busy.into()), ok_reply(&verdict_json())]);
