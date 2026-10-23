@@ -118,6 +118,7 @@ describe("close handler", () => {
     expect(showToast).toHaveBeenCalledWith(
       `${SAFE_CLOSE_TOAST} Saved a recovery file: p`,
       expect.objectContaining({ label: "Close anyway" }),
+      { expiresAfterMs: 30_000 },
     );
   });
 

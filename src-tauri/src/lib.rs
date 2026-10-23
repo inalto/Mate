@@ -52,6 +52,8 @@ pub fn run() {
         )?;
       }
       let state = AppState::init(app.handle())?;
+      // Old recovery files are not kept forever.
+      commands::lifecycle::prune_recovery_files(&state.data_dir, commands::lifecycle::KEEP_RECOVERY_FILES);
       app.manage(state);
       app.manage(pdf::PendingOpenFile::new(pdf::pdf_from_args(
         std::env::args(),

@@ -58,6 +58,9 @@ export const dismissRecovery = (): void => {
   recoveryPageId = null;
 };
 
+/** The "Close anyway" offer lapses after this long (the situation it described has moved on). */
+export const CLOSE_ANYWAY_EXPIRY_MS = 30_000;
+
 export function installCloseHandler(): void {
   let current: number | null = null;
 
@@ -102,7 +105,7 @@ export function installCloseHandler(): void {
               safeSet(CLEAN_EXIT_KEY, "0"); // not a clean exit: the recovery card shows next launch
               void lifecycle.completeCloseAttempt(id, true).catch((err) => console.error("close anyway failed", err));
             },
-          });
+          }, { expiresAfterMs: CLOSE_ANYWAY_EXPIRY_MS });
         }
       }
       return;

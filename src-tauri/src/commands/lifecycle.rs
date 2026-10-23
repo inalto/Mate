@@ -240,6 +240,39 @@ fn write_recovery(dir: &Path, name: &str, contents: &str) -> Result<RecoveryArti
     })
 }
 
+/// Recovery files kept per kind; older ones are deleted at startup.
+pub const KEEP_RECOVERY_FILES: usize = 10;
+
+/// Deletes all but the `keep` newest recovery files: the reset zips (`mate-recovery-*.zip`, in
+/// the data dir) and the close-time json files (`mate-recovery-*.json`, in `recovery/` and, from
+/// Phase 1, next to the database). Each kind is counted across those folders. Returns how many
+/// files were removed; a file that cannot be removed is left and ignored.
+pub fn prune_recovery_files(data_dir: &Path, keep: usize) -> usize {
+    let mut removed = 0;
+    for ext in ["zip", "json"] {
+        let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> = Vec::new();
+        for dir in [data_dir.to_path_buf(), data_dir.join("recovery")] {
+            let Ok(entries) = fs::read_dir(&dir) else { continue };
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let ours = name.starts_with("mate-recovery-") && name.ends_with(&format!(".{ext}"));
+                let Ok(meta) = entry.metadata() else { continue };
+                if ours && meta.is_file() {
+                    files.push((meta.modified().unwrap_or(std::time::UNIX_EPOCH), entry.path()));
+                }
+            }
+        }
+        // Newest first; the name (it carries a timestamp) breaks ties between equal mtimes.
+        files.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+        for (_, path) in files.into_iter().skip(keep) {
+            if fs::remove_file(&path).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
+
 #[tauri::command]
 pub async fn write_recovery_artifact(
     state: State<'_, AppState>,
@@ -335,6 +368,55 @@ mod tests {
         assert!(new > old, "ids never repeat, so a late watchdog cannot hit the new attempt");
         assert_eq!(gates.with("page-p1", |g| g.expire(old)), Expiry::Stale);
         assert!(gates.with("page-p1", |g| g.is_current(new)));
+    }
+
+    #[test]
+    fn prune_keeps_the_ten_newest_recovery_files_of_each_kind() {
+        let dir = std::env::temp_dir().join(format!("mate-prune-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("recovery")).unwrap();
+        let t0 = std::time::SystemTime::now() - Duration::from_secs(10_000);
+        let put = |path: std::path::PathBuf, age: u64| {
+            fs::write(&path, "x").unwrap();
+            let f = fs::File::options().write(true).open(&path).unwrap();
+            f.set_modified(t0 + Duration::from_secs(age)).unwrap();
+        };
+        for i in 0..13 {
+            put(dir.join(format!("mate-recovery-{i:02}.zip")), i);
+        }
+        for i in 0..7 {
+            put(dir.join("recovery").join(format!("mate-recovery-j{i:02}.json")), 100 + i);
+        }
+        for i in 0..6 {
+            put(dir.join(format!("mate-recovery-k{i:02}.json")), 200 + i); // next to the DB
+        }
+        put(dir.join("mate.db"), 0);
+        put(dir.join("settings.json"), 0);
+        put(dir.join("recovery").join("notes.json"), 0);
+
+        assert_eq!(prune_recovery_files(&dir, KEEP_RECOVERY_FILES), 3 + 3);
+        let left = |d: &Path, ext: &str| {
+            let mut v: Vec<String> = fs::read_dir(d)
+                .unwrap()
+                .flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| n.starts_with("mate-recovery-") && n.ends_with(ext))
+                .collect();
+            v.sort();
+            v
+        };
+        let zips = left(&dir, ".zip");
+        assert_eq!(zips.len(), 10);
+        assert_eq!(zips[0], "mate-recovery-03.zip"); // the three oldest went
+        // 13 json files across both folders: the 3 oldest (j00..j02) went.
+        assert_eq!(left(&dir.join("recovery"), ".json").len(), 4);
+        assert_eq!(left(&dir, ".json").len(), 6);
+        assert!(dir.join("mate.db").exists() && dir.join("settings.json").exists());
+        assert!(dir.join("recovery").join("notes.json").exists());
+        // Idempotent, and a missing directory is fine.
+        assert_eq!(prune_recovery_files(&dir, KEEP_RECOVERY_FILES), 0);
+        assert_eq!(prune_recovery_files(&dir.join("nope"), KEEP_RECOVERY_FILES), 0);
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

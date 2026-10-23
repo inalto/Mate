@@ -8,14 +8,31 @@ use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, Provider};
 use mate_core::ai::{is_known_provider, provider_for};
 use mate_core::semantics::related::{self, PageGraph, RelatedPage};
-use mate_core::semantics::summary::{self, Task};
+use mate_core::semantics::summary::{self, SummaryError, Task};
 use mate_core::settings::Settings;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
+use super::recognize::RecognizeError;
 use crate::state::AppState;
 
 type Res<T> = Result<T, String>;
+/// The error of an AI-backed command: `kind` lets the app block live checking after a rejected
+/// key, a billing problem or an unknown model, exactly as a failed tutor check does.
+pub type AiRes<T> = Result<T, RecognizeError>;
+
+/// A summary failure as the app sees it.
+pub fn summary_error(e: SummaryError) -> RecognizeError {
+    match e {
+        SummaryError::Ai(a) => a.into(),
+        SummaryError::Other(message) => RecognizeError { kind: "internal", message },
+    }
+}
+
+/// A non-AI failure (storage, a poisoned lock).
+pub fn internal_error(e: impl ToString) -> RecognizeError {
+    RecognizeError { kind: "internal", message: e.to_string() }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SummaryResult {
@@ -43,27 +60,27 @@ pub fn gated_provider(settings: &Settings, keys: &dyn KeyStore) -> Result<Box<dy
     Ok(provider_for(provider, &settings.ai_model, key))
 }
 
-async fn generate(app: AppHandle, page_id: String, task: Task) -> Res<summary::Generated> {
+async fn generate(app: AppHandle, page_id: String, task: Task) -> AiRes<summary::Generated> {
     // Keychain access can block on an OS prompt, so the gate runs off the async runtime too.
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
+        let settings = state.settings.lock().map_err(internal_error)?.clone();
         // Gate first: with AI off nothing is read, cached or sent.
-        let provider = gated_provider(&settings, state.keys.as_ref()).map_err(|e| e.to_string())?;
-        summary::generate_for_page(&state.storage, provider.as_ref(), &page_id, task)
+        let provider = gated_provider(&settings, state.keys.as_ref())?;
+        summary::generate_for_page(&state.storage, provider.as_ref(), &page_id, task).map_err(summary_error)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(internal_error)?
 }
 
 #[tauri::command]
-pub async fn summarize_page(app: AppHandle, page_id: String) -> Res<SummaryResult> {
+pub async fn summarize_page(app: AppHandle, page_id: String) -> AiRes<SummaryResult> {
     let g = generate(app, page_id, Task::Summary).await?;
     Ok(SummaryResult { summary: g.text, cached: g.cached })
 }
 
 #[tauri::command]
-pub async fn suggest_title(app: AppHandle, page_id: String) -> Res<TitleResult> {
+pub async fn suggest_title(app: AppHandle, page_id: String) -> AiRes<TitleResult> {
     let g = generate(app, page_id, Task::Title).await?;
     Ok(TitleResult { title: g.text, cached: g.cached })
 }
@@ -89,6 +106,21 @@ mod tests {
 
     fn settings(consent: Option<bool>) -> Settings {
         Settings { ai_consent: consent, ..Settings::default() }
+    }
+
+    #[test]
+    fn summary_failures_keep_their_kind_for_the_block() {
+        let kind = |e: AiError| summary_error(SummaryError::Ai(e)).kind;
+        assert_eq!(kind(AiError::Auth), "auth");
+        assert_eq!(kind(AiError::Billing), "billing");
+        assert_eq!(kind(AiError::UnknownModel), "unknownModel");
+        assert_eq!(kind(AiError::RateLimited), "rateLimited");
+        // The gate itself fails with a typed error too (converted with `?` in the commands).
+        let gated: Option<RecognizeError> =
+            gated_provider(&settings(None), &MemoryStore::default()).err().map(RecognizeError::from);
+        assert_eq!(gated.map(|e| e.kind), Some("disabled"));
+        let other = summary_error(SummaryError::Other("Nothing recognised.".into()));
+        assert_eq!((other.kind, other.message.as_str()), ("internal", "Nothing recognised."));
     }
 
     #[test]

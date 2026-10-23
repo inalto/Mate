@@ -195,13 +195,14 @@ fn empty_page_and_provider_errors_are_readable() {
     let storage = Mutex::new(seeded());
     let mock = MockProvider::new(vec![]);
     let err = summary::generate_for_page(&storage, &mock, "p1", Task::Summary).unwrap_err();
-    assert!(err.contains("recognised"), "{err}");
+    assert!(err.to_string().contains("recognised"), "{err}");
     assert!(mock.text_requests().is_empty());
 
     recognise(&mut storage.lock().unwrap(), "p1", "g1", 0.0, 0.0, "hello");
     let failing = MockProvider::new(vec![]).with_text(vec![Err(AiError::Disabled)]);
     let err = summary::generate_for_page(&storage, &failing, "p1", Task::Title).unwrap_err();
-    assert_eq!(err, AiError::Disabled.to_string());
+    assert_eq!(err.to_string(), AiError::Disabled.to_string());
+    assert!(matches!(err, summary::SummaryError::Ai(AiError::Disabled)));
     assert!(storage.lock().unwrap().get_page_semantics("p1").unwrap().is_none());
 }
 
