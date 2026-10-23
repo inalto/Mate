@@ -185,6 +185,62 @@ pub fn export_unit(storage: &Storage, unit_id: &str, assets_dir: &Path) -> Resul
     Ok(bytes)
 }
 
+/// Zips every live book as its own `.mate` archive (`books/NN-<title>.mate`, stored without
+/// further compression) so a whole library can be restored one book at a time by importing the
+/// entries. Used by "Download backup" and the pre-reset recovery file.
+pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<Vec<u8>> {
+    let units = storage.list_tree()?.units;
+    let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+    for (i, unit) in units.iter().enumerate() {
+        let slug: String = unit
+            .title
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect::<String>()
+            .split('-')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("-")
+            .chars()
+            .take(40)
+            .collect();
+        let slug = if slug.is_empty() { "book".to_string() } else { slug };
+        let bytes = export_unit(storage, &unit.id, assets_dir)?;
+        zip.start_file(format!("books/{:02}-{slug}.mate", i + 1), stored)
+            .map_err(zip_err)?;
+        zip.write_all(&bytes).map_err(io_err)?;
+    }
+    let manifest = serde_json::json!({
+        "format": "mate-backup",
+        "exportedAt": now_iso(),
+        "books": units.len(),
+    });
+    zip.start_file("backup.json", stored).map_err(zip_err)?;
+    zip.write_all(&serde_json::to_vec_pretty(&manifest)?)
+        .map_err(io_err)?;
+    Ok(zip.finish().map_err(zip_err)?.into_inner())
+}
+
+/// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store and
+/// `settings.json` under `data_dir`. Missing files are fine. The caller must have closed or
+/// replaced any open connection to the database first.
+pub fn wipe_local_data(data_dir: &Path) -> std::io::Result<()> {
+    use std::fs;
+    use std::io::ErrorKind::NotFound;
+    for name in ["mate.db", "mate.db-wal", "mate.db-shm", "settings.json"] {
+        match fs::remove_file(data_dir.join(name)) {
+            Err(e) if e.kind() != NotFound => return Err(e),
+            _ => {}
+        }
+    }
+    match fs::remove_dir_all(data_dir.join("assets")) {
+        Err(e) if e.kind() != NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
 /// Reads one entry, enforcing [`MAX_ENTRY_BYTES`]; `None` if the entry does not exist.
 fn read_entry(zip: &mut ZipArchive<Cursor<&[u8]>>, name: &str) -> Result<Option<Vec<u8>>> {
     let file = match zip.by_name(name) {

@@ -100,6 +100,8 @@ pub fn run() {
       export::write_export_file,
       archive::export_unit_archive,
       archive::import_unit_archive,
+      archive::export_backup,
+      archive::reset_local_data,
       lifecycle::close_attempt_started,
       lifecycle::cancel_close_attempt,
       lifecycle::complete_close_attempt,
