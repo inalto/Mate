@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import type { BackgroundType, PageMode, ShapeType, Theme } from "../model/types";
+import AiSettings from "../components/AiSettings";
+import type { BackgroundType, PageMode, ShapeType, Theme, TutorMode } from "../model/types";
 import { SHAPE_LABEL, SHAPE_TYPES } from "../shapes/catalog";
 import { useSettingsStore } from "../stores/settings";
 
@@ -261,6 +262,41 @@ export default function Settings() {
         </Field>
         <Field label="Erase images" htmlFor="set-erase-images">
           <input id="set-erase-images" type="checkbox" checked={settings.eraserEraseImages} onChange={(e) => void update({ eraserEraseImages: e.target.checked })} />
+        </Field>
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section-title">Intelligence</h2>
+        <AiSettings />
+      </section>
+
+      <section className="settings-group">
+        <h2 className="section-title">Tutor</h2>
+        <Field label="Tutor" htmlFor="set-tutor">
+          <input id="set-tutor" type="checkbox" checked={settings.tutorEnabled} onChange={(e) => void update({ tutorEnabled: e.target.checked })} />
+          <span className="muted">Read handwritten maths and point out mistakes. Needs AI set up above.</span>
+        </Field>
+        <Field label="When to check" htmlFor="set-tutor-mode">
+          <select id="set-tutor-mode" className="input" value={settings.tutorMode} onChange={(e) => void update({ tutorMode: e.target.value as TutorMode })}>
+            <option value="live">As I write</option>
+            <option value="onask">Only when I ask</option>
+          </select>
+        </Field>
+        <Field label="Underline mistakes" htmlFor="set-tutor-underline">
+          <input id="set-tutor-underline" type="checkbox" checked={settings.tutorUnderlineErrors} onChange={(e) => void update({ tutorUnderlineErrors: e.target.checked })} />
+        </Field>
+        <Field label="Tick correct work" htmlFor="set-tutor-ticks">
+          <input id="set-tutor-ticks" type="checkbox" checked={settings.correctnessMode} onChange={(e) => void update({ correctnessMode: e.target.checked })} />
+        </Field>
+        <Field label="Show when checking" htmlFor="set-tutor-checking">
+          <input id="set-tutor-checking" type="checkbox" checked={settings.tutorShowChecking} onChange={(e) => void update({ tutorShowChecking: e.target.checked })} />
+          <span className="muted">A small turning ring next to ink being checked</span>
+        </Field>
+        <Field label="Double-tap ink to ask" htmlFor="set-tutor-double-tap">
+          <input id="set-tutor-double-tap" type="checkbox" checked={settings.tutorDoubleTapAsk} onChange={(e) => void update({ tutorDoubleTapAsk: e.target.checked })} />
+        </Field>
+        <Field label="Hold the pen on ink to ask" htmlFor="set-tutor-hold">
+          <input id="set-tutor-hold" type="checkbox" checked={settings.tutorHoldToAsk} onChange={(e) => void update({ tutorHoldToAsk: e.target.checked })} />
         </Field>
       </section>
 

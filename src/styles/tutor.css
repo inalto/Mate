@@ -1,0 +1,83 @@
+/* Tutor card: screen-space popover next to a stroke group (inside the pane's overlay clip). */
+.tutor-card {
+  position: absolute;
+  z-index: 30;
+  box-sizing: border-box;
+  max-height: calc(100% - 16px);
+  overflow: auto;
+  pointer-events: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
+  font-size: 0.9rem;
+}
+
+.tutor-card p {
+  margin: 0;
+}
+
+.tutor-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tutor-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.tutor-card-close {
+  border: none;
+  background: transparent;
+  padding: var(--space-1) var(--space-2);
+}
+
+.tutor-card-latex {
+  overflow-x: auto;
+}
+
+.tutor-card-latex .katex-display {
+  margin: 0;
+}
+
+.tutor-card-code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  white-space: pre-wrap;
+}
+
+.tutor-card-hint {
+  font-weight: 600;
+}
+
+.tutor-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tutor-card-actions .btn,
+.tutor-card .btn {
+  padding: var(--space-1) var(--space-3);
+}
+
+.tutor-card-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tutor-card-ask textarea {
+  resize: vertical;
+}
+
+.tutor-card-error {
+  color: var(--color-danger);
+}
+
+.tutor-card-answer {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}

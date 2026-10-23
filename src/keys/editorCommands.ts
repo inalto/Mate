@@ -62,11 +62,16 @@ function runChromeShortcut(action: string): boolean {
       return true;
     case "tab.new":
       return true;
+    case "palette.open":
+      useChromeStore.getState().openPalette();
+      return true;
   }
   return false;
 }
 
 export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
+  // While the command palette is open it owns the keyboard; only reopening it is allowed.
+  if (useChromeStore.getState().paletteOpen && action !== "palette.open") return;
   if (runChromeShortcut(action)) return;
   if (action === "duplicate" && sidebarHasFocus()) {
     const id = focusedPageId(useTabsStore.getState());

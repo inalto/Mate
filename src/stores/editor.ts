@@ -21,6 +21,7 @@ import { History, type Action } from "../tools/history";
 import { scaleElements, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, SpatialIndex, withMeta } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
+import type { ElementsChange } from "../tutor/types";
 import {
   clampCamera,
   initialCamera,
@@ -124,7 +125,13 @@ export interface EditorState {
   bindEditSession(commit: () => void): () => void;
   /** Box-wide text formatting for the selected text boxes (replaces matching inline styles). */
   restyleTextBox(patch: Partial<TextAttributes>): void;
-  removeElements(ids: string[]): void;
+  /** Delete elements as one undo entry (`label` defaults to "Delete"). */
+  removeElements(ids: string[], label?: string): void;
+  /**
+   * Add ready-made elements (already carrying this page's id) as ONE history entry `label`;
+   * refused (false, `limitReached` set) when the page would pass the element limit.
+   */
+  addElements(label: string, els: Element[]): boolean;
   setTool(tool: ToolId): void;
   setPreset(preset: PenPreset): void;
   setCamera(camera: Camera): void;
@@ -294,6 +301,8 @@ const isPenType = (p: PenPreset) => p.type === "pen" || p.type === "fountain-pen
 export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
   /** Spatial index over the loaded page's elements (kept in sync by the store). */
   spatialIndex(): SpatialIndex;
+  /** Subscribe to element mutations (one call per applied batch); returns the unsubscribe. */
+  onElementsChanged(cb: (change: ElementsChange) => void): () => void;
 };
 
 export function createEditorStore(): EditorStore {
@@ -301,6 +310,7 @@ export function createEditorStore(): EditorStore {
   // Page-scoped helpers (reset by loadPage).
   const history = new History();
   const index = new SpatialIndex();
+  const changeListeners = new Set<(change: ElementsChange) => void>();
   /** Actions of the eraser drag in progress (pushed as one entry by endEraser). */
   let eraseBatch: Action[] = [];
   /** Text box added by addTextBox whose first edit session is still open. */
@@ -547,9 +557,15 @@ export function createEditorStore(): EditorStore {
       record("Style", actions);
     },
 
-    removeElements(ids) {
+    removeElements(ids, label = "Delete") {
       const cur = get().elements;
-      record("Delete", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+      record(label, ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+    },
+
+    addElements(label, els) {
+      if (els.length === 0) return false;
+      closeEdit();
+      return record(label, els.map((el): Action => ({ type: "add", el })));
     },
 
     setTool(tool) {
@@ -834,7 +850,16 @@ export function createEditorStore(): EditorStore {
     let editingId = s.editingId;
     let grewOnly = true;
     let bottom = s.contentBottom;
+    const added = new Set<string>();
+    const updated = new Set<string>();
+    const removed = new Set<string>();
     for (const a of actions) {
+      const id = a.type === "update" ? a.after.id : a.el.id;
+      if (a.type === "delete") {
+        if (!added.delete(id)) removed.add(id);
+        updated.delete(id);
+      } else if (a.type === "add" && !removed.delete(id)) added.add(id);
+      else if (!added.has(id)) updated.add(id);
       if (a.type === "delete") {
         elements.delete(a.el.id);
         index.remove(a.el.id);
@@ -862,6 +887,10 @@ export function createEditorStore(): EditorStore {
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });
     syncHistoryFlags();
+    if (changeListeners.size > 0 && added.size + updated.size + removed.size > 0) {
+      const change: ElementsChange = { added: [...added], updated: [...updated], removed: [...removed] };
+      for (const cb of [...changeListeners]) cb(change);
+    }
   }
 
   function flushEraseBatch(): void {
@@ -970,7 +999,15 @@ export function createEditorStore(): EditorStore {
     );
   }
 
-  return Object.assign(store, { spatialIndex: () => index });
+  return Object.assign(store, {
+    spatialIndex: () => index,
+    onElementsChanged(cb: (change: ElementsChange) => void): () => void {
+      changeListeners.add(cb);
+      return () => {
+        changeListeners.delete(cb);
+      };
+    },
+  });
 }
 
 /** The default instance: first pane, and the one tests and single-pane code use. */

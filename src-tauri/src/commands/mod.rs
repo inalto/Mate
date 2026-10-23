@@ -1,9 +1,15 @@
+pub mod ai;
 pub mod archive;
+pub mod ask;
 pub mod assets;
 pub mod elements;
 pub mod export;
 pub mod lifecycle;
 pub mod notebook;
 pub mod pdf;
+pub mod recognition;
+pub mod recognize;
+pub mod practice;
+pub mod semantics;
 pub mod settings;
 pub mod thumbnails;

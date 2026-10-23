@@ -18,6 +18,7 @@ import { watchPageLimit } from "../stores/pageLimit";
 import { useSettingsStore } from "../stores/settings";
 import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
+import TutorController from "../tutor/TutorController";
 
 export default function Editor() {
   const { pageId } = useParams();
@@ -93,6 +94,8 @@ export default function Editor() {
                 }}
               >
                 <CanvasView pageId={pane.pageId} store={editorForPane(i as PaneIndex)} />
+                {/* Live tutor (checks only with AI consent and a key); renders nothing. */}
+                <TutorController store={editorForPane(i as PaneIndex)} pane={i as PaneIndex} />
                 <OverlayLayer store={editorForPane(i as PaneIndex)} />
               </div>
             ))}

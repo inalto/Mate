@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{OptionalExtension, Row, params};
 
+use super::recognition::invalidate_in;
 use super::{
     Result, Storage, StorageError, enum_col, enum_to_sql, json_col, opt_enum_col, opt_json_col,
 };
@@ -17,6 +18,22 @@ pub(crate) const MAX_POINTS_PER_STROKE: usize = 50_000;
 const ELEMENT_COLS: &str = "id, page_id, type, points, color, width, height, is_highlighter, \
      pen_style, image_url, shape_type, fill_color, box_width, box_height, content, \
      classification, ui_group_id, created_at, updated_at, deleted_at, version, last_write_id";
+
+/// The parts of an element that change what its ink looks like to the tutor, in stored form.
+#[derive(PartialEq)]
+struct InkState {
+    page_id: String,
+    r#type: String,
+    points: String,
+    image_url: Option<String>,
+    is_highlighter: bool,
+    height: Option<f64>,
+    shape_type: Option<String>,
+    box_width: Option<f64>,
+    box_height: Option<f64>,
+    content: Option<String>,
+    deleted: bool,
+}
 
 fn element_from_row(r: &Row) -> rusqlite::Result<Element> {
     Ok(Element {
@@ -69,15 +86,25 @@ impl Storage {
     /// bump the stored version. `updated_at` is always stamped now; `created_at` is kept from
     /// the first insert; `deleted_at` is taken from the input (so an undone erase revives).
     /// Limits are checked for the whole batch before anything is written.
+    ///
+    /// Tutor verdicts of groups containing an element whose ink changed (page, type, points,
+    /// box size, shape, content, image, highlighter or deleted state) are invalidated in the same
+    /// transaction and its `ink_updated_at` is stamped (new rows get it too); style-only edits
+    /// (colour, width, pen) and unchanged re-saves keep both.
     pub fn upsert_elements(&mut self, elements: &[Element]) -> Result<()> {
         self.check_limits(elements)?;
         let now = now_iso();
         let tx = self.conn.transaction()?;
+        let mut changed: Vec<String> = Vec::new();
         {
+            let mut prev = tx.prepare(
+                "SELECT page_id, type, points, height, shape_type, box_width, box_height, content, deleted_at,
+                 image_url, is_highlighter FROM elements WHERE id = ?1",
+            )?;
             let mut stmt = tx.prepare(&format!(
-                "INSERT INTO elements ({ELEMENT_COLS})
+                "INSERT INTO elements ({ELEMENT_COLS}, ink_updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16,
-                         ?17, ?18, ?19, ?20, 1, ?21)
+                         ?17, ?18, ?19, ?20, 1, ?21, ?19)
                  ON CONFLICT(id) DO UPDATE SET
                    page_id = excluded.page_id, type = excluded.type, points = excluded.points,
                    color = excluded.color, width = excluded.width, height = excluded.height,
@@ -87,25 +114,65 @@ impl Storage {
                    box_height = excluded.box_height, content = excluded.content,
                    classification = excluded.classification, ui_group_id = excluded.ui_group_id,
                    updated_at = excluded.updated_at, deleted_at = excluded.deleted_at,
-                   version = elements.version + 1, last_write_id = excluded.last_write_id"
+                   version = elements.version + 1, last_write_id = excluded.last_write_id,
+                   ink_updated_at = CASE WHEN ?22 THEN excluded.ink_updated_at
+                                         ELSE elements.ink_updated_at END"
             ))?;
             for e in elements {
+                let r#type = enum_to_sql(&e.r#type)?;
+                let points = serde_json::to_string(&e.points)?;
+                let shape_type = e.shape_type.as_ref().map(enum_to_sql).transpose()?;
+                let content = e.content.as_ref().map(serde_json::to_string).transpose()?;
+                let stored = prev
+                    .query_row([&e.id], |r| {
+                        Ok(InkState {
+                            page_id: r.get(0)?,
+                            r#type: r.get(1)?,
+                            points: r.get(2)?,
+                            height: r.get(3)?,
+                            shape_type: r.get(4)?,
+                            box_width: r.get(5)?,
+                            box_height: r.get(6)?,
+                            content: r.get(7)?,
+                            deleted: r.get::<_, Option<String>>(8)?.is_some(),
+                            image_url: r.get(9)?,
+                            is_highlighter: r.get(10)?,
+                        })
+                    })
+                    .optional()?;
+                let incoming = InkState {
+                    page_id: e.page_id.clone(),
+                    r#type: r#type.clone(),
+                    points: points.clone(),
+                    height: e.height,
+                    shape_type: shape_type.clone(),
+                    box_width: e.box_width,
+                    box_height: e.box_height,
+                    content: content.clone(),
+                    deleted: e.deleted_at.is_some(),
+                    image_url: e.image_url.clone(),
+                    is_highlighter: e.is_highlighter,
+                };
+                let ink_changed = stored.is_some_and(|s| s != incoming);
+                if ink_changed {
+                    changed.push(e.id.clone());
+                }
                 stmt.execute(params![
                     e.id,
                     e.page_id,
-                    enum_to_sql(&e.r#type)?,
-                    serde_json::to_string(&e.points)?,
+                    r#type,
+                    points,
                     e.color,
                     e.width,
                     e.height,
                     e.is_highlighter,
                     e.pen_style.as_ref().map(enum_to_sql).transpose()?,
                     e.image_url,
-                    e.shape_type.as_ref().map(enum_to_sql).transpose()?,
+                    shape_type,
                     e.fill_color,
                     e.box_width,
                     e.box_height,
-                    e.content.as_ref().map(serde_json::to_string).transpose()?,
+                    content,
                     e.classification
                         .as_ref()
                         .map(serde_json::to_string)
@@ -115,9 +182,11 @@ impl Storage {
                     now,
                     e.deleted_at,
                     e.last_write_id,
+                    ink_changed,
                 ])?;
             }
         }
+        invalidate_in(&tx, &changed)?;
         tx.commit()?;
         Ok(())
     }
@@ -186,19 +255,21 @@ impl Storage {
         Ok(ids)
     }
 
-    /// Soft-deletes elements by id (stamps `deleted_at`, bumps `version`).
+    /// Soft-deletes elements by id (stamps `deleted_at`, bumps `version`) and, in the same
+    /// transaction, invalidates the tutor verdicts of the groups they belonged to.
     pub fn delete_elements(&mut self, ids: &[String]) -> Result<()> {
         let now = now_iso();
         let tx = self.conn.transaction()?;
         {
             let mut stmt = tx.prepare(
-                "UPDATE elements SET deleted_at = ?1, updated_at = ?1, version = version + 1 \
+                "UPDATE elements SET deleted_at = ?1, updated_at = ?1, ink_updated_at = ?1, version = version + 1 \
                  WHERE id = ?2 AND deleted_at IS NULL",
             )?;
             for id in ids {
                 stmt.execute(params![now, id])?;
             }
         }
+        invalidate_in(&tx, ids)?;
         tx.commit()?;
         Ok(())
     }

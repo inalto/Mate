@@ -1,5 +1,5 @@
 // Values mirror crates/mate-core/src/geometry.rs and settings.rs.
-import type { AspectPreset, Settings } from "./types";
+import type { AiProvider, AspectPreset, Settings } from "./types";
 
 export const PAGE_WIDTH = 1080;
 export const PAGE_HEIGHT = 1440;
@@ -22,6 +22,17 @@ export const LIMITS = {
   MAX_ELEMENTS_PER_PAGE: 5000,
   MAX_POINTS_PER_STROKE: 50000,
 } as const;
+
+export const AI_PROVIDER_LABEL: Record<AiProvider, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+};
+
+/** Model used when `settings.aiModel` is empty (mirrors `ai::default_model` in Rust). */
+export const AI_DEFAULT_MODEL: Record<AiProvider, string> = {
+  anthropic: "claude-opus-5-5",
+  openai: "gpt-5",
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   settingsVersion: 1,
@@ -73,10 +84,13 @@ export const DEFAULT_SETTINGS: Settings = {
   tutorUnderlineErrors: true,
   tutorShowChecking: true,
   tutorEnabled: true,
+  tutorMode: "live",
   tutorDoubleTapAsk: true,
   tutorHoldToAsk: true,
   tutorVerdictChangeGate: "enforce",
   aiConsent: null,
+  aiProvider: "anthropic",
+  aiModel: "",
   analyticsConsent: false,
   trashRetentionDays: 30,
   defaultExportFormat: "pdf",

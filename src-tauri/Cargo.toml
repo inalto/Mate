@@ -28,3 +28,5 @@ tauri-plugin-opener = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-single-instance = "2"
 mate-core = { path = "../crates/mate-core" }
+base64 = "0.22"
+tokio = { version = "1", features = ["sync"] }

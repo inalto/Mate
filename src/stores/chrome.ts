@@ -31,13 +31,20 @@ interface ChromeState extends Persisted {
   renamingPageId: string | null;
   pageSettingsFor: string | null;
   shortcutsOpen: boolean;
+  /** Command palette (Ctrl/Cmd+K). `paletteAction` runs as soon as it opens. */
+  paletteOpen: boolean;
+  paletteAction: PaletteAction | null;
   setSidebarOpen(open: boolean): void;
   toggleSidebar(): void;
   setSidebarWidth(w: number): void;
   setRenaming(id: string | null): void;
   openPageSettings(pageId: string | null): void;
   setShortcutsOpen(open: boolean): void;
+  openPalette(action?: PaletteAction): void;
+  closePalette(): void;
 }
+
+export type PaletteAction = "summary" | "title" | "related";
 
 export const useChromeStore = create<ChromeState>((set, get) => {
   const persist = () => {
@@ -53,6 +60,8 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     renamingPageId: null,
     pageSettingsFor: null,
     shortcutsOpen: false,
+    paletteOpen: false,
+    paletteAction: null,
     setSidebarOpen(sidebarOpen) {
       set({ sidebarOpen });
       persist();
@@ -65,5 +74,7 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     setRenaming: (renamingPageId) => set({ renamingPageId }),
     openPageSettings: (pageSettingsFor) => set({ pageSettingsFor }),
     setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+    openPalette: (action) => set({ paletteOpen: true, paletteAction: action ?? null }),
+    closePalette: () => set({ paletteOpen: false, paletteAction: null }),
   };
 });
