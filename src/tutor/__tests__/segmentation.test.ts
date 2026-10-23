@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Element } from "../../model/types";
 import { el } from "../../tools/__tests__/fixtures";
-import { beyondMergeReach, DEFAULT_SEGMENTATION, regionIdOf, segmentPage } from "../segmentation";
+import { elementBounds, type Rect } from "../../tools/spatialIndex";
+import { beyondMergeReach, DEFAULT_SEGMENTATION, mergeCost, regionIdOf, segmentPage } from "../segmentation";
 
 const T0 = Date.parse("2026-10-23T10:00:00.000Z");
 
@@ -13,6 +14,51 @@ function glyph(id: string, x: number, y: number, t: number, opts: Partial<Elemen
 }
 
 const ids = (r: { elementIds: string[] }) => [...r.elementIds].sort();
+
+const lcg = (seed: number) => () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32;
+
+/** Brute-force closest-pair reference: all pairs every round, ties to the lowest (i, j). */
+function referencePartition(els: Element[]): string[] {
+  interface C {
+    ids: string[];
+    bounds: Rect;
+    baselineY: number;
+    tStart: number;
+    tEnd: number;
+  }
+  const cs: C[] = els.map((e) => {
+    const b = elementBounds(e);
+    const end = Date.parse(e.createdAt);
+    const p = e.points;
+    return { ids: [e.id], bounds: b, baselineY: b.y + b.height, tStart: end - (p[p.length - 1].timestamp - p[0].timestamp), tEnd: end };
+  });
+  for (;;) {
+    let bi = -1;
+    let bj = -1;
+    let bc = Infinity;
+    for (let i = 0; i < cs.length; i++)
+      for (let j = i + 1; j < cs.length; j++) {
+        const c = mergeCost(cs[i], cs[j]);
+        if (c < bc) [bi, bj, bc] = [i, j, c];
+      }
+    if (!(bc <= 1)) break;
+    const a = cs[bi];
+    const b = cs[bj];
+    const x = Math.min(a.bounds.x, b.bounds.x);
+    const y = Math.min(a.bounds.y, b.bounds.y);
+    const r = Math.max(a.bounds.x + a.bounds.width, b.bounds.x + b.bounds.width);
+    const btm = Math.max(a.bounds.y + a.bounds.height, b.bounds.y + b.bounds.height);
+    cs[bi] = {
+      ids: [...a.ids, ...b.ids],
+      bounds: { x, y, width: r - x, height: btm - y },
+      baselineY: btm,
+      tStart: Math.min(a.tStart, b.tStart),
+      tEnd: Math.max(a.tEnd, b.tEnd),
+    };
+    cs.splice(bj, 1);
+  }
+  return cs.map((c) => [...c.ids].sort().join(",")).sort();
+}
 
 describe("segmentPage", () => {
   it("clusters_two_lines_separately", () => {
@@ -89,6 +135,45 @@ describe("segmentPage", () => {
     expect(regions).toHaveLength(2);
     expect(regions[0].elementIds).toHaveLength(5000);
     expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("segments_3000_sparse_chained_strokes_under_1s", () => {
+    const strokes: Element[] = [];
+    for (let i = 0; i < 3000; i++) strokes.push(glyph(`c${i}`, i * 45, 100, i * 300));
+    const start = performance.now();
+    const regions = segmentPage(strokes);
+    const elapsed = performance.now() - start;
+    expect(regions).toHaveLength(1);
+    expect(regions[0].elementIds).toHaveLength(3000);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("segments_2000_scattered_strokes_under_1s", () => {
+    const rnd = lcg(777);
+    const strokes: Element[] = [];
+    for (let i = 0; i < 2000; i++) strokes.push(glyph(`r${i}`, rnd() * 20000, rnd() * 20000, i * 100));
+    const start = performance.now();
+    const regions = segmentPage(strokes);
+    const elapsed = performance.now() - start;
+    expect(regions.reduce((n, r) => n + r.elementIds.length, 0)).toBe(2000);
+    expect(elapsed).toBeLessThan(1000);
+  });
+
+  it("matches_brute_force_closest_pair_on_random_pages", () => {
+    const rnd = lcg(4242);
+    for (let page = 0; page < 200; page++) {
+      const els: Element[] = [];
+      const n = 5 + Math.floor(rnd() * 25);
+      for (let i = 0; i < n; i++) {
+        const w = 14 + rnd() * 36;
+        const h = 14 + rnd() * 36;
+        els.push(glyph(`p${page}e${i}`, rnd() * 500, rnd() * 300, Math.floor(rnd() * 30000), {}, w, h));
+      }
+      const got = segmentPage(els)
+        .map((r) => r.elementIds.join(","))
+        .sort();
+      expect(got, `page ${page}`).toEqual(referencePartition(els));
+    }
   });
 
   it("beyond_merge_reach_uses_gaps_and_adaptive_threshold", () => {
