@@ -480,7 +480,7 @@ fn samsung_hostile_stroke_count_does_not_overflow() {
 #[test]
 fn samsung_repeated_media_index_is_read_once() {
     let mut spec = samsung_fixture::basic();
-    spec.images = vec![(1, "img1.png".into(), vec![7u8; 1 << 20], [50.0, 300.0, 150.0, 350.0])];
+    spec.images = vec![(1, "img1.png".into(), vec![7u8; 5 << 20], [50.0, 300.0, 150.0, 350.0])];
     let mut parts = samsung_fixture::parts(&spec);
     let note = &mut parts.iter_mut().find(|(n, _)| n == "note.note").unwrap().1;
     let first = note[48..48 + 140].to_vec();
@@ -490,10 +490,30 @@ fn samsung_repeated_media_index_is_read_once() {
         rec[11 + 24..11 + 32].copy_from_slice(&(400.0 + f64::from(k)).to_le_bytes());
         note.extend_from_slice(&rec);
     }
-    // 1 MiB x 1001 would need ~1 GiB; a budget of 8 MiB only passes if the file is read once.
+    let doc = parse(&samsung_fixture::zip_parts(&parts), "x.sdocx", &limits()).unwrap();
+    let p = &doc.sections[0].pages[0];
+    // One image, not 1000 clones of 5 MiB; the other placements (1000 within the cap, 1 beyond) are counted.
+    assert_eq!(p.images.len(), 1);
+    let total: usize = doc.sections[0].pages.iter().flat_map(|p| &p.images).map(|i| i.bytes.len()).sum();
+    assert_eq!(total, 5 << 20);
+    assert_eq!(p.skipped.other, 1000);
+
+    // The byte cap (a quarter of the unzip budget) counts an image that does not fit.
     let lim = ImportLimits { max_unzipped_bytes: 8 << 20, ..limits() };
     let doc = parse(&samsung_fixture::zip_parts(&parts), "x.sdocx", &lim).unwrap();
-    let p = &doc.sections[0].pages[0];
-    assert_eq!(p.images.len(), 500);
-    assert_eq!(p.skipped.other, 500);
+    assert!(doc.sections[0].pages[0].images.is_empty());
+    assert_eq!(doc.sections[0].pages[0].skipped.other, 1001);
+}
+
+#[test]
+fn samsung_implausible_page_size_skips_only_that_page() {
+    let mut spec = samsung_fixture::basic();
+    spec.images.clear();
+    let mut parts = samsung_fixture::parts(&spec);
+    let page = &mut parts.iter_mut().find(|(n, _)| n == "p2.page").unwrap().1;
+    page[22..26].copy_from_slice(&2_000_000u32.to_le_bytes());
+    let doc = parse(&samsung_fixture::zip_parts(&parts), "x.sdocx", &limits()).unwrap();
+    let pages = &doc.sections[0].pages;
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[1].skipped.other, 1);
 }
