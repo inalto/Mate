@@ -12,8 +12,7 @@ export function isWindowsPlatform(): boolean {
 
 /** The `penHaptics` setting (default on). */
 function enabled(): boolean {
-  const settings = useSettingsStore.getState().settings as unknown as { penHaptics?: boolean };
-  return settings.penHaptics ?? true;
+  return useSettingsStore.getState().settings.penHaptics ?? true;
 }
 
 /** Contacts (DOM pointer ids) that got an inkStart and still owe an inkStop. */

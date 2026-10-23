@@ -55,7 +55,7 @@ mod imp {
 mod imp {
     use std::collections::HashMap;
     use std::sync::OnceLock;
-    use std::sync::mpsc::{Sender, channel};
+    use std::sync::mpsc::{SyncSender, sync_channel};
 
     use ::windows::Devices::Haptics::{
         KnownSimpleHapticsControllerWaveforms, SimpleHapticsController, SimpleHapticsControllerFeedback,
@@ -64,15 +64,23 @@ mod imp {
 
     use super::{HapticKind, Waveform, waveform_for};
 
-    /// Highest Windows pointer id tried when the DOM pointer id is not a Windows pen pointer id.
+    /// Highest Windows pointer id scanned when the DOM pointer id is not a Windows pen pointer id.
+    /// Windows hands out small pointer ids to active pointers and reuses them, so a pen in contact
+    /// sits well below this; the cap bounds a failed scan to ~64 cheap `GetFromPointerId` calls.
     const MAX_SCANNED_POINTER_ID: u32 = 64;
 
-    static WORKER: OnceLock<Option<Sender<(u32, HapticKind)>>> = OnceLock::new();
+    /// After this many failed scans for the same DOM pointer id, stop scanning (no haptic pen here).
+    const MAX_FAILED_SCANS: u32 = 3;
+
+    /// Pending requests; when full (a hung WinRT call), new requests are dropped instead of queued.
+    const QUEUE_CAPACITY: usize = 256;
+
+    static WORKER: OnceLock<Option<SyncSender<(u32, HapticKind)>>> = OnceLock::new();
 
     /// Queues a request for the worker thread (started on first use). Never blocks, never fails.
     pub fn enqueue(pointer_id: u32, kind: HapticKind) {
         let worker = WORKER.get_or_init(|| {
-            let (tx, rx) = channel::<(u32, HapticKind)>();
+            let (tx, rx) = sync_channel::<(u32, HapticKind)>(QUEUE_CAPACITY);
             std::thread::Builder::new()
                 .name("pen-haptics".into())
                 .spawn(move || {
@@ -85,7 +93,7 @@ mod imp {
                 .map(|_| tx)
         });
         if let Some(tx) = worker {
-            let _ = tx.send((pointer_id, kind));
+            let _ = tx.try_send((pointer_id, kind));
         }
     }
 
@@ -95,6 +103,9 @@ mod imp {
         controllers: HashMap<u32, SimpleHapticsController>,
         /// The Windows pointer id that last resolved to a haptic pen (tried first next time).
         last_pen_id: Option<u32>,
+        /// Consecutive scans that found no haptic pen, and the DOM id of the last one.
+        failed_scans: u32,
+        failed_dom_id: Option<u32>,
     }
 
     impl Haptics {
@@ -128,18 +139,37 @@ mod imp {
 
         /// The haptics controller of the pen behind the DOM pointer id `dom_id`, if any.
         fn resolve(&mut self, dom_id: u32) -> Option<SimpleHapticsController> {
-            for id in windows_pointer_id_candidates(dom_id, self.last_pen_id) {
+            let scan = should_scan(self.failed_scans, self.failed_dom_id, dom_id);
+            let ids = if scan { windows_pointer_id_candidates(dom_id, self.last_pen_id) } else { vec![dom_id] };
+            for id in ids {
                 if let Some(c) = controller_for(id) {
                     self.last_pen_id = Some(id);
+                    self.failed_scans = 0;
+                    self.failed_dom_id = None;
                     return Some(c);
                 }
+            }
+            if scan {
+                self.failed_scans = self.failed_scans.saturating_add(1);
+                self.failed_dom_id = Some(dom_id);
             }
             None
         }
     }
 
+    /// Negative cache: scan for the pen unless `MAX_FAILED_SCANS` scans already failed and the
+    /// last of them was for this same DOM pointer id (a new DOM id, i.e. a new pen pointer, scans
+    /// again). Without a haptic pen this stops the per-stroke scan for the rest of the session.
+    pub fn should_scan(failed_scans: u32, failed_dom_id: Option<u32>, dom_id: u32) -> bool {
+        failed_scans < MAX_FAILED_SCANS || failed_dom_id != Some(dom_id)
+    }
+
     /// Windows pointer ids that may belong to the pen behind the DOM pointer id `dom_id`, most likely
     /// first. This is the single place mapping DOM ids to Windows ids.
+    ///
+    /// Why a scan: the DOM `PointerEvent.pointerId` is Blink's own counter, not the OS id that
+    /// `PenDevice::GetFromPointerId` expects, and WebView2 offers no way to read the OS id. The scan
+    /// is capped at `MAX_SCANNED_POINTER_ID` and skipped by `should_scan` after repeated failures.
     ///
     /// Chromium (and so WebView2) does not expose the platform pointer id: Blink's
     /// `PointerEventFactory` gives every new (type, platform id) pair the next value of a counter
@@ -191,6 +221,29 @@ mod imp {
                 h.pulse(u32::MAX - 7, kind);
             }
             assert!(h.controllers.is_empty());
+        }
+
+        #[test]
+        fn scan_stops_after_repeated_failures_for_the_same_dom_id() {
+            assert!(should_scan(0, None, 4));
+            assert!(should_scan(MAX_FAILED_SCANS - 1, Some(4), 4));
+            assert!(!should_scan(MAX_FAILED_SCANS, Some(4), 4));
+            assert!(!should_scan(MAX_FAILED_SCANS + 5, Some(4), 4));
+            // A new DOM pointer id scans again.
+            assert!(should_scan(MAX_FAILED_SCANS, Some(4), 5));
+        }
+
+        #[test]
+        fn failed_scans_are_counted_per_dom_id() {
+            let mut h = Haptics::default();
+            for _ in 0..MAX_FAILED_SCANS {
+                h.pulse(u32::MAX - 7, HapticKind::Click);
+            }
+            if h.last_pen_id.is_none() {
+                // No haptic pen on this machine: further strokes with this id skip the scan.
+                assert_eq!(h.failed_scans, MAX_FAILED_SCANS);
+                assert!(!should_scan(h.failed_scans, h.failed_dom_id, u32::MAX - 7));
+            }
         }
 
         #[test]
