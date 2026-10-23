@@ -36,11 +36,14 @@ export default function AiSettings() {
 
   useEffect(() => {
     mounted.current = true;
-    void refresh();
+    getAiStatus().then(
+      (next) => mounted.current && setStatus(next),
+      (err: unknown) => mounted.current && setResult(message(err)),
+    );
     return () => {
       mounted.current = false;
     };
-  }, [refresh]);
+  }, []);
 
   /** Runs a key action, then shows its outcome and the fresh status. */
   const run = async (action: () => Promise<void>, success: string | null) => {
