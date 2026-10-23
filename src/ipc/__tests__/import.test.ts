@@ -51,7 +51,7 @@ describe("import ipc", () => {
   });
 
   it("recognises the import extensions only", () => {
-    for (const p of ["C:\n\Maths.GoodNotes", "/n/a.note", "a.one", "a.onepkg", "a.freenotes", "a.freenotesv2", "a.freebackup", "a.sdocx"]) {
+    for (const p of [String.raw`C:\notes\Maths.GoodNotes`, "/n/a.note", "a.one", "a.onepkg", "a.freenotes", "a.freenotesv2", "a.freebackup", "a.sdocx"]) {
       expect(isImportPath(p), p).toBe(true);
     }
     for (const p of ["a.pdf", "note", ".note", "a.mate", "a.png"]) expect(isImportPath(p), p).toBe(false);

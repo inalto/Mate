@@ -9,7 +9,7 @@ export const IMPORT_EXTENSIONS = ["goodnotes", "note", "one", "onepkg", "freenot
 
 /** True when `path` ends in one of the {@link IMPORT_EXTENSIONS} (case-insensitive). */
 export function isImportPath(path: string): boolean {
-  const base = path.split(/[\/]/).pop() ?? path;
+  const base = path.split(/[\\/]/).pop() ?? path;
   const dot = base.lastIndexOf(".");
   return dot > 0 && (IMPORT_EXTENSIONS as readonly string[]).includes(base.slice(dot + 1).toLowerCase());
 }

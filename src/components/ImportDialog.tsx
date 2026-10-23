@@ -1,8 +1,8 @@
 // "Import notes": pick notebook files from other apps, check what each one is, choose a new or an
 // existing book, import with progress, then read the report and open the book.
 import { useEffect, useRef } from "react";
-import type { ImportFileResult, ImportProgress, NoteImportReport, SniffResult } from "../ipc/import";
-import { bookNameFromFile, useImportStore } from "../stores/importStore";
+import type { ImportProgress, SniffResult } from "../ipc/import";
+import { bookNameFromFile, reportNotes, sumReports, useImportStore } from "../stores/importStore";
 import { navigateTo } from "../stores/navigation";
 import { useNotebookStore } from "../stores/notebook";
 
@@ -18,43 +18,6 @@ function progressText(p: ImportProgress | undefined): string {
   if (p.phase === "reading") return "Reading the file";
   if (p.phase === "parsing") return "Reading pages";
   return p.pagesTotal > 0 ? `Placing pages (${p.pagesDone} of ${p.pagesTotal})` : "Placing pages";
-}
-
-/** Totals over the files that were imported. */
-export function sumReports(results: ImportFileResult[]): NoteImportReport {
-  const total: NoteImportReport = {
-    unitId: "",
-    sectionIds: [],
-    pagesImported: 0,
-    pagesSkippedDuplicate: 0,
-    pagesSkippedLimit: 0,
-    strokes: 0,
-    texts: 0,
-    images: 0,
-    elementsSkippedLimit: 0,
-    elementsSkippedInvalid: 0,
-    tablesSkipped: 0,
-    shapesSkipped: 0,
-    warnings: [],
-    details: [], // log-only; never rendered
-  };
-  for (const r of results) {
-    const rep = r.report;
-    if (!rep) continue;
-    total.unitId = rep.unitId;
-    total.pagesImported += rep.pagesImported;
-    total.pagesSkippedDuplicate += rep.pagesSkippedDuplicate;
-    total.pagesSkippedLimit += rep.pagesSkippedLimit;
-    total.strokes += rep.strokes;
-    total.texts += rep.texts;
-    total.images += rep.images;
-    total.elementsSkippedLimit += rep.elementsSkippedLimit;
-    total.elementsSkippedInvalid += rep.elementsSkippedInvalid ?? 0;
-    total.tablesSkipped += rep.tablesSkipped;
-    total.shapesSkipped += rep.shapesSkipped;
-    total.warnings.push(...rep.warnings);
-  }
-  return total;
 }
 
 /** Id of the first page of `unitId`, once the tree is loaded. */
@@ -161,15 +124,7 @@ export default function ImportDialog() {
       const total = sumReports(s.results);
       const failed = s.results.filter((r) => r.status === "failed");
       const imported = s.results.some((r) => r.status === "ok");
-      const notes: string[] = [];
-      if (total.pagesSkippedDuplicate > 0)
-        notes.push(`${plural(total.pagesSkippedDuplicate, "page")} already imported, so not added again.`);
-      if (total.pagesSkippedLimit > 0) notes.push(`${plural(total.pagesSkippedLimit, "page")} over the page limit were skipped.`);
-      if (total.elementsSkippedInvalid > 0)
-        notes.push(`${plural(total.elementsSkippedInvalid, "item")} could not be read and were skipped.`);
-      if (total.elementsSkippedLimit > 0)
-        notes.push(`${plural(total.elementsSkippedLimit, "item")} over the size limits were skipped.`);
-      if (total.tablesSkipped > 0 || total.shapesSkipped > 0) notes.push("Tables and shapes are not imported yet.");
+      const { notes, warnings } = reportNotes(total);
       return (
         <>
           <h2>{imported ? "Import finished" : "Nothing was imported"}</h2>
@@ -184,9 +139,9 @@ export default function ImportDialog() {
               {notes.map((n) => <li key={n}>{n}</li>)}
             </ul>
           )}
-          {total.warnings.length > 0 && (
+          {warnings.length > 0 && (
             <ul aria-label="Warnings">
-              {total.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              {warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
           )}
           {failed.length > 0 && (

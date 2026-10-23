@@ -13,6 +13,7 @@ import {
   takePendingImportFiles,
   type ImportFileResult,
   type ImportProgress,
+  type NoteImportReport,
   type PlaceTarget,
   type SniffResult,
 } from "../ipc/import";
@@ -25,9 +26,64 @@ export type Destination = { kind: "new"; title: string } | { kind: "existing"; u
 
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+/** Totals over the files that were imported (warnings concatenated in file order). */
+export function sumReports(results: ImportFileResult[]): NoteImportReport {
+  const total: NoteImportReport = {
+    unitId: "",
+    sectionIds: [],
+    pagesImported: 0,
+    pagesSkippedDuplicate: 0,
+    pagesSkippedLimit: 0,
+    strokes: 0,
+    texts: 0,
+    images: 0,
+    elementsSkippedLimit: 0,
+    elementsSkippedInvalid: 0,
+    tablesSkipped: 0,
+    shapesSkipped: 0,
+    warnings: [],
+    details: [], // log-only; never rendered
+  };
+  for (const r of results) {
+    const rep = r.report;
+    if (!rep) continue;
+    total.unitId = rep.unitId;
+    total.pagesImported += rep.pagesImported;
+    total.pagesSkippedDuplicate += rep.pagesSkippedDuplicate;
+    total.pagesSkippedLimit += rep.pagesSkippedLimit;
+    total.strokes += rep.strokes;
+    total.texts += rep.texts;
+    total.images += rep.images;
+    total.elementsSkippedLimit += rep.elementsSkippedLimit;
+    total.elementsSkippedInvalid += rep.elementsSkippedInvalid ?? 0;
+    total.tablesSkipped += rep.tablesSkipped;
+    total.shapesSkipped += rep.shapesSkipped;
+    total.warnings.push(...rep.warnings);
+  }
+  return total;
+}
+
+/** Placer warnings that the single "Tables and shapes are not imported yet." line replaces. */
+const TABLES_OR_SHAPES = /^\d+ (tables|shapes) were not imported\.$/;
+
+/**
+ * What the done stage lists: its own notes (pages already imported, and one line for tables and
+ * shapes) and the placer's warnings, each shown once.
+ */
+export function reportNotes(total: NoteImportReport): { notes: string[]; warnings: string[] } {
+  const notes: string[] = [];
+  if (total.pagesSkippedDuplicate > 0) {
+    const n = total.pagesSkippedDuplicate;
+    notes.push(`${n} ${n === 1 ? "page" : "pages"} already imported, so not added again.`);
+  }
+  if (total.tablesSkipped > 0 || total.shapesSkipped > 0) notes.push("Tables and shapes are not imported yet.");
+  const warnings = [...new Set(total.warnings)].filter((w) => !TABLES_OR_SHAPES.test(w));
+  return { notes, warnings };
+}
+
 /** The file name without its extension: the default name of a new book. */
 export function bookNameFromFile(filename: string): string {
-  const base = filename.split(/[\/]/).pop() ?? filename;
+  const base = filename.split(/[\\/]/).pop() ?? filename;
   const dot = base.lastIndexOf(".");
   return (dot > 0 ? base.slice(0, dot) : base).trim();
 }

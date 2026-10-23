@@ -27,7 +27,7 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(async () => ({})), set
 
 import { open } from "@tauri-apps/plugin-dialog";
 import { MemoryRouter } from "react-router";
-import { installImportOpenHandler, useImportStore } from "../../stores/importStore";
+import { bookNameFromFile, installImportOpenHandler, useImportStore } from "../../stores/importStore";
 import { setNavigator } from "../../stores/navigation";
 import { useNotebookStore } from "../../stores/notebook";
 import ImportDialog from "../ImportDialog";
@@ -210,14 +210,20 @@ describe("ImportDialog during an import", () => {
   });
 
   it("shows invalid-item counts but never the log-only details", async () => {
+    const invalid = "4 items were left out because their position or size was unreadable.";
     ipc.importFiles.mockResolvedValue([
-      { path: good.path, status: "ok", report: { ...report, elementsSkippedInvalid: 4, details: ["page write failed: secret"] } },
+      {
+        path: good.path,
+        status: "ok",
+        report: { ...report, elementsSkippedInvalid: 4, warnings: [invalid], details: ["page write failed: secret"] },
+      },
     ]);
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
     const { container } = render(<ImportDialog />);
     await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
     fireEvent.click(screen.getByRole("button", { name: "Import" }));
-    await screen.findByText("4 items could not be read and were skipped.");
+    await screen.findByText(invalid);
+    expect(screen.getAllByText(/position or size/)).toHaveLength(1);
     expect(container.textContent).not.toContain("secret");
     expect(debug).toHaveBeenCalled();
     debug.mockRestore();
@@ -241,6 +247,29 @@ describe("copy", () => {
     const skipped = screen.getByRole("list", { name: "Skipped" });
     expect(skipped.textContent).toContain("Tables and shapes are not imported yet.");
     expect(skipped.textContent).not.toMatch(/could not be imported/);
+  });
+
+  it("shows each skip message once", async () => {
+    const limit = "3 items were left out because a page or stroke was too large.";
+    const rep = { ...report, tablesSkipped: 2, shapesSkipped: 1, elementsSkippedLimit: 3 };
+    const warnings = ["2 tables were not imported.", "1 shapes were not imported.", limit];
+    ipc.importFiles.mockResolvedValue([
+      { path: good.path, status: "ok", report: { ...rep, warnings } },
+      { path: "C:/b.goodnotes", status: "ok", report: { ...rep, warnings } },
+    ]);
+    render(<ImportDialog />);
+    await act(async () => useImportStore.getState().openDialog({ paths: [good.path] }));
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await screen.findByText("Import finished");
+    expect(screen.getAllByText(limit)).toHaveLength(1);
+    expect(screen.getAllByText("Tables and shapes are not imported yet.")).toHaveLength(1);
+    expect(screen.queryByText(/tables were not imported/)).toBeNull();
+    expect(screen.queryByText(/over the size limits/)).toBeNull();
+  });
+
+  it("names the book after a Windows path's file", () => {
+    expect(bookNameFromFile(String.raw`C:\Users\me\Maths.goodnotes`)).toBe("Maths");
+    expect(bookNameFromFile("/home/me/Physics.note")).toBe("Physics");
   });
 
   it("never says Derive in the entry points", () => {
