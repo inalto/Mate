@@ -2,7 +2,7 @@
 // and run page actions (summary, title, related pages, graph).
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { getRecognitions, searchRecognition, snippetParts } from "../ipc/recognition";
 import { relatedPages, suggestTitle, summarizePage, type RelatedPage } from "../ipc/semantics";
 import type { Page, SearchHit } from "../model/types";
@@ -10,15 +10,22 @@ import { useChromeStore, type PaletteAction } from "../stores/chrome";
 import { flashGroup } from "../stores/flash";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
+import { formatKeys } from "../keys/keybindings";
+import { isMacPlatform } from "../keys/platform";
+import { useKeyMap } from "../keys/useKeyMap";
 import { showToast } from "./Toast";
+import { actionScore, DISABLED_HINT, fuzzyScore, QUICK_ACTIONS, type QuickAction } from "./paletteActions";
 
 const SEARCH_DEBOUNCE_MS = 150;
 const SEARCH_LIMIT = 20;
 const MAX_PAGE_MATCHES = 6;
+const MAX_RECENT = 8;
 const EMPTY_HITS: SearchHit[] = [];
 
 type Item =
   | { key: string; section: "Pages"; label: string; page: Page }
+  | { key: string; section: "Recent pages"; label: string; page: Page; trail: string }
+  | { key: string; section: "Quick actions"; label: string; quick: QuickAction; keys: string; disabled?: boolean; hint?: string }
   | { key: string; section: "Search everything"; hit: SearchHit; title: string }
   | { key: string; section: "Actions"; label: string; run(): void; disabled?: boolean };
 
@@ -62,6 +69,8 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   const navigate = useNavigate();
   const pages = useNotebookStore((s) => s.tree.pages);
   const currentPageId = useTabsStore((s) => focusedPageId(s));
+  const inEditor = useLocation().pathname.startsWith("/edit/") && !!currentPageId;
+  const keyMap = useKeyMap();
   const [query, setQuery] = useState("");
   // Hits are tied to the query that produced them: while the next query is still debounced, the
   // old hits are not shown and Enter cannot activate one.
@@ -168,26 +177,68 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
 
   const items = useMemo<Item[]>(() => {
     const q = query.trim().toLowerCase();
-    const matched = (q ? pages.filter((p) => p.title.toLowerCase().includes(q)) : pages)
-      .slice()
-      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
-      .slice(0, MAX_PAGE_MATCHES);
-    const out: Item[] = matched.map((page) => ({
-      key: `page:${page.id}`,
-      section: "Pages",
-      label: page.title || "Untitled",
-      page,
-    }));
+    const tree = useNotebookStore.getState().tree;
+    const blocks: { score: number; items: Item[] }[] = [];
+
     if (q) {
-      for (const hit of hits) {
-        out.push({
-          key: `hit:${hit.pageId}:${hit.strokeGroupId}`,
-          section: "Search everything",
-          hit,
-          title: pages.find((p) => p.id === hit.pageId)?.title || "Untitled",
+      const scored = pages
+        .map((page) => ({ page, score: fuzzyScore(q, page.title) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score || (a.page.updatedAt < b.page.updatedAt ? 1 : -1))
+        .slice(0, MAX_PAGE_MATCHES);
+      if (scored.length)
+        blocks.push({
+          score: scored[0].score,
+          items: scored.map(({ page }) => ({ key: `page:${page.id}`, section: "Pages", label: page.title || "Untitled", page })),
         });
-      }
+      if (hits.length)
+        blocks.push({
+          score: 50,
+          items: hits.map((hit) => ({
+            key: `hit:${hit.pageId}:${hit.strokeGroupId}`,
+            section: "Search everything" as const,
+            hit,
+            title: pages.find((p) => p.id === hit.pageId)?.title || "Untitled",
+          })),
+        });
+    } else {
+      const recent = pages
+        .filter((p) => !p.deletedAt)
+        .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+        .slice(0, MAX_RECENT);
+      const trailOf = (p: Page): string => {
+        const section = tree.sections.find((x) => x.id === p.sectionId);
+        const unit = tree.units.find((x) => x.id === section?.unitId);
+        return [unit?.title, section?.title].filter(Boolean).join(" › ");
+      };
+      if (recent.length)
+        blocks.push({
+          score: 1000,
+          items: recent.map((page) => ({ key: `recent:${page.id}`, section: "Recent pages", label: page.title || "Untitled", page, trail: trailOf(page) })),
+        });
     }
+
+    const quick = QUICK_ACTIONS.map((a) => ({ a, score: q ? actionScore(q, a) : 1 }))
+      .filter((x) => x.score > 0)
+      .sort((x, y) => y.score - x.score)
+      .map(({ a, score }): { score: number; item: Item } => {
+        const ok = a.scope === "global" || (a.scope === "page" ? !!currentPageId : inEditor);
+        const first = a.shortcut ? keyMap[a.shortcut]?.[0] : undefined;
+        return {
+          score,
+          item: {
+            key: `quick:${a.id}`,
+            section: "Quick actions",
+            label: a.label,
+            quick: a,
+            keys: first ? formatKeys(first, isMacPlatform()) : "",
+            disabled: !ok,
+            hint: !ok && a.scope !== "global" ? DISABLED_HINT[a.scope] : undefined,
+          },
+        };
+      });
+    if (quick.length) blocks.push({ score: q ? quick[0].score : 0.5, items: quick.map((x) => x.item) });
+
     const needsPage = !currentPageId;
     const actions: [string, () => void, boolean][] = [
       ["Summarise this page", () => runAction("summary"), needsPage],
@@ -195,13 +246,17 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
       ["What's related?", () => runAction("related"), needsPage],
       ["Open graph", () => { close(); navigate("/graph"); }, false],
     ];
+    const acts: Item[] = [];
     for (const [label, run, disabled] of actions) {
-      if (!q || label.toLowerCase().includes(q)) out.push({ key: `action:${label}`, section: "Actions", label, run, disabled });
+      if (!q || label.toLowerCase().includes(q)) acts.push({ key: `action:${label}`, section: "Actions", label, run, disabled });
     }
-    return out;
+    if (acts.length) blocks.push({ score: q ? 40 : 0.7, items: acts });
+
+    // Sections ordered by their best match; the order is stable for equal scores.
+    return blocks.sort((a, b) => b.score - a.score).flatMap((b) => b.items);
     // runAction and navigate are stable enough for a list rebuilt on every query/hit change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, pages, hits, currentPageId]);
+  }, [query, pages, hits, currentPageId, inEditor, keyMap]);
 
   // Keep the active row in view while arrowing through a long list.
   useEffect(() => {
@@ -210,9 +265,14 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
 
   const activate = (item: Item | undefined) => {
     if (!item) return;
-    if (item.section === "Pages") openPage(item.page.id);
+    if (item.section === "Pages" || item.section === "Recent pages") openPage(item.page.id);
     else if (item.section === "Search everything") openHit(item.hit);
-    else if (!item.disabled) item.run();
+    else if (item.section === "Quick actions") {
+      if (item.disabled) return;
+      // Close first: the keyboard dispatcher ignores actions while the palette is open.
+      close();
+      item.quick.run(navigate);
+    } else if (!item.disabled) item.run();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -332,13 +392,29 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
                     id={`palette-opt-${i}`}
                     role="option"
                     aria-selected={i === active}
-                    aria-disabled={item.section === "Actions" && item.disabled ? true : undefined}
+                    aria-disabled={(item.section === "Actions" || item.section === "Quick actions") && item.disabled ? true : undefined}
                     className={i === active ? "palette-item active" : "palette-item"}
                     onMouseMove={() => i !== active && setActive(i)}
                     onClick={() => activate(item)}
                   >
                     {item.section === "Pages" && <span>{item.label}</span>}
                     {item.section === "Actions" && <span>{item.label}</span>}
+                    {item.section === "Recent pages" && (
+                      <span className="palette-hit">
+                        <span className="palette-hit-title">{item.label}</span>
+                        {item.trail && <span className="palette-snippet">{item.trail}</span>}
+                      </span>
+                    )}
+                    {item.section === "Quick actions" && (
+                      <span className="palette-quick">
+                        <span>{item.label}</span>
+                        {item.hint ? (
+                          <span className="palette-hint">{item.hint}</span>
+                        ) : (
+                          item.keys && <kbd className="palette-keys">{item.keys}</kbd>
+                        )}
+                      </span>
+                    )}
                     {item.section === "Search everything" && (
                       <span className="palette-hit">
                         <span className="palette-hit-title">{item.title}</span>
@@ -349,7 +425,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
                 </div>
               );
             })}
-            {query.trim() && items.every((i) => i.section === "Actions") && (
+            {query.trim() && items.every((i) => i.section === "Actions" || i.section === "Quick actions") && (
               <p className="muted palette-empty">No page or handwriting matches.</p>
             )}
           </div>

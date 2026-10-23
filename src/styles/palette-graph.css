@@ -206,3 +206,21 @@
     animation-delay: 1.2s;
   }
 }
+
+.palette-quick {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.palette-keys,
+.palette-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.palette-keys {
+  font-family: inherit;
+  white-space: nowrap;
+}

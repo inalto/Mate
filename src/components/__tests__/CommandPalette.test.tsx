@@ -19,6 +19,7 @@ vi.mock("../../ipc/semantics", () => ({
 import { getRecognitions, searchRecognition, SNIPPET_CLOSE, SNIPPET_OPEN } from "../../ipc/recognition";
 import { relatedPages, suggestTitle, summarizePage } from "../../ipc/semantics";
 import { useChromeStore } from "../../stores/chrome";
+import { useEditorStore } from "../../stores/editor";
 import { useFlashStore } from "../../stores/flash";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
@@ -249,5 +250,75 @@ describe("CommandPalette", () => {
     const ev = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
     expect(matchShortcut(DEFAULT_SHORTCUTS, ev({ key: "k", ctrlKey: true }), false)?.action).toBe("palette.open");
     expect(matchShortcut(DEFAULT_SHORTCUTS, ev({ key: "k", metaKey: true }), true)?.action).toBe("palette.open");
+  });
+});
+
+describe("CommandPalette quick actions", () => {
+  const withTree = () =>
+    useNotebookStore.setState({
+      tree: {
+        bookshelves: [],
+        units: [{ id: "u1", title: "Maths" } as never],
+        sections: [{ id: "s1", unitId: "u1", title: "Algebra" } as never],
+        pages: [
+          { ...page("p1", "Quadratics"), updatedAt: "2026-03-01T00:00:00.000Z" },
+          { ...page("p2", "Cell biology"), updatedAt: "2026-02-01T00:00:00.000Z" },
+        ],
+      },
+    });
+
+  it("palette_lists_quick_actions_with_bindings", () => {
+    renderPalette();
+    open();
+    const pen = screen.getByRole("option", { name: /Switch to pen/ });
+    expect(pen.textContent).toContain("P");
+    expect(screen.getByRole("option", { name: /Zoom in/ }).textContent).toContain("Ctrl+=");
+    expect(screen.getByText("Quick actions")).toBeTruthy();
+    for (const l of ["Insert table", "New page", "Open settings", "Keyboard shortcuts", "Open page in new window"]) {
+      expect(screen.getByRole("option", { name: new RegExp(l) })).toBeTruthy();
+    }
+    // "pen" ranks the pen switch first among quick actions.
+    fireEvent.change(input(), { target: { value: "pen" } });
+    expect(screen.getAllByRole("option")[0].textContent).toContain("Switch to pen");
+  });
+
+  it("palette_recent_pages", () => {
+    withTree();
+    renderPalette();
+    open();
+    expect(screen.getByText("Recent pages")).toBeTruthy();
+    const opts = screen.getAllByRole("option");
+    expect(opts[0].textContent).toContain("Quadratics");
+    expect(opts[0].textContent).toContain("Maths › Algebra");
+    expect(opts[1].textContent).toContain("Cell biology");
+  });
+
+  it("palette_action_switches_tool", () => {
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "eraser" } });
+    fireEvent.keyDown(input(), { key: "Enter" });
+    expect(useEditorStore.getState().tool).toBe("eraser");
+    expect(useChromeStore.getState().paletteOpen).toBe(false);
+  });
+
+  it("editor_actions_disabled_outside_editor", () => {
+    useEditorStore.getState().setTool("pen");
+    render(
+      <MemoryRouter initialEntries={["/library"]}>
+        <CommandPalette />
+      </MemoryRouter>,
+    );
+    open();
+    fireEvent.change(input(), { target: { value: "eraser" } });
+    const row = screen.getByRole("option", { name: /Switch to eraser/ });
+    expect(row.getAttribute("aria-disabled")).toBe("true");
+    expect(row.textContent).toContain("Open a page in the editor first");
+    fireEvent.click(row);
+    expect(useEditorStore.getState().tool).toBe("pen");
+    expect(useChromeStore.getState().paletteOpen).toBe(true);
+    // Global actions stay enabled.
+    fireEvent.change(input(), { target: { value: "settings" } });
+    expect(screen.getByRole("option", { name: /Open settings/ }).getAttribute("aria-disabled")).toBeNull();
   });
 });
