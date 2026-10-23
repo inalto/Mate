@@ -455,6 +455,34 @@ export const HOLD_ASK_MS = 600;
 /** Moving further than this (screen px) turns a hold into a normal stroke. */
 export const HOLD_SLOP_PX = 6;
 
+/**
+ * A pen press that closed the tutor card. Ink always wins: its stroke is drawn and committed like
+ * any other; only a contact that ends as a bare tap (≤ TAP_MS, never further than HOLD_SLOP_PX
+ * from where it started) is dropped, since that dot was only meant to close the card.
+ */
+export function createDismissPress(now: () => number = () => performance.now()) {
+  let press: { t: number; at: Vec2; moved: boolean } | null = null;
+  return {
+    down(screen: Vec2): void {
+      press = { t: now(), at: screen, moved: false };
+    },
+    /** True while the current contact is a dismissing press. */
+    active: (): boolean => press !== null,
+    move(screen: Vec2): void {
+      if (press && Math.hypot(screen.x - press.at.x, screen.y - press.at.y) > HOLD_SLOP_PX) press.moved = true;
+    },
+    /** Pen up: "discard" only for a bare tap that closed the card, else "commit". */
+    up(): TutorUp {
+      const p = press;
+      press = null;
+      return p && !p.moved && now() - p.t <= TAP_MS ? "discard" : "commit";
+    },
+    cancel(): void {
+      press = null;
+    },
+  };
+}
+
 export interface TutorGestureDeps {
   /** Consent given, tutor on and a key stored: otherwise every gesture is inert (plain ink). */
   active(): boolean;

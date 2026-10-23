@@ -7,7 +7,6 @@ import { getRecognitions } from "../ipc/recognition";
 import type { Recognition, Settings } from "../model/types";
 import type { EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
-import { sessionAttempts } from "./attempts";
 import { tutorActive, useAiStatus } from "./aiStatus";
 import { createGroupManager, type GroupManager } from "./groupManager";
 import { defaultPipelineDeps, revisionOf, runRecognition, type PipelineDeps, type RecognitionOutcome, type UncheckedKind } from "./pipeline";
@@ -36,9 +35,22 @@ export interface TutorView {
   unchecked: ReadonlyMap<string, UncheckedGroup>;
   /** Current segmentation (bounds for markers). */
   regions: ReadonlyMap<string, Region>;
+  /**
+   * Groups whose shown verdict is known to be stored (loaded from or written to the database this
+   * session); cleared when the verdict is invalidated. An unchanged reply is only not re-written
+   * for these.
+   */
+  persisted: ReadonlySet<string>;
 }
 
-export const EMPTY_TUTOR_VIEW: TutorView = { pageId: null, recognitions: new Map(), inFlight: new Set(), unchecked: new Map(), regions: new Map() };
+export const EMPTY_TUTOR_VIEW: TutorView = {
+  pageId: null,
+  recognitions: new Map(),
+  inFlight: new Set(),
+  unchecked: new Map(),
+  regions: new Map(),
+  persisted: new Set(),
+};
 
 export interface TutorSessionDeps {
   pipeline?: PipelineDeps;
@@ -177,10 +189,12 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     const touched = new Set([...change.updated, ...change.removed]);
     for (const [id, s] of stash) if (s.rec.elementIds.some((e) => touched.has(e))) stash.delete(id);
     const recs = new Map(view.recognitions);
+    const persisted = new Set(view.persisted);
     let dropped = false;
     for (const [id, r] of recs) {
       if (r.elementIds.some((e) => touched.has(e))) {
         recs.delete(id);
+        persisted.delete(id); // Rust drops the row when a member changes
         dropped = true;
       }
     }
@@ -201,7 +215,8 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       recs.set(r.regionId, old.rec);
       back.add(r.regionId);
     }
-    if (dropped || back.size > 0) emit({ recognitions: recs });
+    // A restored verdict is shown but its row may be gone: it stays "not known to be stored".
+    if (dropped || back.size > 0) emit({ recognitions: recs, persisted });
     manager.setRegions(regions, { clean: back });
     manager.noteElementsChanged(change);
   }
@@ -244,7 +259,8 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
       inFlight: withSet(view.inFlight, (x) => x.add(region.regionId)),
       unchecked: withMap(view.unchecked, (x) => x.delete(region.regionId)),
     });
-    void runRecognition(region, elementsNow(), [...view.recognitions.values()], s, pipeline)
+    const live = { elementsNow, persisted: (id: string) => view.persisted.has(id) };
+    void runRecognition(region, elementsNow(), [...view.recognitions.values()], s, pipeline, live)
       .catch((): RecognitionOutcome | null => null)
       .then((out) => {
         if (disposed || token !== pageToken) return;
@@ -252,18 +268,38 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
         const patch: Partial<TutorView> = { inFlight: withSet(view.inFlight, (x) => x.delete(id)) };
         // The group was re-segmented or erased meanwhile: its result no longer describes the page.
         const alive = view.regions.has(id);
+        let again = false;
         if (alive && out?.status === "checked") {
           const members = new Set(out.recognition.elementIds);
+          const superseded: string[] = [];
           patch.recognitions = withMap(view.recognitions, (x) => {
-            for (const [gid, r] of x) if (gid !== id && r.elementIds.some((e) => members.has(e))) x.delete(gid);
+            for (const [gid, r] of x) {
+              if (gid !== id && r.elementIds.some((e) => members.has(e))) {
+                x.delete(gid);
+                superseded.push(gid);
+              }
+            }
             x.set(id, out.recognition);
+          });
+          patch.persisted = withSet(view.persisted, (x) => {
+            for (const gid of superseded) x.delete(gid);
+            // Written now: stored. An unchanged reply (not re-written) keeps what was known; a
+            // failed write leaves it not stored.
+            if (out.stored) x.add(id);
+            else if (!out.unchanged) x.delete(id);
           });
         } else if (alive && out?.status === "unchecked") {
           patch.unchecked = withMap(view.unchecked, (x) => x.set(id, { kind: out.kind, reason: out.reason }));
           if (out.retryInMs !== undefined) scheduleRetry(token, id, out.retryInMs, asked);
+        } else if (alive && out?.status === "stale") {
+          // The ink (or its write) changed after capture: check it again on the settle schedule.
+          // The pipeline counted this attempt, so a group that keeps coming back stale is bounded.
+          again = true;
+          if (asked) requested.add(id);
         }
         emit(patch);
         m?.markInFlight(id, false);
+        if (again) m?.redirty(id);
       });
   }
 
@@ -293,6 +329,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
         emit({
           recognitions: withMap(view.recognitions, (x) => x.delete(regionId)),
           unchecked: withMap(view.unchecked, (x) => x.delete(regionId)),
+          persisted: withSet(view.persisted, (x) => x.delete(regionId)),
         });
       },
     });
@@ -305,11 +342,15 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
         if (disposed || token !== pageToken) return;
         // Results that arrived while loading are kept when they are newer than the stored ones.
         const merged = new Map(view.recognitions);
+        const persisted = new Set(view.persisted);
         for (const r of recs) {
           const cur = merged.get(r.strokeGroupId);
-          if (!cur || cur.capturedAt < r.capturedAt) merged.set(r.strokeGroupId, r);
+          if (!cur || cur.capturedAt < r.capturedAt) {
+            merged.set(r.strokeGroupId, r);
+            persisted.add(r.strokeGroupId);
+          }
         }
-        emit({ recognitions: merged });
+        emit({ recognitions: merged, persisted });
       })
       .catch((e) => console.error("loading tutor results failed", e));
   }
@@ -414,20 +455,16 @@ export function showRecognition(rec: Recognition): void {
  */
 export function useTutor(store: EditorStore, pane: PaneIndex): void {
   useEffect(() => {
+    // Reads the key status (keychain) only once consent and the tutor switch are both on.
     useAiStatus.getState().ensure();
     const session = createTutorSession(store);
     sessions.set(pane, session);
     const publish = () => useTutorViews.getState().setView(pane, session.getView());
     const unsub = session.subscribe(publish);
     publish();
-    // A changed provider, model or consent may fix a rejected key: allow checks again.
-    const unsubSettings = useSettingsStore.subscribe((s, prev) => {
-      const a = s.settings;
-      const b = prev.settings;
-      if (a.aiProvider !== b.aiProvider || a.aiModel !== b.aiModel || a.aiConsent !== b.aiConsent) sessionAttempts.clearAuthBlock();
-      if (a.aiProvider !== b.aiProvider || a.aiConsent !== b.aiConsent) void useAiStatus.getState().refresh();
-      session.reactivate();
-    });
+    // Clearing a block and refreshing the key status on provider/model/consent changes happen at
+    // module level (attempts.ts, aiStatus.ts), so they also work while no editor is open.
+    const unsubSettings = useSettingsStore.subscribe(() => session.reactivate());
     const unsubStatus = useAiStatus.subscribe(() => session.reactivate());
     return () => {
       unsub();

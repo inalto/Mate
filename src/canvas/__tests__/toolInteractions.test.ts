@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
-import { createTutorGestures, HOLD_ASK_MS, hitHandle, pointerTool, scaleFromDrag, type TutorGestureDeps } from "../toolInteractions";
+import { createDismissPress, createTutorGestures, HOLD_ASK_MS, hitHandle, pointerTool, scaleFromDrag, TAP_MS, type TutorGestureDeps } from "../toolInteractions";
 
 const b = { x: 0, y: 0, width: 100, height: 50 };
 const info = { pointerType: "pen", buttons: 1, isBarrel: false, isEraserEnd: false };
@@ -181,5 +181,34 @@ describe("tutor gestures", () => {
     expect(markerAt).toHaveBeenCalledWith(at, 0);
     const blank = gestures({ markerAt, inkAt: vi.fn(() => false) });
     expect(blank.g.selectDown(at, at)).toBe(true);
+  });
+});
+
+describe("closing the tutor card with the pen", () => {
+  it("dismissing_card_keeps_the_stroke", () => {
+    let t = 0;
+    const d = createDismissPress(() => t);
+    // A real stroke that starts by closing the card: it is committed like any other.
+    d.down({ x: 10, y: 10 });
+    expect(d.active()).toBe(true);
+    t = 40;
+    d.move({ x: 60, y: 12 });
+    t = 120;
+    expect(d.up()).toBe("commit");
+    expect(d.active()).toBe(false);
+    // A still press held longer than a tap is ink too (a dot the user meant to make).
+    d.down({ x: 10, y: 10 });
+    t += TAP_MS + 1;
+    expect(d.up()).toBe("commit");
+    // Only a bare quick tap, the press that just closed the card, is dropped.
+    d.down({ x: 10, y: 10 });
+    d.move({ x: 13, y: 12 });
+    t += 80;
+    expect(d.up()).toBe("discard");
+    // Ordinary strokes (no dismissing press) are never affected.
+    expect(d.up()).toBe("commit");
+    d.down({ x: 0, y: 0 });
+    d.cancel();
+    expect(d.up()).toBe("commit");
   });
 });

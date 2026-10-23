@@ -1,5 +1,6 @@
 // Check attempts per revision and the "live checking is blocked" state (rejected key, billing,
 // unknown model). Kept free of heavy imports so settings code can clear the block cheaply.
+import { useSettingsStore } from "../stores/settings";
 
 export const MAX_ATTEMPTS_PER_REVISION = 3;
 
@@ -45,6 +46,16 @@ export function createAttemptLedger(): AttemptLedger {
 
 /** Shared ledger for the app session (all editor panes use it). */
 export const sessionAttempts = createAttemptLedger();
+
+/**
+ * A changed provider, model or consent may fix a rejected key: allow checks again. Subscribed once
+ * for the app (not per editor), so a fix made in Settings applies even with no page open.
+ */
+useSettingsStore.subscribe((s, prev) => {
+  const a = s.settings;
+  const b = prev.settings;
+  if (a.aiProvider !== b.aiProvider || a.aiModel !== b.aiModel || a.aiConsent !== b.aiConsent) sessionAttempts.clearAuthBlock();
+});
 
 const keyListeners = new Set<() => void>();
 

@@ -73,6 +73,8 @@ function harness(settings: Settings, recognize: PipelineDeps["recognize"]) {
     capture: async () => ({ png: new Uint8Array([1]), bounds: { x: 0, y: 0, width: 1, height: 1 }, width: 1, height: 1 }),
     now: () => now,
     warn: () => {},
+    flushWrites: async () => {},
+    toast: () => {},
     attempts: createAttemptLedger(),
   };
   const advance = async (ms: number) => {
@@ -319,6 +321,61 @@ describe("tutor session", () => {
     expect(load).toHaveBeenCalledWith("pg");
     expect(session.getView().regions.size).toBe(2);
     expect(recognize).not.toHaveBeenCalled();
+    session.dispose();
+  });
+
+  it("stale_outcome_redirties_group", async () => {
+    const recognize = vi.fn(async () => result);
+    const h = harness(on, recognize);
+    // The first write arrives after an edit reached the database: Rust calls it stale.
+    vi.mocked(h.pipeline.upsert).mockResolvedValueOnce("stale");
+    const fs = fakeStore([]);
+    const session = createTutorSession(fs.store, h.deps);
+    fs.add(glyph("a", 0, 0));
+    h.pen().up();
+    await h.advance(2000);
+    expect(recognize).toHaveBeenCalledTimes(1);
+    const gid = [...session.getView().regions.keys()][0];
+    expect(session.getView().recognitions.has(gid)).toBe(false);
+    // Not left clean: the group is checked again on the settle schedule and its verdict shown.
+    await h.advance(SETTLE_DELAY_MS);
+    expect(recognize).toHaveBeenCalledTimes(2);
+    expect(session.getView().recognitions.get(gid)?.latex).toBe("x=2");
+    expect(session.getView().persisted.has(gid)).toBe(true);
+    session.dispose();
+  });
+
+  it("a group that keeps coming back stale stops after the attempt limit", async () => {
+    const recognize = vi.fn(async () => result);
+    const h = harness(on, recognize);
+    vi.mocked(h.pipeline.upsert).mockResolvedValue("stale");
+    const fs = fakeStore([]);
+    const session = createTutorSession(fs.store, h.deps);
+    fs.add(glyph("a", 0, 0));
+    h.pen().up();
+    await h.advance(30_000);
+    expect(recognize).toHaveBeenCalledTimes(3);
+    const gid = [...session.getView().regions.keys()][0];
+    expect(session.getView().unchecked.get(gid)?.kind).toBe("exhausted");
+    session.dispose();
+  });
+
+  it("tracks which shown verdicts are stored", async () => {
+    const recognize = vi.fn(async () => result);
+    const h = harness(on, recognize);
+    const stored = { ...result, pageId: "pg", strokeGroupId: "g9", elementIds: ["x"], bounds: { x: 0, y: 0, width: 10, height: 10 }, capturedAt: 1, source: "auto" as const, userOverride: false, createdAt: "", updatedAt: "" };
+    const fs = fakeStore([]);
+    const session = createTutorSession(fs.store, { ...h.deps, loadRecognitions: async () => [stored] });
+    await h.advance(0);
+    expect(session.getView().persisted.has("g9")).toBe(true);
+    // A failed write shows the verdict but does not count as stored.
+    vi.mocked(h.pipeline.upsert).mockRejectedValueOnce(new Error("disk full"));
+    fs.add(glyph("a", 0, 400));
+    h.pen().up();
+    await h.advance(2000);
+    const gid = [...session.getView().recognitions.keys()].find((k) => k !== "g9")!;
+    expect(session.getView().recognitions.has(gid)).toBe(true);
+    expect(session.getView().persisted.has(gid)).toBe(false);
     session.dispose();
   });
 

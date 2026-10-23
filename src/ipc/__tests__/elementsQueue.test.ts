@@ -114,6 +114,27 @@ describe("elementsQueue", () => {
     expect(q.failed()).toBe(0);
   });
 
+  it("flushAll_waits_for_an_in_flight_write", async () => {
+    // The 150 ms timer already started a write and nothing is queued: flushAll still waits for it
+    // (the tutor stamps its capture time only after this resolves).
+    let release: () => void = () => {};
+    const upsert = vi.fn(() => new Promise<void>((r) => (release = r)));
+    const q = createElementsQueue({ upsertElements: upsert, deleteElements: vi.fn(async () => {}) });
+    q.enqueueUpsert(stroke("a"));
+    await vi.advanceTimersByTimeAsync(150);
+    expect(upsert).toHaveBeenCalledTimes(1);
+    let done = false;
+    const p = q.flushAll().then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(done).toBe(false);
+    release();
+    await p;
+    expect(done).toBe(true);
+    expect(upsert).toHaveBeenCalledTimes(1);
+  });
+
   it("partial_erase_at_boundary_persists", async () => {
     // Partial erase at the element limit: delete 1 + add 2 must reach the backend deletes-first so
     // the live count never transiently exceeds the limit.

@@ -69,6 +69,8 @@ function harness(settings: Settings, recognize: PipelineDeps["recognize"]) {
     capture: async () => ({ png: new Uint8Array([1]), bounds: { x: 0, y: 0, width: 1, height: 1 }, width: 1, height: 1 }),
     now: () => now,
     warn: () => {},
+    flushWrites: async () => {},
+    toast: () => {},
     attempts: createAttemptLedger(),
   };
   const advance = async (ms: number) => {
@@ -183,6 +185,8 @@ describe("couldn't-check hover label", () => {
     const unchecked: TutorMarker = { groupId: "g", kind: "unchecked", bounds };
     expect(drawTutorTip(ctx, unchecked, cam, 1)).not.toBeNull();
     expect(texts).toEqual([UNCHECKED_TIP]);
+    // The card it opens offers "Try again", so the tip promises details, not a retry.
+    expect(UNCHECKED_TIP).toBe("Couldn't check — tap for details");
     expect(drawTutorTip(ctx, { groupId: "g", kind: "tick", bounds }, cam, 1)).toBeNull();
     expect(texts).toHaveLength(1);
   });

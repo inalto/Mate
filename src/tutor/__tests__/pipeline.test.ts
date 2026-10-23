@@ -3,7 +3,7 @@ import type { RecognizeResult } from "../../ipc/recognize";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Recognition, Settings } from "../../model/types";
 import { el } from "../../tools/__tests__/fixtures";
-import { createAttemptLedger, MAX_ATTEMPTS_PER_REVISION, RETRY_DELAY_MS, runRecognition, type PipelineDeps } from "../pipeline";
+import { createAttemptLedger, MAX_ATTEMPTS_PER_REVISION, RETRY_DELAY_MS, revisionOf, runRecognition, type PipelineDeps } from "../pipeline";
 import type { Region } from "../types";
 
 const on: Settings = { ...DEFAULT_SETTINGS, aiConsent: true, tutorEnabled: true };
@@ -39,6 +39,8 @@ function deps(over: Partial<PipelineDeps> = {}): PipelineDeps {
     capture: vi.fn(async () => ({ png: new Uint8Array([1, 2, 3]), bounds: { x: -24, y: -24, width: 98, height: 78 }, width: 10, height: 8 })),
     now: () => 1_000,
     warn: vi.fn(),
+    flushWrites: vi.fn(async () => {}),
+    toast: vi.fn(),
     attempts: createAttemptLedger(),
     ...over,
   };
@@ -82,12 +84,78 @@ describe("runRecognition", () => {
     const req = vi.mocked(d.recognize).mock.calls[0][0];
     expect(req.imagePngBase64).toBe("AQID");
 
-    // Same verdict for the same members: nothing is written again.
+    // Same verdict for the same, unchanged members with a stored row: nothing is written again.
     const again = deps();
     const stored = { ...rec, createdAt: "t", updatedAt: "t" } as Recognition;
-    const out2 = await runRecognition(region, elements, [stored], on, again);
-    expect(out2).toMatchObject({ status: "checked", stored: false });
+    const out2 = await runRecognition(region, elements, [stored], on, again, { persisted: () => true, elementsNow: () => elements });
+    expect(out2).toMatchObject({ status: "checked", stored: false, unchanged: true });
     expect(again.upsert).not.toHaveBeenCalled();
+  });
+
+  it("unchanged_reply_after_edit_is_persisted", async () => {
+    const stored = {
+      ...verdict,
+      pageId: "pg",
+      strokeGroupId: "g1",
+      elementIds: ["a"],
+      bounds: region.bounds,
+      source: "auto",
+      userOverride: false,
+      provider: "anthropic",
+      model: "claude-opus-5-5",
+      createdAt: "t",
+      updatedAt: "t",
+      capturedAt: 500,
+    } as Recognition;
+    // A lasso nudge lands while the reply is on its way: same verdict, but the ink moved.
+    const nudged = [{ ...elements[0], updatedAt: "2026-03-01T00:00:00.000Z", version: 2 }];
+    const d = deps({ upsert: vi.fn(async () => "stale" as const) });
+    const out = await runRecognition(region, elements, [stored], on, d, { persisted: () => true, elementsNow: () => nudged });
+    // Written (so Rust runs its stale check) instead of being shown without a row.
+    expect(d.upsert).toHaveBeenCalledTimes(1);
+    expect(out).toEqual({ status: "stale" });
+
+    // Same ink, but no stored row is known (e.g. a verdict restored in memory): written too.
+    const d2 = deps();
+    const out2 = await runRecognition(region, elements, [stored], on, d2, { persisted: () => false, elementsNow: () => elements });
+    expect(d2.upsert).toHaveBeenCalledTimes(1);
+    expect(out2).toMatchObject({ status: "checked", stored: true });
+  });
+
+  it("capture_waits_for_pending_element_writes", async () => {
+    let flushed!: () => void;
+    const order: string[] = [];
+    let clock = 1_000;
+    const d = deps({
+      flushWrites: vi.fn(() => new Promise<void>((r) => (flushed = () => (order.push("flushed"), r())))),
+      now: () => (order.push("stamp"), clock),
+    });
+    const run = runRecognition(region, elements, [], on, d);
+    await Promise.resolve();
+    await Promise.resolve();
+    // The edit is still in the write-behind queue: no stamp, no capture yet.
+    expect(d.flushWrites).toHaveBeenCalledTimes(1);
+    expect(d.capture).not.toHaveBeenCalled();
+    expect(order).toEqual([]);
+    clock = 1_200;
+    flushed();
+    await run;
+    expect(order).toEqual(["flushed", "stamp"]);
+    expect(vi.mocked(d.upsert).mock.calls[0][0].capturedAt).toBe(1_200);
+    // A failing flush never blocks checking.
+    const broken = deps({ flushWrites: vi.fn(async () => Promise.reject(new Error("io"))) });
+    expect(await runRecognition(region, elements, [], on, broken)).toMatchObject({ status: "checked" });
+  });
+
+  it("stale results count as attempts", async () => {
+    const d = deps({ upsert: vi.fn(async () => "stale" as const) });
+    for (let i = 0; i < MAX_ATTEMPTS_PER_REVISION; i++) expect(await runRecognition(region, elements, [], on, d)).toEqual({ status: "stale" });
+    expect(await runRecognition(region, elements, [], on, d)).toMatchObject({ status: "unchecked", kind: "exhausted" });
+    expect(d.recognize).toHaveBeenCalledTimes(MAX_ATTEMPTS_PER_REVISION);
+    // A stored result clears the count for its revision.
+    const ok = deps();
+    await runRecognition(region, elements, [], on, ok);
+    expect(ok.attempts.count(revisionOf(region, elements))).toBe(0);
   });
 
   it("offline_does_not_block_or_retry_forever", async () => {
@@ -142,6 +210,9 @@ describe("runRecognition", () => {
       const out = await runRecognition(region, elements, [], on, d);
       expect(out).toMatchObject({ status: "unchecked", kind, reason: `Blocked by ${kind}.` });
       expect(r).toHaveBeenCalledTimes(1);
+      // The block is announced once with the same sentence Ask uses, not only the muted marker.
+      expect(d.toast).toHaveBeenCalledTimes(1);
+      expect(d.toast).toHaveBeenCalledWith(`Blocked by ${kind}.`);
       const other: Region = { ...region, regionId: "g2" };
       expect(await runRecognition(other, elements, [], on, d)).toMatchObject({ status: "unchecked", kind });
       expect(r).toHaveBeenCalledTimes(1);
@@ -149,7 +220,22 @@ describe("runRecognition", () => {
       d.attempts.clearAuthBlock();
       await runRecognition(other, elements, [], on, d);
       expect(r).toHaveBeenCalledTimes(2);
+      // A new block after the change is announced again.
+      expect(d.toast).toHaveBeenCalledTimes(2);
     }
+  });
+
+  it("blocking_error_toasts_once_for_concurrent_checks", async () => {
+    let fail!: () => void;
+    const gate = new Promise<void>((r) => (fail = r));
+    const d = deps({ recognize: vi.fn(async (): Promise<RecognizeResult> => gate.then(() => Promise.reject({ kind: "auth", message: "The API key was not accepted." }))) });
+    const a = runRecognition(region, elements, [], on, d);
+    const b = runRecognition({ ...region, regionId: "g2" }, elements, [], on, d);
+    await Promise.resolve();
+    fail();
+    await Promise.all([a, b]);
+    expect(d.recognize).toHaveBeenCalledTimes(2);
+    expect(d.toast).toHaveBeenCalledTimes(1);
   });
 
   it("pipeline_drops_stale_result", async () => {

@@ -220,7 +220,7 @@ export function drawTutorMarkers(ctx: MarkerContext, markers: readonly TutorMark
 }
 
 /** Hover label for a group that couldn't be checked (mouse only; a tap opens the card instead). */
-export const UNCHECKED_TIP = "Couldn't check — tap to retry";
+export const UNCHECKED_TIP = "Couldn't check — tap for details";
 
 /** The parts of a 2D context the hover label uses. */
 export type TipContext = Pick<

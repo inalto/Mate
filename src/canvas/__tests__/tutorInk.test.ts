@@ -53,6 +53,8 @@ async function setup() {
     capture: async () => ({ png: new Uint8Array([1]), bounds: { x: 0, y: 0, width: 1, height: 1 }, width: 1, height: 1 }),
     now: () => Date.now(),
     warn: () => {},
+    flushWrites: async () => {},
+    toast: () => {},
     attempts: createAttemptLedger(),
   };
   session = createTutorSession(store, { pipeline, settings: () => on, aiConfigured: () => true, loadRecognitions: async () => [stored], watchPen: () => () => {} });

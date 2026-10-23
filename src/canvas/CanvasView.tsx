@@ -23,7 +23,7 @@ import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
-import { createToolController, pointerTool } from "./toolInteractions";
+import { createDismissPress, createToolController, pointerTool } from "./toolInteractions";
 import { createTutorInk } from "./tutorInk";
 import { consumeDismissDown, paneOfStore } from "../stores/tutor";
 import { useAiStatus } from "../tutor/aiStatus";
@@ -93,6 +93,8 @@ function createEngine(
   let sheetCount = 0;
   /** The pen stroke in progress takes part in tutor gestures (tap / double-tap / hold on ink). */
   let tutorStroke = false;
+  /** The pen press that closed the tutor card (its stroke is kept unless it was a bare tap). */
+  const dismissPress = createDismissPress();
   /** Group whose "couldn't check" marker the mouse hovers (its label is drawn). */
   let hoverGroup: string | null = null;
 
@@ -270,12 +272,14 @@ function createEngine(
       onDown(p, info) {
         const s = ready();
         if (!s) return;
-        // This press closed the tutor card: it only dismisses (no dot, no selection).
-        if (consumeDismissDown()) {
+        const dismissing = consumeDismissDown();
+        const { tool, temp } = pointerTool(s.tool, s.panHold, info, getSettings());
+        // This press closed the tutor card. With a select tool it only dismisses; a pen stroke is
+        // kept (ink always wins) and only a bare tap's dot is dropped on pen-up.
+        if (dismissing && !isInkTool(tool)) {
           mode = "none";
           return;
         }
-        const { tool, temp } = pointerTool(s.tool, s.panHold, info, getSettings());
         if (temp) s.pushTempTool(temp);
         if (tool === "pan") {
           mode = "pan";
@@ -293,7 +297,9 @@ function createEngine(
           if (mode === "tool") tools.down(p, tool);
           return;
         }
-        tutorStroke = s.preset.type !== "highlighter";
+        // No tutor gestures (double-tap, hold, marker tap) for the press that closed the card.
+        tutorStroke = !dismissing && s.preset.type !== "highlighter";
+        if (dismissing) dismissPress.down(worldToScreen(s.camera, p));
         const abortForAsk = () => {
           // Held still on ink: the stroke becomes "Ask the tutor" (nothing is drawn).
           endStroke();
@@ -305,6 +311,7 @@ function createEngine(
         if (!s.beginStroke()) {
           // Page full: the editor route shows a toast when limitReached flips.
           tutor.cancel();
+          dismissPress.cancel();
           tutorStroke = false;
           mode = "none";
           return;
@@ -340,6 +347,7 @@ function createEngine(
           builder.push(points);
           if (points.length > 0) snap?.move(points[points.length - 1]);
           if (tutorStroke && points.length > 0) tutor.inkMove(worldToScreen(st().camera, points[points.length - 1]));
+          if (dismissPress.active() && points.length > 0) dismissPress.move(worldToScreen(st().camera, points[points.length - 1]));
           if (!snapShape) setLive(builder.preview(predicted));
         } else if (mode === "tool") tools.move(points);
         else if (mode === "marker" && markerPress && points.length > 0) {
@@ -362,7 +370,9 @@ function createEngine(
           const stroke = pts.length > 0 ? strokeElement(pts, { pageId, preset: st().preset }) : null;
           // Committed at once, except a tap on a marker's blank area (opens its card) or the second
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
-          const t = tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
+          if (dismissPress.active()) dismissPress.move(worldToScreen(st().camera, p));
+          const dismissed = dismissPress.up();
+          const t = dismissed === "discard" ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
           if (stroke && t === "commit") {
             if (shape) {
               const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());
@@ -382,6 +392,7 @@ function createEngine(
       },
       onCancel() {
         if (mode === "tool") tools.cancel();
+        dismissPress.cancel();
         tutor.cancel();
         tutorStroke = false;
         markerPress = null;
