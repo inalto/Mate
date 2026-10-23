@@ -1,8 +1,11 @@
 //! Importing notebooks from other apps: sniffing the picked files, then reading, parsing and
-//! placing each one (off the async runtime) with progress events, a per-file deadline and a
-//! cancel flag. Parsing and placement live in `mate_core::import`; this module only walks the
-//! files, reports progress and turns the two error types (`ImportError`, `StorageError`) into one
-//! sentence for the user.
+//! placing each one (off the async runtime) with progress events, a deadline for parsing and
+//! another for placing, and a cancel flag. Parsing and placement live in `mate_core::import`;
+//! this module only walks the files, reports progress and turns the two error types
+//! (`ImportError`, `StorageError`) into one sentence for the user.
+//!
+//! Placement takes the storage lock once per page (through `StorageAccess` on the mutex), so
+//! other storage commands run between pages while a large file is placed.
 
 use std::fs;
 use std::path::Path;
@@ -10,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::open_files::is_import_path;
-use mate_core::import::place::{ImportReport, PlaceTarget, place_document};
+use mate_core::import::place::{ImportReport, PlaceControl, PlaceTarget, place_document_with};
 use mate_core::import::{
     IMPORT_DEADLINE, ImportDocument, ImportError, ImportLimits, ImportSource, fingerprint, max_file_bytes, parse,
     sniff,
@@ -32,8 +35,8 @@ const UNREADABLE: &str = "This file could not be read.";
 /// The largest file any format accepts; bigger files are refused without reading them.
 const LARGEST_FILE: u64 = 256 * 1024 * 1024;
 
-/// Set by `cancel_import`; checked between files and phases (a parse in progress stops at its
-/// deadline).
+/// Set by `cancel_import`; checked between files and phases and between placed pages (a parse in
+/// progress stops at its deadline).
 #[derive(Default)]
 pub struct ImportControl {
     cancel: AtomicBool,
@@ -262,6 +265,7 @@ pub struct Job<'a> {
     pub storage: &'a std::sync::Mutex<Storage>,
     pub assets_dir: &'a Path,
     pub cancel: &'a AtomicBool,
+    /// Time allowed for parsing, and again for placing.
     pub deadline: Duration,
 }
 
@@ -304,12 +308,21 @@ pub fn import_one(
     let total = doc.page_count();
     say(Phase::Placing, 0, total);
     let fp = fingerprint::file_fingerprint(&bytes);
-    let report = {
-        let mut storage = job.storage.lock().map_err(|_| "The notebook database is busy. Try again.".to_string())?;
-        place_document(&mut storage, &doc, target, job.assets_dir, &fp).map_err(|e| storage_error_message(&e))?
-    };
-    say(Phase::Placing, report.pages_imported + report.pages_skipped_duplicate, total);
-    Ok(report)
+    let place_deadline = Instant::now() + job.deadline;
+    let place_limits = ImportLimits { deadline: Some(place_deadline), ..ImportLimits::default() };
+    let on_page = |done, total| say(Phase::Placing, done, total);
+    let control = PlaceControl { limits: &place_limits, cancel: job.cancel, progress: &on_page };
+    let mut access = job.storage;
+    place_document_with(&mut access, &doc, target, job.assets_dir, &fp, &control).map_err(|e| {
+        // Stopped before any page was placed.
+        if cancelled() {
+            CANCELLED.to_owned()
+        } else if Instant::now() >= place_deadline {
+            TOOK_TOO_LONG.to_owned()
+        } else {
+            storage_error_message(&e)
+        }
+    })
 }
 
 fn too_many() -> String {
@@ -526,6 +539,74 @@ mod tests {
             import_one(&OneBlankPage, &job, &path, PlaceTarget::NewUnit { title: None }, &|_| {}).unwrap_err(),
             CANCELLED
         );
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// `n` blank pages.
+    struct BlankPages(usize);
+    impl Importer for BlankPages {
+        fn parse(&self, _: &[u8], _: &str, _: &ImportLimits) -> Result<ImportDocument, ImportError> {
+            let mut doc = OneBlankPage.parse(&[], "", &ImportLimits::default())?;
+            let page = doc.sections[0].pages[0].clone();
+            doc.sections[0].pages =
+                (0..self.0).map(|i| ImportPage { source_id: format!("p{i}"), ..page.clone() }).collect();
+            Ok(doc)
+        }
+    }
+
+    #[test]
+    fn placement_releases_the_storage_lock_between_pages() {
+        use std::sync::atomic::AtomicUsize;
+        let d = temp("lock");
+        let file = d.join("Big.goodnotes");
+        bare_zip(&file);
+        let storage = Mutex::new(Storage::open_in_memory().unwrap());
+        let cancel = AtomicBool::new(false);
+        let job = Job { storage: &storage, assets_dir: &d, cancel: &cancel, deadline: Duration::from_secs(30) };
+        let path = file.to_string_lossy().into_owned();
+        let placed = AtomicUsize::new(0);
+        let placed_when_locked = std::thread::scope(|scope| {
+            let other = scope.spawn(|| {
+                // Another storage command, issued once placement has started.
+                while placed.load(Ordering::SeqCst) == 0 {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                let units = storage.lock().unwrap().list_tree().unwrap().units.len();
+                (placed.load(Ordering::SeqCst), units)
+            });
+            // 50 pages, each followed by 10 ms of work outside the storage step.
+            let report = import_one(&BlankPages(50), &job, &path, PlaceTarget::NewUnit { title: None }, &|p| {
+                if p.phase == Phase::Placing && p.pages_done > 0 {
+                    placed.store(p.pages_done, Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            })
+            .unwrap();
+            assert_eq!(report.pages_imported, 50);
+            other.join().unwrap()
+        });
+        // The other command got the lock while pages were still being placed.
+        assert!(placed_when_locked.0 < 50, "{placed_when_locked:?}");
+        assert_eq!(placed_when_locked.1, 1);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn placement_stops_on_cancel_between_pages() {
+        let d = temp("cancel-pages");
+        let file = d.join("Big.goodnotes");
+        bare_zip(&file);
+        let storage = Mutex::new(Storage::open_in_memory().unwrap());
+        let cancel = AtomicBool::new(false);
+        let job = Job { storage: &storage, assets_dir: &d, cancel: &cancel, deadline: Duration::from_secs(30) };
+        let report = import_one(&BlankPages(20), &job, &file.to_string_lossy(), PlaceTarget::NewUnit { title: None }, &|p| {
+            if p.phase == Phase::Placing && p.pages_done == 5 {
+                cancel.store(true, Ordering::SeqCst);
+            }
+        })
+        .unwrap();
+        assert_eq!(report.pages_imported, 5);
+        assert!(report.warnings.iter().any(|w| w.contains("cancelled")), "{:?}", report.warnings);
         let _ = fs::remove_dir_all(&d);
     }
 

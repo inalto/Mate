@@ -7,8 +7,8 @@ use std::path::PathBuf;
 
 use mate_core::import::{
     ImportBackground, ImportDocument, ImportError, ImportImage, ImportLimits, ImportPage,
-    ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ImportText, PlaceTarget,
-    file_fingerprint, parse, place_document,
+    ImportPoint, ImportSection, ImportSkipped, ImportSource, ImportStroke, ImportText, PlaceControl,
+    PlaceTarget, file_fingerprint, parse, place_document, place_document_with,
 };
 use mate_core::model::{BackgroundType, ElementType, PageMode, PenStyle};
 use mate_core::storage::Storage;
@@ -598,4 +598,87 @@ fn import_metadata_survives_an_archive_round_trip() {
     .unwrap();
     assert_eq!(again.pages_skipped_duplicate, 3);
     let _ = std::fs::remove_dir_all(&assets);
+}
+
+/// One section of `n` letter pages.
+fn many_pages(n: usize) -> ImportDocument {
+    ImportDocument {
+        sections: vec![ImportSection {
+            source_id: "s".into(),
+            title: "Many".into(),
+            pages: (0..n).map(|i| letter_page(&format!("p{i}"))).collect(),
+        }],
+        ..sample_doc()
+    }
+}
+
+#[test]
+fn placement_stops_at_deadline_keeps_finished_pages() {
+    use std::sync::atomic::AtomicBool;
+    use std::time::{Duration, Instant};
+
+    let mut st = Storage::open_in_memory().unwrap();
+    let assets = tmp_assets("deadline");
+    let doc = many_pages(20);
+    let limits = ImportLimits { deadline: Some(Instant::now() + Duration::from_millis(150)), ..ImportLimits::default() };
+    let cancel = AtomicBool::new(false);
+    let seen = std::cell::RefCell::new(Vec::new());
+    // Each page takes 40 ms (in the progress callback, outside the storage step).
+    let progress = |done: usize, total: usize| {
+        seen.borrow_mut().push((done, total));
+        std::thread::sleep(Duration::from_millis(40));
+    };
+    let control = PlaceControl { limits: &limits, cancel: &cancel, progress: &progress };
+    let report = place_document_with(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, "5", &control)
+        .unwrap();
+    let n = report.pages_imported;
+    assert!((1..20).contains(&n), "{n}");
+    assert!(
+        report.warnings.iter().any(|w| w.starts_with(&format!("The import stopped after {n} page"))
+            && w.ends_with("because it took too long.")),
+        "{:?}",
+        report.warnings
+    );
+    assert_eq!(seen.borrow().len(), n);
+    assert_eq!(seen.borrow()[0], (1, 20));
+    let tree = st.list_tree().unwrap();
+    assert_eq!(tree.pages.len(), n);
+
+    // A deadline already passed: nothing is placed and the new unit is removed.
+    let past = ImportLimits { deadline: Some(Instant::now() - Duration::from_secs(1)), ..ImportLimits::default() };
+    let control = PlaceControl { limits: &past, cancel: &cancel, progress: &|_, _| {} };
+    let err = place_document_with(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, "6", &control)
+        .unwrap_err();
+    assert!(err.to_string().contains("took too long"), "{err}");
+    assert_eq!(st.list_tree().unwrap().units.len(), 1);
+}
+
+#[test]
+fn placement_honours_cancel() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    let mut st = Storage::open_in_memory().unwrap();
+    let assets = tmp_assets("cancel");
+    let doc = many_pages(10);
+    let limits = ImportLimits::default();
+    let cancel = AtomicBool::new(false);
+    // Cancelled once three pages are done.
+    let progress = |done: usize, _| {
+        if done == 3 {
+            cancel.store(true, Ordering::SeqCst);
+        }
+    };
+    let control = PlaceControl { limits: &limits, cancel: &cancel, progress: &progress };
+    let report = place_document_with(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, "7", &control)
+        .unwrap();
+    assert_eq!(report.pages_imported, 3);
+    assert!(report.warnings.contains(&"The import stopped after 3 pages because it was cancelled.".to_string()));
+    assert_eq!(st.list_tree().unwrap().pages.len(), 3);
+
+    // Cancelled before the first page: an error, and the unit it created is gone.
+    let control = PlaceControl { limits: &limits, cancel: &cancel, progress: &|_, _| {} };
+    let err = place_document_with(&mut st, &doc, PlaceTarget::NewUnit { title: None }, &assets, "8", &control)
+        .unwrap_err();
+    assert!(err.to_string().contains("cancelled"), "{err}");
+    assert_eq!(st.list_tree().unwrap().units.len(), 1);
 }

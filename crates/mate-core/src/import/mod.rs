@@ -28,7 +28,9 @@ pub use model::{
     ImportBackground, ImportDocument, ImportImage, ImportPage, ImportPoint, ImportSection,
     ImportSkipped, ImportSource, ImportStroke, ImportText,
 };
-pub use place::{ImportReport, PlaceTarget, place_document};
+pub use place::{
+    ImportReport, PlaceControl, PlaceTarget, StorageAccess, place_document, place_document_with,
+};
 pub use zipsrc::ZipSource;
 /// OneNote's raw-value → import-model mapping, public for its unit tests.
 #[doc(hidden)]

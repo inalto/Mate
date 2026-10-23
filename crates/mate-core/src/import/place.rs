@@ -11,16 +11,23 @@
 //!
 //! Pages carry `import_metadata.sourceFingerprint` (file hash + source page id): placing the
 //! same file into a unit that already holds one of its pages skips that page.
+//!
+//! [`place_document_with`] reaches storage through [`StorageAccess`] one step at a time (each page
+//! is built outside it, then written in one short step), checks the deadline and the cancel flag
+//! between pages and reports progress after each page; a stop keeps the pages already placed.
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::fingerprint::{element_fingerprint, fnv1a64, page_fingerprint};
 use super::model::{ImportDocument, ImportPage};
-use super::MAX_PAGES_PER_IMPORT;
+use super::{ImportLimits, MAX_PAGES_PER_IMPORT};
 use crate::assets;
 use crate::model::{Element, ElementType, Page, Point, Section, Unit, new_id, now_iso};
 use crate::storage::elements::{MAX_ELEMENTS_PER_PAGE, MAX_POINTS_PER_STROKE};
@@ -86,8 +93,80 @@ pub struct ImportReport {
     pub details: Vec<String>,
 }
 
-/// Places `doc` into `target`. `file_fingerprint` identifies the source file (16 hex digits,
-/// [`super::file_fingerprint`]; any other string is hashed). Images are stored in `assets_dir`.
+/// How the placer reaches storage: one short step at a time, so a caller that shares the storage
+/// behind a lock holds it for one page, not for the whole placement.
+pub trait StorageAccess {
+    /// Runs `step` with the storage.
+    fn run(&mut self, step: &mut dyn FnMut(&mut Storage) -> Result<()>) -> Result<()>;
+}
+
+impl StorageAccess for Storage {
+    fn run(&mut self, step: &mut dyn FnMut(&mut Storage) -> Result<()>) -> Result<()> {
+        step(self)
+    }
+}
+
+/// Locks the mutex for each step.
+impl StorageAccess for &Mutex<Storage> {
+    fn run(&mut self, step: &mut dyn FnMut(&mut Storage) -> Result<()>) -> Result<()> {
+        let mut storage =
+            self.lock().map_err(|_| StorageError::Limit("the notebook database is busy".into()))?;
+        step(&mut storage)
+    }
+}
+
+/// `f` run through `access`, with its result.
+fn with<R>(access: &mut dyn StorageAccess, f: impl FnOnce(&mut Storage) -> Result<R>) -> Result<R> {
+    let mut f = Some(f);
+    let mut out = None;
+    access.run(&mut |storage| {
+        if let Some(f) = f.take() {
+            out = Some(f(storage)?);
+        }
+        Ok(())
+    })?;
+    out.ok_or_else(|| StorageError::Limit("the notebook database is unavailable".into()))
+}
+
+/// When placement stops early, and who hears about each page.
+pub struct PlaceControl<'a> {
+    /// Its `deadline`: placement stops between pages once it has passed.
+    pub limits: &'a ImportLimits,
+    /// Placement stops between pages once this is set.
+    pub cancel: &'a AtomicBool,
+    /// Called outside the storage step after each page placed or recognised as a duplicate,
+    /// with (pages done, pages in the document).
+    pub progress: &'a dyn Fn(usize, usize),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stop {
+    Deadline,
+    Cancelled,
+}
+
+impl Stop {
+    fn why(self) -> &'static str {
+        match self {
+            Stop::Deadline => "it took too long",
+            Stop::Cancelled => "it was cancelled",
+        }
+    }
+}
+
+impl PlaceControl<'_> {
+    fn stop(&self) -> Option<Stop> {
+        if self.cancel.load(Ordering::SeqCst) {
+            Some(Stop::Cancelled)
+        } else if self.limits.deadline.is_some_and(|d| Instant::now() >= d) {
+            Some(Stop::Deadline)
+        } else {
+            None
+        }
+    }
+}
+
+/// Places `doc` into `target` with no deadline and no cancel flag (see [`place_document_with`]).
 pub fn place_document(
     storage: &mut Storage,
     doc: &ImportDocument,
@@ -95,12 +174,32 @@ pub fn place_document(
     assets_dir: &Path,
     file_fingerprint: &str,
 ) -> Result<ImportReport> {
+    let limits = ImportLimits { deadline: None, ..ImportLimits::default() };
+    let cancel = AtomicBool::new(false);
+    let control = PlaceControl { limits: &limits, cancel: &cancel, progress: &|_, _| {} };
+    place_document_with(storage, doc, target, assets_dir, file_fingerprint, &control)
+}
+
+/// Places `doc` into `target`. `file_fingerprint` identifies the source file (16 hex digits,
+/// [`super::file_fingerprint`]; any other string is hashed). Images are stored in `assets_dir`.
+///
+/// Between pages the placement stops when `control`'s deadline has passed or its cancel flag is
+/// set: the pages already placed stay and the report says where it stopped; a stop before any
+/// page was placed undoes what this call created and returns `StorageError::Limit`.
+pub fn place_document_with(
+    access: &mut dyn StorageAccess,
+    doc: &ImportDocument,
+    target: PlaceTarget,
+    assets_dir: &Path,
+    file_fingerprint: &str,
+    control: &PlaceControl<'_>,
+) -> Result<ImportReport> {
     if doc.page_count() == 0 {
         return Err(StorageError::Limit("the file has no pages to import".into()));
     }
     let file_fp = u64::from_str_radix(file_fingerprint, 16)
         .unwrap_or_else(|_| fnv1a64(file_fingerprint.as_bytes()));
-    let tree = storage.list_tree()?;
+    let tree = with(access, |s| s.list_tree())?;
     let now = now_iso();
 
     let (unit_id, new_unit) = match target {
@@ -111,7 +210,7 @@ pub fn place_document(
                 .or_else(|| Some(doc.title.trim().to_owned()).filter(|t| !t.is_empty()))
                 .unwrap_or_else(|| format!("{} import", doc.source.display_name()));
             let id = new_id();
-            storage.upsert_unit(&Unit {
+            let unit = Unit {
                 id: id.clone(),
                 title,
                 icon: None,
@@ -124,7 +223,8 @@ pub fn place_document(
                 updated_at: now.clone(),
                 deleted_at: None,
                 version: 0,
-            })?;
+            };
+            with(access, |s| s.upsert_unit(&unit))?;
             (id, true)
         }
         PlaceTarget::ExistingUnit { unit_id } => {
@@ -169,37 +269,63 @@ pub fn place_document(
         }
     }
 
-    let outcome = placer.place_all(storage);
+    let outcome = placer.place_all(access, control);
     let mut report = std::mem::take(&mut placer.report);
     // Sections created but left empty (the failing page's, or all-duplicate ones) go away.
-    let empty: Vec<&String> = placer
+    let empty: Vec<String> = placer
         .created_sections
         .iter()
         .filter(|s| !placer.filled_sections.contains(*s))
+        .cloned()
         .collect();
+    let outcome = match outcome {
+        Ok(Some(stop)) if report.pages_imported == 0 => Err(StorageError::Limit(format!(
+            "the import stopped before any page was placed because {}",
+            stop.why()
+        ))),
+        outcome => outcome,
+    };
+    let pages = |n: usize| if n == 1 { "page" } else { "pages" };
     match outcome {
         Err(e) if report.pages_imported == 0 => {
-            if new_unit {
-                let _ = storage.purge(EntityKind::Unit, &unit_id);
-            } else {
-                for s in &placer.created_sections {
-                    let _ = storage.purge(EntityKind::Section, s);
+            let created = placer.created_sections.clone();
+            let _ = with(access, |s| {
+                if new_unit {
+                    let _ = s.purge(EntityKind::Unit, &unit_id);
+                } else {
+                    for id in &created {
+                        let _ = s.purge(EntityKind::Section, id);
+                    }
                 }
-            }
+                Ok(())
+            });
             Err(e)
         }
         outcome => {
-            for s in empty {
-                let _ = storage.purge(EntityKind::Section, s);
+            if !empty.is_empty() {
+                let _ = with(access, |s| {
+                    for id in &empty {
+                        let _ = s.purge(EntityKind::Section, id);
+                    }
+                    Ok(())
+                });
             }
             report.section_ids.retain(|s| placer.filled_sections.contains(s));
-            if let Err(e) = outcome {
-                let n = report.pages_imported;
-                report.warnings.push(format!(
-                    "The import stopped after {n} {} because a page could not be saved.",
-                    if n == 1 { "page" } else { "pages" }
-                ));
-                report.details.push(format!("page write failed: {e}"));
+            let n = report.pages_imported;
+            match outcome {
+                Err(e) => {
+                    report.warnings.push(format!(
+                        "The import stopped after {n} {} because a page could not be saved.",
+                        pages(n)
+                    ));
+                    report.details.push(format!("page write failed: {e}"));
+                }
+                Ok(Some(stop)) => {
+                    report
+                        .warnings
+                        .push(format!("The import stopped after {n} {} because {}.", pages(n), stop.why()));
+                }
+                Ok(None) => {}
             }
             Ok(report)
         }
@@ -234,34 +360,48 @@ struct BuiltPage {
 }
 
 impl Placer<'_> {
-    fn place_all(&mut self, storage: &mut Storage) -> Result<()> {
+    /// Places the pages in order; `Ok(Some(_))` when the deadline or the cancel flag stopped it.
+    fn place_all(
+        &mut self,
+        access: &mut dyn StorageAccess,
+        control: &PlaceControl<'_>,
+    ) -> Result<Option<Stop>> {
+        let doc = self.doc;
+        let total = doc.page_count();
         let mut considered = 0usize;
         let mut other_skipped: u64 = 0;
-        for (si, sec) in self.doc.sections.iter().enumerate() {
+        let mut stopped = None;
+        'sections: for (si, sec) in doc.sections.iter().enumerate() {
             let mut section_id: Option<String> = None;
             for (pi, page) in sec.pages.iter().enumerate() {
                 if considered >= MAX_PAGES_PER_IMPORT {
                     self.report.pages_skipped_limit += 1;
                     continue;
                 }
+                if let Some(stop) = control.stop() {
+                    stopped = Some(stop);
+                    break 'sections;
+                }
                 considered += 1;
                 let fp = page_fingerprint(self.file_fp, &page.source_id);
                 if let Some(sid) = self.existing.get(&fp) {
                     self.report.pages_skipped_duplicate += 1;
                     section_id.get_or_insert_with(|| sid.clone());
+                    (control.progress)(self.pages_done(), total);
                     continue;
                 }
                 let sid = match &section_id {
                     Some(s) => s.clone(),
                     None => {
-                        let s = self.create_section(storage, &sec.title, si)?;
+                        let s = self.create_section(access, &sec.title, si)?;
                         section_id = Some(s.clone());
                         s
                     }
                 };
                 let order = self.next_page_order.get(&sid).copied().unwrap_or(0);
+                // Built (images stored) outside the storage step; written in one short step.
                 let built = self.build_page(page, pi, &sid, order, &fp);
-                if let Err(e) = storage.upsert_page_with_elements(&built.page, &built.elements) {
+                if let Err(e) = with(access, |s| s.upsert_page_with_elements(&built.page, &built.elements)) {
                     for id in &built.assets {
                         assets::delete_asset(self.assets_dir, id);
                     }
@@ -278,6 +418,7 @@ impl Placer<'_> {
                 r.tables_skipped += page.skipped.tables as usize;
                 r.shapes_skipped += page.skipped.shapes as usize;
                 other_skipped += u64::from(page.skipped.other);
+                (control.progress)(self.pages_done(), total);
             }
         }
         if self.report.tables_skipped > 0 {
@@ -311,13 +452,23 @@ impl Placer<'_> {
                 self.report.elements_skipped_limit
             ));
         }
-        Ok(())
+        Ok(stopped)
     }
 
-    fn create_section(&mut self, storage: &mut Storage, title: &str, index: usize) -> Result<String> {
+    /// Pages placed or recognised as already present so far.
+    fn pages_done(&self) -> usize {
+        self.report.pages_imported + self.report.pages_skipped_duplicate
+    }
+
+    fn create_section(
+        &mut self,
+        access: &mut dyn StorageAccess,
+        title: &str,
+        index: usize,
+    ) -> Result<String> {
         let id = new_id();
         let title = title.trim();
-        storage.upsert_section(&Section {
+        let section = Section {
             id: id.clone(),
             unit_id: self.unit_id.clone(),
             title: if title.is_empty() { format!("Section {}", index + 1) } else { title.to_owned() },
@@ -329,7 +480,8 @@ impl Placer<'_> {
             updated_at: self.now.clone(),
             deleted_at: None,
             version: 0,
-        })?;
+        };
+        with(access, |s| s.upsert_section(&section))?;
         self.next_section_order += 1;
         self.created_sections.push(id.clone());
         self.report.section_ids.push(id.clone());
@@ -457,7 +609,8 @@ impl Placer<'_> {
                 Err(e) => {
                     self.report
                         .warnings
-                        .push(format!("An image on page {} could not be imported: {e}", index + 1));
+                        .push(format!("An image on page {} could not be imported.", index + 1));
+                    self.report.details.push(format!("image on page {}: {e}", index + 1));
                     continue;
                 }
             };
