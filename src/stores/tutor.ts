@@ -4,6 +4,7 @@
 // that couldn't be checked) is published per pane by the tutor session in `useTutorViews`.
 import { create } from "zustand";
 import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { recordLearningEvent, setUserOverride } from "../ipc/recognition";
 import type { GroupBounds, Recognition } from "../model/types";
 import { askAboutGroup } from "../tutor/ask";
@@ -202,7 +203,7 @@ export const useTutorUi = create<TutorUiState>((set, get) => {
         await setUserOverride(pageId, groupId, true);
       } catch (e) {
         console.error("saving the override failed", e);
-        showToast("Couldn't save that. Try again.");
+        showToast(i18n.t("tutor.saveFailed"));
         return;
       }
       logEvent(pageId, groupId, "override", { correct: true, previous: rec.correct, code: rec.code });

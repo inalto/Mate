@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import i18n from "../../i18n";
 import type { RecognizeResult } from "../../ipc/recognize";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Recognition, Settings } from "../../model/types";
@@ -208,11 +209,13 @@ describe("runRecognition", () => {
       const r = fail(kind, `Blocked by ${kind}.`);
       const d = deps({ recognize: r });
       const out = await runRecognition(region, elements, [], on, d);
-      expect(out).toMatchObject({ status: "unchecked", kind, reason: `Blocked by ${kind}.` });
+      // The structured kind is shown in the interface language (errors.ai.<kind>).
+      const sentence = i18n.t(`errors.ai.${kind as "auth" | "billing" | "unknownModel"}`);
+      expect(out).toMatchObject({ status: "unchecked", kind, reason: sentence });
       expect(r).toHaveBeenCalledTimes(1);
       // The block is announced once with the same sentence Ask uses, not only the muted marker.
       expect(d.toast).toHaveBeenCalledTimes(1);
-      expect(d.toast).toHaveBeenCalledWith(`Blocked by ${kind}.`);
+      expect(d.toast).toHaveBeenCalledWith(sentence);
       const other: Region = { ...region, regionId: "g2" };
       expect(await runRecognition(other, elements, [], on, d)).toMatchObject({ status: "unchecked", kind });
       expect(r).toHaveBeenCalledTimes(1);

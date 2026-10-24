@@ -1,10 +1,9 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage as message } from "../../i18n";
 import { clearAiKey, listAiModels, setAiKey, testAiKey } from "../../ipc/ai";
 import type { AiProviderInfo, AiStatus } from "../../model/types";
 import { useSettingsStore } from "../../stores/settings";
-
-const message = (err: unknown): string =>
-  typeof err === "string" ? err : err instanceof Error ? err.message : "Something went wrong.";
 
 interface Props {
   info: AiProviderInfo;
@@ -15,6 +14,7 @@ interface Props {
 
 /** Model, address, key, test and consent for the chosen provider. */
 export default function ConnectionFields({ info, status, onChanged }: Props) {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const update = useSettingsStore((s) => s.update);
   const [draft, setDraft] = useState("");
@@ -48,7 +48,7 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
     try {
       const list = await listAiModels();
       setModels(list);
-      setResult(list.length === 0 ? "No models found." : `Found ${list.length} model${list.length === 1 ? "" : "s"}.`);
+      setResult(list.length === 0 ? t("ai.noModels") : t("ai.foundModels", { count: list.length }));
     } catch (err) {
       setResult(message(err));
     } finally {
@@ -57,23 +57,23 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
   };
 
   const keyStatus = info.needsKey
-    ? configured ? "Key saved" : "No key"
+    ? configured ? t("ai.keySaved") : t("ai.noKey")
     : custom
-      ? configured ? "Key saved" : "No key (optional)"
-      : "No key needed";
+      ? configured ? t("ai.keySaved") : t("ai.noKeyOptional")
+      : t("ai.noKeyNeeded");
   const canTest = !busy && (info.needsKey ? configured : true);
-  const testOk = local || consent ? "Connection works." : "Key saved (not tested — turn on permission to test)";
+  const testOk = local || consent ? t("ai.connectionWorks") : t("ai.keySavedUntested");
 
   const consentCopy = local
-    ? `Let Mate use ${info.label} to check your work. Everything is processed on this computer; nothing is sent to the internet.`
+    ? t("ai.consent.local", { provider: info.label })
     : custom
-      ? "Send handwriting images and text to the server at the address above to check your work. Nothing is sent until you turn this on."
-      : `Send handwriting images and text to ${info.label} to check your work. Nothing is sent until you turn this on.`;
+      ? t("ai.consent.custom")
+      : t("ai.consent.cloud", { provider: info.label });
 
   return (
     <div className="ai-connection">
       <div className="field">
-        <label htmlFor="set-ai-model">Model</label>
+        <label htmlFor="set-ai-model">{t("ai.model")}</label>
         <input
           id="set-ai-model"
           className="input"
@@ -92,13 +92,13 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
         </datalist>
         {info.canListModels && (
           <button type="button" className="btn" disabled={busy} onClick={() => void fetchModels()}>
-            Fetch models
+            {t("ai.fetchModels")}
           </button>
         )}
       </div>
       {info.editableBaseUrl && (
         <div className="field">
-          <label htmlFor="set-ai-base">Address</label>
+          <label htmlFor="set-ai-base">{t("ai.address")}</label>
           <input
             id="set-ai-base"
             className="input"
@@ -113,7 +113,7 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
       )}
       {hasKeyField && (
         <div className="field">
-          <label htmlFor="set-ai-key">{custom ? "API key (optional)" : "API key"}</label>
+          <label htmlFor="set-ai-key">{custom ? t("ai.apiKeyOptional") : t("ai.apiKey")}</label>
           <input
             id="set-ai-key"
             className="input"
@@ -121,7 +121,7 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
             autoComplete="off"
             spellCheck={false}
             value={draft}
-            placeholder={configured ? "Saved (hidden)" : `Paste your ${info.label} key`}
+            placeholder={configured ? t("settings.mathEngines.savedHidden") : t("ai.pasteKey", { provider: info.label })}
             onChange={(e) => setDraft(e.target.value)}
           />
           <button
@@ -134,7 +134,7 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
               void run(() => setAiKey(info.id, key), null);
             }}
           >
-            Save key
+            {t("ai.saveKey")}
           </button>
           <button
             type="button"
@@ -142,20 +142,20 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
             disabled={busy || !configured}
             onClick={() => void run(() => clearAiKey(info.id), null)}
           >
-            Remove key
+            {t("ai.removeKey")}
           </button>
         </div>
       )}
       <div className="field">
-        <span className="field-label">Status</span>
+        <span className="field-label">{t("ai.status")}</span>
         <span className="muted" role="status">{keyStatus}</span>
         <button type="button" className="btn" disabled={!canTest} onClick={() => void run(() => testAiKey(info.id), testOk)}>
-          Test connection
+          {t("ai.testConnection")}
         </button>
         {result && <span className="muted">{result}</span>}
       </div>
       <div className="field">
-        <span className="field-label">Permission</span>
+        <span className="field-label">{t("ai.permission")}</span>
         <div>
           <label>
             <input type="checkbox" checked={consent} onChange={(e) => void update({ aiConsent: e.target.checked })} /> {consentCopy}

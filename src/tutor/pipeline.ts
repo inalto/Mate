@@ -3,7 +3,15 @@
 // editing are never affected. One request per call (Rust already retries transient failures within
 // one ~90 s budget); a transient failure asks the caller to try again later, up to 3 attempts per
 // revision (the group's ink as it is now) across settles.
-import { isRecognizeError, recognizeGroup, type RecognizeErrorKind, type RecognizeRequest, type RecognizeResult } from "../ipc/recognize";
+import i18n from "../i18n";
+import {
+  isRecognizeError,
+  recognizeErrorText,
+  recognizeGroup,
+  type RecognizeErrorKind,
+  type RecognizeRequest,
+  type RecognizeResult,
+} from "../ipc/recognize";
 import { upsertRecognition } from "../ipc/recognition";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { showToast } from "../components/Toast";
@@ -105,8 +113,8 @@ const TRANSIENT: ReadonlySet<string> = new Set(["network", "rateLimited", "inval
 const BLOCKING: ReadonlySet<string> = new Set(["auth", "billing", "unknownModel"]);
 
 function asRecognizeError(e: unknown): { kind: RecognizeErrorKind; message: string } {
-  if (isRecognizeError(e)) return e;
-  return { kind: "network", message: "Couldn't check this note." };
+  if (isRecognizeError(e)) return { kind: e.kind, message: recognizeErrorText(e) };
+  return { kind: "network", message: i18n.t("tutor.errors.couldNotCheck") };
 }
 
 function verdictOf(r: RecognizeResult): Verdict {
@@ -146,10 +154,10 @@ export async function runRecognition(
   const els = [...elements];
   const revision = revisionOf(region, els);
   if (attempts.count(revision) >= MAX_ATTEMPTS_PER_REVISION) {
-    return { status: "unchecked", kind: "exhausted", reason: "Couldn't check this note." };
+    return { status: "unchecked", kind: "exhausted", reason: i18n.t("tutor.errors.couldNotCheck") };
   }
   const pageId = els.find((e) => region.elementIds.includes(e.id))?.pageId;
-  if (!pageId) return { status: "unchecked", kind: "capture", reason: "This group has no ink to check." };
+  if (!pageId) return { status: "unchecked", kind: "capture", reason: i18n.t("tutor.errors.noInk") };
 
   // Edits still in the write-behind queue (undo/redo, paste, a stroke within 150 ms of the last)
   // must be stored before the capture stamp is taken, or Rust would call the result stale.
@@ -164,7 +172,7 @@ export async function runRecognition(
     image = await deps.capture(els, region);
   } catch (e) {
     attempts.exhaust(revision);
-    return { status: "unchecked", kind: "capture", reason: e instanceof Error ? e.message : "Couldn't capture this note." };
+    return { status: "unchecked", kind: "capture", reason: e instanceof Error ? e.message : i18n.t("tutor.errors.capture") };
   }
 
   const req: RecognizeRequest = {

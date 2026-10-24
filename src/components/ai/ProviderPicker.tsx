@@ -1,24 +1,22 @@
+import { useTranslation } from "react-i18next";
+import type { TKey } from "../../i18n";
 import { openExternal } from "../../ipc/app";
 import type { AiProviderGroup, AiProviderInfo, AiVision } from "../../model/types";
 
-const GROUPS: Array<{ id: AiProviderGroup; title: string }> = [
-  { id: "cloud", title: "Cloud services" },
-  { id: "local", title: "On this computer" },
-  { id: "custom", title: "Custom" },
+const GROUPS: Array<{ id: AiProviderGroup; titleKey: TKey }> = [
+  { id: "cloud", titleKey: "ai.groups.cloud" },
+  { id: "local", titleKey: "ai.groups.local" },
+  { id: "custom", titleKey: "ai.groups.custom" },
 ];
 
-const VISION_COPY: Record<AiVision, string> = {
-  yes: "Handwriting: can read it",
-  dependsOnModel: "Handwriting: depends on the model",
-  no: "Handwriting: text only, so checking is off",
+const VISION_COPY: Record<AiVision, TKey> = {
+  yes: "ai.vision.yes",
+  dependsOnModel: "ai.vision.dependsOnModel",
+  no: "ai.vision.no",
 };
 
-const needsCopy = (p: AiProviderInfo): string =>
-  p.group === "local"
-    ? "Needs: the program running on this computer, no key"
-    : p.group === "custom"
-      ? "Needs: a web address, and a key if the service wants one"
-      : "Needs: an API key from the service";
+const needsCopy = (p: AiProviderInfo): TKey =>
+  p.group === "local" ? "ai.needsLocal" : p.group === "custom" ? "ai.needsCustom" : "ai.needsCloud";
 
 interface Props {
   providers: AiProviderInfo[];
@@ -28,6 +26,7 @@ interface Props {
 
 /** The catalog as radio cards in three groups. Cards carry search attributes for Settings search. */
 export default function ProviderPicker({ providers, value, onSelect }: Props) {
+  const { t } = useTranslation();
   return (
     <div className="ai-picker">
       {GROUPS.map((g) => {
@@ -35,7 +34,7 @@ export default function ProviderPicker({ providers, value, onSelect }: Props) {
         if (items.length === 0) return null;
         return (
           <fieldset key={g.id} className="ai-group">
-            <legend>{g.title}</legend>
+            <legend>{t(g.titleKey)}</legend>
             <div className="ai-cards">
               {items.map((p) => (
                 <div
@@ -54,16 +53,16 @@ export default function ProviderPicker({ providers, value, onSelect }: Props) {
                     />{" "}
                     <strong>{p.label}</strong>
                   </label>
-                  <p className="muted">{needsCopy(p)}</p>
-                  <p className="muted">{VISION_COPY[p.vision]}</p>
-                  <p className="muted">Cost: {p.cost}</p>
+                  <p className="muted">{t(needsCopy(p))}</p>
+                  <p className="muted">{t(VISION_COPY[p.vision])}</p>
+                  <p className="muted">{t("ai.cost", { cost: p.cost })}</p>
                   {p.keyUrl && (
                     <button
                       type="button"
                       className="btn ai-link"
                       onClick={() => void openExternal(p.keyUrl).catch(() => {})}
                     >
-                      Get a key
+                      {t("ai.getKey")}
                     </button>
                   )}
                 </div>

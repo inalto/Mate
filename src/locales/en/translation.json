@@ -293,7 +293,19 @@
   },
   "errors": {
     "generic": "Something went wrong.",
-    "clipboard": "Could not copy to the clipboard"
+    "clipboard": "Could not copy to the clipboard",
+    "ai": {
+      "auth": "The API key was not accepted. Check it in Settings.",
+      "rateLimited": "The AI service is busy right now. Try again in a moment.",
+      "network": "Could not reach the AI service ({{detail}}).",
+      "invalidResponse": "The AI service sent a reply that could not be read ({{detail}}).",
+      "disabled": "AI checking is off. Turn it on in Settings.",
+      "rejected": "The AI service refused this request ({{detail}}).",
+      "billing": "The AI account has a billing problem. Check it with the provider.",
+      "unknownModel": "The selected model is not available. Check the model in Settings.",
+      "refused": "The AI declined to check this note.",
+      "truncated": "The AI's answer was cut off before it finished."
+    }
   },
   "update": {
     "label": "Software update",
@@ -808,5 +820,100 @@
         "failed": "the check failed"
       }
     }
+  },
+  "tutor": {
+    "title": "Tutor",
+    "tryAgain": "Try again",
+    "hint": "Hint",
+    "why": "Why",
+    "whyButton": "Why?",
+    "nextStep": "Next step",
+    "markCorrect": "Mark as correct",
+    "checkLocally": "Check locally",
+    "checkingLocally": "Checking on this computer…",
+    "saveFailed": "Couldn't save that. Try again.",
+    "uncheckedTip": "Couldn't check — tap for details",
+    "status": {
+      "checking": "Checking this note…",
+      "unchecked": "This note hasn't been checked yet.",
+      "illegible": "This note couldn't be read.",
+      "markedCorrect": "You marked this as correct.",
+      "correct": "This looks right.",
+      "wrong": "Something here needs another look.",
+      "unfinished": "This looks unfinished."
+    },
+    "errors": {
+      "couldNotCheck": "Couldn't check this note.",
+      "noInk": "This group has no ink to check.",
+      "capture": "Couldn't capture this note.",
+      "busy": "Too many checks are waiting. This note will be checked shortly."
+    },
+    "ask": {
+      "button": "Ask",
+      "asking": "Asking…",
+      "label": "Your question",
+      "placeholder": "What would you like to know about this line?",
+      "tooLong": "Keep the question under {{max}} characters.",
+      "empty": "Type a question first.",
+      "failed": "Couldn't get an answer. Try again.",
+      "checkingFirst": "Checking this note first…",
+      "needsCheck": "This note needs to be checked before you can ask about it.",
+      "answer": "Answer"
+    }
+  },
+  "ai": {
+    "loadFailed": "Could not load the list of AI services.",
+    "noVision": "This provider cannot read handwriting, so checking is off. Ask, summaries and practice still work.",
+    "noModels": "No models found.",
+    "foundModels_one": "Found {{count}} model.",
+    "foundModels_other": "Found {{count}} models.",
+    "keySaved": "Key saved",
+    "noKey": "No key",
+    "noKeyOptional": "No key (optional)",
+    "noKeyNeeded": "No key needed",
+    "connectionWorks": "Connection works.",
+    "keySavedUntested": "Key saved (not tested — turn on permission to test)",
+    "consent": {
+      "local": "Let Mate use {{provider}} to check your work. Everything is processed on this computer; nothing is sent to the internet.",
+      "custom": "Send handwriting images and text to the server at the address above to check your work. Nothing is sent until you turn this on.",
+      "cloud": "Send handwriting images and text to {{provider}} to check your work. Nothing is sent until you turn this on."
+    },
+    "model": "Model",
+    "fetchModels": "Fetch models",
+    "address": "Address",
+    "apiKey": "API key",
+    "apiKeyOptional": "API key (optional)",
+    "pasteKey": "Paste your {{provider}} key",
+    "saveKey": "Save key",
+    "removeKey": "Remove key",
+    "status": "Status",
+    "testConnection": "Test connection",
+    "permission": "Permission",
+    "needs": {
+      "title": "What does Mate need from an AI?",
+      "feature": "Feature",
+      "needs": "Needs",
+      "fallback": "If the model cannot do it",
+      "tutor": "Checking handwritten maths (the tutor)",
+      "tutorNeeds": "Image input (\"vision\") and a JSON answer",
+      "tutorFallback": "The tutor is off; everything else works",
+      "text": "Ask about a line, summaries, titles, practice questions",
+      "textNeeds": "Text input and output"
+    },
+    "groups": {
+      "cloud": "Cloud services",
+      "local": "On this computer",
+      "custom": "Custom"
+    },
+    "vision": {
+      "yes": "Handwriting: can read it",
+      "dependsOnModel": "Handwriting: depends on the model",
+      "no": "Handwriting: text only, so checking is off"
+    },
+    "needsLocal": "Needs: the program running on this computer, no key",
+    "needsCustom": "Needs: a web address, and a key if the service wants one",
+    "needsCloud": "Needs: an API key from the service",
+    "cost": "Cost: {{cost}}",
+    "getKey": "Get a key"
   }
 }

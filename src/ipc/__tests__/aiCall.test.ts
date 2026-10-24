@@ -25,20 +25,27 @@ describe("AI commands and the live-checking block", () => {
 
   it("titles and practice questions block too", async () => {
     invoke.mockRejectedValueOnce({ kind: "auth", message: "bad key" });
-    await expect(suggestTitle("p1")).rejects.toThrow("bad key");
+    await expect(suggestTitle("p1")).rejects.toThrow("The API key was not accepted.");
     expect(sessionAttempts.block?.kind).toBe("auth");
     sessionAttempts.clearAuthBlock();
     invoke.mockRejectedValueOnce({ kind: "billing", message: "pay up" });
-    await expect(practiceGenerate("u1", 3, ["true-false"])).rejects.toThrow("pay up");
+    await expect(practiceGenerate("u1", 3, ["true-false"])).rejects.toThrow("billing problem");
     expect(sessionAttempts.block?.kind).toBe("billing");
   });
 
   it("other failures do not block", async () => {
     for (const kind of ["disabled", "rateLimited", "network", "internal"]) {
-      invoke.mockRejectedValueOnce({ kind, message: "nope" });
-      await expect(summarizePage("p1")).rejects.toThrow("nope");
+      invoke.mockRejectedValueOnce({ kind, message: "nope (offline)." });
+      await expect(summarizePage("p1")).rejects.toThrow();
     }
     expect(sessionAttempts.block).toBeNull();
+  });
+
+  it("shows a structured error in the interface language, keeping Rust's detail", async () => {
+    invoke.mockRejectedValueOnce({ kind: "network", message: "Could not reach the AI service (timed out)." });
+    await expect(summarizePage("p1")).rejects.toThrow("Could not reach the AI service (timed out).");
+    invoke.mockRejectedValueOnce({ kind: "internal", message: "database is locked" });
+    await expect(summarizePage("p1")).rejects.toThrow("database is locked");
   });
 
   it("passes results through", async () => {

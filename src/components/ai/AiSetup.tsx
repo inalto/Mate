@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getAiStatus, listAiProviders } from "../../ipc/ai";
 import type { AiProviderInfo, AiStatus } from "../../model/types";
 import { useSettingsStore } from "../../stores/settings";
@@ -7,16 +8,14 @@ import ConnectionFields from "./ConnectionFields";
 import NeedsExplainer from "./NeedsExplainer";
 import ProviderPicker from "./ProviderPicker";
 
-export const NO_VISION_NOTE =
-  "This provider cannot read handwriting, so checking is off. Ask, summaries and practice still work.";
-
 /** Choose an AI provider and connect it: what Mate needs, the catalog, then the connection fields. */
 export default function AiSetup() {
+  const { t } = useTranslation();
   const settings = useSettingsStore((s) => s.settings);
   const update = useSettingsStore((s) => s.update);
   const [providers, setProviders] = useState<AiProviderInfo[]>([]);
   const [status, setStatus] = useState<AiStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const mounted = useRef(true);
 
   const refresh = useCallback(async () => {
@@ -32,7 +31,7 @@ export default function AiSetup() {
     mounted.current = true;
     listAiProviders().then(
       (list) => mounted.current && setProviders(list),
-      () => mounted.current && setError("Could not load the list of AI services."),
+      () => mounted.current && setLoadFailed(true),
     );
     void refresh();
     return () => {
@@ -53,10 +52,10 @@ export default function AiSetup() {
   return (
     <div className="ai-setup">
       <NeedsExplainer open={!current?.configured} />
-      {error && <p className="form-error">{error}</p>}
+      {loadFailed && <p className="form-error">{t("ai.loadFailed")}</p>}
       <ProviderPicker providers={providers} value={settings.aiProvider} onSelect={(id) => void select(id)} />
       {info && <ConnectionFields key={info.id} info={info} status={status} onChanged={refresh} />}
-      {textOnly && <p className="muted" role="note">{NO_VISION_NOTE}</p>}
+      {textOnly && <p className="muted" role="note">{t("ai.noVision")}</p>}
     </div>
   );
 }

@@ -20,7 +20,9 @@ import { patchSettings } from "../../../ipc/settings";
 import { collectEntries } from "../../../routes/Settings/search";
 import { flushSettings, useSettingsStore } from "../../../stores/settings";
 import AiSettings from "../../AiSettings";
-import { NO_VISION_NOTE } from "../AiSetup";
+import i18n from "../../../i18n";
+
+const NO_VISION_NOTE = i18n.t("ai.noVision");
 
 const SECRET = "sk-test-very-secret";
 const base = { canListModels: false, keyUrl: "", cost: "Paid", privacy: "Sent to the service.", defaultBaseUrl: "", editableBaseUrl: false };

@@ -3,6 +3,7 @@
 // (recognitions, in-flight groups, groups that couldn't be checked) needs to draw.
 import { useEffect } from "react";
 import { create } from "zustand";
+import i18n from "../i18n";
 import { getRecognitions } from "../ipc/recognition";
 import type { AiVision, Recognition, Settings } from "../model/types";
 import type { EditorStore } from "../stores/editor";
@@ -249,7 +250,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     if (s.tutorMode === "onask" && !asked) return;
     if (view.inFlight.has(region.regionId)) return;
     if (view.inFlight.size >= MAX_PENDING_PER_PAGE) {
-      emit({ unchecked: withMap(view.unchecked, (m) => m.set(region.regionId, { kind: "busy", reason: "Too many checks are waiting. This note will be checked shortly." })) });
+      emit({ unchecked: withMap(view.unchecked, (m) => m.set(region.regionId, { kind: "busy", reason: i18n.t("tutor.errors.busy") })) });
       scheduleRetry(token, region.regionId, BUSY_RETRY_MS, asked);
       return;
     }

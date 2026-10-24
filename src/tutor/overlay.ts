@@ -3,6 +3,7 @@
 // being checked and a muted dash for a group that couldn't be checked. Ink is never hidden or
 // replaced. Pure functions: `tutorMarkers` decides what to show, `drawTutorMarkers` paints it in
 // screen space and `hitTutorMarker` finds the marker under a pointer.
+import i18n from "../i18n";
 import type { ThemeName } from "../ink/types";
 import type { GroupBounds, Recognition, Settings } from "../model/types";
 import { worldToScreen, type Camera, type Vec2 } from "../canvas/camera";
@@ -220,7 +221,7 @@ export function drawTutorMarkers(ctx: MarkerContext, markers: readonly TutorMark
 }
 
 /** Hover label for a group that couldn't be checked (mouse only; a tap opens the card instead). */
-export const UNCHECKED_TIP = "Couldn't check — tap for details";
+export const uncheckedTip = (): string => i18n.t("tutor.uncheckedTip");
 
 /** The parts of a 2D context the hover label uses. */
 export type TipContext = Pick<
@@ -251,12 +252,13 @@ export function drawTutorTip(ctx: TipContext, m: TutorMarker, c: Camera, dpr: nu
   ctx.font = `${TIP_FONT_PX}px system-ui, sans-serif`;
   ctx.textBaseline = "middle";
   ctx.textAlign = "left";
-  const width = Math.ceil(ctx.measureText(UNCHECKED_TIP).width) + TIP_PAD_PX * 2;
+  const tip = uncheckedTip();
+  const width = Math.ceil(ctx.measureText(tip).width) + TIP_PAD_PX * 2;
   const rect = { x: s.x + r + TIP_PAD_PX, y: s.y - TIP_H_PX / 2, width, height: TIP_H_PX };
   ctx.fillStyle = "rgba(40, 40, 46, 0.92)";
   ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
   ctx.fillStyle = "#FFFFFF";
-  ctx.fillText(UNCHECKED_TIP, rect.x + TIP_PAD_PX, s.y);
+  ctx.fillText(tip, rect.x + TIP_PAD_PX, s.y);
   ctx.restore();
   return rect;
 }

@@ -1,25 +1,28 @@
+import { useTranslation } from "react-i18next";
+
 /** What Mate asks of an AI, in two rows. Open until a provider is set up. */
 export default function NeedsExplainer({ open }: { open: boolean }) {
+  const { t } = useTranslation();
   return (
     <details className="ai-needs" open={open}>
-      <summary>What does Mate need from an AI?</summary>
+      <summary>{t("ai.needs.title")}</summary>
       <table>
         <thead>
           <tr>
-            <th scope="col">Feature</th>
-            <th scope="col">Needs</th>
-            <th scope="col">If the model cannot do it</th>
+            <th scope="col">{t("ai.needs.feature")}</th>
+            <th scope="col">{t("ai.needs.needs")}</th>
+            <th scope="col">{t("ai.needs.fallback")}</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <th scope="row">Checking handwritten maths (the tutor)</th>
-            <td>Image input ("vision") and a JSON answer</td>
-            <td>The tutor is off; everything else works</td>
+            <th scope="row">{t("ai.needs.tutor")}</th>
+            <td>{t("ai.needs.tutorNeeds")}</td>
+            <td>{t("ai.needs.tutorFallback")}</td>
           </tr>
           <tr>
-            <th scope="row">Ask about a line, summaries, titles, practice questions</th>
-            <td>Text input and output</td>
+            <th scope="row">{t("ai.needs.text")}</th>
+            <td>{t("ai.needs.textNeeds")}</td>
             <td>-</td>
           </tr>
         </tbody>
