@@ -2,6 +2,7 @@
 // handedness (right-handed: left edge, so the writing hand never covers it).
 import { ArrowLineLeft, Books, House, Notebook, Plus } from "@phosphor-icons/react";
 import { useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import type { Page } from "../model/types";
 import { clampSidebarWidth, SIDEBAR_MAX, SIDEBAR_MIN, useChromeStore } from "../stores/chrome";
@@ -13,6 +14,7 @@ import PageNode, { type PageTreeContext } from "./SidebarPageRow";
 const byOrder = <T extends { orderIndex: number }>(a: T, b: T) => a.orderIndex - b.orderIndex;
 
 export default function Sidebar() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const tree = useNotebookStore((s) => s.tree);
   const open = useChromeStore((s) => s.sidebarOpen);
@@ -53,9 +55,9 @@ export default function Sidebar() {
   const topPages = (sectionId: string) => (byParent.get(undefined) ?? []).filter((p) => p.sectionId === sectionId);
   const newPage = async (sectionId: string) => {
     const count = tree.pages.filter((p) => p.sectionId === sectionId).length;
-    openPage((await nb.createPage(sectionId, `Page ${count + 1}`)).id, false);
+    openPage((await nb.createPage(sectionId, t("common.pageName", { n: count + 1 }))).id, false);
   };
-  const newBook = async () => setUnitOverride((await nb.createUnit("Untitled book")).id);
+  const newBook = async () => setUnitOverride((await nb.createUnit(t("common.untitledBook"))).id);
 
   const onResize = (e: ReactPointerEvent<HTMLDivElement>) => {
     const startX = e.clientX;
@@ -76,9 +78,9 @@ export default function Sidebar() {
 
   const pageList = (sectionId: string) =>
     topPages(sectionId).length === 0 ? (
-      <p className="muted sb-empty">No pages yet</p>
+      <p className="muted sb-empty">{t("sidebar.noPages")}</p>
     ) : (
-      <ul role="tree" aria-label="Pages">
+      <ul role="tree" aria-label={t("sidebar.pages")}>
         {topPages(sectionId).map((p) => <PageNode key={p.id} page={p} level={1} ctx={ctx} />)}
       </ul>
     );
@@ -86,24 +88,24 @@ export default function Sidebar() {
   const pickedId = sections.some((s) => s.id === sectionPick) ? sectionPick : (sections[0]?.id ?? null);
 
   return (
-    <aside className={`sidebar ${leftHanded ? "sidebar-right" : "sidebar-left"}`} style={{ width }} aria-label="Notebook sidebar">
+    <aside className={`sidebar ${leftHanded ? "sidebar-right" : "sidebar-left"}`} style={{ width }} aria-label={t("sidebar.label")}>
       <div className="sb-header">
-        <button className="icon-btn" aria-label="Home" title="Home" onClick={() => navigate("/")}><House size={18} /></button>
-        <button className="icon-btn" aria-label="Collapse sidebar" title="Collapse sidebar (Ctrl+\)" onClick={() => useChromeStore.getState().setSidebarOpen(false)}><ArrowLineLeft size={18} /></button>
-        <button className="icon-btn" aria-label="New notebook" title="New notebook" onClick={() => void newBook()}><Notebook size={18} /></button>
-        <button className="icon-btn" aria-label="Open library" title="Open library" onClick={() => navigate("/library")}><Books size={18} /></button>
+        <button className="icon-btn" aria-label={t("nav.home")} title={t("nav.home")} onClick={() => navigate("/")}><House size={18} /></button>
+        <button className="icon-btn" aria-label={t("sidebar.collapse")} title={t("toolbar.hintWithKeys", { label: t("sidebar.collapse"), keys: "Ctrl+\\" })} onClick={() => useChromeStore.getState().setSidebarOpen(false)}><ArrowLineLeft size={18} /></button>
+        <button className="icon-btn" aria-label={t("sidebar.newNotebook")} title={t("sidebar.newNotebook")} onClick={() => void newBook()}><Notebook size={18} /></button>
+        <button className="icon-btn" aria-label={t("palette.openLibrary")} title={t("palette.openLibrary")} onClick={() => navigate("/library")}><Books size={18} /></button>
       </div>
       {units.length > 1 && (
-        <select className="input sb-unit" aria-label="Notebook" value={unit?.id} onChange={(e) => setUnitOverride(e.target.value)}>
+        <select className="input sb-unit" aria-label={t("sidebar.notebook")} value={unit?.id} onChange={(e) => setUnitOverride(e.target.value)}>
           {units.map((u) => <option key={u.id} value={u.id}>{u.title}</option>)}
         </select>
       )}
       {units.length === 1 && <div className="sb-unit-title">{unit.title}</div>}
       <div className="sb-body">
-        {sections.length === 0 && <p className="muted sb-empty">No sections</p>}
+        {sections.length === 0 && <p className="muted sb-empty">{t("sidebar.noSections")}</p>}
         {layout === "split" && sections.length > 0 && (
           <>
-            <div className="sb-sections" role="listbox" aria-label="Sections">
+            <div className="sb-sections" role="listbox" aria-label={t("sidebar.sections")}>
               {sections.map((s) => (
                 <button key={s.id} role="option" aria-selected={s.id === pickedId} className={s.id === pickedId ? "sb-row active" : "sb-row"} onClick={() => setSectionPick(s.id)}>
                   <span className="sb-dot" style={{ background: s.color }} />
@@ -119,17 +121,17 @@ export default function Sidebar() {
             <div className="sb-section">
               <span className="sb-dot" style={{ background: s.color }} />
               <span className="sb-title">{s.title}</span>
-              <button className="icon-btn" aria-label={`New page in ${s.title}`} title="New page" onClick={() => void newPage(s.id)}><Plus size={14} /></button>
+              <button className="icon-btn" aria-label={t("sidebar.newPageIn", { section: s.title })} title={t("palette.newPage")} onClick={() => void newPage(s.id)}><Plus size={14} /></button>
             </div>
             {pageList(s.id)}
           </div>
         ))}
         {layout === "split" && pickedId && (
-          <button className="btn sb-add" onClick={() => void newPage(pickedId)}><Plus size={14} /> New page</button>
+          <button className="btn sb-add" onClick={() => void newPage(pickedId)}><Plus size={14} /> {t("palette.newPage")}</button>
         )}
         {unit && (
-          <button className="btn sb-add" onClick={() => void nb.createSection(unit.id, `Section ${sections.length + 1}`)}>
-            <Plus size={14} /> New section
+          <button className="btn sb-add" onClick={() => void nb.createSection(unit.id, t("common.sectionName", { n: sections.length + 1 }))}>
+            <Plus size={14} /> {t("palette.newSection")}
           </button>
         )}
       </div>
@@ -137,7 +139,7 @@ export default function Sidebar() {
         className={`sb-resize ${leftHanded ? "sb-resize-left" : "sb-resize-right"}`}
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize sidebar"
+        aria-label={t("sidebar.resize")}
         aria-valuemin={SIDEBAR_MIN}
         aria-valuemax={SIDEBAR_MAX}
         aria-valuenow={width}

@@ -1,6 +1,7 @@
 import { Books, Gear, House, ShareNetwork, Trash } from "@phosphor-icons/react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { bindLiveShortcuts } from "../keys/shortcuts";
 import ShortcutHelp from "../keys/ShortcutHelp";
 import { runGlobalShortcut } from "../keys/modalGuard";
@@ -15,6 +16,7 @@ import { useSettingsStore } from "../stores/settings";
 const link = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-link active" : "nav-link");
 
 export default function Shell() {
+  const { t } = useTranslation();
   // The editor has its own chrome (top bar, sidebar), so the app rail steps aside there.
   const inEditor = useLocation().pathname.startsWith("/edit/");
   useEffect(() => {
@@ -57,21 +59,21 @@ export default function Shell() {
   return (
     <div className="shell">
       {!inEditor && (
-      <nav className="nav-rail" aria-label="Main">
-        <NavLink to="/" end className={link} aria-label="Home" title="Home">
+      <nav className="nav-rail" aria-label={t("nav.main")}>
+        <NavLink to="/" end className={link} aria-label={t("nav.home")} title={t("nav.home")}>
           <House size={22} />
         </NavLink>
-        <NavLink to="/library" className={link} aria-label="Library" title="Library">
+        <NavLink to="/library" className={link} aria-label={t("nav.library")} title={t("nav.library")}>
           <Books size={22} />
         </NavLink>
-        <NavLink to="/graph" className={link} aria-label="Graph" title="Graph">
+        <NavLink to="/graph" className={link} aria-label={t("nav.graph")} title={t("nav.graph")}>
           <ShareNetwork size={22} />
         </NavLink>
-        <NavLink to="/trash" className={link} aria-label="Trash" title="Trash">
+        <NavLink to="/trash" className={link} aria-label={t("nav.trash")} title={t("nav.trash")}>
           <Trash size={22} />
         </NavLink>
         <div className="spacer" />
-        <NavLink to="/settings" className={link} aria-label="Settings" title="Settings">
+        <NavLink to="/settings" className={link} aria-label={t("nav.settings")} title={t("nav.settings")}>
           <Gear size={22} />
         </NavLink>
       </nav>

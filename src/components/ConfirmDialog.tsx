@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useModal } from "./useModal";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 
 export default function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCancel }: Props) {
   useModal();
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const cancel = useRef(onCancel);
   useEffect(() => {
@@ -45,7 +47,7 @@ export default function ConfirmDialog({ title, children, confirmLabel, onConfirm
         <h2>{title}</h2>
         <p>{children}</p>
         <div className="dialog-actions">
-          <button type="button" className="btn" onClick={onCancel}>Cancel</button>
+          <button type="button" className="btn" onClick={onCancel}>{t("common.cancel")}</button>
           <button type="button" className="btn btn-primary" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>

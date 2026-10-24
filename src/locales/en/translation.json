@@ -286,7 +286,10 @@
     "copied": "Copied",
     "untitled": "Untitled",
     "pageName": "Page {{n}}",
-    "sectionName": "Section {{n}}"
+    "sectionName": "Section {{n}}",
+    "dismiss": "Dismiss",
+    "delete": "Delete",
+    "untitledBook": "Untitled book"
   },
   "errors": {
     "generic": "Something went wrong.",
@@ -451,7 +454,12 @@
     }
   },
   "nav": {
-    "home": "Home"
+    "home": "Home",
+    "main": "Main",
+    "library": "Library",
+    "graph": "Graph",
+    "trash": "Trash",
+    "settings": "Settings"
   },
   "about": {
     "version": "Version {{version}}",
@@ -507,5 +515,137 @@
     "insertGraph": "Insert graph",
     "select": "Select",
     "lasso": "Lasso"
+  },
+  "topbar": {
+    "more": "More actions",
+    "moreUpdate": "More actions, update available",
+    "updateAvailable": "Update available: {{version}}",
+    "exportPage": "Export page…",
+    "importNotes": "Import notes…",
+    "pageSettings": "Page settings",
+    "searchActions": "Search and actions…",
+    "about": "About Mate",
+    "pageTitle": "Page title"
+  },
+  "tabs": {
+    "label": "Open pages",
+    "close": "Close {{title}}",
+    "split": "Split view",
+    "keepLeft": "Keep left only",
+    "keepRight": "Keep right only"
+  },
+  "editor": {
+    "zoomReset": "Zoom {{percent}}%, reset"
+  },
+  "whatsNew": {
+    "title": "What's new",
+    "gotIt": "Got it"
+  },
+  "sidebar": {
+    "label": "Notebook sidebar",
+    "noPages": "No pages yet",
+    "pages": "Pages",
+    "collapse": "Collapse sidebar",
+    "newNotebook": "New notebook",
+    "notebook": "Notebook",
+    "noSections": "No sections",
+    "sections": "Sections",
+    "newPageIn": "New page in {{section}}",
+    "resize": "Resize sidebar",
+    "windowFailed": "Could not open the page in a new window.",
+    "icon": "Icon {{icon}}",
+    "noIcon": "No icon",
+    "collapsePage": "Collapse",
+    "expandPage": "Expand",
+    "menu": {
+      "rename": "Rename",
+      "changeIcon": "Change icon",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "promote": "Promote",
+      "demote": "Demote",
+      "duplicate": "Duplicate",
+      "split": "Open in split view",
+      "window": "Open in new window"
+    }
+  },
+  "library": {
+    "openBook": "Open {{title}}",
+    "bookTitle": "Book title",
+    "bookActions": "Actions for {{title}}",
+    "changeColour": "Change colour",
+    "favourite": "Favourite",
+    "unfavourite": "Unfavourite",
+    "moveToShelf": "Move to shelf",
+    "practice": "Practice from this book…",
+    "exportBook": "Export book…",
+    "share": "Share…",
+    "importInto": "Import into this book…",
+    "colour": "Colour {{color}}",
+    "noShelf": "No shelf",
+    "shelfName": "Shelf name",
+    "unshelved": "Unshelved",
+    "renameShelf": "Rename shelf",
+    "deleteShelf": "Delete shelf",
+    "emptyShelf": "No books on this shelf"
+  },
+  "export": {
+    "failed": "Export failed: {{message}}"
+  },
+  "selection": {
+    "label": "Selection",
+    "arrange": "Arrange ▸",
+    "align": "Align ▸",
+    "alignLeft": "Align left",
+    "alignCenter": "Align center",
+    "alignRight": "Align right",
+    "alignTop": "Align top",
+    "alignMiddle": "Align middle",
+    "alignBottom": "Align bottom",
+    "distributeH": "Distribute horizontally",
+    "distributeV": "Distribute vertically",
+    "fillColour": "Fill colour",
+    "duplicate": "Duplicate",
+    "copyLatex": "Copy as LaTeX",
+    "graphFromEquation": "Graph from equation",
+    "graph": "Graph",
+    "widthPx": "Width (px)",
+    "width": "Selection width"
+  },
+  "preset": {
+    "edit": "Edit preset",
+    "hue": "Hue",
+    "hex": "Hex colour",
+    "recent": "Recent colours",
+    "width": "Width",
+    "moveLeft": "Move left",
+    "moveRight": "Move right"
+  },
+  "text": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "bulletList": "Bulleted list",
+    "numberedList": "Numbered list",
+    "font": "Font",
+    "fonts": {
+      "sans": "Sans",
+      "serif": "Serif",
+      "mono": "Mono",
+      "hand": "Hand",
+      "script": "Script"
+    },
+    "smaller": "Smaller text",
+    "size": "Text size",
+    "larger": "Larger text",
+    "colour": "Text colour {{color}}",
+    "alignCentre": "Align centre"
+  },
+  "pageSettings": {
+    "mode": "Mode",
+    "paperSize": "Paper size",
+    "gridUniform": "Grid (uniform)",
+    "spacing": "Spacing"
   }
 }

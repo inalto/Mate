@@ -1,6 +1,7 @@
 // Pen preset editor popover: hue strip, hex input, palette, width, recent colours, reorder.
 import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
 import type { PenPreset } from "../model/types";
 import { HIGHLIGHTER_PALETTE, hslToHex, hueOf, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import { useDismiss } from "./useDismiss";
@@ -25,6 +26,7 @@ interface Props {
 
 /** Changes apply to the active preset live and are persisted when the menu unmounts. */
 export default function PresetMenu({ preset, index, count, anchorRef, onClose }: Props) {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const [draft, setDraft] = useState(preset);
   const draftRef = useRef(draft);
@@ -64,20 +66,20 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
       type="button"
       className={draft.color.toUpperCase() === c.toUpperCase() ? "tb-swatch active" : "tb-swatch"}
       style={{ background: c }}
-      aria-label={`Colour ${c}`}
+      aria-label={t("library.colour", { color: c })}
       onClick={() => change({ color: c.toUpperCase() })}
     />
   );
 
   return (
-    <div className="tb-popover preset-menu" role="dialog" aria-label="Edit preset">
+    <div className="tb-popover preset-menu" role="dialog" aria-label={t("preset.edit")}>
       <input
         type="range"
         className="hue-strip"
         min={0}
         max={360}
         value={hueOf(draft.color)}
-        aria-label="Hue"
+        aria-label={t("preset.hue")}
         onChange={(e) => change({ color: hslToHex(Number(e.target.value), 70, 45) })}
       />
       <div className="tb-row">
@@ -85,7 +87,7 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
         <input
           className="hex-input"
           value={hexText}
-          aria-label="Hex colour"
+          aria-label={t("preset.hex")}
           spellCheck={false}
           onChange={(e) => {
             setHexText(e.target.value);
@@ -96,18 +98,18 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
       </div>
       <div className="tb-row">{palette.map(swatch)}</div>
       {recent.length > 0 && (
-        <div className="tb-row" aria-label="Recent colours">
+        <div className="tb-row" aria-label={t("preset.recent")}>
           {recent.slice(0, MAX_RECENT).map(swatch)}
         </div>
       )}
-      <label className="tb-row tb-width" title="Width (px)">
+      <label className="tb-row tb-width" title={t("selection.widthPx")}>
         <input
           type="range"
           min={1}
           max={60}
           step={0.5}
           value={widthPx(draft.width)}
-          aria-label="Width"
+          aria-label={t("preset.width")}
           onChange={(e) => change({ width: Number(e.target.value) / PX_PER_UNIT })}
         />
         <span>{widthPx(draft.width)}</span>
@@ -116,7 +118,7 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
         <button
           type="button"
           className="tb-btn"
-          aria-label="Move left"
+          aria-label={t("preset.moveLeft")}
           disabled={index === 0}
           onClick={() => ed.getState().movePreset(preset.id, -1)}
         >
@@ -125,7 +127,7 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
         <button
           type="button"
           className="tb-btn"
-          aria-label="Move right"
+          aria-label={t("preset.moveRight")}
           disabled={index >= count - 1}
           onClick={() => ed.getState().movePreset(preset.id, 1)}
         >
