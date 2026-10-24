@@ -16,7 +16,7 @@ vi.mock("../../stores/navigation", () => ({ navigateTo: vi.fn() }));
 import { navigateTo } from "../../stores/navigation";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { detectSyncFolders, nextcloudShare, nextcloudStatus, pickFolder, saveArchiveTo } from "../../ipc/share";
+import { detectSyncFolders, nextcloudShare, nextcloudStatus, pickFolder, saveArchiveTo, type SyncFolder } from "../../ipc/share";
 import ShareDialog from "../ShareDialog";
 
 const unit = { id: "u1", title: "Algebra" } as Unit;
@@ -65,7 +65,7 @@ describe("ShareDialog", () => {
   });
 
   it("says it is looking for folders until the search ends", async () => {
-    let resolve!: (v: Array<{ service: string; label: string; path: string }>) => void;
+    let resolve!: (v: SyncFolder[]) => void;
     vi.mocked(detectSyncFolders).mockReturnValue(new Promise((r) => (resolve = r)));
     render(<ShareDialog unit={unit} onClose={onClose} />);
     expect(screen.getByText("Looking for synced folders…")).toBeTruthy();
