@@ -12,7 +12,33 @@ permissions:
   contents: write
 
 jobs:
+  # Creates the GitHub Release once, so the four build jobs only upload to it. Without this
+  # step two jobs finishing at the same moment both try to create it and one fails.
+  prepare:
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Create the release if it does not exist yet
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $TAG already exists"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Mate ${TAG#v}" --notes "$(cat <<'NOTES'
+          Mate — local-first handwriting & math notes for Windows, macOS and Linux.
+
+          Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux).
+          macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
+          NOTES
+          )"
+          fi
+
   release:
+    needs: prepare
+    # workflow_dispatch skips prepare; the build jobs then create the release themselves as before.
+    if: always() && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
