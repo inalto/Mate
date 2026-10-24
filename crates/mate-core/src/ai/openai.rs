@@ -5,6 +5,7 @@
 //! and `Debug` redacts the key.
 
 use std::fmt;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -81,7 +82,27 @@ pub struct OpenAiProvider {
     id: &'static str,
     timeout: Duration,
     deadline: Duration,
+    /// How far structured output has been downgraded after the service refused a
+    /// `response_format` (see [`level`]); never goes back up for this instance.
+    downgrade: AtomicU8,
     client: reqwest::blocking::Client,
+}
+
+/// `JsonSchema` < `JsonObject` < `PromptOnly`: each step asks less of the service.
+fn level(s: Structured) -> u8 {
+    match s {
+        Structured::JsonSchema => 0,
+        Structured::JsonObject => 1,
+        Structured::PromptOnly => 2,
+    }
+}
+
+fn from_level(l: u8) -> Structured {
+    match l {
+        0 => Structured::JsonSchema,
+        1 => Structured::JsonObject,
+        _ => Structured::PromptOnly,
+    }
 }
 
 impl fmt::Debug for OpenAiProvider {
@@ -99,6 +120,8 @@ enum Failure {
     /// Worth another attempt (408, 429, 5xx, network), optionally after the server's `retry-after`.
     Transient(AiError, Option<Duration>),
     Final(AiError),
+    /// A 400 refusing the request's `response_format`: worth one try in a simpler mode.
+    Format(AiError),
 }
 
 /// Upper bound for one check, retries included, so a group is never in flight for long.
@@ -122,6 +145,7 @@ impl OpenAiProvider {
             id: "openai",
             timeout: TIMEOUT,
             deadline: DEADLINE,
+            downgrade: AtomicU8::new(0),
             client,
         }
     }
@@ -141,12 +165,16 @@ impl OpenAiProvider {
         self
     }
 
-    /// `base_url + path`, without doubling `/v1` when the user's address already ends with it.
+    /// `base_url + path`. An address ending in `/v1` (as OpenAI-compatible servers are often
+    /// given) neither doubles it for `/v1/…` paths nor keeps it for others (Ollama's `/api/tags`).
     fn url(&self, path: &str) -> String {
-        match path.strip_prefix("/v1/") {
-            Some(rest) if self.base_url.ends_with("/v1") => format!("{}/{rest}", self.base_url),
-            _ => format!("{}{path}", self.base_url),
-        }
+        let root = self.base_url.strip_suffix("/v1").unwrap_or(&self.base_url);
+        format!("{root}{path}")
+    }
+
+    /// The structured-output mode to use now: the service's own, or a simpler one it fell back to.
+    fn mode(&self) -> Structured {
+        from_level(level(self.quirks.structured).max(self.downgrade.load(Ordering::Relaxed)))
     }
 
     /// Authorization (when a key is set) and the service's extra headers.
@@ -168,10 +196,10 @@ impl OpenAiProvider {
         body[field] = json!(max);
     }
 
-    /// The system prompt, with the schema appended when the service cannot enforce it itself.
-    fn system_prompt(&self, system: &str, schema: Option<&Value>) -> String {
+    /// The system prompt, with the schema appended when `mode` cannot enforce it.
+    fn system_prompt(mode: Structured, system: &str, schema: Option<&Value>) -> String {
         match schema {
-            Some(schema) if self.quirks.structured != Structured::JsonSchema => {
+            Some(schema) if mode != Structured::JsonSchema => {
                 let rule = format!(
                     "Reply with only one JSON object and no other text. It must match this JSON Schema:\n{schema}"
                 );
@@ -181,8 +209,8 @@ impl OpenAiProvider {
         }
     }
 
-    fn set_format(&self, body: &mut Value, schema: &Value, name: &str) {
-        match self.quirks.structured {
+    fn set_format(mode: Structured, body: &mut Value, schema: &Value, name: &str) {
+        match mode {
             Structured::JsonSchema => body["response_format"] = response_format(schema, name),
             Structured::JsonObject => body["response_format"] = json!({ "type": "json_object" }),
             Structured::PromptOnly => {}
@@ -197,22 +225,47 @@ impl OpenAiProvider {
 
     /// POSTs `body` with retries and returns the first text block of the reply.
     fn send(&self, body: &Value) -> Result<String, AiError> {
+        self.send_retrying(body).map_err(|f| match f {
+            Failure::Transient(e, _) | Failure::Final(e) | Failure::Format(e) => e,
+        })
+    }
+
+    /// Sends the body `build` makes for the current mode. When the service refuses the
+    /// `response_format`, tries again in the next simpler mode (`json_schema`, then `json_object`,
+    /// then prompt only) and keeps that mode for later calls.
+    fn send_structured(&self, build: impl Fn(Structured) -> Value) -> Result<String, AiError> {
+        loop {
+            let mode = self.mode();
+            match self.send_retrying(&build(mode)) {
+                Ok(text) => return Ok(text),
+                Err(Failure::Format(e)) => {
+                    if mode == Structured::PromptOnly {
+                        return Err(e);
+                    }
+                    self.downgrade.fetch_max(level(mode) + 1, Ordering::Relaxed);
+                }
+                Err(Failure::Transient(e, _) | Failure::Final(e)) => return Err(e),
+            }
+        }
+    }
+
+    fn send_retrying(&self, body: &Value) -> Result<String, Failure> {
         let start = Instant::now();
         let mut attempt = 0;
         loop {
             let left = self.deadline.saturating_sub(start.elapsed());
             match self.send_once(body, left.min(self.timeout)) {
                 Ok(text) => return Ok(text),
-                Err(Failure::Final(e)) => return Err(e),
+                Err(f @ (Failure::Final(_) | Failure::Format(_))) => return Err(f),
                 Err(Failure::Transient(e, retry_after)) => {
                     let wait = match retry_after {
-                        Some(ra) if ra > MAX_RETRY_AFTER => return Err(e),
+                        Some(ra) if ra > MAX_RETRY_AFTER => return Err(Failure::Final(e)),
                         Some(ra) => ra.max(self.backoff * 2u32.pow(attempt)),
                         None => self.backoff * 2u32.pow(attempt),
                     };
                     // Another try must fit in the deadline with at least a few seconds to run.
                     if attempt >= RETRIES || start.elapsed() + wait + Duration::from_secs(5) > self.deadline {
-                        return Err(e);
+                        return Err(Failure::Final(e));
                     }
                     thread::sleep(wait);
                     attempt += 1;
@@ -242,6 +295,9 @@ impl OpenAiProvider {
             401 | 403 => Err(Failure::Final(AiError::Auth)),
             402 => Err(Failure::Final(AiError::Billing)),
             404 => Err(Failure::Final(AiError::UnknownModel)),
+            400 if body.get("response_format").is_some() && mentions_format(&text) => {
+                Err(Failure::Format(AiError::Rejected(api_message(&text, status))))
+            }
             400 | 413 | 422 => Err(Failure::Final(AiError::Rejected(api_message(&text, status)))),
             408 => Err(Failure::Transient(AiError::Network("the request timed out".into()), retry_after)),
             // An exhausted quota also comes back as 429; waiting does not fix it.
@@ -304,14 +360,22 @@ pub fn parse_model_list(body: &str, vision_only: bool) -> Result<Vec<String>, Ai
     Ok(ids)
 }
 
-/// The first balanced `{…}` in a reply, skipping any `<think>…</think>` preamble, code fences and
-/// prose around it. Braces inside JSON strings are ignored.
+/// The first balanced `{…}` in a reply that parses as a JSON object, skipping any
+/// `<think>…</think>` preamble, code fences and prose around it (prose may itself hold braces, as in
+/// `$\frac{1}{2}$`). Braces inside JSON strings are ignored.
 pub fn extract_json_object(text: &str) -> Option<&str> {
     let hay = match text.rfind("</think>") {
         Some(i) => &text[i + "</think>".len()..],
         None => text,
     };
-    let open = hay.find('{')?;
+    hay.match_indices('{').find_map(|(open, _)| {
+        let block = balanced_from(hay, open)?;
+        serde_json::from_str::<Value>(block).ok().filter(Value::is_object).map(|_| block)
+    })
+}
+
+/// The balanced `{…}` starting at byte `open` (a `{`), treating `"…"` as strings.
+fn balanced_from(hay: &str, open: usize) -> Option<&str> {
     let (mut depth, mut in_str, mut escaped) = (0usize, false, false);
     for (i, &b) in hay.as_bytes().iter().enumerate().skip(open) {
         if in_str {
@@ -336,6 +400,12 @@ pub fn extract_json_object(text: &str) -> Option<&str> {
         }
     }
     None
+}
+
+/// A 400 body that blames the `response_format` (or the `json_schema` in it).
+fn mentions_format(body: &str) -> bool {
+    let b = body.to_ascii_lowercase();
+    b.contains("response_format") || b.contains("json_schema")
 }
 
 /// A 429 whose `error.code` (or `error.type`) is `insufficient_quota`: out of credit, not busy.
@@ -415,38 +485,48 @@ impl Provider for OpenAiProvider {
     fn recognize(&self, req: &RecognizeRequest) -> Result<Verdict, AiError> {
         let data = base64::engine::general_purpose::STANDARD.encode(&req.image_png);
         let schema = Verdict::json_schema();
-        let mut body = json!({
-            "model": self.model,
-            "messages": [
-                { "role": "system", "content": self.system_prompt(RECOGNIZE_SYSTEM, Some(&schema)) },
-                {
-                    "role": "user",
-                    "content": [
-                        { "type": "text", "text": recognize_user_text(req) },
-                        { "type": "image_url", "image_url": { "url": format!("data:image/png;base64,{data}") } }
-                    ]
-                }
-            ]
-        });
-        self.set_limit(&mut body, MAX_TOKENS);
-        self.set_format(&mut body, &schema, "verdict");
-        let text = self.send(&body)?;
+        let user_text = recognize_user_text(req);
+        let text = self.send_structured(|mode| {
+            let mut body = json!({
+                "model": self.model,
+                "messages": [
+                    { "role": "system", "content": Self::system_prompt(mode, RECOGNIZE_SYSTEM, Some(&schema)) },
+                    {
+                        "role": "user",
+                        "content": [
+                            { "type": "text", "text": user_text },
+                            { "type": "image_url", "image_url": { "url": format!("data:image/png;base64,{data}") } }
+                        ]
+                    }
+                ]
+            });
+            self.set_limit(&mut body, MAX_TOKENS);
+            Self::set_format(mode, &mut body, &schema, "verdict");
+            body
+        })?;
         parse_verdict(&text)
     }
 
     fn complete(&self, req: &TextRequest) -> Result<String, AiError> {
-        let mut messages = Vec::new();
-        let system = self.system_prompt(&req.system, req.json_schema.as_ref());
-        // An empty system prompt is omitted.
-        if !system.trim().is_empty() {
-            messages.push(json!({ "role": "system", "content": system }));
+        let build = |mode: Structured| {
+            let mut messages = Vec::new();
+            let system = Self::system_prompt(mode, &req.system, req.json_schema.as_ref());
+            // An empty system prompt is omitted.
+            if !system.trim().is_empty() {
+                messages.push(json!({ "role": "system", "content": system }));
+            }
+            messages.push(json!({ "role": "user", "content": req.user }));
+            let mut body = json!({ "model": self.model, "messages": messages });
+            self.set_limit(&mut body, req.max_tokens.max(1));
+            if let Some(schema) = &req.json_schema {
+                Self::set_format(mode, &mut body, schema, "result");
+            }
+            body
+        };
+        if req.json_schema.is_none() {
+            return self.send(&build(self.mode()));
         }
-        messages.push(json!({ "role": "user", "content": req.user }));
-        let mut body = json!({ "model": self.model, "messages": messages });
-        self.set_limit(&mut body, req.max_tokens.max(1));
-        let Some(schema) = &req.json_schema else { return self.send(&body) };
-        self.set_format(&mut body, schema, "result");
-        let text = self.send(&body)?;
+        let text = self.send_structured(build)?;
         // Services without enforced schemas wrap the object in prose or code fences.
         Ok(extract_json_object(&text).map_or(text.clone(), str::to_string))
     }

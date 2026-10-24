@@ -439,3 +439,72 @@ fn factory_builds_quirky_providers_against_the_base_url() {
     assert_eq!(r.body["response_format"]["type"], "json_schema");
     assert_eq!(r.header("authorization"), None);
 }
+
+#[test]
+fn base_urls_ending_in_v1_work_for_chat_and_other_paths() {
+    for suffix in ["", "/v1", "/v1/"] {
+        let (base, seen) = stub(vec![reply_with(json!({ "content": "ok" }), "stop"), (200, r#"{"models":[]}"#.into())]);
+        let q = Quirks { models_path: Some("/api/tags"), ..Quirks::default() };
+        let p = OpenAiProvider::new(String::new(), "m".into(), format!("{base}{suffix}")).with_quirks(q);
+        p.complete(&text_req(None)).unwrap();
+        p.list_models().unwrap();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0].path, "/v1/chat/completions", "{suffix:?}");
+        assert_eq!(seen[1].path, "/api/tags", "{suffix:?}");
+    }
+}
+
+fn format_rejection() -> (u16, String) {
+    (400, json!({ "error": { "message": "Invalid parameter: 'response_format' of type 'json_schema' is not supported with this model." } }).to_string())
+}
+
+#[test]
+fn json_schema_rejection_downgrades_to_json_object_and_remembers() {
+    let (base, seen) = stub(vec![
+        format_rejection(),
+        reply_with(json!({ "content": "{\"a\":1}" }), "stop"),
+        reply_with(json!({ "content": "{\"a\":2}" }), "stop"),
+    ]);
+    let p = quirky(&base, Structured::JsonSchema, TokenParam::MaxTokens);
+    assert_eq!(p.complete(&text_req(Some(tiny_schema()))).unwrap(), "{\"a\":1}");
+    assert_eq!(p.complete(&text_req(Some(tiny_schema()))).unwrap(), "{\"a\":2}");
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 3);
+    assert_eq!(seen[0].body["response_format"]["type"], "json_schema");
+    assert_eq!(seen[1].body["response_format"], json!({ "type": "json_object" }));
+    assert!(seen[1].body["messages"][0]["content"].as_str().unwrap().contains("\"required\""));
+    // The next call starts in the mode that worked.
+    assert_eq!(seen[2].body["response_format"], json!({ "type": "json_object" }));
+}
+
+#[test]
+fn json_object_rejection_downgrades_to_prompt_only() {
+    let (base, seen) = stub(vec![
+        format_rejection(),
+        (400, json!({ "error": { "message": "response_format is not supported" } }).to_string()),
+        ok_reply(&verdict_json()),
+        ok_reply(&verdict_json()),
+    ]);
+    let p = quirky(&base, Structured::JsonSchema, TokenParam::MaxTokens);
+    assert_eq!(p.recognize(&request()).unwrap().latex, "x=2");
+    assert_eq!(p.recognize(&request()).unwrap().latex, "x=2");
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 4);
+    assert_eq!(seen[1].body["response_format"]["type"], "json_object");
+    assert!(seen[2].body.get("response_format").is_none());
+    assert!(seen[2].body["messages"][0]["content"].as_str().unwrap().contains("\"latex\""));
+    assert!(seen[3].body.get("response_format").is_none());
+}
+
+#[test]
+fn other_400s_are_not_retried_in_another_mode() {
+    let (base, seen) = stub(vec![(400, json!({ "error": { "message": "messages: too long" } }).to_string())]);
+    let e = quirky(&base, Structured::JsonSchema, TokenParam::MaxTokens).complete(&text_req(Some(tiny_schema()))).unwrap_err();
+    assert!(matches!(e, AiError::Rejected(_)), "{e:?}");
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    // In prompt-only mode there is nothing to downgrade.
+    let (base, seen) = stub(vec![format_rejection()]);
+    let e = quirky(&base, Structured::PromptOnly, TokenParam::MaxTokens).complete(&text_req(Some(tiny_schema()))).unwrap_err();
+    assert!(matches!(e, AiError::Rejected(_)), "{e:?}");
+    assert_eq!(seen.lock().unwrap().len(), 1);
+}

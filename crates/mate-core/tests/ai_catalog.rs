@@ -106,6 +106,12 @@ fn tolerant_json_extraction() {
     assert_eq!(extract_json_object("<think>maybe {x}</think>\n{\"ok\":true}"), Some("{\"ok\":true}"));
     assert_eq!(extract_json_object("no json here"), None);
     assert_eq!(extract_json_object("{\"open\": 1"), None);
+    // Braces in prose (LaTeX) before the object are skipped.
+    assert_eq!(extract_json_object("The answer is $\\frac{1}{2}$.\n{\"a\":1}"), Some("{\"a\":1}"));
+    assert_eq!(extract_json_object("set {x | x > 0} then ```{\"b\": [1]}```"), Some("{\"b\": [1]}"));
+    assert_eq!(extract_json_object("{not json} {also not}"), None);
+    // A balanced block that is not an object at the top level is not returned.
+    assert_eq!(extract_json_object("{1}{\"k\":{\"n\":null}}"), Some("{\"k\":{\"n\":null}}"));
 }
 
 #[test]
