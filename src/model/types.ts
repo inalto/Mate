@@ -197,7 +197,12 @@ export interface AiProviderInfo {
 
 /** What the UI may know about the AI setup (the key itself never leaves Rust). */
 export interface AiStatus {
+  /** A key is stored (cloud), always (local), or an address is set (custom); never with a refused address. */
   configured: boolean;
+  /** A non-empty key is stored for the provider. */
+  hasKey: boolean;
+  /** The effective address is on this computer or the local network (never for cloud services). */
+  local: boolean;
   provider: AiProvider;
   model: string;
   consent: boolean;

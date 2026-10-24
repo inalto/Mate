@@ -12,7 +12,7 @@ import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Settings } from "../../model/types";
 import { useSettingsStore } from "../../stores/settings";
 import { notifyKeyChanged, sessionAttempts } from "../attempts";
-import { useAiStatus } from "../aiStatus";
+import { ADDRESS_REFRESH_MS, useAiStatus } from "../aiStatus";
 
 const flush = async () => {
   for (let i = 0; i < 5; i++) await Promise.resolve();
@@ -44,7 +44,7 @@ describe("AI status and block, app-wide", () => {
     await flush();
     expect(getAiStatus).toHaveBeenCalledTimes(1);
     expect(useAiStatus.getState().configured).toBe(true);
-    vi.mocked(getAiStatus).mockResolvedValueOnce({ configured: false, provider: "openai", model: "gpt-5", consent: true, needsKey: true, vision: "yes", baseUrl: "" });
+    vi.mocked(getAiStatus).mockResolvedValueOnce({ configured: false, hasKey: false, local: false, provider: "openai", model: "gpt-5", consent: true, needsKey: true, vision: "yes", baseUrl: "" });
     set({ aiProvider: "openai" });
     await flush();
     expect(getAiStatus).toHaveBeenCalledTimes(2);
@@ -52,6 +52,25 @@ describe("AI status and block, app-wide", () => {
     set({ aiModel: "gpt-5-mini" });
     await flush();
     expect(getAiStatus).toHaveBeenCalledTimes(3);
+  });
+
+  it("refreshes the status once typing an address pauses", async () => {
+    set({ aiConsent: true, tutorEnabled: true });
+    await flush();
+    vi.mocked(getAiStatus).mockClear();
+    vi.useFakeTimers();
+    try {
+      set({ aiBaseUrl: "http://l" });
+      await vi.advanceTimersByTimeAsync(300);
+      set({ aiBaseUrl: "http://localhost:11434" });
+      await vi.advanceTimersByTimeAsync(ADDRESS_REFRESH_MS - 1);
+      expect(getAiStatus).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      await flush();
+      expect(getAiStatus).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("never reads the keychain without consent and the tutor on", async () => {

@@ -1,12 +1,13 @@
 // Whether the tutor may run at all: AI consent given, the tutor switched on and a key stored for
 // the provider. Until all three hold, nothing is segmented, no marker or gesture is active and
 // nothing is sent. The key part comes from `get_ai_status` (Rust), cached here and refreshed when
-// a key is saved or removed and when the provider, model, consent or tutor switch changes. The
-// keychain is only read while consent and the tutor switch are both on.
+// a key is saved or removed and when the provider, model, address, consent or tutor switch changes
+// (the address once typing pauses and the setting is written). The keychain is only read while
+// consent and the tutor switch are both on.
 import { create } from "zustand";
 import { getAiStatus } from "../ipc/ai";
 import type { AiVision, Settings } from "../model/types";
-import { useSettingsStore } from "../stores/settings";
+import { flushSettings, useSettingsStore } from "../stores/settings";
 import { onKeyChanged } from "./attempts";
 
 interface AiStatusState {
@@ -53,6 +54,10 @@ onKeyChanged(() => {
   if (mayRead()) void useAiStatus.getState().refresh();
 });
 
+/** Quiet time after typing an address before the status is read again. */
+export const ADDRESS_REFRESH_MS = 500;
+let addressTimer: ReturnType<typeof setTimeout> | null = null;
+
 // Subscribed once for the app (not per editor): a provider switch or model fix in Settings updates
 // `configured` even while no page is open.
 useSettingsStore.subscribe((s, prev) => {
@@ -61,6 +66,16 @@ useSettingsStore.subscribe((s, prev) => {
   const changed =
     a.aiProvider !== b.aiProvider || a.aiModel !== b.aiModel || a.aiConsent !== b.aiConsent || a.tutorEnabled !== b.tutorEnabled;
   if (changed && mayRead(a)) void useAiStatus.getState().refresh();
+  if (a.aiBaseUrl !== b.aiBaseUrl) {
+    if (addressTimer !== null) clearTimeout(addressTimer);
+    addressTimer = setTimeout(() => {
+      addressTimer = null;
+      // Rust reads the stored settings: write the address first.
+      void flushSettings()
+        .catch(() => {})
+        .then(() => (mayRead() ? useAiStatus.getState().refresh() : undefined));
+    }, ADDRESS_REFRESH_MS);
+  }
 });
 
 /**
