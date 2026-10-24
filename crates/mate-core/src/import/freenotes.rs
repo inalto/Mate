@@ -937,7 +937,7 @@ fn shape_outline(kind: u64, c: &[f64]) -> Option<Vec<(f64, f64)>> {
         v
     };
     let pairs =
-        |c: &[f64]| -> Vec<(f64, f64)> { c.chunks_exact(2).map(|p| (p[0], p[1])).collect() };
+        |c: &[f64]| -> Vec<(f64, f64)> { c.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])).collect() };
     match (kind, c.len()) {
         (1001 | 1002, n) if n >= 2 => Some(pairs(c)),
         (2001, 8) | (2004, 6) => Some(closed(pairs(c))),

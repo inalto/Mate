@@ -112,7 +112,7 @@ impl<'a> Val<'a> {
             Val::Ascii(b) => Some(String::from_utf8_lossy(b)),
             Val::Utf16(b) => {
                 let units: Vec<u16> =
-                    b.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+                    b.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes(*c)).collect();
                 Some(Cow::Owned(String::from_utf16_lossy(&units)))
             }
             _ => None,
@@ -125,8 +125,10 @@ impl<'a> Val<'a> {
             Val::Ascii(b) => b == s.as_bytes(),
             Val::Utf16(b) => {
                 b.len() / 2 == s.encode_utf16().count()
-                    && b.chunks_exact(2)
-                        .map(|c| u16::from_be_bytes([c[0], c[1]]))
+                    && b.as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|c| u16::from_be_bytes(*c))
                         .eq(s.encode_utf16())
             }
             _ => false,
@@ -143,7 +145,7 @@ impl<'a> Val<'a> {
             }
             Val::Utf16(b) if b.len() / 2 <= p.len() + max => {
                 let units: Vec<u16> =
-                    b.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+                    b.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes(*c)).collect();
                 let rest = units.strip_prefix(&p.iter().map(|&c| u16::from(c)).collect::<Vec<_>>()[..])?;
                 Some(String::from_utf16_lossy(rest))
             }
@@ -656,14 +658,14 @@ fn le_f32s(bytes: &[u8], what: &str) -> Result<Vec<f32>, ImportError> {
     if !bytes.len().is_multiple_of(4) {
         return Err(corrupt(format!("{what} has a partial value")));
     }
-    Ok(bytes.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+    Ok(bytes.as_chunks::<4>().0.iter().map(|c| f32::from_le_bytes(*c)).collect())
 }
 
 fn le_i32s(bytes: &[u8], what: &str) -> Result<Vec<i32>, ImportError> {
     if !bytes.len().is_multiple_of(4) {
         return Err(corrupt(format!("{what} has a partial value")));
     }
-    Ok(bytes.chunks_exact(4).map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
+    Ok(bytes.as_chunks::<4>().0.iter().map(|c| i32::from_le_bytes(*c)).collect())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -802,7 +804,9 @@ fn read_curves<'a>(
         };
 
         let pts: Vec<ImportPoint> = xy
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|p| (f64::from(p[0]), f64::from(p[1])))
             .filter(|(x, y)| x.is_finite() && y.is_finite())
             .map(|(x, y)| ImportPoint { x, y, pressure: None })

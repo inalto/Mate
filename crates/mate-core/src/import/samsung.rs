@@ -73,7 +73,7 @@ fn usize_from(v: u32) -> usize {
 fn utf16_at(buf: &[u8], off: usize, units: usize) -> Result<String, ImportError> {
     let end = add(off, units.checked_mul(2).ok_or_else(|| corrupt("offset overflow"))?)?;
     let raw = buf.get(off..end).ok_or_else(|| corrupt("truncated data"))?;
-    let words: Vec<u16> = raw.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    let words: Vec<u16> = raw.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).collect();
     Ok(String::from_utf16_lossy(&words))
 }
 

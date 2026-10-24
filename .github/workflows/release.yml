@@ -12,8 +12,10 @@ permissions:
   contents: write
 
 jobs:
-  # Creates the GitHub Release once, so the four build jobs only upload to it. Without this
-  # step two jobs finishing at the same moment both try to create it and one fails.
+  # Creates the GitHub Release once, as a draft, so the four build jobs only upload to it and
+  # "latest" keeps pointing at the previous release (and its latest.json) until every installer
+  # is attached. Without this step two jobs finishing at the same moment both try to create it
+  # and one fails.
   prepare:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-22.04
@@ -26,7 +28,7 @@ jobs:
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "release $TAG already exists"
           else
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Mate ${TAG#v}" --notes "$(cat <<'NOTES'
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "Mate ${TAG#v}" --notes "$(cat <<'NOTES'
           Mate — local-first handwriting & math notes for Windows, macOS and Linux.
 
           Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux).
@@ -95,8 +97,24 @@ jobs:
 
             Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux).
             macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
-          releaseDraft: false
+          # The release is created as a draft by `prepare` and published by `publish` below.
+          releaseDraft: true
           prerelease: false
           # Uploads latest.json (versions, signatures, URLs) next to the installers when signing is on.
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+  # Publishes the draft only when all four builds uploaded their installers, so updaters never see
+  # a release without latest.json.
+  publish:
+    needs: [prepare, release]
+    if: github.ref_type == 'tag' && needs.release.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -q '^latest.json$' || { echo "latest.json missing; leaving the release as a draft"; exit 1; }
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -89,8 +89,10 @@ impl<'a> Wire<'a> {
         match *self {
             Wire::Fixed32(v) => Ok(vec![f32::from_bits(v)]),
             Wire::Len(b) if b.len() % 4 == 0 => Ok(b
-                .chunks_exact(4)
-                .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f32::from_le_bytes(*c))
                 .collect()),
             Wire::Len(_) => Err(corrupt("packed float length is not a multiple of 4")),
             _ => Err(corrupt("expected packed floats")),
@@ -102,8 +104,10 @@ impl<'a> Wire<'a> {
         match *self {
             Wire::Fixed64(v) => Ok(vec![f64::from_bits(v)]),
             Wire::Len(b) if b.len() % 8 == 0 => Ok(b
-                .chunks_exact(8)
-                .map(|c| f64::from_le_bytes([c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]]))
+                .as_chunks::<8>()
+                .0
+                .iter()
+                .map(|c| f64::from_le_bytes(*c))
                 .collect()),
             Wire::Len(_) => Err(corrupt("packed double length is not a multiple of 8")),
             _ => Err(corrupt("expected packed doubles")),

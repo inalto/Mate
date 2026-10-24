@@ -189,23 +189,25 @@ fn google_drive_from_macos_cloud_storage() {
     );
 }
 
+// The variables hold Windows paths in real life; the test builds them with `join` so `file_name`
+// splits them on every platform.
 #[test]
 fn onedrive_from_env_vars_deduplicated() {
-    let env = FakeEnv::home("C:\\Users\\u")
-        .var("OneDrive", "C:\\Users\\u\\OneDrive")
-        .var("OneDriveConsumer", "C:\\Users\\u\\OneDrive")
-        .var("OneDriveCommercial", "C:\\Users\\u\\OneDrive - Acme")
-        .dir("C:\\Users\\u\\OneDrive")
-        .dir("C:\\Users\\u\\OneDrive - Acme");
+    let home = PathBuf::from(if cfg!(windows) { "C:/Users/u" } else { "/home/u" });
+    let personal = home.join("OneDrive");
+    let work = home.join("OneDrive - Acme");
+    let s = |p: &Path| p.to_string_lossy().into_owned();
+    let env = FakeEnv::home(&s(&home))
+        .var("OneDrive", &s(&personal))
+        .var("OneDriveConsumer", &s(&personal))
+        .var("OneDriveCommercial", &s(&work))
+        .dir(&personal)
+        .dir(&work);
     assert_eq!(
         detect(&env),
         vec![
-            folder(SyncService::OneDrive, "OneDrive", "C:\\Users\\u\\OneDrive"),
-            folder(
-                SyncService::OneDrive,
-                "OneDrive (Acme)",
-                "C:\\Users\\u\\OneDrive - Acme"
-            ),
+            folder(SyncService::OneDrive, "OneDrive", &personal),
+            folder(SyncService::OneDrive, "OneDrive (Acme)", &work),
         ]
     );
 }
