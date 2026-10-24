@@ -1533,7 +1533,12 @@ button.card:hover {
 }
 
 .welcome-logo {
-  margin-bottom: var(--space-3);
+  margin: 0 auto var(--space-3);
+}
+
+/* The heading takes focus programmatically on each step; no ring is needed for that. */
+.welcome h1:focus {
+  outline: none;
 }
 
 .icon-btn {
