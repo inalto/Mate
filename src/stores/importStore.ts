@@ -162,7 +162,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
       picked = await open({
         multiple: true,
         directory: false,
-        filters: [{ name: "Notebook files", extensions: [...IMPORT_EXTENSIONS] }],
+        filters: [{ name: "Notebook files and Mate archives", extensions: [...IMPORT_EXTENSIONS] }],
       });
     } catch (err) {
       set({ error: fail(err) });
