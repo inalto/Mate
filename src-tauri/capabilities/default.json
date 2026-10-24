@@ -11,6 +11,7 @@
     "core:path:default",
     "dialog:default",
     "opener:default",
+    "clipboard-manager:allow-write-text",
     "window-state:default",
     "core:window:allow-set-title",
     "core:window:allow-close"

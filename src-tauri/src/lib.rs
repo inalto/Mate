@@ -27,6 +27,7 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
     .plugin(tauri_plugin_updater::Builder::new().build())
+    .plugin(tauri_plugin_clipboard_manager::init())
     .on_window_event(|window, event| match event {
       WindowEvent::CloseRequested { api, .. } => {
         // Fail open: if the frontend never acknowledged the previous attempt, let the window close.
@@ -63,6 +64,7 @@ pub fn run() {
       app.manage(open_files::PendingImportFiles::new(open_files::import_paths_from_args(std::env::args(), &cwd)));
       app.manage(import::ImportControl::default());
       app.manage(crate::windows::PageWindows::default());
+      app.manage(commands::share::ShareState::default());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -118,6 +120,14 @@ pub fn run() {
       archive::export_backup,
       archive::reset_local_data,
       archive::take_reset_incomplete,
+      commands::share::detect_sync_folders,
+      commands::share::save_archive_to,
+      commands::share::pick_folder,
+      commands::share::nextcloud_status,
+      commands::share::nextcloud_login_start,
+      commands::share::nextcloud_login_poll,
+      commands::share::nextcloud_logout,
+      commands::share::nextcloud_share,
       lifecycle::close_attempt_started,
       lifecycle::cancel_close_attempt,
       lifecycle::complete_close_attempt,

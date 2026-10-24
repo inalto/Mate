@@ -51,6 +51,14 @@
         "rank": "Alternate"
       },
       {
+        "ext": ["mate"],
+        "mimeType": "application/x-mate-archive",
+        "name": "Mate archive",
+        "description": "Mate archive",
+        "role": "Editor",
+        "rank": "Default"
+      },
+      {
         "ext": ["goodnotes"],
         "name": "GoodNotes file",
         "description": "GoodNotes file",

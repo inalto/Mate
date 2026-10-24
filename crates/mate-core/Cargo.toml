@@ -27,6 +27,10 @@ cab = "0.6"
 typed-path = "0.12"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
+[target.'cfg(windows)'.dependencies]
+# Volume labels for synced-folder detection (share/folders.rs). Same version src-tauri uses.
+windows = { version = "0.62.2", features = ["Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 # Writes the keyed-archive fixtures in tests/import_notability.rs (the importer reads bplists itself).
 plist = "1"

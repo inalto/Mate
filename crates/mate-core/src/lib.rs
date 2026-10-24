@@ -6,6 +6,7 @@ pub mod import;
 pub mod model;
 pub mod semantics;
 pub mod settings;
+pub mod share;
 pub mod storage;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

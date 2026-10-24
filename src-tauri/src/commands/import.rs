@@ -12,12 +12,14 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use super::open_files::is_import_path;
+use super::open_files::{is_import_path, is_mate_path};
+use mate_core::archive::{MAX_ARCHIVE_BYTES, import_archive};
 use mate_core::import::place::{ImportReport, PlaceControl, PlaceTarget, place_document_with};
 use mate_core::import::{
     IMPORT_DEADLINE, ImportDocument, ImportError, ImportLimits, ImportSource, fingerprint, max_file_bytes, parse,
     sniff,
 };
+use mate_core::model::ElementType;
 use mate_core::storage::{Storage, StorageError};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -70,6 +72,12 @@ pub const MAX_PATHS: usize = 50;
 /// How much of a file is read to rule out obvious non-matches before reading all of it.
 pub const HEAD_BYTES: usize = 64 * 1024;
 const NOT_IMPORTABLE: &str = "This is not a notebook file Mate can import (unsupported file extension).";
+/// Display name of a `.mate` file in the import dialog.
+pub const MATE_ARCHIVE: &str = "Mate archive";
+const NOT_A_MATE_ARCHIVE: &str = "This is not a Mate archive.";
+const MATE_TOO_LARGE: &str = "Mate archives over 512 MiB are not imported.";
+/// The note a `.mate` import adds to its report.
+pub const ONE_BOOK_IMPORTED: &str = "1 book imported.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -227,6 +235,22 @@ pub fn sniff_path(path: &str) -> SniffResult {
     if let Err(reason) = check_path(path) {
         return rejected(reason);
     }
+    if is_mate_path(path) {
+        return match read_head(p) {
+            Ok(_) if size > MAX_ARCHIVE_BYTES as u64 => rejected(MATE_TOO_LARGE.into()),
+            Ok(head) if head.starts_with(b"PK\x03\x04") || head.starts_with(b"PK\x05\x06") => SniffResult {
+                path: path.to_owned(),
+                filename: filename.clone(),
+                size,
+                status: SniffStatus::Ok,
+                source: None,
+                source_name: Some(MATE_ARCHIVE.to_owned()),
+                reason: None,
+            },
+            Ok(_) => rejected(NOT_A_MATE_ARCHIVE.into()),
+            Err(_) => rejected(UNREADABLE.into()),
+        };
+    }
     // Rule out obvious non-matches from the head before reading a large file in full.
     match read_head(p) {
         Ok(head) if !plausible_head(&head) => {
@@ -282,6 +306,9 @@ pub fn import_one(
     };
     let cancelled = || job.cancel.load(Ordering::SeqCst);
     check_path(path)?;
+    if is_mate_path(path) {
+        return import_mate(job, path, progress);
+    }
     let deadline = Instant::now() + job.deadline;
     let p = Path::new(path);
     let filename = filename_of(p);
@@ -323,6 +350,58 @@ pub fn import_one(
             storage_error_message(&e)
         }
     })
+}
+
+/// Imports a Mate archive as a new book through `mate_core::archive` (the target does not apply:
+/// an archive is a whole book). The report counts its pages and elements and says "1 book
+/// imported.".
+fn import_mate(job: &Job<'_>, path: &str, progress: &dyn Fn(Progress)) -> Result<ImportReport, String> {
+    let say = |phase, done, total| {
+        progress(Progress { path: path.to_owned(), phase, pages_done: done, pages_total: total })
+    };
+    say(Phase::Reading, 0, 0);
+    let p = Path::new(path);
+    let meta = fs::metadata(p).map_err(|_| UNREADABLE.to_string())?;
+    if meta.len() > MAX_ARCHIVE_BYTES as u64 {
+        return Err(MATE_TOO_LARGE.into());
+    }
+    let bytes = fs::read(p).map_err(|_| UNREADABLE.to_string())?;
+    if job.cancel.load(Ordering::SeqCst) {
+        return Err(CANCELLED.into());
+    }
+    say(Phase::Placing, 0, 0);
+    let mut storage = job.storage.lock().map_err(|_| UNREADABLE.to_string())?;
+    let imported = import_archive(&mut storage, &bytes, job.assets_dir).map_err(|e| storage_error_message(&e))?;
+    let report = mate_report(&storage, &imported).map_err(|e| storage_error_message(&e))?;
+    drop(storage);
+    say(Phase::Placing, report.pages_imported, report.pages_imported);
+    Ok(report)
+}
+
+/// The import dialog's report for an imported archive.
+fn mate_report(storage: &Storage, imported: &mate_core::archive::ImportReport) -> Result<ImportReport, StorageError> {
+    let tree = storage.list_tree()?;
+    let section_ids: Vec<String> =
+        tree.sections.iter().filter(|s| s.unit_id == imported.unit_id).map(|s| s.id.clone()).collect();
+    let mut report = ImportReport {
+        unit_id: imported.unit_id.clone(),
+        pages_imported: imported.pages,
+        elements_skipped_limit: imported.skipped,
+        warnings: vec![ONE_BOOK_IMPORTED.to_owned()],
+        ..ImportReport::default()
+    };
+    for page in tree.pages.iter().filter(|p| section_ids.contains(&p.section_id)) {
+        for e in storage.load_elements(&page.id)? {
+            match e.r#type {
+                ElementType::Stroke => report.strokes += 1,
+                ElementType::Text | ElementType::TextBox => report.texts += 1,
+                ElementType::Image => report.images += 1,
+                _ => {}
+            }
+        }
+    }
+    report.section_ids = section_ids;
+    Ok(report)
 }
 
 fn too_many() -> String {
@@ -385,7 +464,8 @@ pub async fn import_files(
         .map_err(|e| e.to_string())?;
         results.push(match outcome {
             Ok(report) => {
-                if matches!(target, PlaceTarget::NewUnit { .. }) {
+                // A Mate archive is a book of its own; the next files do not go into it.
+                if matches!(target, PlaceTarget::NewUnit { .. }) && !is_mate_path(&path) {
                     target = PlaceTarget::ExistingUnit { unit_id: report.unit_id.clone() };
                 }
                 ImportFileResult { path, status: FileStatus::Ok, report: Some(report), error: None }
@@ -643,6 +723,67 @@ mod tests {
         assert_eq!(r.status, SniffStatus::Rejected);
         assert!(r.reason.as_deref().unwrap().contains("not a format Mate can import"));
         assert!(plausible_head(b"PK\x03\x04rest") && plausible_head(b"MSCF"));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn mate_archives_are_sniffed_and_imported_as_a_book() {
+        let d = temp("mate");
+        // A one-page book to export.
+        let source = Mutex::new(Storage::open_in_memory().unwrap());
+        let cancel = AtomicBool::new(false);
+        let gn = d.join("Maths.goodnotes");
+        bare_zip(&gn);
+        let job = Job { storage: &source, assets_dir: &d, cancel: &cancel, deadline: Duration::from_secs(5) };
+        let target = PlaceTarget::NewUnit { title: Some("Maths".into()) };
+        let placed = import_one(&OneBlankPage, &job, &gn.to_string_lossy(), target, &|_| {}).unwrap();
+        let bytes =
+            mate_core::archive::export_unit(&source.lock().unwrap(), &placed.unit_id, &d.join("assets")).unwrap();
+        let file = d.join("Maths.mate");
+        fs::write(&file, &bytes).unwrap();
+        let path = file.to_string_lossy().into_owned();
+
+        let sniffed = sniff_path(&path);
+        assert_eq!(sniffed.status, SniffStatus::Ok);
+        assert_eq!(sniffed.source, None);
+        assert_eq!(sniffed.source_name.as_deref(), Some(MATE_ARCHIVE));
+
+        let storage = Mutex::new(Storage::open_in_memory().unwrap());
+        let job = Job { storage: &storage, assets_dir: &d, cancel: &cancel, deadline: Duration::from_secs(5) };
+        let seen = std::cell::RefCell::new(Vec::new());
+        // The target does not apply: an archive is always a new book.
+        let target = PlaceTarget::ExistingUnit { unit_id: "elsewhere".into() };
+        let report = import_one(&OneBlankPage, &job, &path, target, &|p| {
+            seen.borrow_mut().push((p.phase, p.pages_done, p.pages_total))
+        })
+        .unwrap();
+        assert_eq!(report.pages_imported, 1);
+        assert_eq!(report.warnings, vec![ONE_BOOK_IMPORTED.to_string()]);
+        assert_eq!(report.section_ids.len(), 1);
+        let units = storage.lock().unwrap().list_tree().unwrap().units;
+        assert_eq!(units.len(), 1);
+        assert_eq!((units[0].id.as_str(), units[0].title.as_str()), (report.unit_id.as_str(), "Maths"));
+        assert_eq!(*seen.borrow(), vec![(Phase::Reading, 0, 0), (Phase::Placing, 0, 0), (Phase::Placing, 1, 1)]);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_broken_mate_file_is_refused_with_a_sentence() {
+        let d = temp("badmate");
+        let junk = d.join("junk.mate");
+        fs::write(&junk, b"hello").unwrap();
+        let r = sniff_path(&junk.to_string_lossy());
+        assert_eq!((r.status, r.reason.as_deref()), (SniffStatus::Rejected, Some(NOT_A_MATE_ARCHIVE)));
+        let zip = d.join("empty.mate");
+        bare_zip(&zip);
+        assert_eq!(sniff_path(&zip.to_string_lossy()).status, SniffStatus::Ok);
+        let storage = Mutex::new(Storage::open_in_memory().unwrap());
+        let cancel = AtomicBool::new(false);
+        let job = Job { storage: &storage, assets_dir: &d, cancel: &cancel, deadline: Duration::from_secs(5) };
+        let target = PlaceTarget::NewUnit { title: None };
+        let err = import_one(&OneBlankPage, &job, &zip.to_string_lossy(), target, &|_| {}).unwrap_err();
+        assert!(err.contains("not a Mate archive"), "{err}");
+        assert!(storage.lock().unwrap().list_tree().unwrap().units.is_empty());
         let _ = fs::remove_dir_all(&d);
     }
 

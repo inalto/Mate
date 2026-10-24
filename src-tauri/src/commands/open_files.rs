@@ -1,5 +1,6 @@
 //! "Open with" for notebook files: the paths of GoodNotes, Notability, OneNote, Freenotes and
-//! Samsung Notes files the OS hands to Mate, and the handshake with the frontend.
+//! Samsung Notes files, and of Mate archives (`.mate`), the OS hands to Mate, and the handshake
+//! with the frontend.
 //!
 //! Like PDFs (see [`super::pdf`]), such a file arrives as `argv` at startup, as the argv of a
 //! second instance forwarded by the single-instance plugin while running, or as `RunEvent::Opened`
@@ -18,9 +19,9 @@ use super::pdf;
 /// Event carrying the notebook files opened while the app is running.
 pub const FILE_OPENED_EVENT: &str = "import://file-opened";
 
-/// Extensions (lower case) of the formats the import dialog reads.
+/// Extensions (lower case) of the formats the import dialog reads (`mate`: a Mate archive).
 pub const IMPORT_EXTENSIONS: &[&str] =
-    &["goodnotes", "note", "one", "onepkg", "freenotes", "freenotesv2", "freebackup", "sdocx"];
+    &["goodnotes", "note", "one", "onepkg", "freenotes", "freenotesv2", "freebackup", "sdocx", "mate"];
 
 /// True when `path` has one of the [`IMPORT_EXTENSIONS`] (case-insensitive).
 pub fn is_import_path(path: &str) -> bool {
@@ -28,6 +29,11 @@ pub fn is_import_path(path: &str) -> bool {
         .extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| IMPORT_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// True when `path` is a Mate archive (`.mate`, case-insensitive): imported as a whole book.
+pub fn is_mate_path(path: &str) -> bool {
+    Path::new(path).extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("mate"))
 }
 
 /// Payload of [`FILE_OPENED_EVENT`].
@@ -180,6 +186,8 @@ mod tests {
             assert!(is_import_path(&format!("x.{}", ext.to_uppercase())), "{ext}");
         }
         assert!(!is_import_path("x.pdf"));
+        assert!(is_import_path("x.mate") && is_import_path("/books/Maths.MATE"));
+        assert!(is_mate_path("x.Mate") && !is_mate_path("x.note") && !is_mate_path("mate"));
         assert!(!is_import_path("goodnotes"));
         assert_eq!(import_paths_from_args(args(&["a.note"]), &cwd), Vec::<String>::new()); // program name
         let pending = PendingImportFiles::new(vec![]);
