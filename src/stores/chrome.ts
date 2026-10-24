@@ -31,6 +31,9 @@ interface ChromeState extends Persisted {
   renamingPageId: string | null;
   pageSettingsFor: string | null;
   shortcutsOpen: boolean;
+  aboutOpen: boolean;
+  /** Version of an update found by a check, or null. Drives the dot on the More menu. */
+  updateAvailable: string | null;
   /** Open dialogs, overlays, palette and menus: while above 0 editor shortcuts do nothing. */
   modalDepth: number;
   /** Command palette (Ctrl/Cmd+K). `paletteAction` runs as soon as it opens. */
@@ -42,6 +45,8 @@ interface ChromeState extends Persisted {
   setRenaming(id: string | null): void;
   openPageSettings(pageId: string | null): void;
   setShortcutsOpen(open: boolean): void;
+  setAboutOpen(open: boolean): void;
+  setUpdateAvailable(version: string | null): void;
   pushModal(): void;
   popModal(): void;
   openPalette(action?: PaletteAction): void;
@@ -64,6 +69,8 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     renamingPageId: null,
     pageSettingsFor: null,
     shortcutsOpen: false,
+    aboutOpen: false,
+    updateAvailable: null,
     modalDepth: 0,
     paletteOpen: false,
     paletteAction: null,
@@ -79,6 +86,8 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     setRenaming: (renamingPageId) => set({ renamingPageId }),
     openPageSettings: (pageSettingsFor) => set({ pageSettingsFor }),
     setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+    setAboutOpen: (aboutOpen) => set({ aboutOpen }),
+    setUpdateAvailable: (updateAvailable) => set({ updateAvailable }),
     pushModal: () => set((s) => ({ modalDepth: s.modalDepth + 1 })),
     popModal: () => set((s) => ({ modalDepth: Math.max(0, s.modalDepth - 1) })),
     openPalette: (action) => set({ paletteOpen: true, paletteAction: action ?? null }),

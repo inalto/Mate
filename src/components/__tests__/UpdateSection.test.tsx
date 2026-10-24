@@ -14,7 +14,8 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.f
 
 import { useSettingsStore } from "../../stores/settings";
 import { useToastStore } from "../Toast";
-import UpdateSection, { NOT_CONFIGURED_COPY, StartupUpdateCheck } from "../UpdateSection";
+import UpdateSection, { StartupUpdateCheck } from "../UpdateSection";
+import { NOT_CONFIGURED_COPY } from "../useUpdater";
 
 beforeEach(() => {
   useToastStore.getState().dismiss();

@@ -1,84 +1,30 @@
 import { getAppVersion } from "../ipc/app";
 import { useEffect, useRef, useState } from "react";
-import { checkForUpdate, installUpdate, onUpdateProgress, relaunch, type UpdateProgress } from "../ipc/updater";
+import { checkForUpdate } from "../ipc/updater";
 import { navigateTo } from "../stores/navigation";
+import { useChromeStore } from "../stores/chrome";
 import { useSettingsStore } from "../stores/settings";
 import { Row } from "../routes/Settings/rows";
 import { showToast } from "./Toast";
-
-export const NOT_CONFIGURED_COPY = "Updates are not configured for this build.";
-
-type State =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "upToDate" }
-  | { kind: "notConfigured" }
-  | { kind: "available"; version: string; notes?: string }
-  | { kind: "downloading"; version: string; progress: UpdateProgress | null }
-  | { kind: "ready"; version: string }
-  | { kind: "error"; message: string };
-
-const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-
-export function formatProgress(p: UpdateProgress | null): string {
-  if (!p) return "Saving your work…";
-  return p.total ? `${mb(p.downloaded)} of ${mb(p.total)}` : mb(p.downloaded);
-}
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "string" ? e : "Something went wrong.");
+import { NOT_CONFIGURED_COPY, formatProgress, useUpdater } from "./useUpdater";
 
 /** Version, "Check for updates", download progress and "Restart to update". */
 export default function UpdateSection() {
-  const [state, setState] = useState<State>({ kind: "idle" });
+  const { state, busy, check, install, restart } = useUpdater();
   const [version, setVersion] = useState<string | null>(null);
-  const busy = state.kind === "checking" || state.kind === "downloading";
-  const live = useRef(true);
 
   useEffect(() => {
-    live.current = true;
+    let live = true;
     // "View" on the startup notice lands here: /settings#updates.
     if (window.location.hash === "#updates") document.getElementById("set-sec-updates")?.scrollIntoView?.({ block: "start" });
     getAppVersion().then(
-      (v) => live.current && setVersion(v),
+      (v) => live && setVersion(v),
       () => {},
     );
     return () => {
-      live.current = false;
+      live = false;
     };
   }, []);
-
-  const check = async () => {
-    setState({ kind: "checking" });
-    try {
-      const r = await checkForUpdate();
-      if (!live.current) return;
-      if (!r.configured) setState({ kind: "notConfigured" });
-      else if (r.available && r.version) setState({ kind: "available", version: r.version, notes: r.notes });
-      else setState({ kind: "upToDate" });
-    } catch (e) {
-      if (live.current) setState({ kind: "error", message: errorText(e) });
-    }
-  };
-
-  const install = async (target: string) => {
-    setState({ kind: "downloading", version: target, progress: null });
-    let unlisten: (() => void) | undefined;
-    try {
-      unlisten = await onUpdateProgress((progress) => {
-        if (live.current) setState({ kind: "downloading", version: target, progress });
-      });
-      await installUpdate(target);
-      if (live.current) setState({ kind: "ready", version: target });
-    } catch (e) {
-      if (live.current) setState({ kind: "error", message: errorText(e) });
-    } finally {
-      unlisten?.();
-    }
-  };
-
-  const restart = () => {
-    relaunch().catch((e) => live.current && setState({ kind: "error", message: errorText(e) }));
-  };
 
   return (
     <>
@@ -133,6 +79,7 @@ export function StartupUpdateCheck() {
       try {
         const r = await checkForUpdate();
         if (r.configured && r.available && r.version) {
+          useChromeStore.getState().setUpdateAvailable(r.version);
           showToast(`Mate ${r.version} is available.`, { label: "View", onClick: () => navigateTo("/settings#updates") });
         }
       } catch {
