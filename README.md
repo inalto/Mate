@@ -95,6 +95,13 @@ Android tablets and iPads are studied but not built. The conclusion is that Taur
 ## Screenshots
 
 <!-- screenshots:start -->
+| | |
+|---|---|
+| ![Welcome](screenshots/welcome.png) | ![Library](screenshots/library.png) |
+| ![Handwritten maths with the tutor](screenshots/tutor-card.png) | ![AI providers](screenshots/ai-providers.png) |
+| ![Share a book](screenshots/share-dialog.png) | ![Compute menu](screenshots/compute-menu.png) |
+
+The images live in [`screenshots/`](screenshots/README.md), which also says how to capture them.
 <!-- screenshots:end -->
 
 ## Import
