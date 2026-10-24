@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ipc = vi.hoisted(() => ({
@@ -115,4 +115,34 @@ describe("TutorCard", () => {
     expect(screen.getByText("Could not reach the AI service (offline).")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
   });
+
+  it("check_locally_reports_agreement_on_an_identity", async () => {
+    show([recognition("g", { latex: "x^2-1=(x-1)(x+1)" })]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
+    });
+    await waitFor(() => expect(screen.getByText("Both sides agree")).toBeTruthy());
+  });
+
+  it("check_locally_names_a_point_where_the_sides_differ", async () => {
+    show();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
+    });
+    await waitFor(() => expect(screen.getByText(/^They differ at x = -?\d/)).toBeTruthy());
+  });
+
+  it("check_locally_says_when_it_cannot_decide", async () => {
+    show([recognition("g", { latex: "\\sqrt{-1-x^2}=\\sqrt{-2-x^2}" })]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
+    });
+    await waitFor(() => expect(screen.getByText(/^Could not decide: /)).toBeTruthy());
+  });
+
+  it("check_locally_is_offered_for_equations_only", () => {
+    show([recognition("g", { latex: "x+1" })]);
+    expect(screen.queryByRole("button", { name: "Check locally" })).toBeNull();
+  });
 });
+

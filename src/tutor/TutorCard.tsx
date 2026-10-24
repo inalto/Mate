@@ -1,11 +1,13 @@
 // The tutor card for one stroke group, shown next to the ink (never over it as a replacement):
 // what was read (LaTeX via KaTeX, or the transcribed text), then the reveal ladder hint → "Why?"
-// (explanation) → "Next step", plus "Mark as correct" and "Ask" (a free question). A group that
+// (explanation) → "Next step", plus "Mark as correct", "Ask" (a free question) and, for an
+// equation, "Check locally" (an offline second opinion from the Compute Engine). A group that
 // couldn't be checked shows the reason and "Try again". Rendered in screen space inside the pane's
 // overlay clip, positioned from the group's page-unit bounds and clamped to the viewport.
 import { useModal } from "../components/useModal";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
+import { localCheck, localCheckMessage, looksLikeEquation } from "../math/cas";
 import { renderLatex } from "../math/katex";
 import type { EditorStore } from "../stores/editor";
 import { groupState, noteDismissDown, useTutorUi, type PaneIndex } from "../stores/tutor";
@@ -35,6 +37,8 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const [height, setHeight] = useState(0);
+  /** The local check's message, for the card opening (`key`) and LaTeX it was run on. */
+  const [local, setLocal] = useState<{ key: string; text: string | null } | null>(null);
   const open = card !== null && view.pageId === card.pageId;
   useModal(open);
   const g = open ? groupState(view, card.groupId) : null;
@@ -108,7 +112,7 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
   const inFlight = g?.inFlight;
   useLayoutEffect(() => {
     if (ref.current) setHeight(ref.current.offsetHeight);
-  }, [card, rec, unchecked, inFlight]);
+  }, [card, rec, unchecked, inFlight, local]);
 
   if (!open || !card || !g || !bounds) return null;
   const b = bounds;
@@ -139,6 +143,18 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
               ? "Something here needs another look."
               : "This looks unfinished.";
   const canAsk = !!rec && !g.inFlight;
+  const checkable = !!rec && !rec.illegible && looksLikeEquation(rec.latex);
+  const localKey = `${card.seq}:${rec?.latex ?? ""}`;
+  const localShown = local?.key === localKey ? local : null;
+  const runLocalCheck = () => {
+    if (!rec) return;
+    const key = localKey;
+    setLocal({ key, text: null });
+    void localCheck(rec.latex).then(
+      (r) => setLocal((cur) => (cur?.key === key ? { key, text: localCheckMessage(r) } : cur)),
+      () => setLocal((cur) => (cur?.key === key ? { key, text: "Could not decide: the check failed" } : cur)),
+    );
+  };
   const tooLong = [...card.question].length > MAX_QUESTION_CHARS;
   const canSubmit = canAsk && !card.busy && !tooLong && card.question.trim() !== "";
 
@@ -214,7 +230,18 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
             Ask
           </button>
         ) : null}
+        {checkable ? (
+          <button type="button" className="btn" disabled={localShown?.text === null} onClick={runLocalCheck}>
+            Check locally
+          </button>
+        ) : null}
       </div>
+
+      {localShown ? (
+        <p className="tutor-card-local muted" role="status" aria-live="polite">
+          {localShown.text ?? "Checking on this computer…"}
+        </p>
+      ) : null}
 
       {card.asking ? (
         <form

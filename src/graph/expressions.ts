@@ -31,7 +31,7 @@ export const MAX_ITERATIONS = 1000;
 class ExprError extends Error {}
 
 /** The first parse error of `json` (MathJSON) as a readable message, or null. */
-function firstError(json: unknown): string | null {
+export function firstError(json: unknown): string | null {
   if (!Array.isArray(json)) return null;
   if (json[0] === "Error") {
     const code = Array.isArray(json[1]) ? json[1][1] : json[1];

@@ -1,6 +1,7 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
 // (when shapes are selected), width; a single text box gets box-wide text formatting instead of
-// colour and width. Hidden while a text box is being edited (its editor has its own bar).
+// colour and width; a single math box also gets Graph and Compute. Hidden while a text box is
+// being edited (its editor has its own bar).
 import { AlignLeft, ChartLine, Copy, CopySimple, Function as FunctionIcon, Stack, Trash } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { worldToScreen } from "../canvas/camera";
@@ -10,6 +11,7 @@ import { hasFill } from "../shapes/geometry";
 import { isMathBox, latexOf } from "../math/mathBox";
 import { textAttrsOf } from "../text/textBox";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
+import ComputeMenu from "./ComputeMenu";
 import TextFormatControls from "./TextFormatControls";
 import { useDismiss } from "./useDismiss";
 
@@ -198,6 +200,7 @@ export default function SelectionBar() {
           <ChartLine size={16} /> Graph
         </button>
       )}
+      {math && math.length === 1 && <ComputeMenu store={ed} source={math[0]} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} />}
       <span className="tb-sep" />
       {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
