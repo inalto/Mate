@@ -11,6 +11,10 @@ import {
 import { Row, SettingsSection } from "../rows";
 
 export const POLL_MS = 2000;
+/** Nextcloud's login flow token lasts 20 minutes; polling stops then. */
+export const SIGN_IN_TIMEOUT_MS = 20 * 60 * 1000;
+/** Consecutive poll failures (a flaky network) tolerated before the error is shown. */
+export const MAX_POLL_ERRORS = 5;
 
 export default function SharingSection() {
   const { t } = useTranslation();
@@ -53,10 +57,13 @@ export default function SharingSection() {
       return;
     }
     setWaiting(true);
+    const started = Date.now();
+    let failures = 0;
     const tick = async () => {
       try {
         const { done } = await nextcloudLoginPoll();
         if (attempt.current !== id) return;
+        failures = 0;
         if (done) {
           setWaiting(false);
           await refresh();
@@ -64,8 +71,17 @@ export default function SharingSection() {
         }
       } catch (err) {
         if (attempt.current !== id) return;
+        failures += 1;
+        if (failures >= MAX_POLL_ERRORS) {
+          setWaiting(false);
+          setError(message(err));
+          return;
+        }
+      }
+      if (Date.now() - started + POLL_MS > SIGN_IN_TIMEOUT_MS) {
+        stopPolling();
         setWaiting(false);
-        setError(message(err));
+        setError(t("settings.sharing.nextcloud.expired"));
         return;
       }
       timer.current = setTimeout(() => void tick(), POLL_MS);

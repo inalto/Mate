@@ -9,7 +9,7 @@ vi.mock("../../../ipc/share", () => ({
 }));
 
 import { nextcloudLoginPoll, nextcloudLoginStart, nextcloudLogout, nextcloudStatus } from "../../../ipc/share";
-import SharingSection from "../sections/SharingSection";
+import SharingSection, { SIGN_IN_TIMEOUT_MS } from "../sections/SharingSection";
 
 const out = { signedIn: false, server: "", user: "" };
 const inn = { signedIn: true, server: "https://cloud.example.com", user: "ana" };
@@ -68,13 +68,51 @@ describe("SharingSection", () => {
     expect(nextcloudLoginPoll).not.toHaveBeenCalled();
   });
 
-  it("shows a poll failure and stops", async () => {
-    vi.mocked(nextcloudLoginPoll).mockRejectedValue("Sign-in expired");
+  it("keeps polling through a few failures, then shows the error and stops", async () => {
+    vi.mocked(nextcloudLoginPoll).mockRejectedValue("Could not reach the server");
     await signInFlow();
-    await tick(2100);
-    expect(screen.getByRole("alert").textContent).toContain("Sign-in expired");
+    await tick(2000 * 4 + 100);
+    expect(nextcloudLoginPoll).toHaveBeenCalledTimes(4);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText(/Waiting for you to approve/)).toBeTruthy();
+    await tick(2000);
+    expect(nextcloudLoginPoll).toHaveBeenCalledTimes(5);
+    expect(screen.getByRole("alert").textContent).toContain("Could not reach the server");
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
     await tick(6000);
-    expect(nextcloudLoginPoll).toHaveBeenCalledTimes(1);
+    expect(nextcloudLoginPoll).toHaveBeenCalledTimes(5);
+  });
+
+  it("a success resets the failure count", async () => {
+    vi.mocked(nextcloudLoginPoll)
+      .mockRejectedValueOnce("x")
+      .mockRejectedValueOnce("x")
+      .mockRejectedValueOnce("x")
+      .mockRejectedValueOnce("x")
+      .mockResolvedValueOnce({ done: false })
+      .mockRejectedValueOnce("x")
+      .mockRejectedValueOnce("x")
+      .mockResolvedValueOnce({ done: true });
+    await signInFlow();
+    vi.mocked(nextcloudStatus).mockResolvedValue(inn);
+    await tick(2000 * 8 + 100);
+    expect(nextcloudLoginPoll).toHaveBeenCalledTimes(8);
+    expect(screen.getByText(/Signed in as ana/)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("gives up after 20 minutes", async () => {
+    vi.mocked(nextcloudLoginPoll).mockResolvedValue({ done: false });
+    await signInFlow();
+    await tick(SIGN_IN_TIMEOUT_MS - 1000);
+    expect(screen.getByText(/Waiting for you to approve/)).toBeTruthy();
+    const calls = vi.mocked(nextcloudLoginPoll).mock.calls.length;
+    await tick(2000);
+    expect(screen.getByRole("alert").textContent).toContain("The sign-in link has expired. Start again.");
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
+    await tick(10000);
+    expect(vi.mocked(nextcloudLoginPoll).mock.calls.length).toBeLessThanOrEqual(calls + 1);
+    expect(SIGN_IN_TIMEOUT_MS).toBe(20 * 60 * 1000);
   });
 
   it("signs out", async () => {

@@ -259,7 +259,8 @@
         "signOut": "Sign out",
         "waiting": "Waiting for you to approve in your browser…",
         "server": "Nextcloud server address",
-        "signIn": "Sign in"
+        "signIn": "Sign in",
+        "expired": "The sign-in link has expired. Start again."
       }
     },
     "updates": {
