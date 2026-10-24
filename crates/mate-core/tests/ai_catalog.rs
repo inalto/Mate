@@ -2,7 +2,9 @@
 
 use std::collections::HashSet;
 
-use mate_core::ai::catalog::{Group, Structured, TokenParam, Vision, Wire, catalog, effective_base_url, spec};
+use mate_core::ai::catalog::{
+    Group, Structured, TokenParam, Vision, Wire, catalog, effective_base_url, is_local_host, spec,
+};
 use mate_core::ai::openai::extract_json_object;
 use mate_core::ai::{default_model, is_known_provider, provider_for};
 
@@ -75,14 +77,15 @@ fn catalog_specific_entries() {
 
 #[test]
 fn base_url_override_only_where_editable() {
-    assert_eq!(effective_base_url("ollama", ""), "http://localhost:11434");
-    assert_eq!(effective_base_url("ollama", " http://box:11434/ "), "http://box:11434");
-    assert_eq!(effective_base_url("custom", "https://llm.example.org/v1"), "https://llm.example.org/v1");
-    assert_eq!(effective_base_url("custom", ""), "");
+    let eff = |id: &str, o: &str| effective_base_url(id, o).unwrap();
+    assert_eq!(eff("ollama", ""), "http://localhost:11434");
+    assert_eq!(eff("ollama", " http://192.168.1.20:11434/ "), "http://192.168.1.20:11434");
+    assert_eq!(eff("custom", "https://llm.example.org/v1"), "https://llm.example.org/v1");
+    assert_eq!(eff("custom", ""), "");
     // Cloud services keep their own address.
-    assert_eq!(effective_base_url("openai", "http://evil.example"), "https://api.openai.com");
+    assert_eq!(eff("openai", "http://evil.example"), "https://api.openai.com");
     // Unknown ids fall back to Anthropic.
-    assert_eq!(effective_base_url("acme", ""), "https://api.anthropic.com");
+    assert_eq!(eff("acme", ""), "https://api.anthropic.com");
 }
 
 #[test]
@@ -103,4 +106,64 @@ fn tolerant_json_extraction() {
     assert_eq!(extract_json_object("<think>maybe {x}</think>\n{\"ok\":true}"), Some("{\"ok\":true}"));
     assert_eq!(extract_json_object("no json here"), None);
     assert_eq!(extract_json_object("{\"open\": 1"), None);
+}
+
+#[test]
+fn base_url_must_be_https_or_local() {
+    const BAD: &str = "Use an https:// address, or a local address such as http://localhost:11434.";
+    for ok in [
+        "http://localhost:11434",
+        "http://127.0.0.1:1234/v1",
+        "http://[::1]:8080",
+        "http://gpu.localhost:11434",
+        "http://10.0.0.5:11434",
+        "http://172.16.3.4",
+        "http://172.31.255.255",
+        "http://192.168.1.20:11434",
+        "https://llm.example.org/v1",
+        "HTTPS://LLM.EXAMPLE.ORG",
+    ] {
+        assert!(effective_base_url("custom", ok).is_ok(), "{ok}");
+    }
+    for bad in [
+        "http://llm.example.org",
+        "http://172.32.0.1",
+        "http://8.8.8.8",
+        "ftp://localhost",
+        "localhost:11434",
+        "not a url",
+        "http://localhost.evil.com",
+    ] {
+        assert_eq!(effective_base_url("custom", bad).unwrap_err(), BAD, "{bad}");
+        assert_eq!(effective_base_url("ollama", bad).unwrap_err(), BAD, "{bad}");
+    }
+}
+
+#[test]
+fn local_host_rule() {
+    assert!(is_local_host("http://localhost:11434"));
+    assert!(is_local_host("http://LOCALHOST"));
+    assert!(is_local_host("https://127.0.0.1"));
+    assert!(is_local_host("http://[::1]:1"));
+    assert!(is_local_host("http://box.localhost"));
+    assert!(is_local_host("http://10.1.2.3"));
+    assert!(is_local_host("http://172.20.0.1"));
+    assert!(is_local_host("http://192.168.0.2"));
+    assert!(!is_local_host("http://172.15.0.1"));
+    assert!(!is_local_host("https://api.openai.com"));
+    assert!(!is_local_host("http://mylocalhost"));
+    assert!(!is_local_host(""));
+    assert!(!is_local_host("garbage"));
+}
+
+#[test]
+fn factory_refuses_a_bad_address_without_network() {
+    use mate_core::ai::provider::{AiError, TextRequest};
+    let p = provider_for("custom", "m", String::new(), Some("http://llm.example.org"));
+    assert_eq!(p.id(), "custom");
+    let req = TextRequest { system: String::new(), user: "hi".into(), max_tokens: 4, json_schema: None };
+    let e = p.complete(&req).unwrap_err();
+    assert!(matches!(e, AiError::BadAddress), "{e:?}");
+    assert_eq!(e.to_string(), "Use an https:// address, or a local address such as http://localhost:11434.");
+    assert!(matches!(p.list_models(), Err(AiError::BadAddress)));
 }

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use mate_core::ai::catalog::{Group, Vision, catalog, effective_base_url, spec, spec_or_default};
+use mate_core::ai::catalog::{Group, Vision, catalog, effective_base_url, is_local_host, spec, spec_or_default};
 use mate_core::ai::is_known_provider;
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, Provider, TextRequest};
@@ -18,14 +18,20 @@ use crate::state::AppState;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AiStatus {
-    /// A key is stored (cloud), always (local), or an address is set (custom).
+    /// A key is stored (cloud), always (local), or an address is set (custom); never with a
+    /// refused address.
     pub configured: bool,
+    /// A non-empty key is stored for the provider (the key itself is never sent).
+    pub has_key: bool,
+    /// The effective address is on this computer or the local network (never for cloud services).
+    pub local: bool,
     pub provider: String,
     pub model: String,
     pub consent: bool,
     pub needs_key: bool,
     pub vision: Vision,
-    /// The effective address (the setting, or the catalog default).
+    /// The effective address (the setting, or the catalog default). A refused setting is shown
+    /// as typed, with `configured` false.
     pub base_url: String,
 }
 
@@ -95,14 +101,15 @@ pub fn clear_key(store: &dyn KeyStore, provider: &str) -> Result<(), String> {
 
 pub fn status(store: &dyn KeyStore, settings: &Settings) -> Result<AiStatus, String> {
     let s = spec_or_default(&settings.ai_provider);
-    let base_url = effective_base_url(s.id, &settings.ai_base_url);
-    let configured = if s.needs_key {
-        has_key(store, s.id)?
-    } else {
-        s.local || !base_url.is_empty()
-    };
+    let checked = effective_base_url(s.id, &settings.ai_base_url);
+    let valid = checked.is_ok();
+    let base_url = checked.unwrap_or_else(|_| settings.ai_base_url.trim().trim_end_matches('/').to_string());
+    let has_key = has_key(store, s.id)?;
+    let configured = valid && if s.needs_key { has_key } else { s.local || !base_url.is_empty() };
     Ok(AiStatus {
         configured,
+        has_key,
+        local: valid && s.group() != Group::Cloud && is_local_host(&base_url),
         provider: s.id.to_string(),
         model: effective_model(s.id, &settings.ai_model),
         consent: settings.ai_consent == Some(true),
@@ -183,7 +190,7 @@ pub fn models(
     if s.needs_key && key.is_empty() {
         return Err("Save an API key first.".into());
     }
-    let base_url = effective_base_url(s.id, &settings.ai_base_url);
+    let base_url = effective_base_url(s.id, &settings.ai_base_url)?;
     if base_url.is_empty() {
         return Err("Enter the service address first.".into());
     }
@@ -222,7 +229,7 @@ pub fn check_key(
     let s = spec(provider).ok_or_else(|| format!("unknown AI provider \"{provider}\""))?;
     // The address and model settings belong to the selected provider only.
     let current = settings.ai_provider == provider;
-    let base_url = effective_base_url(provider, if current { &settings.ai_base_url } else { "" });
+    let base_url = effective_base_url(provider, if current { &settings.ai_base_url } else { "" })?;
     let model = effective_model(provider, if current { &settings.ai_model } else { "" });
     if s.local {
         return make(provider, &model, "", Some(&base_url))
@@ -271,7 +278,8 @@ mod tests {
         let json = serde_json::to_value(&st).unwrap();
         let mut keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
         keys.sort();
-        assert_eq!(keys, ["baseUrl", "configured", "consent", "model", "needsKey", "provider", "vision"]);
+        assert_eq!(keys, ["baseUrl", "configured", "consent", "hasKey", "local", "model", "needsKey", "provider", "vision"]);
+        assert_eq!(json["hasKey"], true);
         let text = json.to_string();
         assert!(!text.contains("sk-secret"));
         // Settings never carry it either.
@@ -284,7 +292,7 @@ mod tests {
         store.set("openai", "k").unwrap();
         let mut settings = Settings { ai_provider: "openai".into(), ..Settings::default() };
         let st = status(&store, &settings).unwrap();
-        assert!(st.configured && !st.consent && st.needs_key);
+        assert!(st.configured && !st.consent && st.needs_key && st.has_key && !st.local);
         assert_eq!((st.provider.as_str(), st.model.as_str()), ("openai", "gpt-5"));
         assert_eq!((st.vision, st.base_url.as_str()), (Vision::Yes, "https://api.openai.com"));
 
@@ -292,7 +300,7 @@ mod tests {
         settings.ai_consent = Some(true);
         settings.ai_provider = "anthropic".into();
         let st = status(&store, &settings).unwrap();
-        assert!(!st.configured && st.consent);
+        assert!(!st.configured && st.consent && !st.has_key);
         assert_eq!((st.provider.as_str(), st.model.as_str()), ("anthropic", "gpt-5-mini"));
     }
 
@@ -374,19 +382,34 @@ mod tests {
         assert_eq!(st.base_url, "http://localhost:11434");
         assert_eq!(st.model, "qwen3-vl:8b");
         assert_eq!(st.vision, Vision::DependsOnModel);
-        settings.ai_base_url = "http://gpu-box:11434/".into();
-        assert_eq!(status(&store, &settings).unwrap().base_url, "http://gpu-box:11434");
+        assert!(st.local && !st.has_key);
+        settings.ai_base_url = "http://192.168.1.20:11434/".into();
+        let st = status(&store, &settings).unwrap();
+        assert_eq!(st.base_url, "http://192.168.1.20:11434");
+        assert!(st.local);
+        // A remote machine over https is allowed but is not "local".
+        settings.ai_base_url = "https://gpu.example.org".into();
+        let st = status(&store, &settings).unwrap();
+        assert!(st.configured && !st.local);
+        // A plain-http remote address is refused: not configured, not local.
+        settings.ai_base_url = "http://gpu-box:11434".into();
+        let st = status(&store, &settings).unwrap();
+        assert!(!st.configured && !st.local);
+        assert_eq!(st.base_url, "http://gpu-box:11434");
 
         settings.ai_provider = "custom".into();
         settings.ai_base_url = String::new();
         assert!(!status(&store, &settings).unwrap().configured, "custom needs an address");
         settings.ai_base_url = "https://llm.example.org".into();
         let st = status(&store, &settings).unwrap();
-        assert!(st.configured && !st.needs_key);
+        assert!(st.configured && !st.needs_key && !st.local && !st.has_key);
         assert_eq!(serde_json::to_value(&st).unwrap()["vision"], "dependsOnModel");
+        settings.ai_base_url = "http://localhost:8080/v1".into();
+        assert!(status(&store, &settings).unwrap().local);
 
         // A key for a keyless provider may still be saved (custom endpoints sometimes want one).
         set_key(&store, "custom", "k").unwrap();
+        assert!(status(&store, &settings).unwrap().has_key);
         assert!(set_key(&store, "mock", "k").is_err());
     }
 
@@ -394,19 +417,19 @@ mod tests {
     fn local_test_is_a_reachability_check_without_consent() {
         use mate_core::ai::mock::MockProvider;
         let store = MemoryStore::default();
-        let settings = Settings { ai_provider: "ollama".into(), ai_base_url: "http://box:1".into(), ..Settings::default() };
+        let settings = Settings { ai_provider: "ollama".into(), ai_base_url: "http://127.0.0.1:1".into(), ..Settings::default() };
         let mut asked = None;
         let r = check_key(&store, &settings, "ollama", |p, _, key, base| {
             asked = Some((p.to_string(), key.to_string(), base.map(str::to_string)));
             Arc::new(MockProvider::new(vec![]).with_models(Ok(vec!["m".into()])))
         });
         assert!(r.is_ok(), "{r:?}");
-        assert_eq!(asked.unwrap(), ("ollama".into(), String::new(), Some("http://box:1".into())));
+        assert_eq!(asked.unwrap(), ("ollama".into(), String::new(), Some("http://127.0.0.1:1".into())));
         let r = check_key(&store, &settings, "ollama", |_, _, _, _| {
             Arc::new(MockProvider::new(vec![]).with_models(Err(AiError::Network("no connection".into()))))
         });
         let e = r.unwrap_err();
-        assert!(e.contains("Ollama") && e.contains("http://box:1"), "{e}");
+        assert!(e.contains("Ollama") && e.contains("http://127.0.0.1:1"), "{e}");
         // No text is ever sent for a reachability check.
         let mock = Arc::new(MockProvider::new(vec![]).with_models(Ok(vec![])));
         let m2 = mock.clone();
@@ -462,6 +485,21 @@ mod tests {
         })
         .unwrap();
         assert_eq!(out, ["qwen3-vl:8b"]);
+    }
+
+    #[test]
+    fn bad_addresses_are_refused_before_any_request() {
+        let store = MemoryStore::default();
+        let mut settings =
+            Settings { ai_provider: "ollama".into(), ai_base_url: "http://gpu-box:11434".into(), ..Settings::default() };
+        let bad = "Use an https:// address, or a local address such as http://localhost:11434.";
+        assert_eq!(models(&store, &settings, |_, _, _, _| unreachable!()).unwrap_err(), bad);
+        assert_eq!(check_key(&store, &settings, "ollama", |_, _, _, _| unreachable!()).unwrap_err(), bad);
+        settings.ai_provider = "custom".into();
+        settings.ai_base_url = "http://llm.example.org".into();
+        settings.ai_consent = Some(true);
+        assert_eq!(check_key(&store, &settings, "custom", |_, _, _, _| unreachable!()).unwrap_err(), bad);
+        assert_eq!(models(&store, &settings, |_, _, _, _| unreachable!()).unwrap_err(), bad);
     }
 
     #[test]

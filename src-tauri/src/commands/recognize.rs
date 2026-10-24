@@ -80,6 +80,8 @@ impl From<AiError> for RecognizeError {
             AiError::UnknownModel => "unknownModel",
             AiError::Refused => "refused",
             AiError::Truncated => "truncated",
+            // Fixed in Settings like a missing address; the message says what to change.
+            AiError::BadAddress => "disabled",
         };
         RecognizeError { kind, message: e.to_string() }
     }
@@ -165,7 +167,7 @@ pub struct Resolved {
 }
 
 /// The provider settings, without the consent check: `Disabled` when a needed key or address is
-/// missing. Unknown provider ids fall back to Anthropic.
+/// missing, `BadAddress` when the address is refused. Unknown provider ids fall back to Anthropic.
 pub fn connection(settings: &Settings, store: &dyn KeyStore) -> Result<Resolved, AiError> {
     let spec = spec_or_default(&settings.ai_provider);
     let key = store.get(spec.id).map_err(|_| AiError::Disabled)?.filter(|k| !k.trim().is_empty());
@@ -174,7 +176,7 @@ pub fn connection(settings: &Settings, store: &dyn KeyStore) -> Result<Resolved,
         None if !spec.needs_key => String::new(),
         None => return Err(AiError::Disabled),
     };
-    let base_url = effective_base_url(spec.id, &settings.ai_base_url);
+    let base_url = effective_base_url(spec.id, &settings.ai_base_url).map_err(|_| AiError::BadAddress)?;
     if base_url.is_empty() {
         return Err(AiError::Disabled);
     }
@@ -306,9 +308,14 @@ mod tests {
     #[test]
     fn local_providers_need_no_key_and_custom_needs_an_address() {
         let store = MemoryStore::default();
-        let local = Settings { ai_provider: "ollama".into(), ai_base_url: "http://box:11434".into(), ..consenting() };
+        let local = Settings { ai_provider: "ollama".into(), ai_base_url: "http://10.0.0.7:11434".into(), ..consenting() };
         let r = resolve(&local, &store).unwrap();
-        assert_eq!((r.provider.as_str(), r.key.as_str(), r.base_url.as_str()), ("ollama", "", "http://box:11434"));
+        assert_eq!((r.provider.as_str(), r.key.as_str(), r.base_url.as_str()), ("ollama", "", "http://10.0.0.7:11434"));
+        // A plain-http remote address is refused before anything is sent.
+        let remote = Settings { ai_base_url: "http://box.example.org:11434".into(), ..local.clone() };
+        let e = resolve(&remote, &store).unwrap_err();
+        assert_eq!(e.kind, "disabled");
+        assert_eq!(e.message, AiError::BadAddress.to_string());
         let custom = Settings { ai_provider: "custom".into(), ..consenting() };
         assert_eq!(resolve(&custom, &store).unwrap_err().kind, "disabled");
         let custom = Settings { ai_base_url: "https://llm.example.org".into(), ..custom };

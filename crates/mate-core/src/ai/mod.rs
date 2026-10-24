@@ -28,7 +28,8 @@ pub fn default_model(provider: &str) -> &'static str {
 
 /// The provider for `settings_provider`. An empty `model` means the provider's default;
 /// `base_url` overrides the catalog address where the provider allows it (local and custom).
-/// `"mock"` gives an empty [`mock::MockProvider`]; unknown ids fall back to Anthropic.
+/// `"mock"` gives an empty [`mock::MockProvider`]; unknown ids fall back to Anthropic. A refused
+/// address (see [`catalog::effective_base_url`]) gives a provider that fails every call.
 pub fn provider_for(settings_provider: &str, model: &str, key: String, base_url: Option<&str>) -> Box<dyn Provider> {
     if settings_provider == "mock" {
         return Box::new(mock::MockProvider::new(Vec::new()));
@@ -38,12 +39,33 @@ pub fn provider_for(settings_provider: &str, model: &str, key: String, base_url:
         "" => spec.default_model.to_string(),
         m => m.to_string(),
     };
-    let base = catalog::effective_base_url(spec.id, base_url.unwrap_or(""));
+    let Ok(base) = catalog::effective_base_url(spec.id, base_url.unwrap_or("")) else {
+        return Box::new(BadAddress(spec.id));
+    };
     match spec.wire {
         catalog::Wire::Anthropic => Box::new(anthropic::AnthropicProvider::new(key, model, base)),
         catalog::Wire::OpenAiCompat => Box::new(
             openai::OpenAiProvider::new(key, model, base).with_quirks(openai::Quirks::from_spec(spec)).with_id(spec.id),
         ),
+    }
+}
+
+/// Stands in for a provider whose address setting was refused: every call fails with
+/// [`AiError::BadAddress`] and nothing is sent.
+struct BadAddress(&'static str);
+
+impl Provider for BadAddress {
+    fn id(&self) -> &'static str {
+        self.0
+    }
+    fn recognize(&self, _req: &provider::RecognizeRequest) -> Result<Verdict, AiError> {
+        Err(AiError::BadAddress)
+    }
+    fn complete(&self, _req: &provider::TextRequest) -> Result<String, AiError> {
+        Err(AiError::BadAddress)
+    }
+    fn list_models(&self) -> Result<Vec<String>, AiError> {
+        Err(AiError::BadAddress)
     }
 }
 

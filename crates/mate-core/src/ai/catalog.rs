@@ -227,10 +227,44 @@ pub fn spec_or_default(id: &str) -> &'static ProviderSpec {
     spec(id).unwrap_or(&CATALOG[0])
 }
 
+/// Shown when an address is neither `https://` nor a local `http://` one.
+pub const BAD_ADDRESS: &str = "Use an https:// address, or a local address such as http://localhost:11434.";
+
 /// The address to use: `override_url` (trimmed, without a trailing `/`) when the provider allows
-/// it and it is not empty, else the catalog default.
-pub fn effective_base_url(id: &str, override_url: &str) -> String {
+/// it and it is not empty, else the catalog default. An override must be `https://`, or `http://`
+/// on a local host (see [`is_local_host`]); otherwise the error is [`BAD_ADDRESS`].
+pub fn effective_base_url(id: &str, override_url: &str) -> Result<String, String> {
     let s = spec_or_default(id);
     let o = override_url.trim().trim_end_matches('/');
-    if s.editable_base_url && !o.is_empty() { o.to_string() } else { s.base_url.to_string() }
+    if s.editable_base_url && !o.is_empty() {
+        check_address(o)?;
+        Ok(o.to_string())
+    } else {
+        Ok(s.base_url.to_string())
+    }
+}
+
+fn check_address(url: &str) -> Result<(), String> {
+    match url::Url::parse(url) {
+        Ok(u) if u.scheme() == "https" && u.host().is_some() => Ok(()),
+        Ok(u) if u.scheme() == "http" && is_local_host(url) => Ok(()),
+        _ => Err(BAD_ADDRESS.to_string()),
+    }
+}
+
+/// True when `url` names this computer or the local network: `localhost`, `*.localhost`, a
+/// loopback address (`127.0.0.0/8`, `::1`) or a private IPv4 range (`10/8`, `172.16/12`,
+/// `192.168/16`). The settings screen mirrors this rule.
+pub fn is_local_host(url: &str) -> bool {
+    use std::net::IpAddr;
+    let Ok(u) = url::Url::parse(url.trim()) else { return false };
+    match u.host() {
+        Some(url::Host::Domain(d)) => {
+            let d = d.trim_end_matches('.').to_ascii_lowercase();
+            d == "localhost" || d.ends_with(".localhost")
+        }
+        Some(url::Host::Ipv4(ip)) => IpAddr::V4(ip).is_loopback() || ip.is_private(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    }
 }

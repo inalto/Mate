@@ -57,6 +57,9 @@ pub enum AiError {
     Refused,
     #[error("The AI's answer was cut off before it finished.")]
     Truncated,
+    /// The address setting is neither `https://` nor a local `http://` one; nothing was sent.
+    #[error("{}", super::catalog::BAD_ADDRESS)]
+    BadAddress,
 }
 
 pub trait Provider: Send + Sync {
