@@ -481,6 +481,7 @@
   "about": {
     "version": "バージョン {{version}}",
     "tagline": "ローカル優先の手書きと数式のノートアプリです。",
+    "nameNote": "Mate はあなたの数学の相棒です。イタリア語では、学生が数学を「mate」と呼びます。",
     "starPitch": "Mate がお役に立ったら、GitHub でスターを付けると、ほかの人にも見つけてもらいやすくなります。",
     "star": "GitHub でスターを付ける",
     "githubFailed": "GitHub を開けませんでした。",
@@ -641,6 +642,7 @@
     "latexHint": ".tex ファイルを保存します。画像はプレースホルダーになります。",
     "mateHint": "このページが属するノート全体を書き出します。",
     "shareHint": "このノートを相手に送るには、ノートのメニューから「共有…」を使ってください。",
+    "shareInstead": "代わりに共有…",
     "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",
     "boxMissing": "ボックス {{id}} は書き出し用に描画されませんでした。"
   },
@@ -755,7 +757,7 @@
     "folderTitle": "同期フォルダーにコピーを保存",
     "noFolders": "このコンピューターに同期フォルダーが見つかりません。",
     "lookingForFolders": "同期フォルダーを検索中…",
-    "chooseFolder":"別のフォルダーを選択…",
+    "chooseFolder": "別のフォルダーを選択…",
     "savedTo": "{{path}} に保存しました",
     "showInFolder": "フォルダーで表示",
     "nextcloudHint": "Nextcloud から、このノートへのリンクを送信します。",
@@ -835,7 +837,7 @@
       "differAt": "{{at}} で一致しません",
       "holds": "{{solutions}} のとき成り立つ",
       "never": "常に不成立",
-      "undecided":"判定できませんでした: {{reason}}",
+      "undecided": "判定できませんでした: {{reason}}",
       "notEquation": "判定できませんでした: 方程式ではありません",
       "reasons": {
         "noNumeric": "両辺に数値がありません",
@@ -894,7 +896,7 @@
     "modelMissing": "モデル名を入力してください。",
     "visionHint": "画像を読み取れるモデルを選んでください。そうでない場合、チューターは手書きをチェックできません。",
     "fetchModelsNote": "キーを {{provider}} に送信してモデル一覧を取得します。ほかは送信されません。",
-    "loadFailed":"AI サービスの一覧を読み込めませんでした。",
+    "loadFailed": "AI サービスの一覧を読み込めませんでした。",
     "noVision": "このプロバイダーは手書きを読み取れないため、チェックはオフです。質問、要約、練習問題は引き続き使えます。",
     "noModels": "モデルが見つかりません。",
     "foundModels_other": "{{count}} 件のモデルが見つかりました。",
@@ -910,7 +912,7 @@
       "cloud": "作業内容をチェックするため、手書きの画像とテキストを {{provider}} に送信します。この設定をオンにするまで、何も送信されません。",
       "cloudText": "質問、要約、練習のために、ノートのテキストを {{provider}} に送信します。この設定をオンにするまで、何も送信されません。"
     },
-    "model":"モデル",
+    "model": "モデル",
     "fetchModels": "モデルを取得",
     "address": "アドレス",
     "apiKey": "API キー",

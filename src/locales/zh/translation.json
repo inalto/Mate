@@ -481,6 +481,7 @@
   "about": {
     "version": "版本 {{version}}",
     "tagline": "本地优先的手写与数学笔记。",
+    "nameNote": "Mate 是你的数学伙伴。在意大利语中，学生也把数学叫作“mate”。",
     "starPitch": "如果 Mate 对您有帮助，在 GitHub 上点个星星，能帮助更多人发现它。",
     "star": "在 GitHub 上点星",
     "githubFailed": "无法打开 GitHub。",
@@ -641,6 +642,7 @@
     "latexHint": "保存为 .tex 文件；图片将转换为占位符。",
     "mateHint": "导出此页面所属的整个笔记本。",
     "shareHint": "如需将此笔记本发送给他人，请使用笔记本菜单中的“分享…”。",
+    "shareInstead": "改为分享…",
     "boxRender": "无法为导出渲染框 {{id}} 的内容。",
     "boxMissing": "框 {{id}} 未能为导出而渲染。"
   },
@@ -755,7 +757,7 @@
     "folderTitle": "将副本保存到同步文件夹",
     "noFolders": "在此计算机上未找到同步文件夹。",
     "lookingForFolders": "正在查找同步文件夹…",
-    "chooseFolder":"选择其他文件夹…",
+    "chooseFolder": "选择其他文件夹…",
     "savedTo": "已保存至 {{path}}",
     "showInFolder": "在文件夹中显示",
     "nextcloudHint": "通过您的 Nextcloud 发送此笔记本的链接。",
@@ -835,7 +837,7 @@
       "differAt": "在 {{at}} 处不相等",
       "holds": "当{{solutions}}时成立",
       "never": "从不成立",
-      "undecided":"无法判定：{{reason}}",
+      "undecided": "无法判定：{{reason}}",
       "notEquation": "无法判定：这不是方程",
       "reasons": {
         "noNumeric": "两边没有数值",
@@ -894,7 +896,7 @@
     "modelMissing": "请输入模型名称。",
     "visionHint": "请选择能够读取图片的模型，否则辅导无法检查手写内容。",
     "fetchModelsNote": "将您的密钥发送至 {{provider}} 以获取其模型列表；不会发送其他内容。",
-    "loadFailed":"无法加载 AI 服务列表。",
+    "loadFailed": "无法加载 AI 服务列表。",
     "noVision": "此服务商无法读取手写内容，因此检查已关闭。提问、摘要和练习功能仍可使用。",
     "noModels": "未找到模型。",
     "foundModels_other": "找到 {{count}} 个模型。",
@@ -910,7 +912,7 @@
       "cloud": "将手写图片和文本发送到 {{provider}}，以检查您的作业。在开启此选项之前，不会发送任何内容。",
       "cloudText": "为提问、摘要和练习，将您笔记的文本发送至 {{provider}}。在开启此选项之前，不会发送任何内容。"
     },
-    "model":"模型",
+    "model": "模型",
     "fetchModels": "获取模型",
     "address": "地址",
     "apiKey": "API 密钥",

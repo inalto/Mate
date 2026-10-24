@@ -482,6 +482,7 @@
   "about": {
     "version": "Version {{version}}",
     "tagline": "Notes manuscrites et mathématiques, d'abord sur ton appareil.",
+    "nameNote": "Mate est ton compagnon de maths. En italien, « mate » est aussi le mot des élèves pour les mathématiques.",
     "starPitch": "Si Mate t'est utile, une étoile sur GitHub aide d'autres personnes à le trouver.",
     "star": "Mettre une étoile sur GitHub",
     "githubFailed": "Impossible d'ouvrir GitHub.",
@@ -642,6 +643,7 @@
     "latexHint": "Enregistre un fichier .tex ; les images deviennent des espaces réservés.",
     "mateHint": "Exporte tout le cahier auquel appartient cette page.",
     "shareHint": "Pour envoyer ce cahier à quelqu'un, utilise Partager… depuis le menu du cahier.",
+    "shareInstead": "Partager plutôt…",
     "boxRender": "Impossible de générer le contenu de la zone {{id}} pour l'export.",
     "boxMissing": "La zone {{id}} n'a pas été générée pour l'export."
   },
@@ -763,7 +765,7 @@
     "folderTitle": "Enregistrer une copie dans un dossier synchronisé",
     "noFolders": "Aucun dossier synchronisé trouvé sur cet ordinateur.",
     "lookingForFolders": "Recherche de dossiers synchronisés…",
-    "chooseFolder":"Choisir un autre dossier…",
+    "chooseFolder": "Choisir un autre dossier…",
     "savedTo": "Enregistré dans {{path}}",
     "showInFolder": "Afficher dans le dossier",
     "nextcloudHint": "Envoie un lien vers ce cahier depuis ton Nextcloud.",
@@ -844,7 +846,7 @@
       "differAt": "Ils diffèrent en {{at}}",
       "holds": "Vrai lorsque {{solutions}}",
       "never": "Jamais vrai",
-      "undecided":"Impossible de trancher : {{reason}}",
+      "undecided": "Impossible de trancher : {{reason}}",
       "notEquation": "Impossible de trancher : ce n'est pas une équation",
       "reasons": {
         "noNumeric": "les deux membres n'ont pas de valeur numérique",
@@ -903,7 +905,7 @@
     "modelMissing": "Saisis un nom de modèle.",
     "visionHint": "Choisis un modèle capable de lire des images, sinon le tuteur ne pourra pas vérifier l'écriture manuscrite.",
     "fetchModelsNote": "Envoie ta clé à {{provider}} pour obtenir la liste de ses modèles ; rien d'autre n'est envoyé.",
-    "loadFailed":"Impossible de charger la liste des services d'IA.",
+    "loadFailed": "Impossible de charger la liste des services d'IA.",
     "noVision": "Ce fournisseur ne peut pas lire l'écriture manuscrite, la vérification est donc désactivée. Les questions, résumés et entraînements fonctionnent toujours.",
     "noModels": "Aucun modèle trouvé.",
     "foundModels_one": "{{count}} modèle trouvé.",
@@ -920,7 +922,7 @@
       "cloud": "Envoyer des images d'écriture manuscrite et du texte à {{provider}} pour vérifier ton travail. Rien n'est envoyé tant que tu n'actives pas cette option.",
       "cloudText": "Envoie le texte de tes notes à {{provider}} pour les questions, résumés et entraînements. Rien n'est envoyé tant que tu n'actives pas cette option."
     },
-    "model":"Modèle",
+    "model": "Modèle",
     "fetchModels": "Récupérer les modèles",
     "address": "Adresse",
     "apiKey": "Clé API",

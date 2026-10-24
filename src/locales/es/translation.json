@@ -482,6 +482,7 @@
   "about": {
     "version": "Versión {{version}}",
     "tagline": "Notas de escritura a mano y matemáticas que se guardan primero en tu equipo.",
+    "nameNote": "Mate es tu compañero de mates. En italiano, \"mate\" es también como los estudiantes llaman a las matemáticas.",
     "starPitch": "Si Mate te resulta útil, una estrella en GitHub ayuda a que otros la encuentren.",
     "star": "Dar estrella en GitHub",
     "githubFailed": "No se pudo abrir GitHub.",
@@ -642,6 +643,7 @@
     "latexHint": "Guarda un archivo .tex; las imágenes se convierten en marcadores.",
     "mateHint": "Exporta todo el cuaderno al que pertenece esta página.",
     "shareHint": "Para enviar este cuaderno a alguien, usa Compartir… desde el menú del cuaderno.",
+    "shareInstead": "Compartir en su lugar…",
     "boxRender": "No se pudo generar el contenido del cuadro {{id}} para exportar.",
     "boxMissing": "El cuadro {{id}} no se generó para exportar."
   },
@@ -763,7 +765,7 @@
     "folderTitle": "Guardar una copia en una carpeta sincronizada",
     "noFolders": "No se encontraron carpetas sincronizadas en este equipo.",
     "lookingForFolders": "Buscando carpetas sincronizadas…",
-    "chooseFolder":"Elegir otra carpeta…",
+    "chooseFolder": "Elegir otra carpeta…",
     "savedTo": "Guardado en {{path}}",
     "showInFolder": "Mostrar en la carpeta",
     "nextcloudHint": "Envía un enlace a este cuaderno desde tu Nextcloud.",
@@ -844,7 +846,7 @@
       "differAt": "No coinciden en {{at}}",
       "holds": "Verdadero cuando {{solutions}}",
       "never": "Nunca es verdadero",
-      "undecided":"No se pudo decidir: {{reason}}",
+      "undecided": "No se pudo decidir: {{reason}}",
       "notEquation": "No se pudo decidir: esto no es una ecuación",
       "reasons": {
         "noNumeric": "los dos lados no tienen valor numérico",
@@ -903,7 +905,7 @@
     "modelMissing": "Escribe un nombre de modelo.",
     "visionHint": "Elige un modelo que pueda leer imágenes; si no, el tutor no podrá revisar la escritura a mano.",
     "fetchModelsNote": "Envía tu clave a {{provider}} para obtener su lista de modelos; no se envía nada más.",
-    "loadFailed":"No se pudo cargar la lista de servicios de IA.",
+    "loadFailed": "No se pudo cargar la lista de servicios de IA.",
     "noVision": "Este proveedor no puede leer la escritura a mano, así que la revisión está desactivada. Preguntar, los resúmenes y la práctica siguen funcionando.",
     "noModels": "No se encontraron modelos.",
     "foundModels_one": "Se encontró {{count}} modelo.",
@@ -920,7 +922,7 @@
       "cloud": "Enviar imágenes de escritura a mano y texto a {{provider}} para revisar tu trabajo. No se envía nada hasta que actives esta opción.",
       "cloudText": "Envía el texto de tus notas a {{provider}} para preguntas, resúmenes y práctica. No se envía nada hasta que actives esta opción."
     },
-    "model":"Modelo",
+    "model": "Modelo",
     "fetchModels": "Buscar modelos",
     "address": "Dirección",
     "apiKey": "Clave de API",

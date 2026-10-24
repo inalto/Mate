@@ -482,6 +482,7 @@
   "about": {
     "version": "Versão {{version}}",
     "tagline": "Anotações de escrita à mão e matemática, guardadas primeiro no seu dispositivo.",
+    "nameNote": "Mate é seu parceiro de matemática. Em italiano, \"mate\" também é como os estudantes chamam a matemática.",
     "starPitch": "Se o Mate for útil para você, uma estrela no GitHub ajuda outras pessoas a encontrá-lo.",
     "star": "Dar estrela no GitHub",
     "githubFailed": "Não foi possível abrir o GitHub.",
@@ -642,6 +643,7 @@
     "latexHint": "Salva um arquivo .tex; as imagens viram marcadores.",
     "mateHint": "Exporta o caderno inteiro ao qual esta página pertence.",
     "shareHint": "Para enviar este caderno a alguém, use Compartilhar… no menu do caderno.",
+    "shareInstead": "Partilhar em vez disso…",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
   },
@@ -763,7 +765,7 @@
     "folderTitle": "Salvar uma cópia em uma pasta sincronizada",
     "noFolders": "Nenhuma pasta sincronizada encontrada neste computador.",
     "lookingForFolders": "Procurando pastas sincronizadas…",
-    "chooseFolder":"Escolher outra pasta…",
+    "chooseFolder": "Escolher outra pasta…",
     "savedTo": "Salvo em {{path}}",
     "showInFolder": "Mostrar na pasta",
     "nextcloudHint": "Envie um link para este caderno pelo seu Nextcloud.",
@@ -844,7 +846,7 @@
       "differAt": "Eles diferem em {{at}}",
       "holds": "Verdadeiro quando {{solutions}}",
       "never": "Nunca é verdadeiro",
-      "undecided":"Não foi possível decidir: {{reason}}",
+      "undecided": "Não foi possível decidir: {{reason}}",
       "notEquation": "Não foi possível decidir: isto não é uma equação",
       "reasons": {
         "noNumeric": "os dois lados não têm valor numérico",
@@ -903,7 +905,7 @@
     "modelMissing": "Digite um nome de modelo.",
     "visionHint": "Escolha um modelo que consiga ler imagens; caso contrário, o tutor não poderá verificar a escrita à mão.",
     "fetchModelsNote": "Envia sua chave para a {{provider}} para listar os modelos; nada mais é enviado.",
-    "loadFailed":"Não foi possível carregar a lista de serviços de IA.",
+    "loadFailed": "Não foi possível carregar a lista de serviços de IA.",
     "noVision": "Este provedor não consegue ler escrita à mão, então a verificação está desligada. Perguntas, resumos e prática continuam funcionando.",
     "noModels": "Nenhum modelo encontrado.",
     "foundModels_one": "Encontrado {{count}} modelo.",
@@ -920,7 +922,7 @@
       "cloud": "Enviar imagens de escrita à mão e texto para {{provider}} para verificar seu trabalho. Nada é enviado até você ativar esta opção.",
       "cloudText": "Envia o texto de suas anotações para {{provider}} para perguntas, resumos e prática. Nada é enviado até você ativar esta opção."
     },
-    "model":"Modelo",
+    "model": "Modelo",
     "fetchModels": "Buscar modelos",
     "address": "Endereço",
     "apiKey": "Chave de API",

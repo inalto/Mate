@@ -482,6 +482,7 @@
   "about": {
     "version": "Version {{version}}",
     "tagline": "Handschrift- und Mathe-Notizen, die zuerst auf deinem Gerät bleiben.",
+    "nameNote": "Mate ist dein Mathe-Kumpel. Auf Italienisch sagen Schüler auch „mate“ für Mathematik.",
     "starPitch": "Wenn Mate dir hilft, hilft ein Stern auf GitHub anderen, es zu finden.",
     "star": "Auf GitHub mit Stern bewerten",
     "githubFailed": "GitHub konnte nicht geöffnet werden.",
@@ -642,6 +643,7 @@
     "latexHint": "Speichert eine .tex-Datei; Bilder werden zu Platzhaltern.",
     "mateHint": "Exportiert das gesamte Notizbuch, zu dem diese Seite gehört.",
     "shareHint": "Um dieses Notizbuch an jemanden zu senden, nutze Teilen… im Notizbuchmenü.",
+    "shareInstead": "Stattdessen teilen…",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
     "boxMissing": "Feld {{id}} wurde für den Export nicht gerendert."
   },
@@ -763,7 +765,7 @@
     "folderTitle": "Eine Kopie in einem synchronisierten Ordner speichern",
     "noFolders": "Auf diesem Computer wurden keine synchronisierten Ordner gefunden.",
     "lookingForFolders": "Suche nach synchronisierten Ordnern…",
-    "chooseFolder":"Anderen Ordner wählen…",
+    "chooseFolder": "Anderen Ordner wählen…",
     "savedTo": "Gespeichert unter {{path}}",
     "showInFolder": "Im Ordner anzeigen",
     "nextcloudHint": "Sende einen Link zu diesem Notizbuch aus deiner Nextcloud.",
@@ -844,7 +846,7 @@
       "differAt": "Sie unterscheiden sich bei {{at}}",
       "holds": "Wahr, wenn {{solutions}}",
       "never": "Niemals wahr",
-      "undecided":"Keine Entscheidung möglich: {{reason}}",
+      "undecided": "Keine Entscheidung möglich: {{reason}}",
       "notEquation": "Keine Entscheidung möglich: dies ist keine Gleichung",
       "reasons": {
         "noNumeric": "die beiden Seiten haben keinen numerischen Wert",
@@ -903,7 +905,7 @@
     "modelMissing": "Gib einen Modellnamen ein.",
     "visionHint": "Wähle ein Modell, das Bilder lesen kann, sonst kann der Tutor keine Handschrift prüfen.",
     "fetchModelsNote": "Sendet deinen Schlüssel an {{provider}}, um dessen Modelle abzurufen; sonst wird nichts gesendet.",
-    "loadFailed":"Die Liste der KI-Dienste konnte nicht geladen werden.",
+    "loadFailed": "Die Liste der KI-Dienste konnte nicht geladen werden.",
     "noVision": "Dieser Anbieter kann keine Handschrift lesen, daher ist die Prüfung aus. Fragen, Zusammenfassungen und Übungen funktionieren weiterhin.",
     "noModels": "Keine Modelle gefunden.",
     "foundModels_one": "{{count}} Modell gefunden.",
@@ -920,7 +922,7 @@
       "cloud": "Handschriftbilder und Text an {{provider}} senden, um deine Arbeit zu prüfen. Nichts wird gesendet, bis du dies aktivierst.",
       "cloudText": "Sendet den Text deiner Notizen an {{provider}} für Fragen, Zusammenfassungen und Übungen. Nichts wird gesendet, bis du dies aktivierst."
     },
-    "model":"Modell",
+    "model": "Modell",
     "fetchModels": "Modelle abrufen",
     "address": "Adresse",
     "apiKey": "API-Schlüssel",

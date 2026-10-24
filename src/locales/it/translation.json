@@ -259,7 +259,8 @@
         "signOut": "Esci",
         "waiting": "In attesa della tua approvazione nel browser…",
         "server": "Indirizzo del server Nextcloud",
-        "signIn": "Accedi"
+        "signIn": "Accedi",
+        "expired": "Il link di accesso è scaduto. Ricomincia."
       }
     },
     "updates": {
@@ -478,6 +479,7 @@
   "about": {
     "version": "Versione {{version}}",
     "tagline": "Appunti a mano e di matematica, prima di tutto in locale.",
+    "nameNote": "Mate è il tuo compagno di matematica. E \"mate\" è come gli studenti chiamano la matematica.",
     "starPitch": "Se Mate ti è utile, una stella su GitHub aiuta altri a trovarlo.",
     "star": "Metti una stella su GitHub",
     "githubFailed": "Impossibile aprire GitHub.",
@@ -638,6 +640,7 @@
     "latexHint": "Salva un file .tex; le immagini diventano segnaposto.",
     "mateHint": "Esporta l'intero quaderno a cui appartiene questa pagina.",
     "shareHint": "Per inviare questo quaderno a qualcuno, usa Condividi… dal menu del quaderno.",
+    "shareInstead": "Condividi invece…",
     "boxRender": "Impossibile renderizzare il contenuto della casella {{id}} per l'esportazione.",
     "boxMissing": "La casella {{id}} non è stata renderizzata per l'esportazione."
   },
@@ -758,10 +761,13 @@
     "title": "Condividi {{title}}",
     "folderTitle": "Salva una copia in una cartella sincronizzata",
     "noFolders": "Nessuna cartella sincronizzata trovata su questo computer.",
+    "lookingForFolders": "Cerco le cartelle sincronizzate…",
     "chooseFolder": "Scegli un'altra cartella…",
     "savedTo": "Salvato in {{path}}",
     "showInFolder": "Mostra nella cartella",
-    "nextcloudHint": "Invia un link a questo quaderno dal tuo Nextcloud. Si configura in Impostazioni → Condivisione.",
+    "nextcloudHint": "Invia un link a questo quaderno dal tuo Nextcloud.",
+    "setUpInSettings": "Si configura in Impostazioni",
+    "publicLink": "Chiunque abbia il link può scaricare questo quaderno.",
     "expires": "Scadenza del link",
     "expiry": {
       "never": "Mai",
@@ -835,6 +841,8 @@
       "agree": "I due membri coincidono",
       "differ": "Sono diversi",
       "differAt": "Sono diversi in {{at}}",
+      "holds": "Vero quando {{solutions}}",
+      "never": "Mai vero",
       "undecided": "Impossibile stabilirlo: {{reason}}",
       "notEquation": "Impossibile stabilirlo: non è un'equazione",
       "reasons": {
@@ -887,6 +895,13 @@
     }
   },
   "ai": {
+    "privacyRemote": "La tua scrittura a mano e il tuo testo vengono inviati all'indirizzo qui sopra.",
+    "addressInvalid": "Usa un indirizzo https://, oppure un indirizzo locale come http://localhost:11434.",
+    "addressMissing": "Scrivi l'indirizzo del servizio.",
+    "typeModel": "Scrivi il nome del modello",
+    "modelMissing": "Scrivi il nome di un modello.",
+    "visionHint": "Scegli un modello che sappia leggere le immagini, altrimenti il tutor non può controllare la scrittura a mano.",
+    "fetchModelsNote": "Invia la tua chiave a {{provider}} per elencare i suoi modelli; non viene inviato nient'altro.",
     "loadFailed": "Impossibile caricare l'elenco dei servizi AI.",
     "noVision": "Questo provider non sa leggere la scrittura a mano, quindi il controllo è disattivato. Domande, riassunti ed esercizi funzionano comunque.",
     "noModels": "Nessun modello trovato.",
@@ -901,7 +916,8 @@
     "consent": {
       "local": "Permetti a Mate di usare {{provider}} per controllare il tuo lavoro. Tutto viene elaborato su questo computer; nulla viene inviato a internet.",
       "custom": "Invia immagini e testo della scrittura a mano al server all'indirizzo indicato sopra per controllare il tuo lavoro. Non viene inviato nulla finché non lo attivi.",
-      "cloud": "Invia immagini e testo della scrittura a mano a {{provider}} per controllare il tuo lavoro. Non viene inviato nulla finché non lo attivi."
+      "cloud": "Invia immagini e testo della scrittura a mano a {{provider}} per controllare il tuo lavoro. Non viene inviato nulla finché non lo attivi.",
+      "cloudText": "Invia il testo dei tuoi appunti a {{provider}} per domande, riassunti ed esercizi. Non viene inviato nulla finché non lo attivi."
     },
     "model": "Modello",
     "fetchModels": "Scarica i modelli",
