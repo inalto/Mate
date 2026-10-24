@@ -110,7 +110,7 @@ export default function CodeEditor({ el, store }: BoxEditorProps) {
         <select className="tb-select" aria-label={t("code.language")} value={language} onChange={(e) => pick(e.target.value as CodeLanguage)}>
           {CODE_LANGUAGES.map((l) => (
             <option key={l} value={l}>
-              {LANGUAGE_LABELS[l]}
+              {l === "plain" ? t("code.plain") : LANGUAGE_LABELS[l]}
             </option>
           ))}
         </select>

@@ -638,7 +638,8 @@
     "latexHint": "Saves a .tex file; pictures become image placeholders.",
     "mateHint": "Exports the whole book this page belongs to.",
     "shareHint": "To send this book to someone, use Share… from the book menu.",
-    "boxRender": "Could not render the content of box {{id}} for export."
+    "boxRender": "Could not render the content of box {{id}} for export.",
+    "boxMissing": "Box {{id}} was not rendered for export."
   },
   "selection": {
     "label": "Selection",
@@ -796,7 +797,8 @@
     "ready_other": "{{count}} questions ready.",
     "questions": "Questions",
     "add": "Add to a new page",
-    "adding": "Adding…"
+    "adding": "Adding…",
+    "pageFull": "This page is full."
   },
   "math": {
     "compute": "Compute",
@@ -997,7 +999,9 @@
       "parametricForm": "Write a parametric curve as (x(t), y(t))",
       "empty": "Empty expression",
       "invalid": "Invalid expression",
-      "unreadable": "Could not read this expression"
+      "unreadable": "Could not read this expression",
+      "unknownSymbols_one": "Unknown symbol: {{symbols}}",
+      "unknownSymbols_other": "Unknown symbols: {{symbols}}"
     },
     "editor": {
       "settings": "Graph settings",
@@ -1065,6 +1069,7 @@
   },
   "code": {
     "label": "Code",
-    "language": "Language"
+    "language": "Language",
+    "plain": "Plain text"
   }
 }

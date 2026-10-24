@@ -1,6 +1,7 @@
 // Renderer of the boxes drawn from an HTML bitmap (text boxes, tables, code blocks). Canvas: the box's bitmap (the published snapshot or, for an unchanged
 // appearance, the remembered one), asking for a sharper render when the output scale outgrows it;
 // the placeholder frame until a bitmap exists. SVG: a `<foreignObject>` with the sanitised HTML.
+import i18n from "../i18n";
 import type { Element } from "../model/types";
 import { requestTextSnapshot, snapshotScale, textBitmapKey, textSnapshotFor } from "../overlay/snapshot";
 import { boxAppearance } from "../text/boxHtml";
@@ -16,7 +17,7 @@ export const htmlBoxRenderer: ElementRenderer = {
       // Export: only the bitmaps prepared for this paint's theme.
       const bmp = o.textBitmaps.get(textBitmapKey(el.id, o.theme));
       if (!bmp) {
-        if (r.width > 0 && r.height > 0) throw new Error(`Box ${el.id} was not rendered for export.`);
+        if (r.width > 0 && r.height > 0) throw new Error(i18n.t("export.boxMissing", { id: el.id }));
         return;
       }
       drawBoxBitmap(ctx, el, bmp, o);

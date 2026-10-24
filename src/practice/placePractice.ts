@@ -145,7 +145,7 @@ export async function placePractice(questions: PracticeQuestion[], opts: PlaceOp
       for (const el of plan[i].els) el.pageId = page.id;
       const ed = opts.editor;
       if (ed && ed.getState().loadedPageId === page.id) {
-        if (!ed.getState().addElements("Practice questions", plan[i].els)) throw new Error("This page is full.");
+        if (!ed.getState().addElements("Practice questions", plan[i].els)) throw new Error(i18n.t("practice.pageFull"));
       } else {
         await upsertElements(plan[i].els);
       }

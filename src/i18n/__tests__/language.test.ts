@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { useSettingsStore } from "../../stores/settings";
 import i18n from "../index";
 import { applyLanguage, currentLanguage, LANGUAGE_NAMES, resolveLanguage, SUPPORTED } from "../language";
 
@@ -45,10 +46,27 @@ describe("LANGUAGE_NAMES", () => {
 });
 
 describe("applyLanguage", () => {
-  it("stays in English when a catalogue is missing and sets the document language", async () => {
+  afterEach(async () => {
+    i18n.removeResourceBundle("it", "translation");
+    await applyLanguage("en");
+  });
+
+  it("applies English and sets the document language", async () => {
     await applyLanguage("en");
     expect(i18n.language).toBe("en");
     expect(document.documentElement.lang).toBe("en");
     expect(currentLanguage()).toBe("en");
+  });
+
+  it("switches the interface when the language setting changes", async () => {
+    i18n.addResourceBundle("it", "translation", { common: { cancel: "Annulla" } }, true, true);
+    void useSettingsStore.getState().update({ language: "it" }).catch(() => {}); // no backend in tests
+    await vi.waitFor(() => expect(i18n.language).toBe("it"));
+    expect(i18n.t("common.cancel")).toBe("Annulla");
+    expect(i18n.t("common.save")).toBe("Save"); // missing keys fall back to English
+    expect(document.documentElement.lang).toBe("it");
+    expect(currentLanguage()).toBe("it");
+    void useSettingsStore.getState().update({ language: "system" }).catch(() => {});
+    await vi.waitFor(() => expect(i18n.language).toBe("en"));
   });
 });

@@ -95,7 +95,7 @@ function evaluator(eng: Engine, e: Expr, variable: string): Evaluator {
   const unknowns = e.unknowns.filter((s) => s !== variable);
   if (unknowns.length > 0) {
     const shown = unknowns.map((s) => (s === THETA ? "θ" : s)).join(", ");
-    throw new ExprError(`Unknown symbol${unknowns.length > 1 ? "s" : ""}: ${shown}`);
+    throw new ExprError(i18n.t("graph.errors.unknownSymbols", { count: unknowns.length, symbols: shown }));
   }
   let run: ((vars: Record<string, number>) => unknown) | null = null;
   try {

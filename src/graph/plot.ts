@@ -4,6 +4,7 @@
 // of view. The canvas and SVG renderers draw a scene as is. Each expression gets a wall-clock
 // budget: past it its evaluator answers NaN (the curve is cut short) and the scene carries a
 // "too slow" warning for it. While the math engine loads, curves are left out (`pending`).
+import i18n from "../i18n";
 import type { ThemeName } from "../ink/types";
 import { mapInkColor } from "../ink/theme";
 import type { GraphData } from "./data";
@@ -277,7 +278,7 @@ export function buildPlotScene(data: GraphData, box: { w: number; h: number }, t
     const color = mapInkColor(e.color, theme);
     for (const b of branches) for (const polyline of clipPolyline(b.map(toBox), w, h)) curves.push({ color, polyline });
   }
-  if (pending) labels.push({ x: Math.min(6, w), y: Math.min(6, h), text: "Loading…", align: "left", baseline: "top" });
+  if (pending) labels.push({ x: Math.min(6, w), y: Math.min(6, h), text: i18n.t("common.loading"), align: "left", baseline: "top" });
 
   return { w, h, colors: plotColors(theme), axes, grid, ticks, curves, labels, warnings, pending };
 }
