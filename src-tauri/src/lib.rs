@@ -53,6 +53,15 @@ pub fn run() {
         )?;
       }
       let state = AppState::init(app.handle())?;
+      // The asset protocol scope in tauri.conf.json covers the normal app-data folder only; a
+      // `MATE_DATA_DIR` profile needs its thumbnails and assets allowed at runtime.
+      if std::env::var_os("MATE_DATA_DIR").is_some_and(|v| !v.is_empty()) {
+        for sub in ["thumbnails", "assets"] {
+          let dir = state.data_dir.join(sub);
+          let _ = std::fs::create_dir_all(&dir);
+          app.asset_protocol_scope().allow_directory(&dir, true)?;
+        }
+      }
       // Old recovery files are not kept forever.
       commands::lifecycle::prune_recovery_files(&state.data_dir, commands::lifecycle::KEEP_RECOVERY_FILES);
       app.manage(state);

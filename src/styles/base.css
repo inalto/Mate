@@ -366,6 +366,11 @@ button.card:hover {
   text-decoration: none;
 }
 
+/* A row that is also a link keeps its flex layout (`.link-row` alone is a block link). */
+.row.link-row {
+  display: flex;
+}
+
 .link-row:hover {
   border-color: var(--color-primary);
 }
