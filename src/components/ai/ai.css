@@ -34,3 +34,6 @@
   .ai-field-label { width: auto; padding-top: 0; }
   .ai-field-body { width: 100%; }
 }
+
+/* Inside the settings pane the AI rows line up with the 200px row labels. */
+.settings-section .ai-field-label { width: 200px; }
