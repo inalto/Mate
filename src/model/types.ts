@@ -170,7 +170,30 @@ export interface PenPreset {
   sharpness?: number;
 }
 
-export type AiProvider = "anthropic" | "openai";
+/** A catalog id from Rust (`ai::catalog`), e.g. "anthropic", "ollama" or "custom". */
+export type AiProvider = string;
+
+/** Whether a provider can read handwriting (images). */
+export type AiVision = "yes" | "dependsOnModel" | "no";
+
+export type AiProviderGroup = "cloud" | "local" | "custom";
+
+/** One entry of the provider catalog (`list_ai_providers`). */
+export interface AiProviderInfo {
+  id: AiProvider;
+  label: string;
+  group: AiProviderGroup;
+  needsKey: boolean;
+  editableBaseUrl: boolean;
+  defaultBaseUrl: string;
+  defaultModel: string;
+  vision: AiVision;
+  canListModels: boolean;
+  /** Where to get a key; empty when none. */
+  keyUrl: string;
+  cost: string;
+  privacy: string;
+}
 
 /** What the UI may know about the AI setup (the key itself never leaves Rust). */
 export interface AiStatus {
@@ -178,6 +201,10 @@ export interface AiStatus {
   provider: AiProvider;
   model: string;
   consent: boolean;
+  needsKey: boolean;
+  vision: AiVision;
+  /** The address in use (the override, or the provider's default). */
+  baseUrl: string;
 }
 
 export type VerdictDomain = "arithmetic" | "algebra" | "calculus" | "geometry" | "trigonometry" | "physics" | "other";
@@ -323,8 +350,10 @@ export interface Settings {
   tutorVerdictChangeGate: string;
   aiConsent: boolean | null;
   aiProvider: AiProvider;
-  /** Empty means the provider's default model (`AI_DEFAULT_MODEL`). */
+  /** Empty means the provider's default model. */
   aiModel: string;
+  /** Empty means the provider's default address; only used by local and custom providers. */
+  aiBaseUrl: string;
   trashRetentionDays: number;
   defaultExportFormat: string;
   recentColors: string[];

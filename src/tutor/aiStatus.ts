@@ -5,13 +5,15 @@
 // keychain is only read while consent and the tutor switch are both on.
 import { create } from "zustand";
 import { getAiStatus } from "../ipc/ai";
-import type { Settings } from "../model/types";
+import type { AiVision, Settings } from "../model/types";
 import { useSettingsStore } from "../stores/settings";
 import { onKeyChanged } from "./attempts";
 
 interface AiStatusState {
   /** A key is stored for the current provider; null until first read. */
   configured: boolean | null;
+  /** What the provider can do with images; "no" means the tutor cannot check. */
+  vision: AiVision | null;
   refresh(): Promise<void>;
   /**
    * Read the status once, and only with consent and the tutor on (later calls do nothing until
@@ -28,15 +30,19 @@ const mayRead = (s: Pick<Settings, "aiConsent" | "tutorEnabled"> = useSettingsSt
 
 export const useAiStatus = create<AiStatusState>((set, get) => ({
   configured: null,
+  vision: null,
   async refresh() {
     const n = ++reads;
     let configured = false;
+    let vision: AiVision | null = null;
     try {
-      configured = (await getAiStatus()).configured;
+      const status = await getAiStatus();
+      configured = status.configured;
+      vision = status.vision ?? null;
     } catch (e) {
       console.warn("reading the AI status failed", e);
     }
-    if (n === reads) set({ configured });
+    if (n === reads) set({ configured, vision });
   },
   ensure() {
     if (get().configured === null && reads === 0 && mayRead()) void get().refresh();
@@ -57,6 +63,12 @@ useSettingsStore.subscribe((s, prev) => {
   if (changed && mayRead(a)) void useAiStatus.getState().refresh();
 });
 
-/** The tutor's master gate: consent, the tutor switch and a configured key. */
-export const tutorActive = (s: Pick<Settings, "aiConsent" | "tutorEnabled">, configured: boolean | null): boolean =>
-  s.aiConsent === true && s.tutorEnabled && configured === true;
+/**
+ * The tutor's master gate: consent, the tutor switch and a configured provider. A text-only
+ * provider (`vision === "no"`) cannot read handwriting, so checking stays off.
+ */
+export const tutorActive = (
+  s: Pick<Settings, "aiConsent" | "tutorEnabled">,
+  configured: boolean | null,
+  vision: AiVision | null = null,
+): boolean => s.aiConsent === true && s.tutorEnabled && configured === true && vision !== "no";

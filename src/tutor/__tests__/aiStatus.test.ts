@@ -44,7 +44,7 @@ describe("AI status and block, app-wide", () => {
     await flush();
     expect(getAiStatus).toHaveBeenCalledTimes(1);
     expect(useAiStatus.getState().configured).toBe(true);
-    vi.mocked(getAiStatus).mockResolvedValueOnce({ configured: false, provider: "openai", model: "gpt-5", consent: true });
+    vi.mocked(getAiStatus).mockResolvedValueOnce({ configured: false, provider: "openai", model: "gpt-5", consent: true, needsKey: true, vision: "yes", baseUrl: "" });
     set({ aiProvider: "openai" });
     await flush();
     expect(getAiStatus).toHaveBeenCalledTimes(2);
@@ -70,5 +70,16 @@ describe("AI status and block, app-wide", () => {
     set({ tutorEnabled: true });
     await flush();
     expect(getAiStatus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("tutorActive and vision", () => {
+  it("a text-only provider switches checking off", async () => {
+    const { tutorActive } = await import("../aiStatus");
+    const on = { aiConsent: true, tutorEnabled: true };
+    expect(tutorActive(on, true, "yes")).toBe(true);
+    expect(tutorActive(on, true, "dependsOnModel")).toBe(true);
+    expect(tutorActive(on, true, "no")).toBe(false);
+    expect(tutorActive(on, true)).toBe(true);
   });
 });

@@ -1,0 +1,13 @@
+.ai-setup { display: flex; flex-direction: column; gap: var(--space-4); }
+.ai-needs summary { cursor: pointer; font-weight: 600; }
+.ai-needs table { border-collapse: collapse; margin-top: var(--space-2); width: 100%; }
+.ai-needs th, .ai-needs td { border: 1px solid var(--color-border); padding: var(--space-2); text-align: left; vertical-align: top; }
+.ai-group { border: 0; margin: 0; padding: 0; }
+.ai-group legend { font-weight: 600; margin-bottom: var(--space-2); padding: 0; }
+.ai-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--space-3); }
+.ai-card { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); }
+.ai-card p { margin: 0; }
+.ai-card-on { border-color: var(--color-primary); }
+.ai-card-head { cursor: pointer; }
+.ai-link { align-self: flex-start; margin-top: var(--space-1); }
+.ai-connection { display: flex; flex-direction: column; gap: var(--space-3); }
