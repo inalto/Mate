@@ -3,13 +3,14 @@
 // a 1-2-5 ladder with at most 11 per axis; axes stay pinned to the box edge when the origin is out
 // of view. The canvas and SVG renderers draw a scene as is. Each expression gets a wall-clock
 // budget: past it its evaluator answers NaN (the curve is cut short) and the scene carries a
-// "too slow" warning for it. While the math engine loads, curves are left out (`pending`).
+// "too slow" warning for it. Implicit curves (f(x, y) = 0) are traced by marching squares over the
+// window (./sample). While the math engine loads, curves are left out (`pending`).
 import i18n from "../i18n";
 import type { ThemeName } from "../ink/types";
 import { mapInkColor } from "../ink/theme";
 import type { GraphData } from "./data";
 import { parseExpressionSync, type Pending, type ParseResult } from "./expressions";
-import { sampleCurve, sampleParametric, type Point2 } from "./sample";
+import { sampleCurve, sampleImplicit, sampleParametric, type Point2 } from "./sample";
 
 export type { Point2 };
 
@@ -272,6 +273,10 @@ export function buildPlotScene(data: GraphData, box: { w: number; h: number }, t
       }
       case "parametric":
         branches = sampleParametric(timed(p.x), timed(p.y), PARAM_RANGE.from, PARAM_RANGE.to, { xRange, yRange, stop });
+        break;
+      case "implicit":
+        // Marching squares over the window; the deadline is polled before each evaluation.
+        branches = sampleImplicit(p.f, data.domain, { stop });
         break;
     }
     if (late) warnings.push({ id: e.id, message: TOO_SLOW });

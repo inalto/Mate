@@ -1,5 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { sampleCurve, sampleParametric } from "../sample";
+import { sampleCurve, sampleImplicit, sampleParametric } from "../sample";
+
+const window = { xMin: -5, xMax: 5, yMin: -5, yMax: 5 };
+
+describe("sampleImplicit", () => {
+  it("circle_is_one_closed_polyline_on_the_curve", () => {
+    const lines = sampleImplicit((x, y) => x * x + y * y - 4, window);
+    expect(lines.length).toBe(1);
+    const [poly] = lines;
+    expect(poly.length).toBeGreaterThan(50);
+    for (const p of poly) expect(Math.hypot(p.x, p.y)).toBeCloseTo(2, 2);
+    // Closed: the chain comes back to where it started.
+    expect(poly[0]).toEqual(poly[poly.length - 1]);
+  });
+
+  it("hyperbola_has_two_branches", () => {
+    const lines = sampleImplicit((x, y) => x * y - 1, window);
+    expect(lines.length).toBe(2);
+    for (const b of lines) for (const p of b) expect(p.x * p.y).toBeCloseTo(1, 1);
+  });
+
+  it("crossing_lines_resolve_the_saddle", () => {
+    const lines = sampleImplicit((x, y) => x * x - y * y, window, { cols: 40, rows: 40 });
+    const pts = lines.flat();
+    expect(pts.length).toBeGreaterThan(20);
+    for (const p of pts) expect(Math.abs(Math.abs(p.x) - Math.abs(p.y))).toBeLessThan(1e-9);
+  });
+
+  it("skips_non_finite_cells_and_poles", () => {
+    // y = tan(x) written implicitly: the sign flips across each pole, which is not a curve.
+    const lines = sampleImplicit((x, y) => y - Math.tan(x), window);
+    for (const b of lines) for (const p of b) expect(Math.abs(p.y - Math.tan(p.x))).toBeLessThan(0.1);
+    // A function defined only for x > 0 still draws where it is defined.
+    const half = sampleImplicit((x, y) => (x > 0 ? x - y * y : NaN), window);
+    expect(half.flat().every((p) => p.x > 0)).toBe(true);
+    expect(half.flat().length).toBeGreaterThan(10);
+  });
+
+  it("stops_when_asked", () => {
+    let calls = 0;
+    const lines = sampleImplicit(
+      (x, y) => {
+        calls++;
+        return x * x + y * y - 4;
+      },
+      window,
+      { stop: () => calls > 100 },
+    );
+    expect(calls).toBeLessThan(400);
+    expect(Array.isArray(lines)).toBe(true);
+    expect(sampleImplicit(() => 1, window)).toEqual([]);
+  });
+});
 
 const finite = (pts: { x: number; y: number }[][]) => pts.every((b) => b.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)));
 

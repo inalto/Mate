@@ -37,6 +37,31 @@ describe("buildPlotScene", () => {
     expect(buildPlotScene(data(["x"]), box, "light").warnings).toEqual([]);
   });
 
+  it("implicit_curves_are_drawn", () => {
+    const scene = buildPlotScene(data(["x^2+y^2=25", "xy=1"]), box, "light", { budgetMs: 5000 }); // drawing, not timing, under test
+    const circle = scene.curves.filter((c) => c.color === GRAPH_PALETTE[0]);
+    expect(circle.length).toBe(1);
+    // Radius 5 in a ±10 window is 120 px wide and 90 px tall about the centre (240, 180).
+    for (const p of circle[0].polyline) expect(((p.x - 240) / 120) ** 2 + ((p.y - 180) / 90) ** 2).toBeCloseTo(1, 1);
+    expect(scene.curves.filter((c) => c.color === GRAPH_PALETTE[1]).length).toBe(2);
+    expect(scene.warnings).toEqual([]);
+  });
+
+  it("slow_implicit_expression_is_bounded", () => {
+    const slow = (x: number, y: number) => {
+      const until = performance.now() + 0.05;
+      while (performance.now() < until) {
+        // busy: 30 000 grid evaluations would take over a second
+      }
+      return x * x + y * y - 4;
+    };
+    const parse = (): ParseResult => ({ kind: "implicit", f: slow });
+    const t0 = performance.now();
+    const scene = buildPlotScene(data(["slow"]), box, "light", { parse });
+    expect(performance.now() - t0).toBeLessThan(200);
+    expect(scene.warnings).toEqual([{ id: "e0", message: TOO_SLOW }]);
+  });
+
   it("pending_engine_draws_axes_and_a_loading_label", () => {
     const scene = buildPlotScene(data(["x"]), box, "light", { parse: () => ({ pending: true }) });
     expect(scene.pending).toBe(true);

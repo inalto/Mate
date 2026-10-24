@@ -1,19 +1,22 @@
 // DOM editor of graphs, mounted by OverlayLayer in the edited graph's slot. A side panel (left of
 // the box, constant screen size) lists the expressions (colour dot cycling through the palette,
-// LaTeX input, show/hide, delete; parse errors inline under the row, never blocking), the domain
+// plain text input (calculator style or LaTeX, see graph/plain), show/hide, delete; under the row a
+// KaTeX rendering of how the input was read, then any parse error, never blocking), the domain
 // inputs and the grid toggle; the plot area fills the box, with wheel zoom about the cursor and
 // drag to pan. The plot is rebuilt at most once per animation frame (latest state wins); an
 // expression cut short by the plot's time budget shows a warning under its row. The math engine
 // is loaded on mount. Esc ends editing. The session commits once (useEditSession). Registered
 // lazily for "graph" by ./boxEditors.
 import { Eye, EyeSlash, X } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphData, type GraphDomain, type GraphExpression, type GraphKind } from "../graph/data";
 import { loadEngine, engineSync } from "../graph/engine";
 import { expressionError, parseExpressionSync } from "../graph/expressions";
+import { toLatex } from "../graph/plain";
 import { buildPlotScene, type PlotScene } from "../graph/plot";
 import { mapInkColor } from "../ink/theme";
+import { renderLatex } from "../math/katex";
 import { contentOf, type GraphContent } from "../model/content";
 import type { Element } from "../model/types";
 import { drawPlotScene } from "../renderers/graph";
@@ -35,6 +38,14 @@ function kindOf(exprs: GraphExpression[], fallback: GraphKind): GraphKind {
 }
 
 const fmt = (v: number): string => String(Number(v.toPrecision(6)));
+
+/** How the input `text` was read, rendered by KaTeX; nothing when blank or not renderable. */
+function ExprPreview({ text, label }: { text: string; label: string }) {
+  const rendered = useMemo(() => renderLatex(toLatex(text)), [text]);
+  if (rendered.html === "" || rendered.error) return null;
+  // KaTeX output (trust: false), not user HTML.
+  return <div className="graph-expr-preview" role="note" aria-label={label} dangerouslySetInnerHTML={{ __html: rendered.html }} />;
+}
 
 function DomainInput({ label, value, onValue }: { label: string; value: number; onValue: (v: number) => void }) {
   // The typed text while the field has focus; otherwise the current value (pan and zoom update it).
@@ -246,6 +257,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
                     <X size={16} />
                   </button>
                 </div>
+                <ExprPreview text={ex.latex} label={t("graph.editor.preview", { n })} />
                 {err && <div className="graph-expr-error">{err}</div>}
                 {!err && slow && <div className="graph-expr-error graph-expr-warning">{t("graph.editor.slow")}</div>}
               </li>

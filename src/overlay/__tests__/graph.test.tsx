@@ -160,6 +160,22 @@ describe("GraphEditor", () => {
     expect(data(id).expressions[0].latex).toBe("\\sqrt{"); // kept as typed
   });
 
+  it("shows_how_the_input_was_read", () => {
+    const { ui } = insert();
+    const input = ui.getByLabelText("Expression 1");
+    expect(ui.container.querySelector(".graph-expr-preview")).toBeNull(); // nothing for an empty row
+    act(() => void fireEvent.change(input, { target: { value: "y = sqrt(x) + x^10" } }));
+    const preview = ui.getByLabelText("How expression 1 is read");
+    expect(preview.querySelector(".katex")).not.toBeNull();
+    expect(preview.querySelector(".katex annotation, .katex-mathml")).toBeNull(); // html output only
+    expect(preview.textContent).toContain("10");
+    expect(preview.querySelector(".sqrt")).not.toBeNull();
+    expect(ui.container.querySelector(".graph-expr-error")).toBeNull();
+    // An error keeps its line under the preview.
+    act(() => void fireEvent.change(input, { target: { value: "y = z" } }));
+    expect(ui.container.querySelector(".graph-expr-error")?.textContent).toBe("Unknown symbol: z");
+  });
+
   it("delete_removes_a_row", () => {
     const { id, ui } = insert();
     act(() => void fireEvent.click(ui.getByRole("button", { name: "Add expression" })));

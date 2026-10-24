@@ -774,6 +774,20 @@ button.card:hover {
   color: var(--color-danger);
   font-size: 12px;
 }
+/* How the typed expression was read (KaTeX), under its input. */
+.graph-expr-preview {
+  margin: 2px 0 0 22px;
+  overflow-x: auto;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+.graph-expr-preview .katex-display {
+  margin: 0;
+  text-align: left;
+}
+.graph-expr-preview .katex-display > .katex {
+  text-align: left;
+}
 .graph-add {
   align-self: flex-start;
   padding: 2px var(--space-2);
