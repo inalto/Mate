@@ -54,6 +54,7 @@ export default function Welcome() {
 
         {step === 0 && (
           <>
+            <img className="welcome-logo" src="/logo.svg" alt="" width={140} height={99} />
             <h1 ref={heading} tabIndex={-1}>{t("welcome.title")}</h1>
             <p>{t("welcome.intro")}</p>
             <p>{t("welcome.local")}</p>

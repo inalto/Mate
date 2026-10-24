@@ -69,10 +69,14 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
       }}
     >
       <div ref={ref} className="card dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
-        <div className="about-block">
-          <h2 id="about-title">Mate</h2>
-          {version && <span className="muted">{t("about.version", { version })}</span>}
-          <p>{t("about.tagline")}</p>
+        <div className="about-block about-head">
+          <img className="about-logo" src="/logo.svg" alt="" width={96} height={68} />
+          <div className="about-block">
+            <h2 id="about-title">Mate</h2>
+            {version && <span className="muted">{t("about.version", { version })}</span>}
+            <p>{t("about.tagline")}</p>
+            <p className="muted">{t("about.nameNote")}</p>
+          </div>
         </div>
 
         <div className="about-block">

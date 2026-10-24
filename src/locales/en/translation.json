@@ -479,6 +479,7 @@
   "about": {
     "version": "Version {{version}}",
     "tagline": "Local-first handwriting and math notes.",
+    "nameNote": "Mate is your maths mate. In Italian, \"mate\" is also what students call matematica.",
     "starPitch": "If Mate is useful to you, a star on GitHub helps others find it.",
     "star": "Star on GitHub",
     "githubFailed": "Could not open GitHub.",
@@ -916,7 +917,7 @@
       "local": "Let Mate use {{provider}} to check your work. Everything is processed on this computer; nothing is sent to the internet.",
       "custom": "Send handwriting images and text to the server at the address above to check your work. Nothing is sent until you turn this on.",
       "cloud": "Send handwriting images and text to {{provider}} to check your work. Nothing is sent until you turn this on.",
-    "cloudText": "Send the text of your notes to {{provider}} for questions, summaries and practice. Nothing is sent until you turn this on."
+      "cloudText": "Send the text of your notes to {{provider}} for questions, summaries and practice. Nothing is sent until you turn this on."
     },
     "model": "Model",
     "fetchModels": "Fetch models",

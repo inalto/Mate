@@ -1520,6 +1520,22 @@ button.card:hover {
   margin: 0;
 }
 
+.about-head {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.about-logo,
+.welcome-logo {
+  display: block;
+  height: auto;
+}
+
+.welcome-logo {
+  margin-bottom: var(--space-3);
+}
+
 .icon-btn {
   position: relative;
 }
