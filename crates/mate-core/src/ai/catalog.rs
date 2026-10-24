@@ -45,6 +45,34 @@ pub enum Group {
     Custom,
 }
 
+/// What a service costs, as a code the UI words (`ai.cost.<code>`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Cost {
+    Paid,
+    PaidLow,
+    PaidSomeFree,
+    FreeTier,
+    FreeLocal,
+    Depends,
+}
+
+/// Where checked notes go, as a code the UI words (`ai.privacy.<code>`, with the label).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Privacy {
+    /// Sent to the service.
+    SentTo,
+    /// Sent to the service and the maker of the chosen model (OpenRouter).
+    SentToAndMaker,
+    /// Only text is sent (the service cannot read images).
+    TextSentTo,
+    /// Nothing leaves this computer.
+    Local,
+    /// Sent to the address the user enters.
+    Custom,
+}
+
 #[derive(Debug)]
 pub struct ProviderSpec {
     /// The `settings.aiProvider` value and the keychain account.
@@ -67,8 +95,8 @@ pub struct ProviderSpec {
     pub extra_headers: &'static [(&'static str, &'static str)],
     /// Where to get a key; empty when none is needed.
     pub key_url: &'static str,
-    pub cost: &'static str,
-    pub privacy: &'static str,
+    pub cost: Cost,
+    pub privacy: Privacy,
 }
 
 impl ProviderSpec {
@@ -105,8 +133,8 @@ const fn cloud(id: &'static str, label: &'static str, base_url: &'static str, de
         token_param: TokenParam::MaxTokens,
         extra_headers: &[],
         key_url: "",
-        cost: "Paid",
-        privacy: "",
+        cost: Cost::Paid,
+        privacy: Privacy::SentTo,
     }
 }
 
@@ -116,8 +144,8 @@ const fn local(id: &'static str, label: &'static str, base_url: &'static str, de
         needs_key: false,
         local: true,
         editable_base_url: true,
-        cost: "Free (runs on this computer)",
-        privacy: "Nothing leaves this computer.",
+        cost: Cost::FreeLocal,
+        privacy: Privacy::Local,
         ..cloud(id, label, base_url, default_model)
     }
 }
@@ -127,22 +155,20 @@ static CATALOG: [ProviderSpec; 14] = [
         wire: Wire::Anthropic,
         vision: Vision::Yes,
         key_url: "https://console.anthropic.com/settings/keys",
-        privacy: "Checked notes are sent to Anthropic.",
         ..cloud("anthropic", "Anthropic", "https://api.anthropic.com", "claude-opus-5-5")
     },
     ProviderSpec {
         vision: Vision::Yes,
         token_param: TokenParam::MaxCompletionTokens,
         key_url: "https://platform.openai.com/api-keys",
-        privacy: "Checked notes are sent to OpenAI.",
         ..cloud("openai", "OpenAI", "https://api.openai.com", "gpt-5")
     },
     ProviderSpec {
         models_vision_only: true,
         extra_headers: &[("HTTP-Referer", "https://github.com/inalto/Mate"), ("X-Title", "Mate")],
         key_url: "https://openrouter.ai/keys",
-        cost: "Paid; some models are free",
-        privacy: "Checked notes are sent to OpenRouter and the model's maker.",
+        cost: Cost::PaidSomeFree,
+        privacy: Privacy::SentToAndMaker,
         ..cloud("openrouter", "OpenRouter", "https://openrouter.ai/api", "google/gemini-2.5-flash")
     },
     ProviderSpec {
@@ -150,31 +176,28 @@ static CATALOG: [ProviderSpec; 14] = [
         models_path: Some("/v1beta/openai/models"),
         vision: Vision::Yes,
         key_url: "https://aistudio.google.com/apikey",
-        cost: "Free tier, then paid",
-        privacy: "Checked notes are sent to Google.",
+        cost: Cost::FreeTier,
         ..cloud("gemini", "Google Gemini", "https://generativelanguage.googleapis.com", "gemini-2.5-flash")
     },
     ProviderSpec {
         token_param: TokenParam::MaxCompletionTokens,
         key_url: "https://console.groq.com/keys",
-        cost: "Free tier, then paid",
-        privacy: "Checked notes are sent to Groq.",
+        cost: Cost::FreeTier,
         ..cloud("groq", "Groq", "https://api.groq.com/openai", "qwen/qwen3.8-27b")
     },
     ProviderSpec {
         vision: Vision::Yes,
         structured: Structured::JsonObject,
         key_url: "https://console.mistral.ai/api-keys",
-        cost: "Free tier, then paid",
-        privacy: "Checked notes are sent to Mistral.",
+        cost: Cost::FreeTier,
         ..cloud("mistral", "Mistral", "https://api.mistral.ai", "mistral-small-latest")
     },
     ProviderSpec {
         vision: Vision::No,
         structured: Structured::JsonObject,
         key_url: "https://platform.deepseek.com/api_keys",
-        cost: "Paid, low cost",
-        privacy: "Text is sent to DeepSeek.",
+        cost: Cost::PaidLow,
+        privacy: Privacy::TextSentTo,
         ..cloud("deepseek", "DeepSeek", "https://api.deepseek.com", "deepseek-flash")
     },
     ProviderSpec {
@@ -182,24 +205,20 @@ static CATALOG: [ProviderSpec; 14] = [
         models_path: None,
         structured: Structured::PromptOnly,
         key_url: "https://z.ai/manage-apikey/apikey-list",
-        privacy: "Checked notes are sent to Z.ai.",
         ..cloud("zai", "Z.ai (GLM)", "https://api.z.ai", "glm-4.6v")
     },
     ProviderSpec {
         structured: Structured::JsonObject,
         key_url: "https://platform.moonshot.ai/console/api-keys",
-        privacy: "Checked notes are sent to Moonshot.",
         ..cloud("kimi", "Moonshot Kimi", "https://api.moonshot.ai", "kimi-k2.6")
     },
     ProviderSpec {
         vision: Vision::Yes,
         key_url: "https://console.x.ai",
-        privacy: "Checked notes are sent to xAI.",
         ..cloud("xai", "xAI Grok", "https://api.x.ai", "grok-4.7")
     },
     ProviderSpec {
         key_url: "https://api.together.ai/settings/api-keys",
-        privacy: "Checked notes are sent to Together.",
         ..cloud("together", "Together", "https://api.together.ai", "Qwen/Qwen3.5-9B")
     },
     ProviderSpec { models_path: Some("/api/tags"), ..local("ollama", "Ollama", "http://localhost:11434", "qwen3-vl:8b") },
@@ -208,8 +227,8 @@ static CATALOG: [ProviderSpec; 14] = [
         needs_key: false,
         editable_base_url: true,
         structured: Structured::JsonObject,
-        cost: "Depends on the service",
-        privacy: "Checked notes are sent to the address you enter.",
+        cost: Cost::Depends,
+        privacy: Privacy::Custom,
         ..cloud("custom", "Custom (OpenAI-compatible)", "", "")
     },
 ];

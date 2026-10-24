@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use mate_core::ai::catalog::{
-    Group, Structured, TokenParam, Vision, Wire, catalog, effective_base_url, is_local_host, spec,
+    Cost, Group, Privacy, Structured, TokenParam, Vision, Wire, catalog, effective_base_url, is_local_host, spec,
 };
 use mate_core::ai::openai::extract_json_object;
 use mate_core::ai::{default_model, is_known_provider, provider_for};
@@ -31,7 +31,23 @@ fn catalog_ids_are_unique_and_complete() {
 fn catalog_invariants() {
     for s in catalog() {
         assert!(!s.label.is_empty(), "{}", s.id);
-        assert!(!s.cost.is_empty() && !s.privacy.is_empty(), "{}", s.id);
+        // Cost and privacy are codes the UI words; each kind of service gets its own.
+        match s.group() {
+            Group::Local => {
+                assert_eq!(s.privacy, Privacy::Local, "{}", s.id);
+                assert_eq!(s.cost, Cost::FreeLocal, "{}", s.id);
+            }
+            Group::Custom => {
+                assert_eq!(s.privacy, Privacy::Custom, "{}", s.id);
+                assert_eq!(s.cost, Cost::Depends, "{}", s.id);
+            }
+            Group::Cloud => {
+                assert!(matches!(s.privacy, Privacy::SentTo | Privacy::SentToAndMaker | Privacy::TextSentTo), "{}", s.id);
+                assert!(!matches!(s.cost, Cost::FreeLocal | Cost::Depends), "{}", s.id);
+                // A text-only service never receives handwriting.
+                assert_eq!(s.vision == Vision::No, s.privacy == Privacy::TextSentTo, "{}", s.id);
+            }
+        }
         assert!(s.chat_path.starts_with('/'), "{}", s.id);
         if s.local {
             assert!(!s.needs_key, "{} is local but needs a key", s.id);
@@ -73,6 +89,22 @@ fn catalog_specific_entries() {
     assert!(!custom.needs_key && !custom.local && custom.editable_base_url);
     assert_eq!(custom.vision, Vision::DependsOnModel);
     assert!(spec("mock").is_none());
+    assert_eq!(or.privacy, Privacy::SentToAndMaker);
+    assert_eq!(or.cost, Cost::PaidSomeFree);
+    assert_eq!(spec("deepseek").unwrap().cost, Cost::PaidLow);
+    assert_eq!(spec("gemini").unwrap().cost, Cost::FreeTier);
+    assert_eq!(openai.cost, Cost::Paid);
+}
+
+#[test]
+fn cost_and_privacy_serialize_as_ui_codes() {
+    let json = |v: serde_json::Value| v.as_str().unwrap().to_string();
+    let costs = [Cost::Paid, Cost::PaidLow, Cost::PaidSomeFree, Cost::FreeTier, Cost::FreeLocal, Cost::Depends]
+        .map(|c| json(serde_json::to_value(c).unwrap()));
+    assert_eq!(costs, ["paid", "paidLow", "paidSomeFree", "freeTier", "freeLocal", "depends"]);
+    let privacy = [Privacy::SentTo, Privacy::SentToAndMaker, Privacy::TextSentTo, Privacy::Local, Privacy::Custom]
+        .map(|p| json(serde_json::to_value(p).unwrap()));
+    assert_eq!(privacy, ["sentTo", "sentToAndMaker", "textSentTo", "local", "custom"]);
 }
 
 #[test]

@@ -3,7 +3,9 @@
 
 use std::sync::Arc;
 
-use mate_core::ai::catalog::{Group, Vision, catalog, effective_base_url, is_local_host, spec, spec_or_default};
+use mate_core::ai::catalog::{
+    BAD_ADDRESS, Cost, Group, Privacy, Vision, catalog, effective_base_url, is_local_host, spec, spec_or_default,
+};
 use mate_core::ai::is_known_provider;
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, Provider, TextRequest};
@@ -11,7 +13,7 @@ use mate_core::settings::Settings;
 use serde::Serialize;
 use tauri::State;
 
-use crate::commands::recognize::effective_model;
+use crate::commands::recognize::{RecognizeError, effective_model};
 use crate::state::AppState;
 
 /// What the UI may know about the AI setup. Deliberately has no key field.
@@ -49,8 +51,75 @@ pub struct AiProviderInfo {
     pub vision: Vision,
     pub can_list_models: bool,
     pub key_url: &'static str,
-    pub cost: &'static str,
-    pub privacy: &'static str,
+    /// A code the UI words (`ai.cost.<code>`).
+    pub cost: Cost,
+    /// A code the UI words with the label (`ai.privacy.<code>`).
+    pub privacy: Privacy,
+}
+
+/// A failure of a setup command (save key, test, fetch models), worded by the UI from `kind`
+/// (`errors.ai.<kind>`). The shape of [`RecognizeError`] plus an optional `detail` (a provider
+/// label, or a label and address) the sentence names. Besides the [`RecognizeError`] kinds:
+/// `noKey`, `noAddress`, `badAddress`, `cannotListModels` (detail: label) and `unreachable`
+/// (detail: "label (address)"). `message` is the English sentence, for logs and as a fallback.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSetupError {
+    pub kind: &'static str,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+impl AiSetupError {
+    fn new(kind: &'static str, message: impl Into<String>) -> Self {
+        AiSetupError { kind, message: message.into(), detail: None }
+    }
+
+    fn no_key() -> Self {
+        Self::new("noKey", "Save an API key first.")
+    }
+
+    fn no_address() -> Self {
+        Self::new("noAddress", "Enter the service address first.")
+    }
+
+    fn bad_address() -> Self {
+        Self::new("badAddress", BAD_ADDRESS)
+    }
+
+    fn cannot_list_models(label: &str) -> Self {
+        AiSetupError {
+            detail: Some(label.to_string()),
+            ..Self::new("cannotListModels", format!("{label} cannot list its models. Type the model name."))
+        }
+    }
+
+    fn unreachable(label: &str, base_url: &str) -> Self {
+        AiSetupError {
+            detail: Some(format!("{label} ({base_url})")),
+            ..Self::new("unreachable", format!("Could not reach {label} at {base_url}. Is it running?"))
+        }
+    }
+}
+
+impl From<AiError> for AiSetupError {
+    fn from(e: AiError) -> Self {
+        let RecognizeError { kind, message } = e.into();
+        AiSetupError { kind, message, detail: None }
+    }
+}
+
+/// Keychain and internal failures, shown as Rust wrote them.
+impl From<String> for AiSetupError {
+    fn from(message: String) -> Self {
+        Self::new("internal", message)
+    }
+}
+
+/// The address to use, or `badAddress`.
+fn base_url_for(provider: &str, override_url: &str) -> Result<String, AiSetupError> {
+    effective_base_url(provider, override_url).map_err(|_| AiSetupError::bad_address())
 }
 
 pub fn providers() -> Vec<AiProviderInfo> {
@@ -85,13 +154,13 @@ fn has_key(store: &dyn KeyStore, provider: &str) -> Result<bool, String> {
     Ok(store.get(provider)?.is_some_and(|k| !k.trim().is_empty()))
 }
 
-pub fn set_key(store: &dyn KeyStore, provider: &str, key: &str) -> Result<(), String> {
+pub fn set_key(store: &dyn KeyStore, provider: &str, key: &str) -> Result<(), AiSetupError> {
     check_provider(provider)?;
     let key = key.trim();
     if key.is_empty() {
-        return Err("Enter an API key first.".into());
+        return Err(AiSetupError::no_key());
     }
-    store.set(provider, key)
+    Ok(store.set(provider, key)?)
 }
 
 pub fn clear_key(store: &dyn KeyStore, provider: &str) -> Result<(), String> {
@@ -120,28 +189,28 @@ pub fn status(store: &dyn KeyStore, settings: &Settings) -> Result<AiStatus, Str
 }
 
 /// Succeeds when a non-empty key is stored for `provider` (no network).
-pub fn test_key(store: &dyn KeyStore, provider: &str) -> Result<(), String> {
+pub fn test_key(store: &dyn KeyStore, provider: &str) -> Result<(), AiSetupError> {
     check_provider(provider)?;
     if has_key(store, provider)? {
         Ok(())
     } else {
-        Err("No key is saved for this provider.".into())
+        Err(AiSetupError::no_key())
     }
 }
 
 /// Runs a keychain operation off the async runtime (keychain calls can block on OS prompts).
-async fn on_keychain<T: Send + 'static>(
+async fn on_keychain<T: Send + 'static, E: From<String> + Send + 'static>(
     state: &State<'_, AppState>,
-    f: impl FnOnce(&dyn KeyStore) -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
+    f: impl FnOnce(&dyn KeyStore) -> Result<T, E> + Send + 'static,
+) -> Result<T, E> {
     let store: Arc<dyn KeyStore> = state.keys.clone();
     tauri::async_runtime::spawn_blocking(move || f(store.as_ref()))
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|e| E::from(e.to_string()))?
 }
 
 #[tauri::command]
-pub async fn set_ai_key(state: State<'_, AppState>, provider: String, key: String) -> Result<(), String> {
+pub async fn set_ai_key(state: State<'_, AppState>, provider: String, key: String) -> Result<(), AiSetupError> {
     on_keychain(&state, move |s| set_key(s, &provider, &key)).await
 }
 
@@ -165,7 +234,7 @@ pub fn list_ai_providers() -> Vec<AiProviderInfo> {
 /// Models offered by the current provider. Sends the key to its own service and nothing else (no
 /// user content), so it is allowed without AI consent.
 #[tauri::command]
-pub async fn list_ai_models(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+pub async fn list_ai_models(state: State<'_, AppState>) -> Result<Vec<String>, AiSetupError> {
     let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
     let store: Arc<dyn KeyStore> = state.keys.clone();
     let cache = state.providers.clone();
@@ -173,7 +242,7 @@ pub async fn list_ai_models(state: State<'_, AppState>) -> Result<Vec<String>, S
         models(store.as_ref(), &settings, |p, m, k, b| cache.get(p, m, k, b.unwrap_or("")))
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| AiSetupError::from(e.to_string()))?
 }
 
 /// "Fetch models" for the current settings, through `make`.
@@ -181,21 +250,21 @@ pub fn models(
     store: &dyn KeyStore,
     settings: &Settings,
     make: impl FnOnce(&str, &str, &str, Option<&str>) -> Arc<dyn Provider>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, AiSetupError> {
     let s = spec_or_default(&settings.ai_provider);
     if s.models_path.is_none() {
-        return Err(format!("{} cannot list its models. Type the model name.", s.label));
+        return Err(AiSetupError::cannot_list_models(s.label));
     }
     let key = store.get(s.id)?.filter(|k| !k.trim().is_empty()).unwrap_or_default();
     if s.needs_key && key.is_empty() {
-        return Err("Save an API key first.".into());
+        return Err(AiSetupError::no_key());
     }
-    let base_url = effective_base_url(s.id, &settings.ai_base_url)?;
+    let base_url = base_url_for(s.id, &settings.ai_base_url)?;
     if base_url.is_empty() {
-        return Err("Enter the service address first.".into());
+        return Err(AiSetupError::no_address());
     }
     let model = effective_model(s.id, &settings.ai_model);
-    let mut list = make(s.id, &model, &key, Some(&base_url)).list_models().map_err(|e| e.to_string())?;
+    let mut list = make(s.id, &model, &key, Some(&base_url)).list_models()?;
     list.sort();
     list.dedup();
     Ok(list)
@@ -206,7 +275,7 @@ pub fn models(
 /// device. Local programs: a model-list request checks that they are running (no user content,
 /// so consent is not needed).
 #[tauri::command]
-pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result<(), String> {
+pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result<(), AiSetupError> {
     let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
     let store: Arc<dyn KeyStore> = state.keys.clone();
     let cache = state.providers.clone();
@@ -215,7 +284,7 @@ pub async fn test_ai_key(state: State<'_, AppState>, provider: String) -> Result
         check_key(store.as_ref(), &settings, &provider, |p, m, k, b| cache.get(p, m, k, b.unwrap_or("")))
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| AiSetupError::from(e.to_string()))?
 }
 
 /// "Test": the stored-key check, then (with consent) one tiny request through `make`; for local
@@ -225,22 +294,22 @@ pub fn check_key(
     settings: &Settings,
     provider: &str,
     make: impl FnOnce(&str, &str, &str, Option<&str>) -> Arc<dyn Provider>,
-) -> Result<(), String> {
+) -> Result<(), AiSetupError> {
     let s = spec(provider).ok_or_else(|| format!("unknown AI provider \"{provider}\""))?;
     // The address and model settings belong to the selected provider only.
     let current = settings.ai_provider == provider;
-    let base_url = effective_base_url(provider, if current { &settings.ai_base_url } else { "" })?;
+    let base_url = base_url_for(provider, if current { &settings.ai_base_url } else { "" })?;
     let model = effective_model(provider, if current { &settings.ai_model } else { "" });
     if s.local {
         return make(provider, &model, "", Some(&base_url))
             .list_models()
             .map(|_| ())
-            .map_err(|_| format!("Could not reach {} at {base_url}. Is it running?", s.label));
+            .map_err(|_| AiSetupError::unreachable(s.label, &base_url));
     }
     if s.needs_key {
         test_key(store, provider)?;
     } else if base_url.is_empty() {
-        return Err("Enter the service address first.".into());
+        return Err(AiSetupError::no_address());
     }
     if settings.ai_consent != Some(true) {
         return Ok(());
@@ -250,11 +319,11 @@ pub fn check_key(
 }
 
 /// A reply cut off by the tiny token budget still proves the key works.
-pub fn ping(p: &dyn Provider) -> Result<(), String> {
+pub fn ping(p: &dyn Provider) -> Result<(), AiSetupError> {
     let req = TextRequest { system: String::new(), user: "Reply with OK.".into(), max_tokens: 16, json_schema: None };
     match p.complete(&req) {
         Ok(_) | Err(AiError::Truncated) => Ok(()),
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -312,7 +381,7 @@ mod tests {
         let garbled = MockProvider::new(vec![]).with_text(vec![Err(AiError::InvalidResponse("x".into()))]);
         assert!(ping(&garbled).is_err());
         let bad = MockProvider::new(vec![]).with_text(vec![Err(AiError::Auth)]);
-        assert_eq!(ping(&bad).unwrap_err(), AiError::Auth.to_string());
+        assert_eq!(ping(&bad).unwrap_err().kind, "auth");
     }
 
     #[test]
@@ -341,7 +410,7 @@ mod tests {
                 asked = Some((prov.to_string(), key.to_string()));
                 rejecting()
             });
-            assert_eq!(r.unwrap_err(), AiError::Auth.to_string());
+            assert_eq!(r.unwrap_err().kind, "auth");
             assert_eq!(asked.unwrap(), (p.to_string(), store.get(p).unwrap().unwrap()));
         }
     }
@@ -371,6 +440,12 @@ mod tests {
         assert_eq!(deepseek["vision"], "no");
         assert_eq!(json.as_array().unwrap().iter().find(|p| p["id"] == "custom").unwrap()["group"], "custom");
         assert_eq!(json.as_array().unwrap().iter().find(|p| p["id"] == "openrouter").unwrap()["vision"], "dependsOnModel");
+        // Cost and privacy cross IPC as codes, never as English sentences.
+        assert_eq!((&deepseek["cost"], &deepseek["privacy"]), (&"paidLow".into(), &"textSentTo".into()));
+        let ollama = json.as_array().unwrap().iter().find(|p| p["id"] == "ollama").unwrap();
+        assert_eq!((&ollama["cost"], &ollama["privacy"]), (&"freeLocal".into(), &"local".into()));
+        let custom = json.as_array().unwrap().iter().find(|p| p["id"] == "custom").unwrap();
+        assert_eq!((&custom["cost"], &custom["privacy"]), (&"depends".into(), &"custom".into()));
     }
 
     #[test]
@@ -429,7 +504,8 @@ mod tests {
             Arc::new(MockProvider::new(vec![]).with_models(Err(AiError::Network("no connection".into()))))
         });
         let e = r.unwrap_err();
-        assert!(e.contains("Ollama") && e.contains("http://127.0.0.1:1"), "{e}");
+        assert_eq!(e.kind, "unreachable");
+        assert_eq!(e.detail.as_deref(), Some("Ollama (http://127.0.0.1:1)"));
         // No text is ever sent for a reachability check.
         let mock = Arc::new(MockProvider::new(vec![]).with_models(Ok(vec![])));
         let m2 = mock.clone();
@@ -472,7 +548,7 @@ mod tests {
             Arc::new(MockProvider::new(vec![]).with_models(Err(AiError::Auth)))
         })
         .unwrap_err();
-        assert_eq!(e, AiError::Auth.to_string());
+        assert_eq!(e.kind, "auth");
         // A provider with no listing endpoint says so without a request.
         settings.ai_provider = "zai".into();
         store.set("zai", "k").unwrap();
@@ -492,7 +568,8 @@ mod tests {
         let store = MemoryStore::default();
         let mut settings =
             Settings { ai_provider: "ollama".into(), ai_base_url: "http://gpu-box:11434".into(), ..Settings::default() };
-        let bad = "Use an https:// address, or a local address such as http://localhost:11434.";
+        let bad = AiSetupError::bad_address();
+        assert_eq!(bad.kind, "badAddress");
         assert_eq!(models(&store, &settings, |_, _, _, _| unreachable!()).unwrap_err(), bad);
         assert_eq!(check_key(&store, &settings, "ollama", |_, _, _, _| unreachable!()).unwrap_err(), bad);
         settings.ai_provider = "custom".into();
@@ -500,6 +577,43 @@ mod tests {
         settings.ai_consent = Some(true);
         assert_eq!(check_key(&store, &settings, "custom", |_, _, _, _| unreachable!()).unwrap_err(), bad);
         assert_eq!(models(&store, &settings, |_, _, _, _| unreachable!()).unwrap_err(), bad);
+    }
+
+    #[test]
+    fn setup_errors_carry_a_kind_and_detail() {
+        use mate_core::ai::mock::MockProvider;
+        let store = MemoryStore::default();
+        let kind = |r: Result<(), AiSetupError>| r.unwrap_err().kind;
+        assert_eq!(kind(set_key(&store, "anthropic", "  ")), "noKey");
+        assert_eq!(kind(test_key(&store, "anthropic")), "noKey");
+        assert_eq!(kind(set_key(&store, "acme", "k")), "internal");
+        let mut settings = Settings { ai_provider: "openai".into(), ..Settings::default() };
+        assert_eq!(models(&store, &settings, |_, _, _, _| unreachable!()).unwrap_err().kind, "noKey");
+        settings.ai_provider = "custom".into();
+        assert_eq!(models(&store, &settings, |_, _, _, _| unreachable!()).unwrap_err().kind, "noAddress");
+        assert_eq!(kind(check_key(&store, &settings, "custom", |_, _, _, _| unreachable!())), "noAddress");
+        settings.ai_provider = "zai".into();
+        store.set("zai", "k").unwrap();
+        let e = models(&store, &settings, |_, _, _, _| unreachable!()).unwrap_err();
+        assert_eq!((e.kind, e.detail.as_deref()), ("cannotListModels", Some("Z.ai (GLM)")));
+        // Provider failures keep the tutor's kinds.
+        settings.ai_provider = "openai".into();
+        store.set("openai", "k").unwrap();
+        let e = models(&store, &settings, |_, _, _, _| {
+            Arc::new(MockProvider::new(vec![]).with_models(Err(AiError::Network("timed out".into()))))
+        })
+        .unwrap_err();
+        assert_eq!(e.kind, "network");
+
+        // Over IPC: kind, message and (only when there is one) detail.
+        let json = serde_json::to_value(AiSetupError::unreachable("Ollama", "http://localhost:11434")).unwrap();
+        assert_eq!(json["kind"], "unreachable");
+        assert_eq!(json["detail"], "Ollama (http://localhost:11434)");
+        assert!(json["message"].as_str().unwrap().contains("Is it running?"));
+        let json = serde_json::to_value(AiSetupError::no_key()).unwrap();
+        let mut keys: Vec<&str> = json.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort();
+        assert_eq!(keys, ["kind", "message"]);
     }
 
     #[test]

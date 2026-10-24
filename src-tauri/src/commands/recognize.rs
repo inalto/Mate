@@ -57,9 +57,9 @@ pub struct RecognizeRequestDto {
     pub practice: Option<PracticeDto>,
 }
 
-/// A failure the frontend can act on: `kind` is one of `disabled`, `auth`, `billing`,
-/// `unknownModel`, `rateLimited`, `network`, `invalidResponse`, `refused`, `truncated`,
-/// `rejected`, `internal`; `message` is a user-readable sentence.
+/// A failure the frontend can act on: `kind` is one of `disabled`, `badAddress`, `auth`,
+/// `billing`, `unknownModel`, `rateLimited`, `network`, `invalidResponse`, `refused`,
+/// `truncated`, `rejected`, `internal`; `message` is a user-readable sentence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecognizeError {
@@ -80,8 +80,8 @@ impl From<AiError> for RecognizeError {
             AiError::UnknownModel => "unknownModel",
             AiError::Refused => "refused",
             AiError::Truncated => "truncated",
-            // Fixed in Settings like a missing address; the message says what to change.
-            AiError::BadAddress => "disabled",
+            // Fixed in Settings; the message says what to change.
+            AiError::BadAddress => "badAddress",
         };
         RecognizeError { kind, message: e.to_string() }
     }
@@ -314,7 +314,7 @@ mod tests {
         // A plain-http remote address is refused before anything is sent.
         let remote = Settings { ai_base_url: "http://box.example.org:11434".into(), ..local.clone() };
         let e = resolve(&remote, &store).unwrap_err();
-        assert_eq!(e.kind, "disabled");
+        assert_eq!(e.kind, "badAddress");
         assert_eq!(e.message, AiError::BadAddress.to_string());
         let custom = Settings { ai_provider: "custom".into(), ..consenting() };
         assert_eq!(resolve(&custom, &store).unwrap_err().kind, "disabled");
@@ -349,6 +349,7 @@ mod tests {
     fn errors_carry_a_kind() {
         assert_eq!(RecognizeError::from(AiError::Auth).kind, "auth");
         assert_eq!(RecognizeError::from(AiError::Network("x".into())).kind, "network");
+        assert_eq!(RecognizeError::from(AiError::BadAddress).kind, "badAddress");
         let json = serde_json::to_value(RecognizeError::from(AiError::RateLimited)).unwrap();
         assert_eq!(json["kind"], "rateLimited");
         assert!(json["message"].as_str().unwrap().ends_with('.'));
