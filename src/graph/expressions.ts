@@ -23,6 +23,8 @@ type Expr = NonNullable<ReturnType<ComputeEngine["parse"]>>;
 
 const THETA = "theta";
 export const TOO_EXPENSIVE = "Expression too expensive to plot";
+/** Compiling threw an EvalError: the webview's CSP lacks 'unsafe-eval' (see src-tauri/tauri.conf.json). */
+export const EVAL_BLOCKED = "Plotting is blocked by the app's security policy";
 /** Most iterations a plotted sum or product may run per evaluation. */
 export const MAX_ITERATIONS = 1000;
 
@@ -98,7 +100,9 @@ function evaluator(eng: Engine, e: Expr, variable: string): Evaluator {
     // `fallback: false`: no interpreted fallback (slow, and it logs); a decline throws instead.
     const compiled = eng.mod.compile(e, { mode: "strict", fallback: false });
     if (compiled.success && typeof compiled.run === "function") run = compiled.run as (vars: Record<string, number>) => unknown;
-  } catch {
+  } catch (err) {
+    // Compiled code is built with `new Function`: a CSP without 'unsafe-eval' refuses it.
+    if (err instanceof EvalError) throw new ExprError(EVAL_BLOCKED);
     run = null;
   }
   if (!run) throw new ExprError("This expression cannot be plotted");
