@@ -14,7 +14,10 @@ import { openExternal } from "../../../ipc/app";
 import { clearWolframAppid, setWolframAppid, testWolframAppid, wolframStatus } from "../../../ipc/math";
 import { DEFAULT_SETTINGS } from "../../../model/constants";
 import { useSettingsStore } from "../../../stores/settings";
-import MathEnginesSection, { EXPLAINER } from "../sections/MathEnginesSection";
+import i18n from "../../../i18n";
+import MathEnginesSection from "../sections/MathEnginesSection";
+
+const EXPLAINER = i18n.t("settings.mathEngines.explainer");
 
 beforeEach(() => {
   vi.clearAllMocks();

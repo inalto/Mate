@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getAppVersion, openExternal } from "../ipc/app";
 import { isPageWindow } from "../ipc/windows";
 import { navigateTo } from "../stores/navigation";
 import { showToast } from "./Toast";
-import { NOT_CONFIGURED_COPY, formatProgress, useUpdater } from "./useUpdater";
+import { formatProgress, useUpdater } from "./useUpdater";
 import { useModal } from "./useModal";
 
 export const REPO_URL = "https://github.com/inalto/Mate";
@@ -12,6 +13,7 @@ const FOCUSABLE = "button:not([disabled])";
 
 export default function AboutDialog({ onClose }: { onClose: () => void }) {
   useModal();
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   const star = () => {
-    openExternal(REPO_URL).catch(() => showToast("Could not open GitHub."));
+    openExternal(REPO_URL).catch(() => showToast(t("about.githubFailed")));
   };
 
   return (
@@ -69,35 +71,43 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
       <div ref={ref} className="card dialog about-dialog" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div className="about-block">
           <h2 id="about-title">Mate</h2>
-          {version && <span className="muted">Version {version}</span>}
-          <p>Local-first handwriting and math notes.</p>
+          {version && <span className="muted">{t("about.version", { version })}</span>}
+          <p>{t("about.tagline")}</p>
         </div>
 
         <div className="about-block">
           <h3>GitHub</h3>
-          <p className="muted">If Mate is useful to you, a star on GitHub helps others find it.</p>
-          <button type="button" className="btn" onClick={star}>Star on GitHub</button>
+          <p className="muted">{t("about.starPitch")}</p>
+          <button type="button" className="btn" onClick={star}>
+            {t("about.star")}
+          </button>
         </div>
 
         <div className="about-block">
-          <h3>Updates</h3>
+          <h3>{t("about.updates")}</h3>
           <span className="muted" role="status" aria-live="polite">
-            {state.kind === "checking" && "Checking for updates..."}
-            {state.kind === "upToDate" && "You have the latest version"}
-            {state.kind === "notConfigured" && NOT_CONFIGURED_COPY}
-            {state.kind === "available" && `Version ${state.version} is available`}
+            {state.kind === "checking" && t("update.checking")}
+            {state.kind === "upToDate" && t("about.latest")}
+            {state.kind === "notConfigured" && t("update.notConfigured")}
+            {state.kind === "available" && t("about.available", { version: state.version })}
             {state.kind === "downloading" &&
-              (state.progress ? `Downloading ${state.version}: ${formatProgress(state.progress)}` : formatProgress(null))}
-            {state.kind === "ready" && `Version ${state.version} is installed. Restart to finish updating.`}
-            {state.kind === "error" && `Could not update: ${state.message}`}
+              (state.progress
+                ? t("update.downloading", { version: state.version, progress: formatProgress(state.progress) })
+                : formatProgress(null))}
+            {state.kind === "ready" && t("update.ready", { version: state.version })}
+            {state.kind === "error" && t("update.failed", { message: state.message })}
           </span>
           {state.kind === "available" ? (
-            <button type="button" className="btn" onClick={() => void install(state.version)}>Install {state.version}</button>
+            <button type="button" className="btn" onClick={() => void install(state.version)}>
+              {t("update.install", { version: state.version })}
+            </button>
           ) : state.kind === "ready" ? (
-            <button type="button" className="btn" onClick={restart}>Restart to update</button>
+            <button type="button" className="btn" onClick={restart}>
+              {t("update.restart")}
+            </button>
           ) : (
             <button type="button" className="btn" disabled={busy} onClick={() => void check()}>
-              {state.kind === "checking" ? "Checking..." : "Check for updates"}
+              {state.kind === "checking" ? t("update.checkingShort") : t("update.check")}
             </button>
           )}
           {!isPageWindow() && (
@@ -109,13 +119,15 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
                 navigateTo("/settings#updates");
               }}
             >
-              Update settings
+              {t("about.updateSettings")}
             </button>
           )}
         </div>
 
         <div className="dialog-actions">
-          <button type="button" className="btn btn-primary" onClick={onClose}>Close</button>
+          <button type="button" className="btn btn-primary" onClick={onClose}>
+            {t("common.close")}
+          </button>
         </div>
       </div>
     </div>

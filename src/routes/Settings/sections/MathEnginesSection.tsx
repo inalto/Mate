@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage as message } from "../../../i18n";
 import { openExternal } from "../../../ipc/app";
 import { clearWolframAppid, setWolframAppid, testWolframAppid, wolframStatus } from "../../../ipc/math";
 import { Row, SettingsSection, ToggleRow } from "../rows";
 
-const message = (err: unknown): string =>
-  typeof err === "string" ? err : err instanceof Error ? err.message : "Something went wrong.";
-
-export const EXPLAINER =
-  "Compute Engine runs on this computer and needs nothing. Wolfram|Alpha needs a free AppID (2 000 queries a month for non-commercial use).";
 const DEVELOPER_URL = "https://developer.wolframalpha.com/";
 
 export default function MathEnginesSection() {
+  const { t } = useTranslation();
   const [configured, setConfigured] = useState(false);
   const [draft, setDraft] = useState("");
   const [result, setResult] = useState<string | null>(null);
@@ -49,9 +47,9 @@ export default function MathEnginesSection() {
   };
 
   return (
-    <SettingsSection id="math-engines" title="Maths engines">
-      <p className="muted">{EXPLAINER}</p>
-      <Row id="set-wolfram-appid" label="Wolfram|Alpha AppID" htmlFor="set-wolfram-appid-input">
+    <SettingsSection id="math-engines" title={t("settings.nav.sections.mathEngines")}>
+      <p className="muted">{t("settings.mathEngines.explainer")}</p>
+      <Row id="set-wolfram-appid" label={t("settings.mathEngines.appid")} htmlFor="set-wolfram-appid-input">
         <input
           id="set-wolfram-appid-input"
           className="input"
@@ -59,7 +57,7 @@ export default function MathEnginesSection() {
           autoComplete="off"
           spellCheck={false}
           value={draft}
-          placeholder={configured ? "Saved (hidden)" : "Paste your AppID"}
+          placeholder={configured ? t("settings.mathEngines.savedHidden") : t("settings.mathEngines.pasteAppid")}
           onChange={(e) => setDraft(e.target.value)}
         />
         <button
@@ -72,20 +70,24 @@ export default function MathEnginesSection() {
             void run(() => setWolframAppid(id), null);
           }}
         >
-          Save
+          {t("common.save")}
         </button>
         <button type="button" className="btn" disabled={busy || !configured} onClick={() => void run(() => clearWolframAppid(), null)}>
-          Remove
+          {t("common.remove")}
         </button>
-        <button type="button" className="btn" disabled={busy || !configured} onClick={() => void run(() => testWolframAppid(), "The AppID works.")}>
-          Test
+        <button type="button" className="btn" disabled={busy || !configured} onClick={() => void run(() => testWolframAppid(), t("settings.mathEngines.works"))}>
+          {t("common.test")}
         </button>
         <span className="muted" role="status">
-          {result ?? (configured ? "AppID saved" : "No AppID")}
+          {result ?? (configured ? t("settings.mathEngines.saved") : t("settings.mathEngines.none"))}
         </span>
       </Row>
-      <ToggleRow k="wolframConsent" label="Send typed maths to Wolfram|Alpha when I ask" hint="Nothing is sent until you turn this on and choose Ask Wolfram|Alpha." />
-      <Row id="set-wolfram-link" label="Get a free AppID">
+      <ToggleRow
+        k="wolframConsent"
+        label={t("settings.mathEngines.consent.label")}
+        hint={t("settings.mathEngines.consent.hint")}
+      />
+      <Row id="set-wolfram-link" label={t("settings.mathEngines.getAppid")}>
         <a
           href={DEVELOPER_URL}
           onClick={(e) => {

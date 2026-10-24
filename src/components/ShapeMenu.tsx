@@ -1,8 +1,9 @@
 // Shape tool popover: shape type grid, stroke colour, fill colour (or none), fill opacity and
 // stroke width. Changes apply to the settings live and are saved when the menu closes.
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import type { Settings, ShapeType } from "../model/types";
-import { SHAPE_LABEL, SHAPE_TYPES } from "../shapes/catalog";
+import { SHAPE_LABEL_KEY, SHAPE_TYPES } from "../shapes/catalog";
 import { arrowHead, hasFill, isClosedShape, shapeOutline } from "../shapes/geometry";
 import { useSettingsStore } from "../stores/settings";
 import { FILL_PALETTE, PEN_PALETTE } from "./inkColors";
@@ -42,6 +43,7 @@ export function ShapeIcon({ type, size = 18 }: { type: ShapeType; size?: number 
 }
 
 export default function ShapeMenu() {
+  const { t } = useTranslation();
   const cfg = useSettingsStore((s) => s.settings);
   const local = (patch: Partial<ShapeSettings>) => useSettingsStore.setState((s) => ({ settings: { ...s.settings, ...patch } }));
   const initial = useRef(pick(cfg));
@@ -59,71 +61,71 @@ export default function ShapeMenu() {
     [],
   );
 
-  const swatch = (kind: "Stroke" | "Fill", c: string, current: string, set: (c: string) => void) => (
+  const swatch = (kind: "stroke" | "fill", c: string, current: string, set: (c: string) => void) => (
     <button
       key={c}
       type="button"
       className={current.toUpperCase() === c.toUpperCase() ? "tb-swatch active" : "tb-swatch"}
       style={{ background: c }}
-      aria-label={`${kind} ${c}`}
+      aria-label={kind === "stroke" ? t("toolbar.strokeColor", { color: c }) : t("toolbar.fillColor", { color: c })}
       onClick={() => set(c)}
     />
   );
   const filled = hasFill(cfg.defaultShapeFillColor);
 
   return (
-    <div className="tb-popover shape-menu" role="dialog" aria-label="Shape options">
-      <div className="shape-grid" role="radiogroup" aria-label="Shape type">
-        {SHAPE_TYPES.map((t) => (
+    <div className="tb-popover shape-menu" role="dialog" aria-label={t("toolbar.shapeOptions")}>
+      <div className="shape-grid" role="radiogroup" aria-label={t("toolbar.shapeType")}>
+        {SHAPE_TYPES.map((type) => (
           <button
-            key={t}
+            key={type}
             type="button"
             role="radio"
-            aria-checked={cfg.defaultShapeType === t}
-            aria-label={SHAPE_LABEL[t]}
-            title={SHAPE_LABEL[t]}
-            className={cfg.defaultShapeType === t ? "tb-btn active" : "tb-btn"}
-            onClick={() => local({ defaultShapeType: t })}
+            aria-checked={cfg.defaultShapeType === type}
+            aria-label={t(SHAPE_LABEL_KEY[type])}
+            title={t(SHAPE_LABEL_KEY[type])}
+            className={cfg.defaultShapeType === type ? "tb-btn active" : "tb-btn"}
+            onClick={() => local({ defaultShapeType: type })}
           >
-            <ShapeIcon type={t} />
+            <ShapeIcon type={type} />
           </button>
         ))}
       </div>
-      <span className="tb-label">Stroke</span>
+      <span className="tb-label">{t("toolbar.stroke")}</span>
       <div className="tb-row">
-        {PEN_PALETTE.map((c) => swatch("Stroke", c, cfg.defaultShapeStrokeColor, (v) => local({ defaultShapeStrokeColor: v })))}
+        {PEN_PALETTE.map((c) => swatch("stroke", c, cfg.defaultShapeStrokeColor, (v) => local({ defaultShapeStrokeColor: v })))}
       </div>
-      <label className="tb-row tb-width" title="Stroke width">
+      <label className="tb-row tb-width" title={t("toolbar.strokeWidth")}>
         <input
           type="range"
           min={0.5}
           max={15}
           step={0.5}
           value={cfg.defaultShapeStrokeWidth}
-          aria-label="Stroke width"
+          aria-label={t("toolbar.strokeWidth")}
           onChange={(e) => local({ defaultShapeStrokeWidth: Number(e.target.value) })}
         />
         <span>{cfg.defaultShapeStrokeWidth}</span>
       </label>
-      <span className="tb-label">Fill</span>
+      <span className="tb-label">{t("toolbar.fill")}</span>
       <div className="tb-row">
         <button
           type="button"
           className={filled ? "tb-swatch no-fill" : "tb-swatch no-fill active"}
-          aria-label="No fill"
-          title="No fill"
+          aria-label={t("toolbar.noFill")}
+          title={t("toolbar.noFill")}
           onClick={() => local({ defaultShapeFillColor: NO_FILL })}
         />
-        {FILL_PALETTE.map((c) => swatch("Fill", c, cfg.defaultShapeFillColor, (v) => local({ defaultShapeFillColor: v })))}
+        {FILL_PALETTE.map((c) => swatch("fill", c, cfg.defaultShapeFillColor, (v) => local({ defaultShapeFillColor: v })))}
       </div>
-      <label className="tb-row tb-width" title="Fill opacity">
+      <label className="tb-row tb-width" title={t("toolbar.fillOpacity")}>
         <input
           type="range"
           min={0}
           max={1}
           step={0.05}
           value={cfg.defaultShapeFillOpacity}
-          aria-label="Fill opacity"
+          aria-label={t("toolbar.fillOpacity")}
           disabled={!filled}
           onChange={(e) => local({ defaultShapeFillOpacity: Number(e.target.value) })}
         />

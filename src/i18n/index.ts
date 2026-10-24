@@ -1,4 +1,4 @@
-import i18n from "i18next";
+import i18n, { type ParseKeys } from "i18next";
 import { initReactI18next } from "react-i18next";
 import en from "../locales/en/translation.json";
 
@@ -37,3 +37,10 @@ export async function loadLanguage(code: string): Promise<boolean> {
 }
 
 export default i18n;
+
+/** Any key of the English catalogue (for tables that name their label by key). */
+export type TKey = ParseKeys;
+
+/** A thrown value as a sentence: Rust/JS errors are shown as they are, anything else generically. */
+export const errorMessage = (err: unknown): string =>
+  typeof err === "string" ? err : err instanceof Error ? err.message : i18n.t("errors.generic");

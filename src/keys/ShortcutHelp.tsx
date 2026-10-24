@@ -1,7 +1,8 @@
 import { useModal } from "../components/useModal";
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useChromeStore } from "../stores/chrome";
-import { ACTION_GROUPS, ACTION_META, ACTIONS } from "./actions";
+import { ACTION_GROUPS, ACTION_META, ACTIONS, groupLabel } from "./actions";
 import { formatKeys } from "./keybindings";
 import { isMacPlatform } from "./platform";
 import { useKeyMap } from "./useKeyMap";
@@ -15,6 +16,7 @@ export default function ShortcutHelp() {
 
 function Overlay() {
   useModal();
+  const { t } = useTranslation();
   const map = useKeyMap();
   const mac = isMacPlatform();
   const close = () => useChromeStore.getState().setShortcutsOpen(false);
@@ -49,22 +51,22 @@ function Overlay() {
         className="card dialog shortcut-help"
         role="dialog"
         aria-modal="true"
-        aria-label="Keyboard shortcuts"
+        aria-label={t("keys.title")}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2>Keyboard shortcuts</h2>
+        <h2>{t("keys.title")}</h2>
         <div className="shortcut-help-body">
           {ACTION_GROUPS.map((group) => {
             const actions = ACTIONS.filter((a) => ACTION_META[a].group === group);
             if (actions.length === 0) return null;
             return (
               <section key={group}>
-                <h3>{group}</h3>
+                <h3>{groupLabel(group)}</h3>
                 <dl className="shortcut-list">
                   {actions.map((a) => (
                     <div key={a}>
-                      <dt>{ACTION_META[a].label}</dt>
-                      <dd>{map[a].length > 0 ? map[a].map((k) => formatKeys(k, mac)).join(", ") : "Not set"}</dd>
+                      <dt>{t(ACTION_META[a].labelKey)}</dt>
+                      <dd>{map[a].length > 0 ? map[a].map((k) => formatKeys(k, mac)).join(", ") : t("keys.notSet")}</dd>
                     </div>
                   ))}
                 </dl>
@@ -74,7 +76,7 @@ function Overlay() {
         </div>
         <div className="dialog-actions">
           <button type="button" className="btn btn-primary" onClick={close}>
-            Close
+            {t("common.close")}
           </button>
         </div>
       </div>

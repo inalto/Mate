@@ -1,5 +1,6 @@
 // The closed set of keyboard actions, their labels, areas and default key combos.
 // Combos are canonical strings, e.g. "Ctrl+Shift+Z" (`Ctrl` is Cmd on macOS): see keybindings.ts.
+import i18n, { type TKey } from "../i18n";
 
 export type ShortcutAction =
   | "tool.pen"
@@ -49,10 +50,11 @@ export type ShortcutAction =
   | "palette.open"
   | "help.shortcuts";
 
-export type ActionGroup = "Tools" | "Edit" | "Selection" | "Arrange" | "View" | "Pages" | "Tabs and windows" | "General";
+export type ActionGroup = "tools" | "edit" | "selection" | "arrange" | "view" | "pages" | "tabs" | "general";
 
 export interface ActionMeta {
-  label: string;
+  /** Catalogue key of the label (resolved when shown, so it follows the interface language). */
+  labelKey: TKey;
   group: ActionGroup;
   defaultKeys: string[];
   /** False for actions whose keys are fixed (a family of combos, or a held key). */
@@ -60,71 +62,68 @@ export interface ActionMeta {
 }
 
 export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
-  "tool.pen": { label: "Pen", group: "Tools", defaultKeys: ["P"] },
-  "tool.highlighter": { label: "Highlighter", group: "Tools", defaultKeys: ["H"] },
-  "tool.eraser": { label: "Eraser", group: "Tools", defaultKeys: ["E"] },
-  "tool.cursor": { label: "Select (cursor)", group: "Tools", defaultKeys: ["V"] },
-  "tool.lasso": { label: "Lasso", group: "Tools", defaultKeys: ["L"] },
-  "tool.shape": { label: "Shape", group: "Tools", defaultKeys: ["S"] },
-  "tool.text": { label: "Text", group: "Tools", defaultKeys: ["T"] },
-  "tool.insertSpace": { label: "Insert space", group: "Tools", defaultKeys: ["N"] },
+  "tool.pen": { labelKey: "keys.actions.pen", group: "tools", defaultKeys: ["P"] },
+  "tool.highlighter": { labelKey: "keys.actions.highlighter", group: "tools", defaultKeys: ["H"] },
+  "tool.eraser": { labelKey: "keys.actions.eraser", group: "tools", defaultKeys: ["E"] },
+  "tool.cursor": { labelKey: "keys.actions.cursor", group: "tools", defaultKeys: ["V"] },
+  "tool.lasso": { labelKey: "keys.actions.lasso", group: "tools", defaultKeys: ["L"] },
+  "tool.shape": { labelKey: "keys.actions.shape", group: "tools", defaultKeys: ["S"] },
+  "tool.text": { labelKey: "keys.actions.text", group: "tools", defaultKeys: ["T"] },
+  "tool.insertSpace": { labelKey: "keys.actions.insertSpace", group: "tools", defaultKeys: ["N"] },
   "preset.slot": {
-    label: "Preset 1 to 9",
-    group: "Tools",
+    labelKey: "keys.actions.presetSlot",
+    group: "tools",
     defaultKeys: Array.from({ length: 9 }, (_, i) => `Alt+${i + 1}`),
     rebindable: false,
   },
-  pan: { label: "Pan (hold)", group: "Tools", defaultKeys: ["Space"], rebindable: false },
-  undo: { label: "Undo", group: "Edit", defaultKeys: ["Ctrl+Z"] },
-  redo: { label: "Redo", group: "Edit", defaultKeys: ["Ctrl+Shift+Z", "Ctrl+Y"] },
-  copy: { label: "Copy", group: "Edit", defaultKeys: ["Ctrl+C"] },
-  cut: { label: "Cut", group: "Edit", defaultKeys: ["Ctrl+X"] },
-  paste: { label: "Paste", group: "Edit", defaultKeys: ["Ctrl+V"] },
-  duplicate: { label: "Duplicate selection (or page)", group: "Edit", defaultKeys: ["Ctrl+D"] },
-  delete: { label: "Delete", group: "Edit", defaultKeys: ["Delete", "Backspace"] },
-  save: { label: "Save now", group: "Edit", defaultKeys: ["Ctrl+S"] },
-  escape: { label: "Clear selection", group: "Selection", defaultKeys: ["Escape"], rebindable: false },
-  selectAll: { label: "Select all", group: "Selection", defaultKeys: ["Ctrl+A"] },
-  deselect: { label: "Deselect", group: "Selection", defaultKeys: ["Ctrl+Shift+A"] },
-  group: { label: "Group", group: "Selection", defaultKeys: ["Ctrl+G"] },
-  ungroup: { label: "Ungroup", group: "Selection", defaultKeys: ["Ctrl+Shift+G"] },
-  "arrange.forward": { label: "Bring forward", group: "Arrange", defaultKeys: ["Ctrl+]"] },
-  "arrange.backward": { label: "Send backward", group: "Arrange", defaultKeys: ["Ctrl+["] },
-  "arrange.front": { label: "Bring to front", group: "Arrange", defaultKeys: ["Ctrl+Shift+]"] },
-  "arrange.back": { label: "Send to back", group: "Arrange", defaultKeys: ["Ctrl+Shift+["] },
-  "zoom.in": { label: "Zoom in", group: "View", defaultKeys: ["Ctrl+=", "Ctrl+Shift+="] },
-  "zoom.out": { label: "Zoom out", group: "View", defaultKeys: ["Ctrl+-"] },
-  "zoom.reset": { label: "Reset zoom", group: "View", defaultKeys: ["Ctrl+0"] },
-  "sidebar.toggle": { label: "Toggle sidebar", group: "View", defaultKeys: ["Ctrl+\\"] },
-  "page.prev": { label: "Previous page", group: "Pages", defaultKeys: ["Ctrl+PageUp"] },
-  "page.next": { label: "Next page", group: "Pages", defaultKeys: ["Ctrl+PageDown"] },
-  "page.duplicate": { label: "Duplicate page", group: "Pages", defaultKeys: [] },
-  "page.rename": { label: "Rename page", group: "Pages", defaultKeys: ["F2"] },
-  "page.move.up": { label: "Move page up", group: "Pages", defaultKeys: ["Alt+ArrowUp"] },
-  "page.move.down": { label: "Move page down", group: "Pages", defaultKeys: ["Alt+ArrowDown"] },
-  "page.promote": { label: "Promote page", group: "Pages", defaultKeys: ["Alt+ArrowLeft"] },
-  "page.demote": { label: "Demote page", group: "Pages", defaultKeys: ["Alt+ArrowRight"] },
-  "tab.new": { label: "New tab", group: "Tabs and windows", defaultKeys: ["Ctrl+T"] },
-  "tab.close": { label: "Close tab", group: "Tabs and windows", defaultKeys: ["Ctrl+W"] },
-  "tab.move.left": { label: "Move tab left", group: "Tabs and windows", defaultKeys: ["Alt+Shift+ArrowLeft"] },
-  "tab.move.right": { label: "Move tab right", group: "Tabs and windows", defaultKeys: ["Alt+Shift+ArrowRight"] },
-  "window.openPage": { label: "Open page in new window", group: "Tabs and windows", defaultKeys: ["Ctrl+Shift+N"] },
-  "palette.open": { label: "Search and actions", group: "General", defaultKeys: ["Ctrl+K"] },
-  "help.shortcuts": { label: "Keyboard shortcuts", group: "General", defaultKeys: ["?"] },
+  pan: { labelKey: "keys.actions.pan", group: "tools", defaultKeys: ["Space"], rebindable: false },
+  undo: { labelKey: "keys.actions.undo", group: "edit", defaultKeys: ["Ctrl+Z"] },
+  redo: { labelKey: "keys.actions.redo", group: "edit", defaultKeys: ["Ctrl+Shift+Z", "Ctrl+Y"] },
+  copy: { labelKey: "keys.actions.copy", group: "edit", defaultKeys: ["Ctrl+C"] },
+  cut: { labelKey: "keys.actions.cut", group: "edit", defaultKeys: ["Ctrl+X"] },
+  paste: { labelKey: "keys.actions.paste", group: "edit", defaultKeys: ["Ctrl+V"] },
+  duplicate: { labelKey: "keys.actions.duplicate", group: "edit", defaultKeys: ["Ctrl+D"] },
+  delete: { labelKey: "keys.actions.delete", group: "edit", defaultKeys: ["Delete", "Backspace"] },
+  save: { labelKey: "keys.actions.save", group: "edit", defaultKeys: ["Ctrl+S"] },
+  escape: { labelKey: "keys.actions.escape", group: "selection", defaultKeys: ["Escape"], rebindable: false },
+  selectAll: { labelKey: "keys.actions.selectAll", group: "selection", defaultKeys: ["Ctrl+A"] },
+  deselect: { labelKey: "keys.actions.deselect", group: "selection", defaultKeys: ["Ctrl+Shift+A"] },
+  group: { labelKey: "keys.actions.group", group: "selection", defaultKeys: ["Ctrl+G"] },
+  ungroup: { labelKey: "keys.actions.ungroup", group: "selection", defaultKeys: ["Ctrl+Shift+G"] },
+  "arrange.forward": { labelKey: "keys.actions.bringForward", group: "arrange", defaultKeys: ["Ctrl+]"] },
+  "arrange.backward": { labelKey: "keys.actions.sendBackward", group: "arrange", defaultKeys: ["Ctrl+["] },
+  "arrange.front": { labelKey: "keys.actions.bringToFront", group: "arrange", defaultKeys: ["Ctrl+Shift+]"] },
+  "arrange.back": { labelKey: "keys.actions.sendToBack", group: "arrange", defaultKeys: ["Ctrl+Shift+["] },
+  "zoom.in": { labelKey: "keys.actions.zoomIn", group: "view", defaultKeys: ["Ctrl+=", "Ctrl+Shift+="] },
+  "zoom.out": { labelKey: "keys.actions.zoomOut", group: "view", defaultKeys: ["Ctrl+-"] },
+  "zoom.reset": { labelKey: "keys.actions.zoomReset", group: "view", defaultKeys: ["Ctrl+0"] },
+  "sidebar.toggle": { labelKey: "keys.actions.toggleSidebar", group: "view", defaultKeys: ["Ctrl+\\"] },
+  "page.prev": { labelKey: "keys.actions.prevPage", group: "pages", defaultKeys: ["Ctrl+PageUp"] },
+  "page.next": { labelKey: "keys.actions.nextPage", group: "pages", defaultKeys: ["Ctrl+PageDown"] },
+  "page.duplicate": { labelKey: "keys.actions.duplicatePage", group: "pages", defaultKeys: [] },
+  "page.rename": { labelKey: "keys.actions.renamePage", group: "pages", defaultKeys: ["F2"] },
+  "page.move.up": { labelKey: "keys.actions.movePageUp", group: "pages", defaultKeys: ["Alt+ArrowUp"] },
+  "page.move.down": { labelKey: "keys.actions.movePageDown", group: "pages", defaultKeys: ["Alt+ArrowDown"] },
+  "page.promote": { labelKey: "keys.actions.promotePage", group: "pages", defaultKeys: ["Alt+ArrowLeft"] },
+  "page.demote": { labelKey: "keys.actions.demotePage", group: "pages", defaultKeys: ["Alt+ArrowRight"] },
+  "tab.new": { labelKey: "keys.actions.newTab", group: "tabs", defaultKeys: ["Ctrl+T"] },
+  "tab.close": { labelKey: "keys.actions.closeTab", group: "tabs", defaultKeys: ["Ctrl+W"] },
+  "tab.move.left": { labelKey: "keys.actions.moveTabLeft", group: "tabs", defaultKeys: ["Alt+Shift+ArrowLeft"] },
+  "tab.move.right": { labelKey: "keys.actions.moveTabRight", group: "tabs", defaultKeys: ["Alt+Shift+ArrowRight"] },
+  "window.openPage": { labelKey: "keys.actions.openPageWindow", group: "tabs", defaultKeys: ["Ctrl+Shift+N"] },
+  "palette.open": { labelKey: "keys.actions.palette", group: "general", defaultKeys: ["Ctrl+K"] },
+  "help.shortcuts": { labelKey: "keys.actions.shortcuts", group: "general", defaultKeys: ["?"] },
 };
 
 export const ACTIONS = Object.keys(ACTION_META) as ShortcutAction[];
 
-export const ACTION_GROUPS: ActionGroup[] = [
-  "Tools",
-  "Edit",
-  "Selection",
-  "Arrange",
-  "View",
-  "Pages",
-  "Tabs and windows",
-  "General",
-];
+export const ACTION_GROUPS: ActionGroup[] = ["tools", "edit", "selection", "arrange", "view", "pages", "tabs", "general"];
+
+/** The label of `a` in the interface language. */
+export const actionLabel = (a: ShortcutAction): string => i18n.t(ACTION_META[a].labelKey);
+
+/** The heading of a group of actions in the interface language. */
+export const groupLabel = (g: ActionGroup): string => i18n.t(`keys.groups.${g}`);
 
 export const isShortcutAction = (v: unknown): v is ShortcutAction =>
   typeof v === "string" && Object.prototype.hasOwnProperty.call(ACTION_META, v);

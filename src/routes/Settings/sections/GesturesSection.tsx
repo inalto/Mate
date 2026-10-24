@@ -1,25 +1,31 @@
+import { useTranslation } from "react-i18next";
 import { SelectRow, SettingsSection, ToggleRow } from "../rows";
 
 export default function GesturesSection() {
+  const { t } = useTranslation();
   return (
-    <SettingsSection id="gestures" title="Gestures & touch">
+    <SettingsSection id="gestures" title={t("settings.nav.sections.gestures")}>
       <SelectRow
         k="palmRejection"
-        label="Palm rejection"
+        label={t("settings.gestures.palmRejection.label")}
         options={[
-          { value: "off", label: "Off" },
-          { value: "standard", label: "Standard" },
-          { value: "high", label: "High" },
+          { value: "off", label: t("settings.gestures.palmRejection.off") },
+          { value: "standard", label: t("settings.gestures.palmRejection.standard") },
+          { value: "high", label: t("settings.gestures.palmRejection.high") },
         ]}
       />
-      <ToggleRow k="drawWithFinger" label="Draw with finger" hint="Off: fingers pan and zoom, the pen draws" />
-      <ToggleRow k="pinchToZoom" label="Pinch to zoom" />
+      <ToggleRow
+        k="drawWithFinger"
+        label={t("settings.gestures.drawWithFinger.label")}
+        hint={t("settings.gestures.drawWithFinger.hint")}
+      />
+      <ToggleRow k="pinchToZoom" label={t("settings.gestures.pinchToZoom")} />
       <SelectRow
         k="scrollBehavior"
-        label="Mouse wheel"
+        label={t("settings.gestures.mouseWheel.label")}
         options={[
-          { value: "pan", label: "Pans the page" },
-          { value: "zoom", label: "Zooms" },
+          { value: "pan", label: t("settings.gestures.mouseWheel.pan") },
+          { value: "zoom", label: t("settings.gestures.mouseWheel.zoom") },
         ]}
       />
     </SettingsSection>

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage as message } from "../../../i18n";
 import {
   nextcloudLoginPoll,
   nextcloudLoginStart,
@@ -10,10 +12,8 @@ import { Row, SettingsSection } from "../rows";
 
 export const POLL_MS = 2000;
 
-const message = (err: unknown): string =>
-  typeof err === "string" ? err : err instanceof Error ? err.message : "Something went wrong.";
-
 export default function SharingSection() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<NextcloudStatus | null>(null);
   const [server, setServer] = useState("");
   const [waiting, setWaiting] = useState(false);
@@ -89,20 +89,20 @@ export default function SharingSection() {
   };
 
   return (
-    <SettingsSection id="sharing" title="Sharing">
-      <Row id="sharing-nextcloud" label="Nextcloud" hint="Upload a book to your Nextcloud and get a link to send to someone.">
+    <SettingsSection id="sharing" title={t("settings.nav.sections.sharing")}>
+      <Row id="sharing-nextcloud" label={t("settings.sharing.nextcloud.label")} hint={t("settings.sharing.nextcloud.hint")}>
         {status?.signedIn ? (
           <>
-            <span>Signed in as {status.user} on {status.server}</span>
+            <span>{t("settings.sharing.nextcloud.signedIn", { user: status.user, server: status.server })}</span>
             <button type="button" className="btn" onClick={() => void signOut()}>
-              Sign out
+              {t("settings.sharing.nextcloud.signOut")}
             </button>
           </>
         ) : waiting ? (
           <>
-            <span role="status">Waiting for you to approve in your browser…</span>
+            <span role="status">{t("settings.sharing.nextcloud.waiting")}</span>
             <button type="button" className="btn" onClick={cancel}>
-              Cancel
+              {t("common.cancel")}
             </button>
           </>
         ) : (
@@ -110,13 +110,13 @@ export default function SharingSection() {
             <input
               className="input"
               type="url"
-              aria-label="Nextcloud server address"
+              aria-label={t("settings.sharing.nextcloud.server")}
               placeholder="https://cloud.example.com"
               value={server}
               onChange={(e) => setServer(e.target.value)}
             />
             <button type="button" className="btn" disabled={!server.trim()} onClick={() => void signIn()}>
-              Sign in
+              {t("settings.sharing.nextcloud.signIn")}
             </button>
           </>
         )}

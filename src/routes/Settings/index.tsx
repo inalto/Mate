@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { NAV_GROUPS } from "./nav";
 import { collectEntries, jumpToRow, searchEntries, type SearchEntry } from "./search";
 import AboutSection from "./sections/AboutSection";
@@ -19,6 +20,7 @@ import UpdatesSection from "./sections/UpdatesSection";
 import "./settings.css";
 
 export default function Settings() {
+  const { t } = useTranslation();
   const contentRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const [query, setQuery] = useState("");
@@ -87,16 +89,16 @@ export default function Settings() {
   return (
     <div className="screen settings-screen">
       <div className="screen-header">
-        <h1>Settings</h1>
+        <h1>{t("settings.title")}</h1>
       </div>
       <div className="settings-layout">
-        <nav className="settings-nav" aria-label="Settings sections" ref={navRef} onKeyDown={onNavKey}>
+        <nav className="settings-nav" aria-label={t("settings.sectionsLabel")} ref={navRef} onKeyDown={onNavKey}>
           <div role="search" className="settings-search">
             <input
               type="search"
               className="input"
-              aria-label="Search settings"
-              placeholder="Search settings"
+              aria-label={t("settings.search")}
+              placeholder={t("settings.search")}
               value={query}
               data-nav-item
               onChange={(e) => setQuery(e.target.value)}
@@ -110,8 +112,8 @@ export default function Settings() {
               }}
             />
             {query.trim() !== "" && (
-              <ul className="settings-hits" aria-label="Search results">
-                {hits.length === 0 && <li className="muted">No matching settings</li>}
+              <ul className="settings-hits" aria-label={t("settings.searchResults")}>
+                {hits.length === 0 && <li className="muted">{t("settings.noMatches")}</li>}
                 {hits.map((h) => (
                   <li key={h.id}>
                     <button type="button" data-nav-item onClick={() => pick(h)}>
@@ -126,7 +128,7 @@ export default function Settings() {
           {NAV_GROUPS.map((g) => (
             <div key={g.id} className="settings-nav-group" role="group" aria-labelledby={`set-nav-${g.id}`}>
               <span id={`set-nav-${g.id}`} className="settings-nav-title">
-                {g.title}
+                {t(g.titleKey)}
               </span>
               <ul>
                 {g.sections.map((s) => (
@@ -137,7 +139,7 @@ export default function Settings() {
                       aria-current={active === s.id ? "location" : undefined}
                       onClick={() => goToSection(s.id)}
                     >
-                      {s.title}
+                      {t(s.titleKey)}
                     </button>
                   </li>
                 ))}
@@ -145,7 +147,7 @@ export default function Settings() {
             </div>
           ))}
         </nav>
-        <div className="settings-content" ref={contentRef} role="region" aria-label="Settings">
+        <div className="settings-content" ref={contentRef} role="region" aria-label={t("settings.title")}>
           <GeneralSection />
           <ThemeSection />
           <PaperSection />

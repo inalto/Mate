@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { showToast } from "../../components/Toast";
+import i18n from "../../i18n";
 import { takeResetIncomplete } from "../../ipc/backup";
 
 /** Once per launch: tells the user when the previous "Reset local data" could not finish. */
@@ -8,7 +9,7 @@ export default function ResetNotice() {
     takeResetIncomplete().then(
       (m) => {
         if (m) {
-          showToast(`Local data could not be fully reset. Your backup is at ${m.recoveryPath}.`, undefined, {
+          showToast(i18n.t("settings.resetIncomplete", { path: m.recoveryPath }), undefined, {
             persistent: true,
           });
         }

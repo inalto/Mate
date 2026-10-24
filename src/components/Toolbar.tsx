@@ -21,7 +21,9 @@ import {
   ChartLine,
 } from "@phosphor-icons/react";
 import { useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import type { TKey } from "../i18n";
 import { pickAndInsertImage } from "../images/insert";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
@@ -30,12 +32,16 @@ import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useSettingsStore } from "../stores/settings";
 import PresetMenu from "./PresetMenu";
-import { SHAPE_LABEL } from "../shapes/catalog";
+import { SHAPE_LABEL_KEY } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
 import { useShortcutHint } from "./shortcutHints";
 import { useDismiss } from "./useDismiss";
 
-const INK_LABEL: Record<InkType, string> = { pen: "Pen", "fountain-pen": "Fountain pen", highlighter: "Highlighter" };
+const INK_LABEL = {
+  pen: "toolbar.ink.pen",
+  "fountain-pen": "toolbar.ink.fountainPen",
+  highlighter: "toolbar.ink.highlighter",
+} as const satisfies Record<InkType, TKey>;
 
 function InkIcon({ type, color }: { type: InkType; color?: string }) {
   const Icon = type === "highlighter" ? Highlighter : type === "fountain-pen" ? PenNib : Pen;
@@ -43,12 +49,16 @@ function InkIcon({ type, color }: { type: InkType; color?: string }) {
 }
 
 function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number; count: number }) {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const active = ed((s) => isInkTool(s.tool) && s.preset.id === preset.id);
   const s = ed.getState;
-  const hint = useShortcutHint("preset.slot", INK_LABEL[preset.type], { suffix: " · right-click to remove", keyIndex: index });
+  const hint = useShortcutHint("preset.slot", t(INK_LABEL[preset.type]), {
+    decorate: (title) => t("toolbar.presetRemoveHint", { title }),
+    keyIndex: index,
+  });
   return (
     <div ref={ref} className="tb-anchor">
       <button
@@ -56,7 +66,7 @@ function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number
         {...hint}
         className={active ? "tb-btn tb-slot active" : "tb-btn tb-slot"}
         aria-pressed={active}
-        aria-label={`${INK_LABEL[preset.type]} ${preset.color}`}
+        aria-label={t("toolbar.presetLabel", { ink: t(INK_LABEL[preset.type]), color: preset.color })}
         onClick={() => (active ? setOpen((o) => !o) : s().setPreset(preset))}
         onContextMenu={(e) => {
           e.preventDefault();
@@ -74,29 +84,30 @@ function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number
 }
 
 function AddPenMenu() {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   useDismiss(ref, open, () => setOpen(false));
   return (
     <div ref={ref} className="tb-anchor">
-      <button type="button" className="tb-btn" aria-label="Add pen" title="Add pen" onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="tb-btn" aria-label={t("toolbar.addPen")} title={t("toolbar.addPen")} onClick={() => setOpen((o) => !o)}>
         <Plus size={16} />
       </button>
       {open && (
         <div className="tb-popover tb-menu" role="menu">
-          {(["pen", "fountain-pen", "highlighter"] as const).map((t) => (
+          {(["pen", "fountain-pen", "highlighter"] as const).map((ink) => (
             <button
-              key={t}
+              key={ink}
               type="button"
               role="menuitem"
               className="tb-menu-item"
               onClick={() => {
-                ed.getState().addPreset(t);
+                ed.getState().addPreset(ink);
                 setOpen(false);
               }}
             >
-              <InkIcon type={t} /> {INK_LABEL[t]}
+              <InkIcon type={ink} /> {t(INK_LABEL[ink])}
             </button>
           ))}
         </div>
@@ -106,6 +117,7 @@ function AddPenMenu() {
 }
 
 function EraserButton() {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -127,26 +139,26 @@ function EraserButton() {
       .catch((err) => console.error("saving eraser settings failed", err));
   };
   useDismiss(ref, open, close);
-  const hint = useShortcutHint("tool.eraser", "Eraser");
+  const hint = useShortcutHint("tool.eraser", t("toolbar.eraser"));
   return (
     <div ref={ref} className="tb-anchor">
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
         aria-pressed={active}
-        aria-label="Eraser"
+        aria-label={t("toolbar.eraser")}
         {...hint}
         onClick={() => (active ? (open ? close() : setOpen(true)) : ed.getState().setTool("eraser"))}
       >
         <Eraser size={18} />
       </button>
       {open && (
-        <div className="tb-popover eraser-menu" role="dialog" aria-label="Eraser options">
-          <div className="tb-row" role="radiogroup" aria-label="Eraser type">
+        <div className="tb-popover eraser-menu" role="dialog" aria-label={t("toolbar.eraserOptions")}>
+          <div className="tb-row" role="radiogroup" aria-label={t("toolbar.eraserType")}>
             {(
               [
-                ["stroke", "Whole"],
-                ["partial", "Partial"],
+                ["stroke", t("toolbar.eraserWhole")],
+                ["partial", t("toolbar.eraserPartial")],
               ] as const
             ).map(([v, label]) => (
               <button
@@ -161,14 +173,14 @@ function EraserButton() {
               </button>
             ))}
           </div>
-          <label className="tb-row tb-width" title="Eraser size (px)">
+          <label className="tb-row tb-width" title={t("toolbar.eraserSizePx")}>
             <input
               type="range"
               min={4}
               max={100}
               step={1}
               value={cfg.defaultEraserWidth}
-              aria-label="Eraser size"
+              aria-label={t("toolbar.eraserSize")}
               onChange={(e) => local({ defaultEraserWidth: Number(e.target.value) })}
             />
             <span>{cfg.defaultEraserWidth}</span>
@@ -179,7 +191,7 @@ function EraserButton() {
               checked={cfg.eraserEraseShapes}
               onChange={(e) => local({ eraserEraseShapes: e.target.checked })}
             />
-            Erase shapes
+            {t("settings.pen.eraseShapes")}
           </label>
           <label className="tb-row">
             <input
@@ -187,7 +199,7 @@ function EraserButton() {
               checked={cfg.eraserEraseImages}
               onChange={(e) => local({ eraserEraseImages: e.target.checked })}
             />
-            Erase images
+            {t("settings.pen.eraseImages")}
           </label>
         </div>
       )}
@@ -196,20 +208,21 @@ function EraserButton() {
 }
 
 function ShapeButton() {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const active = ed((s) => s.tool === "shape");
   const type = useSettingsStore((s) => s.settings.defaultShapeType);
   useDismiss(ref, open, () => setOpen(false));
-  const hint = useShortcutHint("tool.shape", `Shape: ${SHAPE_LABEL[type]}`);
+  const hint = useShortcutHint("tool.shape", t("toolbar.shapeHint", { shape: t(SHAPE_LABEL_KEY[type]) }));
   return (
     <div ref={ref} className="tb-anchor">
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
         aria-pressed={active}
-        aria-label="Shape"
+        aria-label={t("toolbar.shape")}
         {...hint}
         onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("shape"))}
       >
@@ -222,6 +235,7 @@ function ShapeButton() {
 
 /** Insert-space tool button; a second click opens its options (Insert / Remove, Cut images). */
 function InsertSpaceButton() {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -229,26 +243,26 @@ function InsertSpaceButton() {
   const mode = ed((s) => s.spaceMode);
   const cut = ed((s) => s.spaceCutImages);
   useDismiss(ref, open, () => setOpen(false));
-  const hint = useShortcutHint("tool.insertSpace", "Insert space");
+  const hint = useShortcutHint("tool.insertSpace", t("toolbar.insertSpace"));
   return (
     <div ref={ref} className="tb-anchor">
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
         aria-pressed={active}
-        aria-label="Insert space"
+        aria-label={t("toolbar.insertSpace")}
         {...hint}
         onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("insert-space"))}
       >
         <ArrowsVertical size={18} />
       </button>
       {open && (
-        <div className="tb-popover" role="dialog" aria-label="Insert space options">
-          <div className="tb-row" role="radiogroup" aria-label="Insert space mode">
+        <div className="tb-popover" role="dialog" aria-label={t("toolbar.insertSpaceOptions")}>
+          <div className="tb-row" role="radiogroup" aria-label={t("toolbar.insertSpaceMode")}>
             {(
               [
-                ["insert", "Insert"],
-                ["remove", "Remove"],
+                ["insert", t("toolbar.spaceInsert")],
+                ["remove", t("toolbar.spaceRemove")],
               ] as const
             ).map(([v, label]) => (
               <button
@@ -265,7 +279,7 @@ function InsertSpaceButton() {
           </div>
           <label className="tb-row">
             <input type="checkbox" checked={cut} onChange={(e) => ed.getState().setSpaceOptions({ spaceCutImages: e.target.checked })} />
-            Cut images
+            {t("toolbar.cutImages")}
           </label>
         </div>
       )}
@@ -300,6 +314,7 @@ function HintButton({
 }
 
 export default function Toolbar() {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const presets = useSettingsStore((s) => s.settings.toolbarPresets);
   const tool = ed((s) => s.tool);
@@ -321,8 +336,8 @@ export default function Toolbar() {
   );
 
   return (
-    <div className="toolbar" role="toolbar" aria-label="Editor tools">
-      <Link to="/" className="tb-btn" aria-label="Home" title="Home">
+    <div className="toolbar" role="toolbar" aria-label={t("toolbar.label")}>
+      <Link to="/" className="tb-btn" aria-label={t("nav.home")} title={t("nav.home")}>
         <House size={18} />
       </Link>
       <span className="tb-sep" />
@@ -333,40 +348,46 @@ export default function Toolbar() {
       <span className="tb-sep" />
       <EraserButton />
       <ShapeButton />
-      {toolBtn("text", "tool.text", "Text", <TextT size={18} />)}
-      <button type="button" className="tb-btn" aria-label="Insert image…" title="Insert image…" onClick={() => void pickAndInsertImage()}>
+      {toolBtn("text", "tool.text", t("toolbar.text"), <TextT size={18} />)}
+      <button
+        type="button"
+        className="tb-btn"
+        aria-label={t("toolbar.insertImage")}
+        title={t("toolbar.insertImage")}
+        onClick={() => void pickAndInsertImage()}
+      >
         <ImageSquare size={18} />
       </button>
-      <button type="button" className="tb-btn" aria-label="Insert table" title="Insert table" onClick={() => s().addTable()}>
+      <button type="button" className="tb-btn" aria-label={t("toolbar.insertTable")} title={t("toolbar.insertTable")} onClick={() => s().addTable()}>
         <Table size={18} />
       </button>
-      <button type="button" className="tb-btn" aria-label="Insert code" title="Insert code" onClick={() => s().addCodespace()}>
+      <button type="button" className="tb-btn" aria-label={t("toolbar.insertCode")} title={t("toolbar.insertCode")} onClick={() => s().addCodespace()}>
         <Code size={18} />
       </button>
-      <button type="button" className="tb-btn" aria-label="Insert equation" title="Insert equation" onClick={() => s().addMathBox()}>
+      <button type="button" className="tb-btn" aria-label={t("toolbar.insertEquation")} title={t("toolbar.insertEquation")} onClick={() => s().addMathBox()}>
         <MathOperations size={18} />
       </button>
-      <button type="button" className="tb-btn" aria-label="Insert graph" title="Insert graph" onClick={() => s().addGraph()}>
+      <button type="button" className="tb-btn" aria-label={t("toolbar.insertGraph")} title={t("toolbar.insertGraph")} onClick={() => s().addGraph()}>
         <ChartLine size={18} />
       </button>
-      {toolBtn("cursor", "tool.cursor", "Select", <Cursor size={18} />)}
-      {toolBtn("lasso", "tool.lasso", "Lasso", <Lasso size={18} />)}
+      {toolBtn("cursor", "tool.cursor", t("toolbar.select"), <Cursor size={18} />)}
+      {toolBtn("lasso", "tool.lasso", t("toolbar.lasso"), <Lasso size={18} />)}
       <InsertSpaceButton />
       <span className="tb-sep" />
-      <HintButton action="undo" label="Undo" disabled={!canUndo} onClick={() => s().undo()}>
+      <HintButton action="undo" label={t("keys.actions.undo")} disabled={!canUndo} onClick={() => s().undo()}>
         <ArrowUUpLeft size={18} />
       </HintButton>
-      <HintButton action="redo" label="Redo" disabled={!canRedo} onClick={() => s().redo()}>
+      <HintButton action="redo" label={t("keys.actions.redo")} disabled={!canRedo} onClick={() => s().redo()}>
         <ArrowUUpRight size={18} />
       </HintButton>
       <span className="tb-sep" />
-      <HintButton action="zoom.out" label="Zoom out" onClick={() => zoomStep(1 / ZOOM_STEP)}>
+      <HintButton action="zoom.out" label={t("keys.actions.zoomOut")} onClick={() => zoomStep(1 / ZOOM_STEP)}>
         <Minus size={16} />
       </HintButton>
-      <HintButton action="zoom.reset" label="Reset zoom" className="tb-btn tb-zoom" onClick={() => zoomStep(null)}>
+      <HintButton action="zoom.reset" label={t("keys.actions.zoomReset")} className="tb-btn tb-zoom" onClick={() => zoomStep(null)}>
         {Math.round(zoom * 100)}%
       </HintButton>
-      <HintButton action="zoom.in" label="Zoom in" onClick={() => zoomStep(ZOOM_STEP)}>
+      <HintButton action="zoom.in" label={t("keys.actions.zoomIn")} onClick={() => zoomStep(ZOOM_STEP)}>
         <Plus size={16} />
       </HintButton>
     </div>

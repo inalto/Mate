@@ -1,12 +1,12 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import ConfirmDialog from "../../../components/ConfirmDialog";
+import { errorMessage as message } from "../../../i18n";
 import { exportBackup, resetLocalData } from "../../../ipc/backup";
 import { ButtonRow, SettingsSection } from "../rows";
 
-const message = (err: unknown): string =>
-  typeof err === "string" ? err : err instanceof Error ? err.message : "Something went wrong.";
-
 export default function BackupSection() {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -18,7 +18,7 @@ export default function BackupSection() {
     setStatus(null);
     try {
       const path = await exportBackup();
-      if (path) setStatus(`Backup saved to ${path}`);
+      if (path) setStatus(t("settings.backup.saved", { path }));
     } catch (err) {
       setError(message(err));
     } finally {
@@ -39,20 +39,20 @@ export default function BackupSection() {
   };
 
   return (
-    <SettingsSection id="backup" title="Backup">
+    <SettingsSection id="backup" title={t("settings.nav.sections.backup")}>
       <ButtonRow
         id="backup-download"
-        label="Download backup"
-        hint="One zip holding a .mate file per book. To restore, unzip it and import each .mate file."
-        buttonLabel="Download backup"
+        label={t("settings.backup.download.label")}
+        hint={t("settings.backup.download.hint")}
+        buttonLabel={t("settings.backup.download.label")}
         onClick={() => void download()}
         disabled={busy}
       />
       <ButtonRow
         id="backup-reset"
-        label="Reset local data"
-        hint="Deletes everything on this device and starts again from the welcome flow"
-        buttonLabel="Reset local data"
+        label={t("settings.backup.reset.label")}
+        hint={t("settings.backup.reset.hint")}
+        buttonLabel={t("settings.backup.reset.label")}
         onClick={() => setConfirming(true)}
         disabled={busy}
         danger
@@ -65,12 +65,12 @@ export default function BackupSection() {
       </p>
       {confirming && (
         <ConfirmDialog
-          title="Reset local data?"
-          confirmLabel="Reset"
+          title={t("settings.backup.reset.confirmTitle")}
+          confirmLabel={t("settings.backup.reset.confirm")}
           onConfirm={() => void reset()}
           onCancel={() => setConfirming(false)}
         >
-          This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept.
+          {t("settings.backup.reset.confirmBody")}
         </ConfirmDialog>
       )}
     </SettingsSection>

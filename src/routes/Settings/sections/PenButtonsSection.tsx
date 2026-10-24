@@ -1,16 +1,27 @@
+import { useTranslation } from "react-i18next";
 import { SelectRow, SettingsSection } from "../rows";
 
-const ACTIONS = [
-  { value: "eraser", label: "Eraser" },
-  { value: "lasso", label: "Lasso" },
-  { value: "none", label: "Nothing" },
-];
-
 export default function PenButtonsSection() {
+  const { t } = useTranslation();
+  const actions = [
+    { value: "eraser", label: t("settings.penButtons.eraser") },
+    { value: "lasso", label: t("settings.penButtons.lasso") },
+    { value: "none", label: t("settings.penButtons.none") },
+  ];
   return (
-    <SettingsSection id="pen-buttons" title="Pen buttons">
-      <SelectRow k="penBarrelButtonAction" label="Barrel button" hint="The button on the side of the stylus" options={ACTIONS} />
-      <SelectRow k="penEraserButtonAction" label="Eraser end" hint="The eraser end or eraser button of the stylus" options={ACTIONS} />
+    <SettingsSection id="pen-buttons" title={t("settings.nav.sections.penButtons")}>
+      <SelectRow
+        k="penBarrelButtonAction"
+        label={t("settings.penButtons.barrel.label")}
+        hint={t("settings.penButtons.barrel.hint")}
+        options={actions}
+      />
+      <SelectRow
+        k="penEraserButtonAction"
+        label={t("settings.penButtons.eraserEnd.label")}
+        hint={t("settings.penButtons.eraserEnd.hint")}
+        options={actions}
+      />
     </SettingsSection>
   );
 }

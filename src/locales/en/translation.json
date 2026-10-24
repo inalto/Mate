@@ -4,7 +4,508 @@
       "language": {
         "label": "Language",
         "system": "System"
+      },
+      "handedness": {
+        "label": "Handedness",
+        "hint": "Which side the sidebar and tool strips sit on",
+        "right": "Right-handed",
+        "left": "Left-handed"
+      },
+      "libraryView": {
+        "label": "Library view",
+        "recent": "Recent",
+        "shelves": "Shelves",
+        "az": "A to Z"
+      },
+      "sidebarLayout": {
+        "label": "Sidebar layout",
+        "split": "Split (sections and pages)",
+        "stacked": "Stacked"
+      },
+      "shortcutHints": {
+        "label": "Shortcut hints",
+        "always": "Always",
+        "adaptive": "Until learned",
+        "never": "Never"
+      },
+      "zoomIndicator": {
+        "label": "Show zoom level",
+        "hint": "A small zoom percentage in the editor"
+      },
+      "exportFormat": {
+        "label": "Default export format",
+        "mate": "Mate archive"
       }
+    },
+    "title": "Settings",
+    "sectionsLabel": "Settings sections",
+    "search": "Search settings",
+    "searchResults": "Search results",
+    "noMatches": "No matching settings",
+    "nav": {
+      "groups": {
+        "general": "General",
+        "appearance": "Appearance",
+        "writing": "Writing",
+        "intelligence": "Intelligence",
+        "system": "System"
+      },
+      "sections": {
+        "general": "General",
+        "theme": "Theme",
+        "paper": "Paper & layout",
+        "pen": "Pen & stylus",
+        "penButtons": "Pen buttons",
+        "gestures": "Gestures & touch",
+        "tutor": "Tutor & recognition",
+        "tutorInteractions": "Tutor interactions",
+        "mathEngines": "Maths engines",
+        "shortcuts": "Keyboard shortcuts",
+        "trash": "Trash",
+        "backup": "Backup",
+        "sharing": "Sharing",
+        "updates": "Updates",
+        "about": "About"
+      }
+    },
+    "resetIncomplete": "Local data could not be fully reset. Your backup is at {{path}}.",
+    "theme": {
+      "label": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "sepia": "Sepia",
+      "highContrast": "High contrast",
+      "invertImages": {
+        "label": "Invert images in dark mode",
+        "hint": "Black-and-white images are inverted on dark themes"
+      }
+    },
+    "paper": {
+      "pageMode": {
+        "label": "Page mode",
+        "canvas": "Infinite",
+        "page": "Paper"
+      },
+      "background": {
+        "label": "Background",
+        "blank": "Blank",
+        "ruled": "Ruled",
+        "ruledNoMargin": "Ruled (no margin)",
+        "grid": "Grid",
+        "gridUniform": "Uniform grid",
+        "dotGrid": "Dot grid"
+      },
+      "pageSize": {
+        "label": "Page size",
+        "letter": "Letter",
+        "square": "Square"
+      },
+      "orientation": {
+        "label": "Orientation",
+        "portrait": "Portrait",
+        "landscape": "Landscape"
+      },
+      "alignText": {
+        "label": "Align text to lines",
+        "hint": "Snap typed text to the ruled lines"
+      },
+      "snapToGrid": {
+        "label": "Snap to grid",
+        "hint": "Snap shapes and strokes to the grid background"
+      }
+    },
+    "pen": {
+      "penColor": "Pen colour",
+      "penWidth": "Pen width",
+      "highlighterColor": "Highlighter colour",
+      "highlighterWidth": "Highlighter width",
+      "stabilization": {
+        "label": "Stroke stabilisation",
+        "hint": "Smooths wobble; higher lags the pen slightly"
+      },
+      "nibFlatness": "Fountain pen nib flatness",
+      "haptics": {
+        "label": "Pen haptics (Windows)",
+        "hint": "Buzz while inking and a click when a shape snaps, on pens that support it."
+      },
+      "inkToShapeTitle": "Ink to shape and scribble",
+      "inkToShape": {
+        "label": "Ink to shape",
+        "hint": "Hold the pen still at the end of a stroke to turn it into a shape"
+      },
+      "snapOnRelease": "Snap when lifting the pen",
+      "holdTime": "Hold time",
+      "milliseconds": "{{value}} ms",
+      "scribbleToErase": {
+        "label": "Scribble to erase",
+        "hint": "Scribble quickly over pen ink to erase it"
+      },
+      "scribbleSensitivity": {
+        "label": "Scribble sensitivity",
+        "less": "Less",
+        "standard": "Standard",
+        "more": "More"
+      },
+      "textTitle": "Text defaults",
+      "textColor": "Text colour",
+      "textSize": "Text size",
+      "shapeTitle": "Shape defaults",
+      "shapeType": "Shape type",
+      "shapeStrokeColor": "Shape stroke colour",
+      "shapeFillColor": "Shape fill colour",
+      "shapeWidth": "Shape width",
+      "shapeFillOpacity": "Shape fill opacity",
+      "eraserTitle": "Eraser defaults",
+      "eraserType": {
+        "label": "Eraser type",
+        "stroke": "Whole stroke",
+        "partial": "Partial"
+      },
+      "eraserWidth": "Eraser width",
+      "eraseShapes": "Erase shapes",
+      "eraseImages": "Erase images"
+    },
+    "penButtons": {
+      "barrel": {
+        "label": "Barrel button",
+        "hint": "The button on the side of the stylus"
+      },
+      "eraserEnd": {
+        "label": "Eraser end",
+        "hint": "The eraser end or eraser button of the stylus"
+      },
+      "eraser": "Eraser",
+      "lasso": "Lasso",
+      "none": "Nothing"
+    },
+    "gestures": {
+      "palmRejection": {
+        "label": "Palm rejection",
+        "off": "Off",
+        "standard": "Standard",
+        "high": "High"
+      },
+      "drawWithFinger": {
+        "label": "Draw with finger",
+        "hint": "Off: fingers pan and zoom, the pen draws"
+      },
+      "pinchToZoom": "Pinch to zoom",
+      "mouseWheel": {
+        "label": "Mouse wheel",
+        "pan": "Pans the page",
+        "zoom": "Zooms"
+      }
+    },
+    "tutor": {
+      "providerTitle": "AI provider",
+      "checkingTitle": "Checking",
+      "enabled": {
+        "label": "Tutor",
+        "hint": "Read handwritten maths and point out mistakes. Needs AI set up above."
+      },
+      "mode": {
+        "label": "When to check",
+        "live": "As I write",
+        "onask": "Only when I ask"
+      },
+      "underline": "Underline mistakes",
+      "tickCorrect": "Tick correct work",
+      "showChecking": {
+        "label": "Show when checking",
+        "hint": "A small turning ring next to ink being checked"
+      },
+      "doubleTapAsk": "Double-tap ink to ask",
+      "holdToAsk": "Hold the pen on ink to ask"
+    },
+    "mathEngines": {
+      "explainer": "Compute Engine runs on this computer and needs nothing. Wolfram|Alpha needs a free AppID (2 000 queries a month for non-commercial use).",
+      "appid": "Wolfram|Alpha AppID",
+      "savedHidden": "Saved (hidden)",
+      "pasteAppid": "Paste your AppID",
+      "works": "The AppID works.",
+      "saved": "AppID saved",
+      "none": "No AppID",
+      "consent": {
+        "label": "Send typed maths to Wolfram|Alpha when I ask",
+        "hint": "Nothing is sent until you turn this on and choose Ask Wolfram|Alpha."
+      },
+      "getAppid": "Get a free AppID"
+    },
+    "trash": {
+      "keepFor": "Keep deleted items for",
+      "forever": "Forever",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days"
+    },
+    "backup": {
+      "download": {
+        "label": "Download backup",
+        "hint": "One zip holding a .mate file per book. To restore, unzip it and import each .mate file."
+      },
+      "saved": "Backup saved to {{path}}",
+      "reset": {
+        "label": "Reset local data",
+        "hint": "Deletes everything on this device and starts again from the welcome flow",
+        "confirmTitle": "Reset local data?",
+        "confirm": "Reset",
+        "confirmBody": "This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept."
+      }
+    },
+    "sharing": {
+      "nextcloud": {
+        "label": "Nextcloud",
+        "hint": "Upload a book to your Nextcloud and get a link to send to someone.",
+        "signedIn": "Signed in as {{user}} on {{server}}",
+        "signOut": "Sign out",
+        "waiting": "Waiting for you to approve in your browser…",
+        "server": "Nextcloud server address",
+        "signIn": "Sign in"
+      }
+    },
+    "updates": {
+      "checkOnStartup": "Check for updates on startup"
+    },
+    "about": {
+      "version": "Version",
+      "welcome": "Welcome",
+      "showWelcome": "Show welcome again",
+      "unknownVersion": "unknown"
     }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "remove": "Remove",
+    "test": "Test",
+    "reset": "Reset",
+    "change": "Change",
+    "close": "Close",
+    "view": "View",
+    "back": "Back",
+    "copy": "Copy",
+    "copied": "Copied",
+    "untitled": "Untitled",
+    "pageName": "Page {{n}}",
+    "sectionName": "Section {{n}}"
+  },
+  "errors": {
+    "generic": "Something went wrong.",
+    "clipboard": "Could not copy to the clipboard"
+  },
+  "update": {
+    "label": "Software update",
+    "appVersion": "Mate {{version}}",
+    "install": "Install {{version}}",
+    "restart": "Restart to update",
+    "checkingShort": "Checking...",
+    "check": "Check for updates",
+    "checking": "Checking for updates...",
+    "upToDate": "You are up to date.",
+    "notConfigured": "Updates are not configured for this build.",
+    "available": "Version {{version}} is available.",
+    "availableWithNotes": "Version {{version}} is available. {{notes}}",
+    "downloading": "Downloading {{version}}: {{progress}}",
+    "ready": "Version {{version}} is installed. Restart to finish updating.",
+    "failed": "Could not update: {{message}}",
+    "savingWork": "Saving your work…",
+    "megabytes": "{{value}} MB",
+    "progress": "{{done}} of {{total}}",
+    "toast": "Mate {{version}} is available."
+  },
+  "shapes": {
+    "rectangle": "Rectangle",
+    "circle": "Circle",
+    "ellipse": "Ellipse",
+    "triangle": "Triangle",
+    "line": "Line",
+    "arrow": "Arrow",
+    "diamond": "Diamond",
+    "pentagon": "Pentagon",
+    "hexagon": "Hexagon",
+    "star": "Star",
+    "polygon": "Polygon"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "resetAll": "Reset all",
+    "pressCombo": "Press a key combination…",
+    "notSet": "Not set",
+    "changeAction": "Change {{action}}",
+    "cancelAction": "Cancel {{action}}",
+    "unbind": "Unbind",
+    "unbindAction": "Unbind {{action}}",
+    "resetAction": "Reset {{action}}",
+    "useCmd": "Use Cmd (not Ctrl) as the modifier.",
+    "noMeta": "The Windows/Meta key cannot be used.",
+    "reserved": "{{keys}} is reserved and cannot be used. Press another combination.",
+    "taken": "{{keys}} is already used by \"{{action}}\". Press another combination.",
+    "groups": {
+      "tools": "Tools",
+      "edit": "Edit",
+      "selection": "Selection",
+      "arrange": "Arrange",
+      "view": "View",
+      "pages": "Pages",
+      "tabs": "Tabs and windows",
+      "general": "General"
+    },
+    "actions": {
+      "pen": "Pen",
+      "highlighter": "Highlighter",
+      "eraser": "Eraser",
+      "cursor": "Select (cursor)",
+      "lasso": "Lasso",
+      "shape": "Shape",
+      "text": "Text",
+      "insertSpace": "Insert space",
+      "presetSlot": "Preset 1 to 9",
+      "pan": "Pan (hold)",
+      "undo": "Undo",
+      "redo": "Redo",
+      "copy": "Copy",
+      "cut": "Cut",
+      "paste": "Paste",
+      "duplicate": "Duplicate selection (or page)",
+      "delete": "Delete",
+      "save": "Save now",
+      "escape": "Clear selection",
+      "selectAll": "Select all",
+      "deselect": "Deselect",
+      "group": "Group",
+      "ungroup": "Ungroup",
+      "bringForward": "Bring forward",
+      "sendBackward": "Send backward",
+      "bringToFront": "Bring to front",
+      "sendToBack": "Send to back",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Reset zoom",
+      "toggleSidebar": "Toggle sidebar",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "duplicatePage": "Duplicate page",
+      "renamePage": "Rename page",
+      "movePageUp": "Move page up",
+      "movePageDown": "Move page down",
+      "promotePage": "Promote page",
+      "demotePage": "Demote page",
+      "newTab": "New tab",
+      "closeTab": "Close tab",
+      "moveTabLeft": "Move tab left",
+      "moveTabRight": "Move tab right",
+      "openPageWindow": "Open page in new window",
+      "palette": "Search and actions",
+      "shortcuts": "Keyboard shortcuts"
+    }
+  },
+  "palette": {
+    "label": "Command palette",
+    "searchLabel": "Search pages, handwriting and actions",
+    "searchPlaceholder": "Search pages and handwriting, or run an action",
+    "results": "Results",
+    "working": "Working on it…",
+    "similar": "{{percent}}% similar",
+    "noRelated": "No other page is similar yet. Related pages appear as the tutor reads more of your notes.",
+    "applyTitle": "Apply title",
+    "titleApplied": "Title applied",
+    "noMatches": "No page or handwriting matches.",
+    "summarise": "Summarise this page",
+    "suggestTitle": "Suggest title",
+    "related": "What's related?",
+    "openGraph": "Open graph",
+    "panel": {
+      "summary": "Summary of this page",
+      "title": "Suggested title",
+      "related": "Related pages"
+    },
+    "sections": {
+      "pages": "Pages",
+      "recent": "Recent pages",
+      "quick": "Quick actions",
+      "everything": "Search everything",
+      "actions": "Actions"
+    },
+    "switchTo": {
+      "pen": "Switch to pen",
+      "highlighter": "Switch to highlighter",
+      "eraser": "Switch to eraser",
+      "cursor": "Switch to select (cursor)",
+      "lasso": "Switch to lasso",
+      "shape": "Switch to shape",
+      "text": "Switch to text",
+      "insertSpace": "Switch to insert space"
+    },
+    "insertText": "Insert text box",
+    "insertCode": "Insert code block",
+    "insertTable": "Insert table",
+    "insertGraph": "Insert graph",
+    "insertImage": "Insert image",
+    "newPage": "New page",
+    "newSection": "New section",
+    "openSettings": "Open settings",
+    "openLibrary": "Open library",
+    "disabled": {
+      "editor": "Open a page in the editor first",
+      "selection": "Select something first",
+      "page": "Open a page first"
+    }
+  },
+  "nav": {
+    "home": "Home"
+  },
+  "about": {
+    "version": "Version {{version}}",
+    "tagline": "Local-first handwriting and math notes.",
+    "starPitch": "If Mate is useful to you, a star on GitHub helps others find it.",
+    "star": "Star on GitHub",
+    "githubFailed": "Could not open GitHub.",
+    "updates": "Updates",
+    "latest": "You have the latest version",
+    "available": "Version {{version}} is available",
+    "updateSettings": "Update settings"
+  },
+  "toolbar": {
+    "label": "Editor tools",
+    "hintWithKeys": "{{label}} ({{keys}})",
+    "presetRemoveHint": "{{title}} · right-click to remove",
+    "presetLabel": "{{ink}} {{color}}",
+    "ink": {
+      "pen": "Pen",
+      "fountainPen": "Fountain pen",
+      "highlighter": "Highlighter"
+    },
+    "addPen": "Add pen",
+    "eraser": "Eraser",
+    "eraserOptions": "Eraser options",
+    "eraserType": "Eraser type",
+    "eraserWhole": "Whole",
+    "eraserPartial": "Partial",
+    "eraserSizePx": "Eraser size (px)",
+    "eraserSize": "Eraser size",
+    "shape": "Shape",
+    "shapeHint": "Shape: {{shape}}",
+    "shapeOptions": "Shape options",
+    "shapeType": "Shape type",
+    "stroke": "Stroke",
+    "strokeColor": "Stroke {{color}}",
+    "strokeWidth": "Stroke width",
+    "fill": "Fill",
+    "fillColor": "Fill {{color}}",
+    "noFill": "No fill",
+    "fillOpacity": "Fill opacity",
+    "insertSpace": "Insert space",
+    "insertSpaceOptions": "Insert space options",
+    "insertSpaceMode": "Insert space mode",
+    "spaceInsert": "Insert",
+    "spaceRemove": "Remove",
+    "cutImages": "Cut images",
+    "text": "Text",
+    "insertImage": "Insert image…",
+    "insertTable": "Insert table",
+    "insertCode": "Insert code",
+    "insertEquation": "Insert equation",
+    "insertGraph": "Insert graph",
+    "select": "Select",
+    "lasso": "Lasso"
   }
 }
