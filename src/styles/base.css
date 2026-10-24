@@ -1505,3 +1505,38 @@ button.card:hover {
 .import-file[data-status="failed"] {
   color: var(--color-danger, #a33);
 }
+
+/* About dialog */
+.about-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.about-block h3,
+.about-dialog h2,
+.about-dialog p {
+  margin: 0;
+}
+
+.icon-btn {
+  position: relative;
+}
+
+.update-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.about-link {
+  border-color: transparent;
+  background: none;
+  padding-inline: 0;
+  color: var(--color-primary);
+}

@@ -9,6 +9,7 @@ import { useFocusedEditor } from "../stores/focusedEditor";
 import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
+import AboutDialog from "./AboutDialog";
 import ExportDialog from "./ExportDialog";
 import { useDismiss } from "./useDismiss";
 
@@ -18,14 +19,17 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
   const ref = useRef<HTMLDivElement>(null);
   useDismiss(ref, open, () => setOpen(false));
   const chrome = useChromeStore.getState;
+  const updateAvailable = useChromeStore((s) => s.updateAvailable);
+  const aboutOpen = useChromeStore((s) => s.aboutOpen);
   const pick = (fn: () => void) => () => {
     setOpen(false);
     fn();
   };
   return (
     <div ref={ref} className="menu-anchor">
-      <button className="icon-btn" aria-label="More actions" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button className="icon-btn" aria-label={updateAvailable ? "More actions, update available" : "More actions"} title={updateAvailable ? `Update available: ${updateAvailable}` : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <DotsThree size={20} weight="bold" />
+        {updateAvailable && <span className="update-dot" aria-hidden="true" />}
       </button>
       {open && (
         <div className="menu menu-right" role="menu">
@@ -36,8 +40,10 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
           <button role="menuitem" onClick={pick(() => chrome().openPalette())}>Search and actions…</button>
           {!isPageWindow() && <button role="menuitem" onClick={pick(() => navigate("/settings"))}>Settings</button>}
           <button role="menuitem" onClick={pick(() => chrome().setShortcutsOpen(true))}>Keyboard shortcuts</button>
+          <button role="menuitem" onClick={pick(() => chrome().setAboutOpen(true))}>About Mate</button>
         </div>
       )}
+      {aboutOpen && <AboutDialog onClose={() => chrome().setAboutOpen(false)} />}
     </div>
   );
 }
