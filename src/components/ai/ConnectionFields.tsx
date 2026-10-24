@@ -1,10 +1,16 @@
+import { DownloadSimple, FloppyDisk, PlugsConnected, Trash } from "@phosphor-icons/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { errorMessage as message } from "../../i18n";
+import { errorMessage } from "../../i18n";
 import { clearAiKey, listAiModels, setAiKey, testAiKey } from "../../ipc/ai";
+import { isRecognizeError, recognizeErrorText } from "../../ipc/recognize";
 import type { AiProviderInfo, AiStatus } from "../../model/types";
 import { useSettingsStore } from "../../stores/settings";
 import { isAllowedAddress, isLocalHost } from "./address";
+import { AiField, AiIcon } from "./AiField";
+
+/** A failed command as a sentence: Rust's structured errors are worded in the interface language. */
+const message = (err: unknown): string => (isRecognizeError(err) ? recognizeErrorText(err) : errorMessage(err));
 
 interface Props {
   info: AiProviderInfo;
@@ -82,116 +88,122 @@ export default function ConnectionFields({ info, status, onChanged }: Props) {
       : local
         ? t("ai.consent.local", { provider: info.label })
         : t("ai.consent.custom");
-  const privacy = info.group !== "cloud" && !local ? t("ai.privacyRemote") : info.privacy;
+  const privacy =
+    info.group !== "cloud" && !local ? t("ai.privacyRemote") : t(`ai.privacy.${info.privacy}`, { service: info.label });
 
   return (
     <div className="ai-connection">
-      <div className="field">
-        <label htmlFor="set-ai-model">{t("ai.model")}</label>
-        <input
-          id="set-ai-model"
-          className="input"
-          type="text"
-          list="set-ai-models"
-          spellCheck={false}
-          autoComplete="off"
-          placeholder={info.defaultModel || t("ai.typeModel")}
-          value={settings.aiModel}
-          onChange={(e) => void update({ aiModel: e.target.value })}
-        />
-        <datalist id="set-ai-models" data-testid="ai-models">
-          {models.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
-        {info.canListModels && (
-          <button type="button" className="btn" disabled={busy} onClick={() => void fetchModels()}>
-            {t("ai.fetchModels")}
-          </button>
-        )}
+      <AiField label={t("ai.model")} htmlFor="set-ai-model">
+        <div className="ai-row">
+          <input
+            id="set-ai-model"
+            className="input"
+            type="text"
+            list="set-ai-models"
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={info.defaultModel || t("ai.typeModel")}
+            value={settings.aiModel}
+            onChange={(e) => void update({ aiModel: e.target.value })}
+          />
+          <datalist id="set-ai-models" data-testid="ai-models">
+            {models.map((m) => (
+              <option key={m} value={m} />
+            ))}
+          </datalist>
+          {info.canListModels && (
+            <button type="button" className="btn" disabled={busy} onClick={() => void fetchModels()}>
+              <AiIcon icon={DownloadSimple} />
+              {t("ai.fetchModels")}
+            </button>
+          )}
+        </div>
         {info.canListModels && hasKeyField && (
           <p className="muted">{t("ai.fetchModelsNote", { provider: info.label })}</p>
         )}
         {info.vision === "dependsOnModel" && <p className="muted">{t("ai.visionHint")}</p>}
-      </div>
+      </AiField>
       {info.editableBaseUrl && (
-        <div className="field">
-          <label htmlFor="set-ai-base">{t("ai.address")}</label>
-          <input
-            id="set-ai-base"
-            className="input"
-            type="text"
-            spellCheck={false}
-            autoComplete="off"
-            placeholder={info.defaultBaseUrl || "https://example.com"}
-            value={settings.aiBaseUrl}
-            aria-invalid={!addressOk}
-            aria-describedby={addressOk ? undefined : "set-ai-base-error"}
-            onChange={(e) => void update({ aiBaseUrl: e.target.value })}
-          />
+        <AiField label={t("ai.address")} htmlFor="set-ai-base">
+          <div className="ai-row">
+            <input
+              id="set-ai-base"
+              className="input"
+              type="text"
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={info.defaultBaseUrl || "https://example.com"}
+              value={settings.aiBaseUrl}
+              aria-invalid={!addressOk}
+              aria-describedby={addressOk ? undefined : "set-ai-base-error"}
+              onChange={(e) => void update({ aiBaseUrl: e.target.value })}
+            />
+          </div>
           {!addressOk && (
             <p id="set-ai-base-error" className="form-error">
               {t("ai.addressInvalid")}
             </p>
           )}
-        </div>
+        </AiField>
       )}
       {hasKeyField && (
-        <div className="field">
-          <label htmlFor="set-ai-key">{custom ? t("ai.apiKeyOptional") : t("ai.apiKey")}</label>
-          <input
-            id="set-ai-key"
-            className="input"
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            value={draft}
-            placeholder={hasKey ? t("settings.mathEngines.savedHidden") : t("ai.pasteKey", { provider: info.label })}
-            onChange={(e) => setDraft(e.target.value)}
-          />
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={busy || draft.trim() === ""}
-            onClick={() => {
-              const key = draft;
-              setDraft("");
-              void run(() => setAiKey(info.id, key), null);
-            }}
-          >
-            {t("ai.saveKey")}
-          </button>
-          <button
-            type="button"
-            className="btn"
-            disabled={busy || !hasKey}
-            onClick={() => void run(() => clearAiKey(info.id), null)}
-          >
-            {t("ai.removeKey")}
-          </button>
-        </div>
+        <AiField label={custom ? t("ai.apiKeyOptional") : t("ai.apiKey")} htmlFor="set-ai-key">
+          <div className="ai-row">
+            <input
+              id="set-ai-key"
+              className="input"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={draft}
+              placeholder={hasKey ? t("settings.mathEngines.savedHidden") : t("ai.pasteKey", { provider: info.label })}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || draft.trim() === ""}
+              onClick={() => {
+                const key = draft;
+                setDraft("");
+                void run(() => setAiKey(info.id, key), null);
+              }}
+            >
+              <AiIcon icon={FloppyDisk} />
+              {t("ai.saveKey")}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy || !hasKey}
+              onClick={() => void run(() => clearAiKey(info.id), null)}
+            >
+              <AiIcon icon={Trash} />
+              {t("ai.removeKey")}
+            </button>
+          </div>
+        </AiField>
       )}
-      <div className="field">
-        <span className="field-label">{t("ai.status")}</span>
-        <span className="muted" role="status">
-          <span>{keyStatus}</span>
-          {addressMissing && <span> {t("ai.addressMissing")}</span>}
-          {modelMissing && <span> {t("ai.modelMissing")}</span>}
-        </span>
-        <button type="button" className="btn" disabled={!canTest} onClick={() => void run(() => testAiKey(info.id), testOk)}>
-          {t("ai.testConnection")}
-        </button>
-        {result && <span className="muted">{result}</span>}
-      </div>
-      <div className="field">
-        <span className="field-label">{t("ai.permission")}</span>
-        <div>
-          <label>
-            <input type="checkbox" checked={consent} onChange={(e) => void update({ aiConsent: e.target.checked })} /> {consentCopy}
-          </label>
-          <p className="muted">{privacy}</p>
+      <AiField label={t("ai.status")}>
+        <div className="ai-row">
+          <span className="muted ai-row-text" role="status">
+            <span>{keyStatus}</span>
+            {addressMissing && <span> {t("ai.addressMissing")}</span>}
+            {modelMissing && <span> {t("ai.modelMissing")}</span>}
+          </span>
+          <button type="button" className="btn" disabled={!canTest} onClick={() => void run(() => testAiKey(info.id), testOk)}>
+            <AiIcon icon={PlugsConnected} />
+            {t("ai.testConnection")}
+          </button>
         </div>
-      </div>
+        {result && <p className="muted">{result}</p>}
+      </AiField>
+      <AiField label={t("ai.permission")}>
+        <label className="ai-consent">
+          <input type="checkbox" checked={consent} onChange={(e) => void update({ aiConsent: e.target.checked })} /> {consentCopy}
+        </label>
+        <p className="muted">{privacy}</p>
+      </AiField>
     </div>
   );
 }

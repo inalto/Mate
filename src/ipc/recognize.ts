@@ -23,6 +23,11 @@ export type RecognizeResult = Verdict & { provider: string; model: string };
 
 export type RecognizeErrorKind =
   | "disabled"
+  | "badAddress"
+  | "noKey"
+  | "noAddress"
+  | "cannotListModels"
+  | "unreachable"
   | "auth"
   | "billing"
   | "unknownModel"
@@ -34,10 +39,15 @@ export type RecognizeErrorKind =
   | "rejected"
   | "internal";
 
-/** What `recognize_group` rejects with; `message` is a sentence ready for the UI. */
+/**
+ * What `recognize_group` and the AI setup commands (Rust `AiSetupError`) reject with; `message`
+ * is the English sentence, `detail` (setup errors only) what the sentence names: a provider label,
+ * or a label and address.
+ */
 export interface RecognizeError {
   kind: RecognizeErrorKind;
   message: string;
+  detail?: string;
 }
 
 export const isRecognizeError = (e: unknown): e is RecognizeError =>
@@ -45,6 +55,8 @@ export const isRecognizeError = (e: unknown): e is RecognizeError =>
 
 /** Kinds whose Rust sentence ends with a technical detail in brackets: "… (timed out)." */
 const WITH_DETAIL: ReadonlySet<string> = new Set(["network", "invalidResponse", "rejected"]);
+/** Kinds whose detail comes in its own field. */
+const WITH_DETAIL_FIELD: ReadonlySet<string> = new Set(["cannotListModels", "unreachable"]);
 const DETAIL = /\(([^()]*)\)\.?$/;
 
 /**
@@ -54,6 +66,7 @@ const DETAIL = /\(([^()]*)\)\.?$/;
 export function recognizeErrorText(e: RecognizeError): string {
   if (e.kind === "internal" || !i18n.exists(`errors.ai.${e.kind}`)) return e.message;
   const kind = e.kind as Exclude<RecognizeErrorKind, "internal">;
+  if (WITH_DETAIL_FIELD.has(kind)) return e.detail ? i18n.t(`errors.ai.${kind}`, { detail: e.detail }) : e.message;
   if (!WITH_DETAIL.has(kind)) return i18n.t(`errors.ai.${kind}`);
   const detail = DETAIL.exec(e.message)?.[1];
   return detail ? i18n.t(`errors.ai.${kind}`, { detail }) : e.message;

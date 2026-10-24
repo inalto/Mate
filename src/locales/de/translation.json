@@ -310,7 +310,12 @@
       "billing": "Das KI-Konto hat ein Abrechnungsproblem. Kläre es beim Anbieter.",
       "unknownModel": "Das ausgewählte Modell ist nicht verfügbar. Prüfe das Modell in den Einstellungen.",
       "refused": "Die KI hat sich geweigert, diese Notiz zu prüfen.",
-      "truncated": "Die Antwort der KI wurde abgeschnitten, bevor sie fertig war."
+      "truncated": "Die Antwort der KI wurde abgeschnitten, bevor sie fertig war.",
+      "noKey": "Speichere zuerst einen API-Schlüssel.",
+      "noAddress": "Gib zuerst die Adresse des Dienstes ein.",
+      "badAddress": "Verwende eine https://-Adresse oder eine lokale Adresse wie http://localhost:11434.",
+      "cannotListModels": "{{detail}} kann seine Modelle nicht auflisten. Gib den Modellnamen ein.",
+      "unreachable": "{{detail}} ist nicht erreichbar. Läuft es?"
     }
   },
   "update": {
@@ -957,7 +962,22 @@
     "needsLocal": "Benötigt: das Programm auf diesem Computer, ohne Schlüssel",
     "needsCustom": "Benötigt: eine Web-Adresse und, falls der Dienst es verlangt, einen Schlüssel",
     "needsCloud": "Benötigt: einen API-Schlüssel des Dienstes",
-    "cost": "Kosten: {{cost}}",
+    "costLine": "Kosten: {{cost}}",
+    "cost": {
+      "paid": "Kostenpflichtig",
+      "paidLow": "Kostenpflichtig, günstig",
+      "paidSomeFree": "Kostenpflichtig; einige Modelle sind kostenlos",
+      "freeTier": "Kostenloses Kontingent, dann kostenpflichtig",
+      "freeLocal": "Kostenlos (läuft auf diesem Computer)",
+      "depends": "Hängt vom Dienst ab"
+    },
+    "privacy": {
+      "sentTo": "Geprüfte Notizen werden an {{service}} gesendet.",
+      "sentToAndMaker": "Geprüfte Notizen werden an {{service}} und den Hersteller des Modells gesendet.",
+      "textSentTo": "Text wird an {{service}} gesendet.",
+      "local": "Nichts verlässt diesen Computer.",
+      "custom": "Geprüfte Notizen werden an die Adresse gesendet, die du eingibst."
+    },
     "getKey": "Schlüssel holen"
   },
   "home": {

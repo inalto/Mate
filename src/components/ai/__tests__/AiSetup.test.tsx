@@ -20,19 +20,19 @@ import { patchSettings } from "../../../ipc/settings";
 import { collectEntries } from "../../../routes/Settings/search";
 import { flushSettings, useSettingsStore } from "../../../stores/settings";
 import AiSettings from "../../AiSettings";
-import i18n from "../../../i18n";
+import i18n, { loadLanguage } from "../../../i18n";
 
 const NO_VISION_NOTE = i18n.t("ai.noVision");
 
 const SECRET = "sk-test-very-secret";
-const base = { canListModels: false, keyUrl: "", cost: "Paid", privacy: "Sent to the service.", defaultBaseUrl: "", editableBaseUrl: false };
+const base = { canListModels: false, keyUrl: "", cost: "paid", privacy: "sentTo", defaultBaseUrl: "", editableBaseUrl: false } as const;
 const PROVIDERS: AiProviderInfo[] = [
   { ...base, id: "anthropic", label: "Anthropic", group: "cloud", needsKey: true, defaultModel: "claude-opus-5-5", vision: "yes", canListModels: true, keyUrl: "https://console.anthropic.com" },
   { ...base, id: "openai", label: "OpenAI", group: "cloud", needsKey: true, defaultModel: "gpt-5", vision: "yes" },
-  { ...base, id: "deepseek", label: "DeepSeek", group: "cloud", needsKey: true, defaultModel: "deepseek-flash", vision: "no" },
-  { ...base, id: "ollama", label: "Ollama", group: "local", needsKey: false, defaultModel: "qwen3-vl:8b", vision: "dependsOnModel", canListModels: true, editableBaseUrl: true, defaultBaseUrl: "http://localhost:11434", cost: "Free (local)", privacy: "Nothing leaves this computer." },
-  { ...base, id: "lmstudio", label: "LM Studio", group: "local", needsKey: false, defaultModel: "", vision: "dependsOnModel", canListModels: true, editableBaseUrl: true, defaultBaseUrl: "http://localhost:1234", cost: "Free (local)", privacy: "Nothing leaves this computer." },
-  { ...base, id: "custom", label: "Custom endpoint", group: "custom", needsKey: false, defaultModel: "", vision: "dependsOnModel", editableBaseUrl: true },
+  { ...base, id: "deepseek", label: "DeepSeek", group: "cloud", needsKey: true, defaultModel: "deepseek-flash", vision: "no", cost: "paidLow", privacy: "textSentTo" },
+  { ...base, id: "ollama", label: "Ollama", group: "local", needsKey: false, defaultModel: "qwen3-vl:8b", vision: "dependsOnModel", canListModels: true, editableBaseUrl: true, defaultBaseUrl: "http://localhost:11434", cost: "freeLocal", privacy: "local" },
+  { ...base, id: "lmstudio", label: "LM Studio", group: "local", needsKey: false, defaultModel: "", vision: "dependsOnModel", canListModels: true, editableBaseUrl: true, defaultBaseUrl: "http://localhost:1234", cost: "freeLocal", privacy: "local" },
+  { ...base, id: "custom", label: "Custom endpoint", group: "custom", needsKey: false, defaultModel: "", vision: "dependsOnModel", editableBaseUrl: true, cost: "depends", privacy: "custom" },
 ];
 
 /** Keys stored per provider (the fake keychain). */
@@ -270,6 +270,66 @@ describe("AiSetup", () => {
     expect(note.compareDocumentPosition(model) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const consent = screen.getByText(/Send the text of your notes to DeepSeek/);
     expect(consent.textContent).not.toMatch(/image|handwriting/i);
+  });
+
+  it("words cost and privacy codes in the interface language", async () => {
+    render(<AiSettings />);
+    await screen.findByRole("radio", { name: "Anthropic" });
+    expect(screen.getAllByText("Cost: Paid").length).toBeGreaterThan(0);
+    expect(screen.getByText("Cost: Paid, low cost")).toBeTruthy();
+    expect(screen.getByText("Cost: Depends on the service")).toBeTruthy();
+    expect(screen.getAllByText("Cost: Free (runs on this computer)")).toHaveLength(2);
+    expect(screen.getByText("Checked notes are sent to Anthropic.")).toBeTruthy();
+    await pick("DeepSeek");
+    expect(screen.getByText("Text is sent to DeepSeek.")).toBeTruthy();
+    await pick("Custom endpoint");
+    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "http://localhost:8080" } });
+    await act(flushSettings);
+    expect(await screen.findByText("Checked notes are sent to the address you enter.")).toBeTruthy();
+  });
+
+  it("puts notes under the input row, after its buttons", async () => {
+    render(<AiSettings />);
+    const button = await screen.findByRole("button", { name: "Fetch models" });
+    const note = screen.getByText("Sends your key to Anthropic to list its models; nothing else is sent.");
+    const body = button.closest(".ai-field-body");
+    expect(body).toBeTruthy();
+    expect(button.closest(".ai-row")?.parentElement).toBe(body);
+    expect(note.parentElement).toBe(body);
+    expect(note.closest(".ai-row")).toBeNull();
+    expect(button.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByLabelText("Model").closest(".ai-row")).toBe(button.closest(".ai-row"));
+    // Status: the text and the Test button share a row; the result goes underneath.
+    const test = screen.getByRole("button", { name: "Test connection" });
+    expect(test.closest(".ai-row")).toBe(screen.getByRole("status").closest(".ai-row"));
+    // Icons are decorative.
+    for (const svg of button.querySelectorAll("svg")) expect(svg.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("shows setup errors from Rust in the interface language", async () => {
+    expect(await loadLanguage("it")).toBe(true);
+    await i18n.changeLanguage("it");
+    try {
+      keys.add("anthropic");
+      render(<AiSettings />);
+      expect(await screen.findByText("Costo: A pagamento, costo basso")).toBeTruthy();
+      expect(screen.getByText("Gli appunti da controllare vengono inviati al servizio Anthropic.")).toBeTruthy();
+      vi.mocked(testAiKey).mockRejectedValueOnce({ kind: "noKey", message: "Save an API key first." });
+      fireEvent.click(await screen.findByRole("button", { name: "Prova la connessione" }));
+      expect(await screen.findByText("Prima salva una chiave API.")).toBeTruthy();
+      vi.mocked(listAiModels).mockRejectedValueOnce({
+        kind: "unreachable",
+        message: "Could not reach Ollama at http://localhost:11434. Is it running?",
+        detail: "Ollama (http://localhost:11434)",
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Scarica i modelli" }));
+      expect(await screen.findByText("Non riesco a raggiungere Ollama (http://localhost:11434). È avviato?")).toBeTruthy();
+      vi.mocked(listAiModels).mockRejectedValueOnce({ kind: "badAddress", message: "Use an https:// address…" });
+      fireEvent.click(screen.getByRole("button", { name: "Scarica i modelli" }));
+      expect(await screen.findByText(/^Usa un indirizzo https:\/\//)).toBeTruthy();
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("provider cards are searchable by label", async () => {

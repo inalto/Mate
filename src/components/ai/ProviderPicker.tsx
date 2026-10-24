@@ -1,18 +1,31 @@
+import {
+  ArrowSquareOut,
+  Cloud,
+  Coins,
+  Desktop,
+  Eye,
+  EyeSlash,
+  Key,
+  Plug,
+  Question,
+  type Icon,
+} from "@phosphor-icons/react";
 import { useTranslation } from "react-i18next";
 import type { TKey } from "../../i18n";
 import { openExternal } from "../../ipc/app";
 import type { AiProviderGroup, AiProviderInfo, AiVision } from "../../model/types";
+import { AiIcon } from "./AiField";
 
-const GROUPS: Array<{ id: AiProviderGroup; titleKey: TKey }> = [
-  { id: "cloud", titleKey: "ai.groups.cloud" },
-  { id: "local", titleKey: "ai.groups.local" },
-  { id: "custom", titleKey: "ai.groups.custom" },
+const GROUPS: Array<{ id: AiProviderGroup; titleKey: TKey; icon: Icon }> = [
+  { id: "cloud", titleKey: "ai.groups.cloud", icon: Cloud },
+  { id: "local", titleKey: "ai.groups.local", icon: Desktop },
+  { id: "custom", titleKey: "ai.groups.custom", icon: Plug },
 ];
 
-const VISION_COPY: Record<AiVision, TKey> = {
-  yes: "ai.vision.yes",
-  dependsOnModel: "ai.vision.dependsOnModel",
-  no: "ai.vision.no",
+const VISION_COPY: Record<AiVision, { key: TKey; icon: Icon }> = {
+  yes: { key: "ai.vision.yes", icon: Eye },
+  dependsOnModel: { key: "ai.vision.dependsOnModel", icon: Question },
+  no: { key: "ai.vision.no", icon: EyeSlash },
 };
 
 const needsCopy = (p: AiProviderInfo): TKey =>
@@ -34,7 +47,10 @@ export default function ProviderPicker({ providers, value, onSelect }: Props) {
         if (items.length === 0) return null;
         return (
           <fieldset key={g.id} className="ai-group">
-            <legend>{t(g.titleKey)}</legend>
+            <legend>
+              <AiIcon icon={g.icon} />
+              {t(g.titleKey)}
+            </legend>
             <div className="ai-cards">
               {items.map((p) => (
                 <div
@@ -53,15 +69,25 @@ export default function ProviderPicker({ providers, value, onSelect }: Props) {
                     />{" "}
                     <strong>{p.label}</strong>
                   </label>
-                  <p className="muted">{t(needsCopy(p))}</p>
-                  <p className="muted">{t(VISION_COPY[p.vision])}</p>
-                  <p className="muted">{t("ai.cost", { cost: p.cost })}</p>
+                  <p className="muted ai-info">
+                    <AiIcon icon={Key} />
+                    {t(needsCopy(p))}
+                  </p>
+                  <p className="muted ai-info">
+                    <AiIcon icon={VISION_COPY[p.vision].icon} />
+                    {t(VISION_COPY[p.vision].key)}
+                  </p>
+                  <p className="muted ai-info">
+                    <AiIcon icon={Coins} />
+                    {t("ai.costLine", { cost: t(`ai.cost.${p.cost}`) })}
+                  </p>
                   {p.keyUrl && (
                     <button
                       type="button"
                       className="btn ai-link"
                       onClick={() => void openExternal(p.keyUrl).catch(() => {})}
                     >
+                      <AiIcon icon={ArrowSquareOut} />
                       {t("ai.getKey")}
                     </button>
                   )}

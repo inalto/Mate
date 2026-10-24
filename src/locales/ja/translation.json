@@ -309,7 +309,12 @@
       "billing": "AI アカウントに支払いの問題があります。プロバイダーで確認してください。",
       "unknownModel": "選択したモデルは利用できません。設定でモデルを確認してください。",
       "refused": "AI はこのノートのチェックを行いませんでした。",
-      "truncated": "AI の回答が途中で切れてしまいました。"
+      "truncated": "AI の回答が途中で切れてしまいました。",
+      "noKey": "先に API キーを保存してください。",
+      "noAddress": "先にサービスのアドレスを入力してください。",
+      "badAddress": "https:// のアドレス、または http://localhost:11434 のようなローカルアドレスを使ってください。",
+      "cannotListModels": "{{detail}} はモデルの一覧を取得できません。モデル名を入力してください。",
+      "unreachable": "{{detail}} に接続できませんでした。起動していますか？"
     }
   },
   "update": {
@@ -947,7 +952,22 @@
     "needsLocal": "必要なもの: このコンピューターで動作するプログラム（キーは不要）",
     "needsCustom": "必要なもの: Web アドレス（サービスが求める場合はキーも）",
     "needsCloud": "必要なもの: サービスの API キー",
-    "cost": "料金: {{cost}}",
+    "costLine": "料金: {{cost}}",
+    "cost": {
+      "paid": "有料",
+      "paidLow": "有料（低価格）",
+      "paidSomeFree": "有料（一部のモデルは無料）",
+      "freeTier": "無料枠あり、その後は有料",
+      "freeLocal": "無料（このコンピューターで動作）",
+      "depends": "サービスによって異なります"
+    },
+    "privacy": {
+      "sentTo": "確認するノートは {{service}} に送信されます。",
+      "sentToAndMaker": "確認するノートは {{service}} とモデルの開発元に送信されます。",
+      "textSentTo": "テキストが {{service}} に送信されます。",
+      "local": "このコンピューターの外には何も送信されません。",
+      "custom": "確認するノートは入力したアドレスに送信されます。"
+    },
     "getKey": "キーを取得"
   },
   "home": {

@@ -1,4 +1,5 @@
 // Share a book: save a .mate copy into a synced folder, or upload it to Nextcloud and copy a link.
+import { ArrowSquareOut, CloudArrowUp, Copy, FolderOpen, FolderPlus } from "@phosphor-icons/react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
@@ -15,6 +16,8 @@ import {
 } from "../ipc/share";
 import type { Unit } from "../model/types";
 import { navigateTo } from "../stores/navigation";
+import { AiIcon } from "./ai/AiField";
+import "./ai/ai.css";
 import { useModal } from "./useModal";
 
 const EXPIRY: [string, TKey][] = [
@@ -97,10 +100,12 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
           <div className="share-folders">
             {folders?.map((f) => (
               <button key={f.path} type="button" className="btn" disabled={busy} title={f.path} onClick={() => void saveTo(f.path)}>
+                <AiIcon icon={FolderOpen} />
                 {f.label}
               </button>
             ))}
             <button type="button" className="btn" disabled={busy} onClick={() => void chooseFolder()}>
+              <AiIcon icon={FolderPlus} />
               {t("share.chooseFolder")}
             </button>
           </div>
@@ -108,6 +113,7 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
             <p className="field-hint" role="status">
               {t("share.savedTo", { path: saved })}{" "}
               <button type="button" className="btn" onClick={() => void revealItemInDir(saved)}>
+                <AiIcon icon={ArrowSquareOut} />
                 {t("share.showInFolder")}
               </button>
             </p>
@@ -145,6 +151,7 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
               </label>
               <div>
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void upload()}>
+                  <AiIcon icon={CloudArrowUp} />
                   {busy ? t("share.working") : t("share.upload")}
                 </button>
               </div>
@@ -152,6 +159,7 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
                 <div className="field">
                   <input className="input" readOnly aria-label={t("share.link")} value={link} onFocus={(e) => e.currentTarget.select()} />
                   <button type="button" className="btn" onClick={() => void copy()}>
+                    <AiIcon icon={Copy} />
                     {copied ? t("common.copied") : t("common.copy")}
                   </button>
                 </div>

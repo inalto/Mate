@@ -310,7 +310,12 @@
       "billing": "A conta de IA tem um problema de cobrança. Verifique com o provedor.",
       "unknownModel": "O modelo selecionado não está disponível. Verifique o modelo nas Configurações.",
       "refused": "A IA não quis verificar esta anotação.",
-      "truncated": "A resposta da IA foi cortada antes de terminar."
+      "truncated": "A resposta da IA foi cortada antes de terminar.",
+      "noKey": "Salve uma chave de API primeiro.",
+      "noAddress": "Digite o endereço do serviço primeiro.",
+      "badAddress": "Use um endereço https:// ou um endereço local como http://localhost:11434.",
+      "cannotListModels": "{{detail}} não consegue listar seus modelos. Digite o nome do modelo.",
+      "unreachable": "Não foi possível acessar {{detail}}. Ele está em execução?"
     }
   },
   "update": {
@@ -957,7 +962,22 @@
     "needsLocal": "Precisa de: o programa rodando neste computador, sem chave",
     "needsCustom": "Precisa de: um endereço web, e uma chave se o serviço exigir",
     "needsCloud": "Precisa de: uma chave de API do serviço",
-    "cost": "Custo: {{cost}}",
+    "costLine": "Custo: {{cost}}",
+    "cost": {
+      "paid": "Pago",
+      "paidLow": "Pago, baixo custo",
+      "paidSomeFree": "Pago; alguns modelos são gratuitos",
+      "freeTier": "Plano gratuito, depois pago",
+      "freeLocal": "Gratuito (roda neste computador)",
+      "depends": "Depende do serviço"
+    },
+    "privacy": {
+      "sentTo": "As notas verificadas são enviadas para {{service}}.",
+      "sentToAndMaker": "As notas verificadas são enviadas para {{service}} e para o criador do modelo.",
+      "textSentTo": "O texto é enviado para {{service}}.",
+      "local": "Nada sai deste computador.",
+      "custom": "As notas verificadas são enviadas para o endereço que você digitar."
+    },
     "getKey": "Obter uma chave"
   },
   "home": {

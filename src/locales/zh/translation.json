@@ -309,7 +309,12 @@
       "billing": "AI 账户存在账单问题。请与服务商核实。",
       "unknownModel": "所选模型不可用。请在设置中检查模型。",
       "refused": "AI 拒绝检查此笔记。",
-      "truncated": "AI 的回答在完成前被截断了。"
+      "truncated": "AI 的回答在完成前被截断了。",
+      "noKey": "请先保存 API 密钥。",
+      "noAddress": "请先输入服务地址。",
+      "badAddress": "请使用 https:// 地址，或 http://localhost:11434 这样的本地地址。",
+      "cannotListModels": "{{detail}} 无法列出其模型。请输入模型名称。",
+      "unreachable": "无法连接到 {{detail}}。它在运行吗？"
     }
   },
   "update": {
@@ -947,7 +952,22 @@
     "needsLocal": "需要：在本机运行的程序，无需密钥",
     "needsCustom": "需要：网址；如服务要求，还需密钥",
     "needsCloud": "需要：该服务的 API 密钥",
-    "cost": "费用：{{cost}}",
+    "costLine": "费用：{{cost}}",
+    "cost": {
+      "paid": "付费",
+      "paidLow": "付费，价格低",
+      "paidSomeFree": "付费；部分模型免费",
+      "freeTier": "有免费额度，之后付费",
+      "freeLocal": "免费（在这台电脑上运行）",
+      "depends": "取决于服务"
+    },
+    "privacy": {
+      "sentTo": "要检查的笔记会发送到 {{service}}。",
+      "sentToAndMaker": "要检查的笔记会发送到 {{service}} 和模型的开发者。",
+      "textSentTo": "文本会发送到 {{service}}。",
+      "local": "任何内容都不会离开这台电脑。",
+      "custom": "要检查的笔记会发送到你输入的地址。"
+    },
     "getKey": "获取密钥"
   },
   "home": {

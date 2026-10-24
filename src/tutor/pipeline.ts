@@ -193,7 +193,8 @@ export async function runRecognition(
     result = await deps.recognize(req);
   } catch (raw) {
     const err = asRecognizeError(raw);
-    if (err.kind === "disabled") return null;
+    // Not set up (or an address Settings already flags): no check, nothing to report.
+    if (err.kind === "disabled" || err.kind === "badAddress") return null;
     if (BLOCKING.has(err.kind)) {
       // Once per block (concurrent checks may all fail the same way); Ask uses the same sentence.
       if (!attempts.block) deps.toast(err.message);

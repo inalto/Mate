@@ -11,3 +11,26 @@
 .ai-card-head { cursor: pointer; }
 .ai-link { align-self: flex-start; margin-top: var(--space-1); }
 .ai-connection { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* Decorative icons beside text and in buttons (.btn is already an inline flex row). */
+.ai-icon { flex: none; vertical-align: -3px; margin-inline-end: var(--space-1); }
+.btn > .ai-icon { margin-inline-end: 0; }
+.ai-info .ai-icon, .ai-needs td .ai-icon, .ai-group legend .ai-icon { margin-inline-end: var(--space-2); }
+
+/* A connection row: the label (lined up with other rows), then a body column holding the input
+   row and, underneath, its notes. Notes never share a line with a button. */
+.ai-field { display: flex; align-items: flex-start; gap: var(--space-3); }
+.ai-field-label { width: 180px; flex: none; padding-top: var(--space-2); }
+.ai-field-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.ai-field-body > p { margin: 0; }
+.ai-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ai-row > .input { flex: 1 1 200px; min-width: 0; }
+.ai-row > .btn { white-space: nowrap; flex: none; }
+.ai-row > .ai-row-text { flex: 1 1 200px; min-width: 0; }
+.ai-consent { display: block; }
+
+@media (max-width: 640px) {
+  .ai-field { flex-direction: column; gap: var(--space-1); }
+  .ai-field-label { width: auto; padding-top: 0; }
+  .ai-field-body { width: 100%; }
+}

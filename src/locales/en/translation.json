@@ -307,7 +307,12 @@
       "billing": "The AI account has a billing problem. Check it with the provider.",
       "unknownModel": "The selected model is not available. Check the model in Settings.",
       "refused": "The AI declined to check this note.",
-      "truncated": "The AI's answer was cut off before it finished."
+      "truncated": "The AI's answer was cut off before it finished.",
+      "noKey": "Save an API key first.",
+      "noAddress": "Enter the service address first.",
+      "badAddress": "Use an https:// address, or a local address such as http://localhost:11434.",
+      "cannotListModels": "{{detail}} cannot list its models. Type the model name.",
+      "unreachable": "Could not reach {{detail}}. Is it running?"
     }
   },
   "update": {
@@ -954,7 +959,22 @@
     "needsLocal": "Needs: the program running on this computer, no key",
     "needsCustom": "Needs: a web address, and a key if the service wants one",
     "needsCloud": "Needs: an API key from the service",
-    "cost": "Cost: {{cost}}",
+    "costLine": "Cost: {{cost}}",
+    "cost": {
+      "paid": "Paid",
+      "paidLow": "Paid, low cost",
+      "paidSomeFree": "Paid; some models are free",
+      "freeTier": "Free tier, then paid",
+      "freeLocal": "Free (runs on this computer)",
+      "depends": "Depends on the service"
+    },
+    "privacy": {
+      "sentTo": "Checked notes are sent to {{service}}.",
+      "sentToAndMaker": "Checked notes are sent to {{service}} and the model's maker.",
+      "textSentTo": "Text is sent to {{service}}.",
+      "local": "Nothing leaves this computer.",
+      "custom": "Checked notes are sent to the address you enter."
+    },
     "getKey": "Get a key"
   },
   "home": {

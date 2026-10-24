@@ -177,6 +177,10 @@ export type AiProvider = string;
 export type AiVision = "yes" | "dependsOnModel" | "no";
 
 export type AiProviderGroup = "cloud" | "local" | "custom";
+/** What a service costs (Rust `catalog::Cost`); worded by `ai.cost.<code>`. */
+export type AiCost = "paid" | "paidLow" | "paidSomeFree" | "freeTier" | "freeLocal" | "depends";
+/** Where checked notes go (Rust `catalog::Privacy`); worded by `ai.privacy.<code>` with the label. */
+export type AiPrivacy = "sentTo" | "sentToAndMaker" | "textSentTo" | "local" | "custom";
 
 /** One entry of the provider catalog (`list_ai_providers`). */
 export interface AiProviderInfo {
@@ -191,8 +195,8 @@ export interface AiProviderInfo {
   canListModels: boolean;
   /** Where to get a key; empty when none. */
   keyUrl: string;
-  cost: string;
-  privacy: string;
+  cost: AiCost;
+  privacy: AiPrivacy;
 }
 
 /** What the UI may know about the AI setup (the key itself never leaves Rust). */

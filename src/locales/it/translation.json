@@ -307,7 +307,12 @@
       "billing": "L'account AI ha un problema di fatturazione. Verificalo con il provider.",
       "unknownModel": "Il modello selezionato non è disponibile. Controlla il modello nelle Impostazioni.",
       "refused": "L'AI ha rifiutato di controllare questa nota.",
-      "truncated": "La risposta dell'AI si è interrotta prima della fine."
+      "truncated": "La risposta dell'AI si è interrotta prima della fine.",
+      "noKey": "Prima salva una chiave API.",
+      "noAddress": "Prima inserisci l'indirizzo del servizio.",
+      "badAddress": "Usa un indirizzo https://, oppure un indirizzo locale come http://localhost:11434.",
+      "cannotListModels": "{{detail}} non può elencare i suoi modelli. Scrivi il nome del modello.",
+      "unreachable": "Non riesco a raggiungere {{detail}}. È avviato?"
     }
   },
   "update": {
@@ -954,7 +959,22 @@
     "needsLocal": "Richiede: il programma in esecuzione su questo computer, nessuna chiave",
     "needsCustom": "Richiede: un indirizzo web e una chiave, se il servizio la vuole",
     "needsCloud": "Richiede: una chiave API del servizio",
-    "cost": "Costo: {{cost}}",
+    "costLine": "Costo: {{cost}}",
+    "cost": {
+      "paid": "A pagamento",
+      "paidLow": "A pagamento, costo basso",
+      "paidSomeFree": "A pagamento; alcuni modelli sono gratuiti",
+      "freeTier": "Gratis entro un limite, poi a pagamento",
+      "freeLocal": "Gratis (gira su questo computer)",
+      "depends": "Dipende dal servizio"
+    },
+    "privacy": {
+      "sentTo": "Gli appunti da controllare vengono inviati al servizio {{service}}.",
+      "sentToAndMaker": "Gli appunti da controllare vengono inviati al servizio {{service}} e a chi ha creato il modello.",
+      "textSentTo": "Il testo viene inviato al servizio {{service}}.",
+      "local": "Niente esce da questo computer.",
+      "custom": "Gli appunti da controllare vengono inviati all'indirizzo che inserisci."
+    },
     "getKey": "Ottieni una chiave"
   },
   "home": {

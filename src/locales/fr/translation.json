@@ -310,7 +310,12 @@
       "billing": "Le compte d'IA a un problème de facturation. Vérifie-le auprès du fournisseur.",
       "unknownModel": "Le modèle choisi n'est pas disponible. Vérifie le modèle dans les réglages.",
       "refused": "L'IA a refusé de vérifier cette note.",
-      "truncated": "La réponse de l'IA a été coupée avant la fin."
+      "truncated": "La réponse de l'IA a été coupée avant la fin.",
+      "noKey": "Enregistre d'abord une clé d'API.",
+      "noAddress": "Saisis d'abord l'adresse du service.",
+      "badAddress": "Utilise une adresse https:// ou une adresse locale comme http://localhost:11434.",
+      "cannotListModels": "{{detail}} ne peut pas lister ses modèles. Saisis le nom du modèle.",
+      "unreachable": "Impossible de joindre {{detail}}. Est-il lancé ?"
     }
   },
   "update": {
@@ -957,7 +962,22 @@
     "needsLocal": "Nécessite : le programme lancé sur cet ordinateur, sans clé",
     "needsCustom": "Nécessite : une adresse web, et une clé si le service en demande une",
     "needsCloud": "Nécessite : une clé API du service",
-    "cost": "Coût : {{cost}}",
+    "costLine": "Coût : {{cost}}",
+    "cost": {
+      "paid": "Payant",
+      "paidLow": "Payant, peu coûteux",
+      "paidSomeFree": "Payant ; certains modèles sont gratuits",
+      "freeTier": "Offre gratuite, puis payant",
+      "freeLocal": "Gratuit (tourne sur cet ordinateur)",
+      "depends": "Dépend du service"
+    },
+    "privacy": {
+      "sentTo": "Les notes vérifiées sont envoyées à {{service}}.",
+      "sentToAndMaker": "Les notes vérifiées sont envoyées à {{service}} et au créateur du modèle.",
+      "textSentTo": "Le texte est envoyé à {{service}}.",
+      "local": "Rien ne quitte cet ordinateur.",
+      "custom": "Les notes vérifiées sont envoyées à l'adresse que tu saisis."
+    },
     "getKey": "Obtenir une clé"
   },
   "home": {

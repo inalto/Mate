@@ -9,7 +9,7 @@ vi.mock("../../../ipc/ai", () => ({
   setAiKey: vi.fn(),
   clearAiKey: vi.fn(),
   testAiKey: vi.fn(),
-  listAiProviders: vi.fn(async () => [{ id: "anthropic", label: "Anthropic", group: "cloud", needsKey: true, editableBaseUrl: false, defaultBaseUrl: "", defaultModel: "claude-opus-5-5", vision: "yes", canListModels: false, keyUrl: "", cost: "Paid", privacy: "" }]),
+  listAiProviders: vi.fn(async () => [{ id: "anthropic", label: "Anthropic", group: "cloud", needsKey: true, editableBaseUrl: false, defaultBaseUrl: "", defaultModel: "claude-opus-5-5", vision: "yes", canListModels: false, keyUrl: "", cost: "paid", privacy: "sentTo" }]),
   listAiModels: vi.fn(async () => []),
 }));
 vi.mock("../../../ipc/math", () => ({ wolframStatus: vi.fn(async () => ({ configured: false, consent: false })) }));
