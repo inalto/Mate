@@ -1,0 +1,1079 @@
+{
+  "meta": {
+    "machineTranslated": true
+  },
+  "settings": {
+    "general": {
+      "language": {
+        "label": "言語",
+        "system": "システム"
+      },
+      "handedness": {
+        "label": "利き手",
+        "hint": "サイドバーとツールバーを置く側です",
+        "right": "右利き",
+        "left": "左利き"
+      },
+      "libraryView": {
+        "label": "ライブラリの表示",
+        "recent": "最近使った順",
+        "shelves": "棚別",
+        "az": "A から Z 順"
+      },
+      "sidebarLayout": {
+        "label": "サイドバーのレイアウト",
+        "split": "分割（セクションとページ）",
+        "stacked": "積み重ね"
+      },
+      "shortcutHints": {
+        "label": "ショートカットのヒント",
+        "always": "常に表示",
+        "adaptive": "覚えるまで表示",
+        "never": "表示しない"
+      },
+      "zoomIndicator": {
+        "label": "拡大率を表示",
+        "hint": "エディターに小さく拡大率を表示します"
+      },
+      "exportFormat": {
+        "label": "既定の書き出し形式",
+        "mate": "Mate アーカイブ"
+      }
+    },
+    "title": "設定",
+    "sectionsLabel": "設定のセクション",
+    "search": "設定を検索",
+    "searchResults": "検索結果",
+    "noMatches": "一致する設定はありません",
+    "nav": {
+      "groups": {
+        "general": "一般",
+        "appearance": "外観",
+        "writing": "書き込み",
+        "intelligence": "インテリジェンス",
+        "system": "システム"
+      },
+      "sections": {
+        "general": "一般",
+        "theme": "テーマ",
+        "paper": "用紙とレイアウト",
+        "pen": "ペンとスタイラス",
+        "penButtons": "ペンのボタン",
+        "gestures": "ジェスチャーとタッチ",
+        "tutor": "チューターと認識",
+        "tutorInteractions": "チューターの操作",
+        "mathEngines": "数式エンジン",
+        "shortcuts": "キーボードショートカット",
+        "trash": "ゴミ箱",
+        "backup": "バックアップ",
+        "sharing": "共有",
+        "updates": "アップデート",
+        "about": "バージョン情報"
+      }
+    },
+    "resetIncomplete": "ローカルデータを完全にリセットできませんでした。バックアップは {{path}} にあります。",
+    "theme": {
+      "label": "テーマ",
+      "light": "ライト",
+      "dark": "ダーク",
+      "sepia": "セピア",
+      "highContrast": "ハイコントラスト",
+      "invertImages": {
+        "label": "ダークモードで画像を反転",
+        "hint": "ダークテーマでは白黒の画像が反転されます"
+      }
+    },
+    "paper": {
+      "pageMode": {
+        "label": "ページモード",
+        "canvas": "無限キャンバス",
+        "page": "用紙"
+      },
+      "background": {
+        "label": "背景",
+        "blank": "白紙",
+        "ruled": "罫線",
+        "ruledNoMargin": "罫線（余白なし）",
+        "grid": "方眼",
+        "gridUniform": "均一な方眼",
+        "dotGrid": "ドット方眼"
+      },
+      "pageSize": {
+        "label": "用紙サイズ",
+        "letter": "レター",
+        "square": "正方形"
+      },
+      "orientation": {
+        "label": "向き",
+        "portrait": "縦",
+        "landscape": "横"
+      },
+      "alignText": {
+        "label": "文字を罫線に揃える",
+        "hint": "入力した文字を罫線に合わせます"
+      },
+      "snapToGrid": {
+        "label": "方眼に吸着",
+        "hint": "図形と線を方眼の背景に合わせます"
+      }
+    },
+    "pen": {
+      "penColor": "ペンの色",
+      "penWidth": "ペンの太さ",
+      "highlighterColor": "蛍光ペンの色",
+      "highlighterWidth": "蛍光ペンの太さ",
+      "stabilization": {
+        "label": "線の手ぶれ補正",
+        "hint": "震えを抑えます。値を上げるほどペン先がわずかに遅れます"
+      },
+      "nibFlatness": "万年筆のペン先の平たさ",
+      "haptics": {
+        "label": "ペンの触覚フィードバック（Windows）",
+        "hint": "対応するペンでは、書き込み中に振動し、図形が整列するときにクリック感を返します。"
+      },
+      "inkToShapeTitle": "インクを図形に変換・落書き",
+      "inkToShape": {
+        "label": "インクを図形に変換",
+        "hint": "線の終わりでペンを止めると図形に変換されます"
+      },
+      "snapOnRelease": "ペンを離したときに整列",
+      "holdTime": "保持時間",
+      "milliseconds": "{{value}} ミリ秒",
+      "scribbleToErase": {
+        "label": "落書きで消す",
+        "hint": "ペンのインクの上を素早くなぞると消えます"
+      },
+      "scribbleSensitivity": {
+        "label": "落書きの感度",
+        "less": "弱い",
+        "standard": "標準",
+        "more": "強い"
+      },
+      "textTitle": "テキストの初期設定",
+      "textColor": "文字の色",
+      "textSize": "文字サイズ",
+      "shapeTitle": "図形の初期設定",
+      "shapeType": "図形の種類",
+      "shapeStrokeColor": "図形の線の色",
+      "shapeFillColor": "図形の塗りの色",
+      "shapeWidth": "図形の線の太さ",
+      "shapeFillOpacity": "塗りの不透明度",
+      "eraserTitle": "消しゴムの初期設定",
+      "eraserType": {
+        "label": "消しゴムの種類",
+        "stroke": "線全体",
+        "partial": "部分"
+      },
+      "eraserWidth": "消しゴムの太さ",
+      "eraseShapes": "図形を消す",
+      "eraseImages": "画像を消す"
+    },
+    "penButtons": {
+      "barrel": {
+        "label": "側面のボタン",
+        "hint": "スタイラスの側面にあるボタンです"
+      },
+      "eraserEnd": {
+        "label": "消しゴム側",
+        "hint": "スタイラスの消しゴム側の端またはボタンです"
+      },
+      "eraser": "消しゴム",
+      "lasso": "投げ縄選択",
+      "none": "なし"
+    },
+    "gestures": {
+      "palmRejection": {
+        "label": "パームリジェクション",
+        "off": "オフ",
+        "standard": "標準",
+        "high": "強"
+      },
+      "drawWithFinger": {
+        "label": "指で描く",
+        "hint": "オフの場合、指は画面の移動と拡大縮小に使われ、ペンで描きます"
+      },
+      "pinchToZoom": "ピンチで拡大縮小",
+      "mouseWheel": {
+        "label": "マウスホイール",
+        "pan": "ページを移動",
+        "zoom": "拡大縮小"
+      }
+    },
+    "tutor": {
+      "providerTitle": "AI プロバイダー",
+      "checkingTitle": "チェック",
+      "enabled": {
+        "label": "チューター",
+        "hint": "手書きの数式を読み取り、間違いを指摘します。上で AI の設定が必要です。"
+      },
+      "mode": {
+        "label": "チェックするタイミング",
+        "live": "書きながら",
+        "onask": "質問したときのみ"
+      },
+      "underline": "間違いに下線を引く",
+      "tickCorrect": "正しい解答にチェックを付ける",
+      "showChecking": {
+        "label": "チェック中に表示",
+        "hint": "チェック中のインクの横に小さな回転リングを表示します"
+      },
+      "doubleTapAsk": "インクをダブルタップして質問",
+      "holdToAsk": "インクの上でペンを長押しして質問"
+    },
+    "mathEngines": {
+      "explainer": "Compute Engine はこのコンピューターで動作し、追加の準備は不要です。Wolfram|Alpha には無料の AppID が必要です（非商用利用で月 2,000 件まで）。",
+      "appid": "Wolfram|Alpha AppID",
+      "savedHidden": "保存済み（非表示）",
+      "pasteAppid": "AppID を貼り付けてください",
+      "works": "AppID は有効です。",
+      "saved": "AppID を保存しました",
+      "none": "AppID なし",
+      "consent": {
+        "label": "質問したときに入力した数式を Wolfram|Alpha に送信",
+        "hint": "この設定をオンにし、「Wolfram|Alpha に質問」を選ぶまで、何も送信されません。"
+      },
+      "getAppid": "無料の AppID を取得"
+    },
+    "trash": {
+      "keepFor": "削除した項目の保存期間",
+      "forever": "無期限",
+      "days_other": "{{count}} 日"
+    },
+    "backup": {
+      "download": {
+        "label": "バックアップをダウンロード",
+        "hint": "ノートごとに .mate ファイルを含む zip です。復元するには展開して各 .mate ファイルを読み込んでください。"
+      },
+      "saved": "バックアップを {{path}} に保存しました",
+      "reset": {
+        "label": "ローカルデータをリセット",
+        "hint": "この端末のすべてを削除し、ようこそ画面からやり直します",
+        "confirmTitle": "ローカルデータをリセットしますか？",
+        "confirm": "リセット",
+        "confirmBody": "この端末のすべてのノート、ページ、設定が削除されます。削除の前にバックアップの zip が作成されます。システムのキーチェーンに保存された API キーは残ります。"
+      }
+    },
+    "sharing": {
+      "nextcloud": {
+        "label": "Nextcloud",
+        "hint": "ノートを Nextcloud にアップロードして、相手に送るリンクを取得します。",
+        "signedIn": "{{server}} に {{user}} としてサインイン中",
+        "signOut": "サインアウト",
+        "waiting": "ブラウザーでの承認を待っています…",
+        "server": "Nextcloud サーバーのアドレス",
+        "signIn": "サインイン",
+        "expired": "サインインのリンクの有効期限が切れました。もう一度お試しください。"
+      }
+    },
+    "updates": {
+      "checkOnStartup": "起動時にアップデートを確認"
+    },
+    "about": {
+      "version": "バージョン",
+      "welcome": "ようこそ",
+      "showWelcome": "ようこそ画面をもう一度表示",
+      "unknownVersion": "不明"
+    }
+  },
+  "common": {
+    "cancel": "キャンセル",
+    "save": "保存",
+    "remove": "削除",
+    "test": "テスト",
+    "reset": "リセット",
+    "change": "変更",
+    "close": "閉じる",
+    "view": "表示",
+    "back": "戻る",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "untitled": "無題",
+    "pageName": "ページ {{n}}",
+    "sectionName": "セクション {{n}}",
+    "dismiss": "閉じる",
+    "delete": "削除",
+    "untitledBook": "無題のノート",
+    "loading": "読み込み中…",
+    "firstSection": "ノート"
+  },
+  "errors": {
+    "generic": "問題が発生しました。",
+    "clipboard": "クリップボードにコピーできませんでした",
+    "ai": {
+      "auth": "API キーが受け付けられませんでした。設定で確認してください。",
+      "rateLimited": "AI サービスが混み合っています。しばらくしてからもう一度お試しください。",
+      "network": "AI サービスに接続できませんでした（{{detail}}）。",
+      "invalidResponse": "AI サービスから読み取れない応答が返されました（{{detail}}）。",
+      "disabled": "AI によるチェックはオフです。設定でオンにしてください。",
+      "rejected": "AI サービスがこの要求を拒否しました（{{detail}}）。",
+      "billing": "AI アカウントに支払いの問題があります。プロバイダーで確認してください。",
+      "unknownModel": "選択したモデルは利用できません。設定でモデルを確認してください。",
+      "refused": "AI はこのノートのチェックを行いませんでした。",
+      "truncated": "AI の回答が途中で切れてしまいました。"
+    }
+  },
+  "update": {
+    "label": "ソフトウェアのアップデート",
+    "appVersion": "Mate {{version}}",
+    "install": "{{version}} をインストール",
+    "restart": "再起動して更新",
+    "checkingShort": "確認中...",
+    "check": "アップデートを確認",
+    "checking": "アップデートを確認しています...",
+    "upToDate": "最新の状態です。",
+    "notConfigured": "このビルドではアップデートが設定されていません。",
+    "available": "バージョン {{version}} が利用できます。",
+    "availableWithNotes": "バージョン {{version}} が利用できます。{{notes}}",
+    "downloading": "{{version}} をダウンロード中: {{progress}}",
+    "ready": "バージョン {{version}} をインストールしました。再起動して更新を完了してください。",
+    "failed": "更新できませんでした: {{message}}",
+    "savingWork": "作業内容を保存しています…",
+    "megabytes": "{{value}} MB",
+    "progress": "{{total}} 中 {{done}}",
+    "toast": "Mate {{version}} が利用できます。"
+  },
+  "shapes": {
+    "rectangle": "長方形",
+    "circle": "円",
+    "ellipse": "楕円",
+    "triangle": "三角形",
+    "line": "直線",
+    "arrow": "矢印",
+    "diamond": "ひし形",
+    "pentagon": "五角形",
+    "hexagon": "六角形",
+    "star": "星",
+    "polygon": "多角形"
+  },
+  "keys": {
+    "title": "キーボードショートカット",
+    "resetAll": "すべてリセット",
+    "pressCombo": "キーの組み合わせを押してください…",
+    "notSet": "未設定",
+    "changeAction": "{{action}} を変更",
+    "cancelAction": "{{action}} を取り消す",
+    "unbind": "割り当てを解除",
+    "unbindAction": "{{action}} の割り当てを解除",
+    "resetAction": "{{action}} をリセット",
+    "useCmd": "修飾キーには Ctrl ではなく Cmd を使います。",
+    "noMeta": "Windows キー（Meta）は使用できません。",
+    "reserved": "{{keys}} は予約されているため使用できません。別の組み合わせを押してください。",
+    "taken": "{{keys}} は「{{action}}」で既に使われています。別の組み合わせを押してください。",
+    "groups": {
+      "tools": "ツール",
+      "edit": "編集",
+      "selection": "選択",
+      "arrange": "整列",
+      "view": "表示",
+      "pages": "ページ",
+      "tabs": "タブとウィンドウ",
+      "general": "一般"
+    },
+    "actions": {
+      "pen": "ペン",
+      "highlighter": "蛍光ペン",
+      "eraser": "消しゴム",
+      "cursor": "選択（カーソル）",
+      "lasso": "投げ縄選択",
+      "shape": "図形",
+      "text": "テキスト",
+      "insertSpace": "スペースを挿入",
+      "presetSlot": "プリセット 1〜9",
+      "pan": "移動（押し続ける）",
+      "undo": "元に戻す",
+      "redo": "やり直し",
+      "copy": "コピー",
+      "cut": "切り取り",
+      "paste": "貼り付け",
+      "duplicate": "選択範囲（またはページ）を複製",
+      "delete": "削除",
+      "save": "今すぐ保存",
+      "escape": "選択を解除",
+      "selectAll": "すべて選択",
+      "deselect": "選択を解除",
+      "group": "グループ化",
+      "ungroup": "グループ解除",
+      "bringForward": "前面に移動",
+      "sendBackward": "背面に移動",
+      "bringToFront": "最前面に移動",
+      "sendToBack": "最背面に移動",
+      "zoomIn": "拡大",
+      "zoomOut": "縮小",
+      "zoomReset": "拡大率をリセット",
+      "toggleSidebar": "サイドバーの表示切り替え",
+      "prevPage": "前のページ",
+      "nextPage": "次のページ",
+      "duplicatePage": "ページを複製",
+      "renamePage": "ページの名前を変更",
+      "movePageUp": "ページを上へ移動",
+      "movePageDown": "ページを下へ移動",
+      "promotePage": "ページのレベルを上げる",
+      "demotePage": "ページのレベルを下げる",
+      "newTab": "新しいタブ",
+      "closeTab": "タブを閉じる",
+      "moveTabLeft": "タブを左へ移動",
+      "moveTabRight": "タブを右へ移動",
+      "openPageWindow": "ページを新しいウィンドウで開く",
+      "palette": "検索とアクション",
+      "shortcuts": "キーボードショートカット"
+    }
+  },
+  "palette": {
+    "label": "コマンドパレット",
+    "searchLabel": "ページ、手書き、アクションを検索",
+    "searchPlaceholder": "ページや手書きを検索するか、アクションを実行",
+    "results": "結果",
+    "working": "処理中…",
+    "similar": "類似度 {{percent}}%",
+    "noRelated": "類似するほかのページはまだありません。チューターがノートをさらに読み取ると、関連するページが表示されます。",
+    "applyTitle": "タイトルを適用",
+    "titleApplied": "タイトルを適用しました",
+    "noMatches": "一致するページや手書きはありません。",
+    "summarise": "このページを要約",
+    "suggestTitle": "タイトルを提案",
+    "related": "関連するものは？",
+    "openGraph": "グラフを開く",
+    "panel": {
+      "summary": "このページの要約",
+      "title": "提案されたタイトル",
+      "related": "関連するページ"
+    },
+    "sections": {
+      "pages": "ページ",
+      "recent": "最近のページ",
+      "quick": "クイックアクション",
+      "everything": "すべてを検索",
+      "actions": "アクション"
+    },
+    "switchTo": {
+      "pen": "ペンに切り替え",
+      "highlighter": "蛍光ペンに切り替え",
+      "eraser": "消しゴムに切り替え",
+      "cursor": "選択（カーソル）に切り替え",
+      "lasso": "投げ縄選択に切り替え",
+      "shape": "図形に切り替え",
+      "text": "テキストに切り替え",
+      "insertSpace": "スペース挿入に切り替え"
+    },
+    "insertText": "テキストボックスを挿入",
+    "insertCode": "コードブロックを挿入",
+    "insertTable": "表を挿入",
+    "insertGraph": "グラフを挿入",
+    "insertImage": "画像を挿入",
+    "newPage": "新しいページ",
+    "newSection": "新しいセクション",
+    "openSettings": "設定を開く",
+    "openLibrary": "ライブラリを開く",
+    "disabled": {
+      "editor": "先にエディターでページを開いてください",
+      "selection": "先に何かを選択してください",
+      "page": "先にページを開いてください"
+    }
+  },
+  "nav": {
+    "home": "ホーム",
+    "main": "メイン",
+    "library": "ライブラリ",
+    "graph": "グラフ",
+    "trash": "ゴミ箱",
+    "settings": "設定"
+  },
+  "about": {
+    "version": "バージョン {{version}}",
+    "tagline": "ローカル優先の手書きと数式のノートアプリです。",
+    "starPitch": "Mate がお役に立ったら、GitHub でスターを付けると、ほかの人にも見つけてもらいやすくなります。",
+    "star": "GitHub でスターを付ける",
+    "githubFailed": "GitHub を開けませんでした。",
+    "updates": "アップデート",
+    "latest": "最新バージョンを使用中です",
+    "available": "バージョン {{version}} が利用できます",
+    "updateSettings": "アップデートの設定"
+  },
+  "toolbar": {
+    "label": "エディターのツール",
+    "hintWithKeys": "{{label}}（{{keys}}）",
+    "presetRemoveHint": "{{title}} · 右クリックで削除",
+    "presetLabel": "{{ink}} {{color}}",
+    "ink": {
+      "pen": "ペン",
+      "fountainPen": "万年筆",
+      "highlighter": "蛍光ペン"
+    },
+    "addPen": "ペンを追加",
+    "eraser": "消しゴム",
+    "eraserOptions": "消しゴムのオプション",
+    "eraserType": "消しゴムの種類",
+    "eraserWhole": "線全体",
+    "eraserPartial": "部分",
+    "eraserSizePx": "消しゴムのサイズ（px）",
+    "eraserSize": "消しゴムのサイズ",
+    "shape": "図形",
+    "shapeHint": "図形: {{shape}}",
+    "shapeOptions": "図形のオプション",
+    "shapeType": "図形の種類",
+    "stroke": "線",
+    "strokeColor": "線 {{color}}",
+    "strokeWidth": "線の太さ",
+    "fill": "塗り",
+    "fillColor": "塗り {{color}}",
+    "noFill": "塗りなし",
+    "fillOpacity": "塗りの不透明度",
+    "insertSpace": "スペースを挿入",
+    "insertSpaceOptions": "スペース挿入のオプション",
+    "insertSpaceMode": "スペース挿入のモード",
+    "spaceInsert": "挿入",
+    "spaceRemove": "削除",
+    "cutImages": "画像を切り抜く",
+    "text": "テキスト",
+    "insertImage": "画像を挿入…",
+    "insertTable": "表を挿入",
+    "insertCode": "コードを挿入",
+    "insertEquation": "数式を挿入",
+    "insertGraph": "グラフを挿入",
+    "select": "選択",
+    "lasso": "投げ縄選択"
+  },
+  "topbar": {
+    "more": "その他の操作",
+    "moreUpdate": "その他の操作、アップデートあり",
+    "updateAvailable": "アップデートがあります: {{version}}",
+    "exportPage": "ページを書き出し…",
+    "importNotes": "ノートを読み込み…",
+    "pageSettings": "ページの設定",
+    "searchActions": "検索とアクション…",
+    "about": "Mate について",
+    "pageTitle": "ページのタイトル"
+  },
+  "tabs": {
+    "label": "開いているページ",
+    "close": "{{title}} を閉じる",
+    "split": "分割表示",
+    "keepLeft": "左側のみ残す",
+    "keepRight": "右側のみ残す"
+  },
+  "editor": {
+    "zoomReset": "拡大率 {{percent}}%、リセット",
+    "pageFull": "このページは一杯です（{{max}} 項目）。新しいページを作成してください。",
+    "tableLimit": "表がサイズの上限に達しました（{{max}} セル）",
+    "insertImageFailed": "その画像を挿入できませんでした。",
+    "imagesFilter": "画像"
+  },
+  "whatsNew": {
+    "title": "新機能",
+    "gotIt": "わかりました"
+  },
+  "sidebar": {
+    "label": "ノートのサイドバー",
+    "noPages": "ページはまだありません",
+    "pages": "ページ",
+    "collapse": "サイドバーを折りたたむ",
+    "newNotebook": "新しいノート",
+    "notebook": "ノート",
+    "noSections": "セクションはありません",
+    "sections": "セクション",
+    "newPageIn": "{{section}} に新しいページ",
+    "resize": "サイドバーのサイズを変更",
+    "windowFailed": "ページを新しいウィンドウで開けませんでした。",
+    "icon": "アイコン {{icon}}",
+    "noIcon": "アイコンなし",
+    "collapsePage": "折りたたむ",
+    "expandPage": "展開",
+    "menu": {
+      "rename": "名前を変更",
+      "changeIcon": "アイコンを変更",
+      "moveUp": "上へ移動",
+      "moveDown": "下へ移動",
+      "promote": "レベルを上げる",
+      "demote": "レベルを下げる",
+      "duplicate": "複製",
+      "split": "分割表示で開く",
+      "window": "新しいウィンドウで開く"
+    }
+  },
+  "library": {
+    "openBook": "{{title}} を開く",
+    "bookTitle": "ノートのタイトル",
+    "bookActions": "{{title}} の操作",
+    "changeColour": "色を変更",
+    "favourite": "お気に入りに追加",
+    "unfavourite": "お気に入りから削除",
+    "moveToShelf": "棚に移動",
+    "practice": "このノートから練習…",
+    "exportBook": "ノートを書き出し…",
+    "share": "共有…",
+    "importInto": "このノートに読み込み…",
+    "colour": "色 {{color}}",
+    "noShelf": "棚なし",
+    "shelfName": "棚の名前",
+    "unshelved": "棚なし",
+    "renameShelf": "棚の名前を変更",
+    "deleteShelf": "棚を削除",
+    "emptyShelf": "この棚にノートはありません",
+    "imported": "ノートを読み込みました: {{pages}} ページ、{{elements}} 要素。",
+    "importedSkipped": "ノートを読み込みました: {{pages}} ページ、{{elements}} 要素、{{skipped}} 件をスキップ（上限を超過）。",
+    "importFailed": "読み込みに失敗しました: {{message}}",
+    "search": "ノートを検索",
+    "importBook": "ノートを読み込み…",
+    "sort": "ノートを並べ替え",
+    "az": "A-Z",
+    "emptyHint": "最初のノートを作成して、メモ、数式、アイデアを整理しましょう",
+    "noneFound": "ノートが見つかりません",
+    "clearSearch": "検索をクリア",
+    "newShelf": "新しい棚",
+    "newShelfName": "新しい棚の名前"
+  },
+  "export": {
+    "failed": "書き出しに失敗しました: {{message}}",
+    "title": "書き出し",
+    "export": "書き出し",
+    "exporting": "書き出し中…",
+    "notInBook": "このページはノートに含まれていません",
+    "format": "形式",
+    "paper": "用紙",
+    "plain": "シンプル",
+    "transparent": "透明",
+    "scale": "倍率",
+    "times": "{{n}}×",
+    "pages": "ページ",
+    "allSheets": "すべてのシート",
+    "currentSheet": "現在のシート",
+    "searchable": "検索可能なテキスト",
+    "latexHint": ".tex ファイルを保存します。画像はプレースホルダーになります。",
+    "mateHint": "このページが属するノート全体を書き出します。",
+    "shareHint": "このノートを相手に送るには、ノートのメニューから「共有…」を使ってください。",
+    "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",
+    "boxMissing": "ボックス {{id}} は書き出し用に描画されませんでした。"
+  },
+  "selection": {
+    "label": "選択",
+    "arrange": "整列 ▸",
+    "align": "配置 ▸",
+    "alignLeft": "左揃え",
+    "alignCenter": "中央揃え",
+    "alignRight": "右揃え",
+    "alignTop": "上揃え",
+    "alignMiddle": "上下中央揃え",
+    "alignBottom": "下揃え",
+    "distributeH": "左右に等間隔に配置",
+    "distributeV": "上下に等間隔に配置",
+    "fillColour": "塗りの色",
+    "duplicate": "複製",
+    "copyLatex": "LaTeX としてコピー",
+    "graphFromEquation": "数式からグラフを作成",
+    "graph": "グラフ",
+    "widthPx": "幅（px）",
+    "width": "選択範囲の幅"
+  },
+  "preset": {
+    "edit": "プリセットを編集",
+    "hue": "色相",
+    "hex": "16 進数カラー",
+    "recent": "最近使った色",
+    "width": "太さ",
+    "moveLeft": "左へ移動",
+    "moveRight": "右へ移動"
+  },
+  "text": {
+    "bold": "太字",
+    "italic": "斜体",
+    "underline": "下線",
+    "strikethrough": "取り消し線",
+    "bulletList": "箇条書き",
+    "numberedList": "番号付きリスト",
+    "font": "フォント",
+    "fonts": {
+      "sans": "ゴシック",
+      "serif": "明朝",
+      "mono": "等幅",
+      "hand": "手書き風",
+      "script": "筆記体"
+    },
+    "smaller": "文字を小さく",
+    "size": "文字サイズ",
+    "larger": "文字を大きく",
+    "colour": "文字の色 {{color}}",
+    "alignCentre": "中央揃え",
+    "formatting": "文字の書式",
+    "box": "テキストボックス"
+  },
+  "pageSettings": {
+    "mode": "モード",
+    "paperSize": "用紙サイズ",
+    "gridUniform": "方眼（均一）",
+    "spacing": "間隔"
+  },
+  "import": {
+    "title": "ノートを読み込む",
+    "filter": "ノートファイルと Mate アーカイブ",
+    "duplicates_other": "{{count}} ページは既に読み込まれているため、再度追加されませんでした。",
+    "tablesAndShapes": "表と図形はまだ読み込めません。",
+    "kilobytes": "{{value}} KB",
+    "progress": {
+      "waiting": "待機中",
+      "reading": "ファイルを読み込み中",
+      "parsing": "ページを読み取り中",
+      "placing": "ページを配置中",
+      "placingCount": "ページを配置中（{{total}} 中 {{done}}）"
+    },
+    "fileOk": "{{source}} ファイル、{{size}}",
+    "fileRejected": "読み込めません。{{reason}}",
+    "removeFile": "{{name}} を削除",
+    "importing": "読み込み中",
+    "progressLabel": "進捗",
+    "cancelling": "キャンセル中… 現在のファイルの処理を終えています。",
+    "queued_other": "この読み込みが終わると、さらに {{count}} 件のファイルを提案します。",
+    "cancel": "読み込みをキャンセル",
+    "finished": "読み込みが完了しました",
+    "nothing": "何も読み込まれませんでした",
+    "summary": "{{pages}}、{{strokes}}、{{texts}}、{{images}}。",
+    "counts": {
+      "pages_other": "{{count}} ページ",
+      "strokes_other": "{{count}} 本の線",
+      "texts_other": "{{count}} 個のテキストボックス",
+      "images_other": "{{count}} 枚の画像"
+    },
+    "skipped": "スキップ",
+    "warnings": "警告",
+    "failedFiles": "失敗したファイル",
+    "importMore_other": "さらに {{count}} 件のファイルを読み込む…",
+    "openBook": "ノートを開く",
+    "checking": "ファイルを確認中…",
+    "noFiles": "まだファイルが選択されていません。",
+    "files": "ファイル",
+    "addFiles": "ファイルを追加…",
+    "destination": "保存先",
+    "putPagesIn": "ページの配置先",
+    "newBook": "新しいノート",
+    "bookName": "ノートの名前",
+    "existingBook": "既存のノート",
+    "book": "ノート",
+    "chooseBook": "ノートを選択",
+    "import": "読み込む"
+  },
+  "share": {
+    "title": "{{title}} を共有",
+    "folderTitle": "同期フォルダーにコピーを保存",
+    "noFolders": "このコンピューターに同期フォルダーが見つかりません。",
+    "lookingForFolders": "同期フォルダーを検索中…",
+    "chooseFolder":"別のフォルダーを選択…",
+    "savedTo": "{{path}} に保存しました",
+    "showInFolder": "フォルダーで表示",
+    "nextcloudHint": "Nextcloud から、このノートへのリンクを送信します。",
+    "setUpInSettings": "設定で構成",
+    "publicLink": "リンクを知っている人は誰でもこのノートをダウンロードできます。",
+    "expires": "リンクの有効期限",
+    "expiry": {
+      "never": "無期限",
+      "week": "7 日後",
+      "month": "30 日後"
+    },
+    "working": "処理中…",
+    "upload": "アップロードしてリンクを取得",
+    "link": "共有リンク"
+  },
+  "practice": {
+    "title": "このノートから練習",
+    "pageTitle": "練習 — {{date}}",
+    "tooMany": "練習ページには最大 {{max}} 問まで入ります。残りは除外されました。",
+    "noSection": "このノートには問題を入れるセクションがありません。",
+    "count": "問題数",
+    "types": {
+      "label": "問題の種類",
+      "multipleChoice": "多肢選択",
+      "multiSelect": "複数選択",
+      "trueFalse": "正誤問題",
+      "fillInBlank": "穴埋め",
+      "shortAnswer": "短答"
+    },
+    "extra": "ほかにありますか？（任意）",
+    "extraLabel": "追加の指示",
+    "extraPlaceholder": "例: 部分積分に重点を置く",
+    "privacy": "問題は、チューターがこのノートで読み取った内容から作成されます。テキストは AI プロバイダーに送信されます。",
+    "writing": "問題を作成しています…",
+    "generate": "生成",
+    "generating": "生成中…",
+    "ready_other": "{{count}} 問の準備ができました。",
+    "questions": "問題",
+    "add": "新しいページに追加",
+    "adding": "追加中…",
+    "pageFull": "このページは一杯です。"
+  },
+  "math": {
+    "compute": "計算",
+    "computeMenu": "計算 ▸",
+    "computing": "計算中…",
+    "resultNotAdded": "結果をこのページに追加できませんでした。",
+    "ops": {
+      "evaluate": "評価",
+      "simplify": "簡約化",
+      "expand": "展開",
+      "solve": "解く",
+      "numeric": "数値"
+    },
+    "wolfram": {
+      "ask": "Wolfram|Alpha に質問",
+      "needsAppid": "先に設定で Wolfram|Alpha の AppID を追加してください。",
+      "needsConsent": "Wolfram|Alpha はオフです。設定でオンにしてください。"
+    },
+    "errors": {
+      "unreadable": "この数式を読み取れませんでした",
+      "unreadableDetail": "この数式を読み取れませんでした: {{detail}}",
+      "oneEquation": "方程式は一度に 1 つずつ解いてください",
+      "inequality": "ここでは不等式を解けません",
+      "noUnknown": "解く対象がありません",
+      "severalUnknowns": "未知数が複数（{{unknowns}}）あり、解く対象の x がありません",
+      "unsolved": "この方程式を解けませんでした",
+      "noSolution": "解が見つかりませんでした",
+      "empty": "計算する内容がありません",
+      "engine": "数式エンジンを読み込めませんでした",
+      "failed": "計算できませんでした",
+      "engineGraph": "数式エンジンを読み込めませんでした"
+    },
+    "check": {
+      "agree": "両辺は一致しています",
+      "differ": "一致しません",
+      "differAt": "{{at}} で一致しません",
+      "holds": "{{solutions}} のとき成り立つ",
+      "never": "常に不成立",
+      "undecided":"判定できませんでした: {{reason}}",
+      "notEquation": "判定できませんでした: 方程式ではありません",
+      "reasons": {
+        "noNumeric": "両辺に数値がありません",
+        "noReal": "調べた点では両辺に実数値がありません",
+        "engine": "数式エンジンを読み込めませんでした",
+        "failed": "チェックに失敗しました"
+      }
+    },
+    "equation": "方程式"
+  },
+  "tutor": {
+    "title": "チューター",
+    "tryAgain": "再試行",
+    "hint": "ヒント",
+    "why": "理由",
+    "whyButton": "理由は？",
+    "nextStep": "次のステップ",
+    "markCorrect": "正解にする",
+    "checkLocally": "この端末でチェック",
+    "checkingLocally": "この端末でチェックしています…",
+    "saveFailed": "保存できませんでした。もう一度お試しください。",
+    "uncheckedTip": "チェックできませんでした。タップして詳細を確認",
+    "status": {
+      "checking": "このノートをチェックしています…",
+      "unchecked": "このノートはまだチェックされていません。",
+      "illegible": "このノートを読み取れませんでした。",
+      "markedCorrect": "正解としてマークしました。",
+      "correct": "正しそうです。",
+      "wrong": "ここはもう一度確認してください。",
+      "unfinished": "途中のようです。"
+    },
+    "errors": {
+      "couldNotCheck": "このノートをチェックできませんでした。",
+      "noInk": "このグループにはチェックするインクがありません。",
+      "capture": "このノートを取り込めませんでした。",
+      "busy": "チェック待ちが多すぎます。このノートは間もなくチェックされます。"
+    },
+    "ask": {
+      "button": "質問",
+      "asking": "質問中…",
+      "label": "質問",
+      "placeholder": "この行について何を知りたいですか？",
+      "tooLong": "質問は {{max}} 文字以内にしてください。",
+      "empty": "先に質問を入力してください。",
+      "failed": "回答を得られませんでした。もう一度お試しください。",
+      "checkingFirst": "先にこのノートをチェックしています…",
+      "needsCheck": "質問する前に、このノートのチェックが必要です。",
+      "answer": "回答"
+    }
+  },
+  "ai": {
+    "privacyRemote": "手書きとテキストは、上記のアドレスに送信されます。",
+    "addressInvalid": "https:// のアドレス、または http://localhost:11434 のようなローカルアドレスを使用してください。",
+    "addressMissing": "サービスのアドレスを入力してください。",
+    "typeModel": "モデル名を入力",
+    "modelMissing": "モデル名を入力してください。",
+    "visionHint": "画像を読み取れるモデルを選んでください。そうでない場合、チューターは手書きをチェックできません。",
+    "fetchModelsNote": "キーを {{provider}} に送信してモデル一覧を取得します。ほかは送信されません。",
+    "loadFailed":"AI サービスの一覧を読み込めませんでした。",
+    "noVision": "このプロバイダーは手書きを読み取れないため、チェックはオフです。質問、要約、練習問題は引き続き使えます。",
+    "noModels": "モデルが見つかりません。",
+    "foundModels_other": "{{count}} 件のモデルが見つかりました。",
+    "keySaved": "キーを保存しました",
+    "noKey": "キーなし",
+    "noKeyOptional": "キーなし（任意）",
+    "noKeyNeeded": "キーは不要",
+    "connectionWorks": "接続は正常です。",
+    "keySavedUntested": "キーを保存しました（未テスト。テストするには許可をオンにしてください）",
+    "consent": {
+      "local": "Mate が {{provider}} を使って作業内容をチェックすることを許可します。すべてこのコンピューターで処理され、インターネットには送信されません。",
+      "custom": "作業内容をチェックするため、手書きの画像とテキストを上記のアドレスのサーバーに送信します。この設定をオンにするまで、何も送信されません。",
+      "cloud": "作業内容をチェックするため、手書きの画像とテキストを {{provider}} に送信します。この設定をオンにするまで、何も送信されません。",
+      "cloudText": "質問、要約、練習のために、ノートのテキストを {{provider}} に送信します。この設定をオンにするまで、何も送信されません。"
+    },
+    "model":"モデル",
+    "fetchModels": "モデルを取得",
+    "address": "アドレス",
+    "apiKey": "API キー",
+    "apiKeyOptional": "API キー（任意）",
+    "pasteKey": "{{provider}} のキーを貼り付けてください",
+    "saveKey": "キーを保存",
+    "removeKey": "キーを削除",
+    "status": "状態",
+    "testConnection": "接続をテスト",
+    "permission": "許可",
+    "needs": {
+      "title": "Mate が AI に求める機能",
+      "feature": "機能",
+      "needs": "必要な条件",
+      "fallback": "モデルがその機能に対応していない場合",
+      "tutor": "手書きの数式のチェック（チューター）",
+      "tutorNeeds": "画像入力（「ビジョン」）と JSON の応答",
+      "tutorFallback": "チューターはオフになります。ほかの機能はすべて使えます",
+      "text": "行についての質問、要約、タイトル、練習問題",
+      "textNeeds": "テキストの入出力"
+    },
+    "groups": {
+      "cloud": "クラウドサービス",
+      "local": "このコンピューター",
+      "custom": "カスタム"
+    },
+    "vision": {
+      "yes": "手書き: 読み取り可能",
+      "dependsOnModel": "手書き: モデルによって異なる",
+      "no": "手書き: テキストのみのため、チェックはオフになります"
+    },
+    "needsLocal": "必要なもの: このコンピューターで動作するプログラム（キーは不要）",
+    "needsCustom": "必要なもの: Web アドレス（サービスが求める場合はキーも）",
+    "needsCloud": "必要なもの: サービスの API キー",
+    "cost": "料金: {{cost}}",
+    "getKey": "キーを取得"
+  },
+  "home": {
+    "firstNotebook": "マイノート",
+    "recovery": "このページを開いている間に Mate が再起動されました",
+    "notNow": "今はしない",
+    "openPage": "ページを開く",
+    "newBook": "新しいノート",
+    "importPdf": "PDF を読み込む…",
+    "noRecentPages": "編集したページがここに表示されます。",
+    "recentBooks": "最近のノート",
+    "noBooks": "ノートはまだありません",
+    "favourites": "お気に入りのページ",
+    "noFavourites": "ページをお気に入りにすると、ここにピン留めされます。"
+  },
+  "trash": {
+    "search": "ゴミ箱を検索",
+    "empty": "ゴミ箱を空にする",
+    "isEmpty": "ゴミ箱は空です",
+    "emptyHint": "削除したページ、章、ノートはここに表示され、復元できます。",
+    "deleted": "{{kind}} - {{date}} に削除",
+    "kinds": {
+      "bookshelf": "棚",
+      "unit": "単元",
+      "section": "セクション",
+      "page": "ページ"
+    },
+    "restore": "復元",
+    "deletePermanently": "完全に削除",
+    "confirmTitle": "ゴミ箱を空にしますか？",
+    "confirmBody": "ゴミ箱のすべての項目が完全に削除されます。この操作は取り消せません。"
+  },
+  "graph": {
+    "cutoff": "類似度のしきい値",
+    "empty": "まだつなげるものがありません。チューターがあなたの手書きを読み取ると、ページがここに表示され、類似するページがリンクされます。",
+    "noEdges": "これほど類似するページはありません。しきい値を下げると、より弱いリンクが表示されます。",
+    "label": "ページのグラフ: {{pages}} と {{links}}",
+    "pages_other": "{{count}} ページ",
+    "links_other": "{{count}} 件のリンク",
+    "errors": {
+      "tooExpensive": "式が複雑すぎてプロットできません",
+      "evalBlocked": "アプリのセキュリティポリシーによりプロットがブロックされました",
+      "missing": "何かが不足しています",
+      "missingClose": "閉じかっこがありません",
+      "missingOpen": "開きかっこがありません",
+      "unexpectedClose": "予期しない閉じかっこです",
+      "incompatible": "型が一致しません",
+      "unknownCommand": "不明なコマンドです",
+      "unexpectedSymbol": "予期しない記号です",
+      "notPlottable": "この式はプロットできません",
+      "implicit": "陰関数はサポートされていません",
+      "writeForm": "y = …、x = …、または r = … の形で書いてください",
+      "parametricParts": "媒介変数表示の曲線には 2 つの部分が必要です: (x(t), y(t))",
+      "parametricT": "t を使って x = …、y = … と書いてください",
+      "singleEquals": "等号は 1 つだけ使ってください",
+      "parametricForm": "媒介変数表示の曲線は (x(t), y(t)) の形で書いてください",
+      "empty": "式が空です",
+      "invalid": "無効な式です",
+      "unreadable": "この式を読み取れませんでした",
+      "unknownSymbols_other": "不明な記号: {{symbols}}"
+    },
+    "editor": {
+      "settings": "グラフの設定",
+      "colourOf": "式 {{n}} の色",
+      "expression": "式 {{n}}",
+      "hide": "式 {{n}} を非表示",
+      "show": "式 {{n}} を表示",
+      "delete": "式 {{n}} を削除",
+      "slow": "全体のプロットには時間がかかりすぎます",
+      "add": "式を追加",
+      "addShort": "+ 追加",
+      "xMin": "x 最小",
+      "xMax": "x 最大",
+      "yMin": "y 最小",
+      "yMax": "y 最大",
+      "grid": "方眼",
+      "plot": "グラフのプロット"
+    }
+  },
+  "welcome": {
+    "steps": {
+      "welcome": "ようこそ",
+      "ai": "AI の設定",
+      "playground": "プレイグラウンド"
+    },
+    "stepLabel": "ようこそ、{{total}} 中 {{step}} ステップ目",
+    "playgroundFailed": "プレイグラウンドのページを作成できませんでした。設定 > バージョン情報 から再試行できます。",
+    "saveFailed": "設定を保存できなかったため、次回このようこそ画面が再度表示される場合があります。",
+    "title": "Mate へようこそ",
+    "intro": "Mate は、手書き、描画、入力ができるノートです。作業をチェックするオプションのチューターも備えています。",
+    "local": "ノートはこの端末に保存されます。",
+    "aiTitle": "AI を設定（任意）",
+    "aiIntro": "チューターと練習問題は、ご自身の API キーを使う AI プロバイダーを利用します。後から設定で行うこともできます。",
+    "tryTitle": "試してみる",
+    "tryIntro": "いくつかのツールが入ったプレイグラウンドのページを開いて試せます。ここにある内容は大切なものではないので、自由に落書きしてください。",
+    "skip": "スキップ",
+    "skipForNow": "今はスキップ",
+    "next": "次へ",
+    "openPlayground": "プレイグラウンドを開く",
+    "playground": "プレイグラウンド",
+    "playgroundHint": "ペン（P）、蛍光ペン（H）、消しゴム（E）などを試してください… ? を押すとショートカットが表示されます。",
+    "playgroundCreateFailed": "プレイグラウンドのページを作成できませんでした。"
+  },
+  "lifecycle": {
+    "safeClose": "安全に閉じられませんでした。ノートは完全には保存されていません。Mate を開いたままにして、もう一度お試しください。",
+    "safeCloseRecovery": "安全に閉じられませんでした。ノートは完全には保存されていません。Mate を開いたままにして、もう一度お試しください。復元用ファイルを保存しました: {{path}}",
+    "closeAnyway": "そのまま閉じる",
+    "stillSaving": "Mate はまだ保存中です。少し待ってから、もう一度閉じてください。",
+    "saveFailed": "一部の線を保存できませんでした。Mate は再試行を続けます。"
+  },
+  "pdf": {
+    "tooManyPages": "この PDF は {{n}} ページあります。Mate が読み込めるのは最大 {{max}} ページです。",
+    "noPages": "この PDF にはページがありません。",
+    "imported": "読み込み済み",
+    "tooLarge": "PDF が 50 MiB を超えています。",
+    "importFailed": "この PDF を読み込めませんでした。"
+  },
+  "table": {
+    "label": "表",
+    "addRow": "行を追加",
+    "addColumn": "列を追加",
+    "deleteRow": "行を削除",
+    "deleteColumn": "列を削除",
+    "cell": "{{row}} 行目、{{column}} 列目"
+  },
+  "code": {
+    "label": "コード",
+    "language": "言語",
+    "plain": "プレーンテキスト"
+  }
+}

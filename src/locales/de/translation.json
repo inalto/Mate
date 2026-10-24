@@ -1,0 +1,1092 @@
+{
+  "meta": {
+    "machineTranslated": true
+  },
+  "settings": {
+    "general": {
+      "language": {
+        "label": "Sprache",
+        "system": "System"
+      },
+      "handedness": {
+        "label": "Händigkeit",
+        "hint": "Auf welcher Seite die Seitenleiste und die Werkzeugleisten liegen",
+        "right": "Rechtshänder",
+        "left": "Linkshänder"
+      },
+      "libraryView": {
+        "label": "Bibliotheksansicht",
+        "recent": "Zuletzt",
+        "shelves": "Regale",
+        "az": "A bis Z"
+      },
+      "sidebarLayout": {
+        "label": "Layout der Seitenleiste",
+        "split": "Geteilt (Abschnitte und Seiten)",
+        "stacked": "Gestapelt"
+      },
+      "shortcutHints": {
+        "label": "Tastenkürzel-Hinweise",
+        "always": "Immer",
+        "adaptive": "Bis du sie kennst",
+        "never": "Nie"
+      },
+      "zoomIndicator": {
+        "label": "Zoomstufe anzeigen",
+        "hint": "Ein kleiner Zoomprozentwert im Editor"
+      },
+      "exportFormat": {
+        "label": "Standard-Exportformat",
+        "mate": "Mate-Archiv"
+      }
+    },
+    "title": "Einstellungen",
+    "sectionsLabel": "Einstellungsbereiche",
+    "search": "Einstellungen durchsuchen",
+    "searchResults": "Suchergebnisse",
+    "noMatches": "Keine passenden Einstellungen",
+    "nav": {
+      "groups": {
+        "general": "Allgemein",
+        "appearance": "Darstellung",
+        "writing": "Schreiben",
+        "intelligence": "Intelligenz",
+        "system": "System"
+      },
+      "sections": {
+        "general": "Allgemein",
+        "theme": "Design",
+        "paper": "Papier und Layout",
+        "pen": "Stift und Eingabestift",
+        "penButtons": "Stifttasten",
+        "gestures": "Gesten und Touch",
+        "tutor": "Tutor und Erkennung",
+        "tutorInteractions": "Interaktionen mit dem Tutor",
+        "mathEngines": "Mathe-Engines",
+        "shortcuts": "Tastenkürzel",
+        "trash": "Papierkorb",
+        "backup": "Sicherung",
+        "sharing": "Teilen",
+        "updates": "Updates",
+        "about": "Über"
+      }
+    },
+    "resetIncomplete": "Die lokalen Daten konnten nicht vollständig zurückgesetzt werden. Deine Sicherung liegt unter {{path}}.",
+    "theme": {
+      "label": "Design",
+      "light": "Hell",
+      "dark": "Dunkel",
+      "sepia": "Sepia",
+      "highContrast": "Hoher Kontrast",
+      "invertImages": {
+        "label": "Bilder im dunklen Modus invertieren",
+        "hint": "Schwarz-weiße Bilder werden in dunklen Designs invertiert"
+      }
+    },
+    "paper": {
+      "pageMode": {
+        "label": "Seitenmodus",
+        "canvas": "Unendlich",
+        "page": "Papier"
+      },
+      "background": {
+        "label": "Hintergrund",
+        "blank": "Leer",
+        "ruled": "Liniert",
+        "ruledNoMargin": "Liniert (ohne Rand)",
+        "grid": "Kariert",
+        "gridUniform": "Gleichmäßiges Raster",
+        "dotGrid": "Punktraster"
+      },
+      "pageSize": {
+        "label": "Seitengröße",
+        "letter": "Letter",
+        "square": "Quadratisch"
+      },
+      "orientation": {
+        "label": "Ausrichtung",
+        "portrait": "Hochformat",
+        "landscape": "Querformat"
+      },
+      "alignText": {
+        "label": "Text an Linien ausrichten",
+        "hint": "Getippten Text an den Linien ausrichten"
+      },
+      "snapToGrid": {
+        "label": "Am Raster ausrichten",
+        "hint": "Formen und Striche am Rasterhintergrund ausrichten"
+      }
+    },
+    "pen": {
+      "penColor": "Stiftfarbe",
+      "penWidth": "Stiftstärke",
+      "highlighterColor": "Markiererfarbe",
+      "highlighterWidth": "Markierer-Stärke",
+      "stabilization": {
+        "label": "Strichstabilisierung",
+        "hint": "Glättet Zittern; höhere Werte lassen den Stift leicht nachziehen"
+      },
+      "nibFlatness": "Flachheit der Füllfederspitze",
+      "haptics": {
+        "label": "Stift-Haptik (Windows)",
+        "hint": "Vibration beim Schreiben und ein Klicken, wenn eine Form einrastet, bei Stiften, die das unterstützen."
+      },
+      "inkToShapeTitle": "Tinte zu Form und Gekritzel",
+      "inkToShape": {
+        "label": "Tinte zu Form",
+        "hint": "Am Ende eines Strichs den Stift ruhig halten, um ihn in eine Form zu verwandeln"
+      },
+      "snapOnRelease": "Beim Abheben des Stifts einrasten",
+      "holdTime": "Haltezeit",
+      "milliseconds": "{{value}} ms",
+      "scribbleToErase": {
+        "label": "Mit Gekritzel radieren",
+        "hint": "Schnell über die Stifttinte kritzeln, um sie zu entfernen"
+      },
+      "scribbleSensitivity": {
+        "label": "Empfindlichkeit des Gekritzels",
+        "less": "Weniger",
+        "standard": "Standard",
+        "more": "Mehr"
+      },
+      "textTitle": "Textstandards",
+      "textColor": "Textfarbe",
+      "textSize": "Textgröße",
+      "shapeTitle": "Formstandards",
+      "shapeType": "Formtyp",
+      "shapeStrokeColor": "Konturfarbe der Form",
+      "shapeFillColor": "Füllfarbe der Form",
+      "shapeWidth": "Formstärke",
+      "shapeFillOpacity": "Deckkraft der Füllung",
+      "eraserTitle": "Radierer-Standards",
+      "eraserType": {
+        "label": "Radierertyp",
+        "stroke": "Ganzer Strich",
+        "partial": "Teilweise"
+      },
+      "eraserWidth": "Radierergröße",
+      "eraseShapes": "Formen radieren",
+      "eraseImages": "Bilder radieren"
+    },
+    "penButtons": {
+      "barrel": {
+        "label": "Seitentaste",
+        "hint": "Die Taste an der Seite des Eingabestifts"
+      },
+      "eraserEnd": {
+        "label": "Radierer-Ende",
+        "hint": "Das Radierer-Ende oder die Radiertaste des Eingabestifts"
+      },
+      "eraser": "Radierer",
+      "lasso": "Lasso",
+      "none": "Nichts"
+    },
+    "gestures": {
+      "palmRejection": {
+        "label": "Handballenerkennung",
+        "off": "Aus",
+        "standard": "Standard",
+        "high": "Hoch"
+      },
+      "drawWithFinger": {
+        "label": "Mit dem Finger zeichnen",
+        "hint": "Aus: Finger verschieben und zoomen, der Stift zeichnet"
+      },
+      "pinchToZoom": "Mit Fingern zoomen",
+      "mouseWheel": {
+        "label": "Mausrad",
+        "pan": "Verschiebt die Seite",
+        "zoom": "Zoomt"
+      }
+    },
+    "tutor": {
+      "providerTitle": "KI-Anbieter",
+      "checkingTitle": "Prüfung",
+      "enabled": {
+        "label": "Tutor",
+        "hint": "Liest handschriftliche Mathematik und weist auf Fehler hin. Benötigt die oben eingerichtete KI."
+      },
+      "mode": {
+        "label": "Wann prüfen",
+        "live": "Beim Schreiben",
+        "onask": "Nur auf Nachfrage"
+      },
+      "underline": "Fehler unterstreichen",
+      "tickCorrect": "Richtige Lösungen abhaken",
+      "showChecking": {
+        "label": "Während der Prüfung anzeigen",
+        "hint": "Ein kleiner drehender Ring neben der Tinte, die geprüft wird"
+      },
+      "doubleTapAsk": "Tinte doppelt antippen, um zu fragen",
+      "holdToAsk": "Stift auf der Tinte halten, um zu fragen"
+    },
+    "mathEngines": {
+      "explainer": "Compute Engine läuft auf diesem Computer und braucht nichts weiter. Wolfram|Alpha braucht eine kostenlose AppID (2 000 Anfragen pro Monat für nicht-kommerzielle Nutzung).",
+      "appid": "Wolfram|Alpha-AppID",
+      "savedHidden": "Gespeichert (verborgen)",
+      "pasteAppid": "Füge deine AppID ein",
+      "works": "Die AppID funktioniert.",
+      "saved": "AppID gespeichert",
+      "none": "Keine AppID",
+      "consent": {
+        "label": "Eingetippte Mathematik auf Anfrage an Wolfram|Alpha senden",
+        "hint": "Nichts wird gesendet, bis du dies aktivierst und Wolfram|Alpha fragen wählst."
+      },
+      "getAppid": "Kostenlose AppID holen"
+    },
+    "trash": {
+      "keepFor": "Gelöschte Elemente behalten für",
+      "forever": "Für immer",
+      "days_one": "{{count}} Tag",
+      "days_other": "{{count}} Tage"
+    },
+    "backup": {
+      "download": {
+        "label": "Sicherung herunterladen",
+        "hint": "Eine Zip-Datei mit einer .mate-Datei pro Notizbuch. Zum Wiederherstellen entpacken und jede .mate-Datei importieren."
+      },
+      "saved": "Sicherung gespeichert unter {{path}}",
+      "reset": {
+        "label": "Lokale Daten zurücksetzen",
+        "hint": "Löscht alles auf diesem Gerät und beginnt wieder mit der Willkommensseite",
+        "confirmTitle": "Lokale Daten zurücksetzen?",
+        "confirm": "Zurücksetzen",
+        "confirmBody": "Dies löscht alle Notizbücher, Seiten und Einstellungen auf diesem Gerät. Vorher wird eine Sicherung als Zip-Datei erstellt. Im Systemschlüsselbund gespeicherte API-Schlüssel bleiben erhalten."
+      }
+    },
+    "sharing": {
+      "nextcloud": {
+        "label": "Nextcloud",
+        "hint": "Lade ein Notizbuch in deine Nextcloud hoch und erhalte einen Link zum Versenden.",
+        "signedIn": "Angemeldet als {{user}} auf {{server}}",
+        "signOut": "Abmelden",
+        "waiting": "Warte auf deine Freigabe im Browser…",
+        "server": "Adresse des Nextcloud-Servers",
+        "signIn": "Anmelden",
+        "expired": "Der Anmeldelink ist abgelaufen. Starte erneut."
+      }
+    },
+    "updates": {
+      "checkOnStartup": "Beim Start nach Updates suchen"
+    },
+    "about": {
+      "version": "Version",
+      "welcome": "Willkommen",
+      "showWelcome": "Willkommensseite erneut anzeigen",
+      "unknownVersion": "unbekannt"
+    }
+  },
+  "common": {
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "remove": "Entfernen",
+    "test": "Testen",
+    "reset": "Zurücksetzen",
+    "change": "Ändern",
+    "close": "Schließen",
+    "view": "Ansehen",
+    "back": "Zurück",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "untitled": "Ohne Titel",
+    "pageName": "Seite {{n}}",
+    "sectionName": "Abschnitt {{n}}",
+    "dismiss": "Ausblenden",
+    "delete": "Löschen",
+    "untitledBook": "Notizbuch ohne Titel",
+    "loading": "Wird geladen…",
+    "firstSection": "Notizen"
+  },
+  "errors": {
+    "generic": "Etwas ist schiefgelaufen.",
+    "clipboard": "Konnte nicht in die Zwischenablage kopiert werden",
+    "ai": {
+      "auth": "Der API-Schlüssel wurde nicht akzeptiert. Prüfe ihn in den Einstellungen.",
+      "rateLimited": "Der KI-Dienst ist gerade ausgelastet. Versuche es gleich noch einmal.",
+      "network": "Der KI-Dienst ist nicht erreichbar ({{detail}}).",
+      "invalidResponse": "Der KI-Dienst hat eine unlesbare Antwort gesendet ({{detail}}).",
+      "disabled": "Die KI-Prüfung ist aus. Schalte sie in den Einstellungen ein.",
+      "rejected": "Der KI-Dienst hat diese Anfrage abgelehnt ({{detail}}).",
+      "billing": "Das KI-Konto hat ein Abrechnungsproblem. Kläre es beim Anbieter.",
+      "unknownModel": "Das ausgewählte Modell ist nicht verfügbar. Prüfe das Modell in den Einstellungen.",
+      "refused": "Die KI hat sich geweigert, diese Notiz zu prüfen.",
+      "truncated": "Die Antwort der KI wurde abgeschnitten, bevor sie fertig war."
+    }
+  },
+  "update": {
+    "label": "Software-Update",
+    "appVersion": "Mate {{version}}",
+    "install": "{{version}} installieren",
+    "restart": "Zum Aktualisieren neu starten",
+    "checkingShort": "Prüfe...",
+    "check": "Nach Updates suchen",
+    "checking": "Suche nach Updates...",
+    "upToDate": "Du bist auf dem neuesten Stand.",
+    "notConfigured": "Für diesen Build sind keine Updates konfiguriert.",
+    "available": "Version {{version}} ist verfügbar.",
+    "availableWithNotes": "Version {{version}} ist verfügbar. {{notes}}",
+    "downloading": "{{version}} wird heruntergeladen: {{progress}}",
+    "ready": "Version {{version}} ist installiert. Starte neu, um das Update abzuschließen.",
+    "failed": "Update nicht möglich: {{message}}",
+    "savingWork": "Deine Arbeit wird gespeichert…",
+    "megabytes": "{{value}} MB",
+    "progress": "{{done}} von {{total}}",
+    "toast": "Mate {{version}} ist verfügbar."
+  },
+  "shapes": {
+    "rectangle": "Rechteck",
+    "circle": "Kreis",
+    "ellipse": "Ellipse",
+    "triangle": "Dreieck",
+    "line": "Linie",
+    "arrow": "Pfeil",
+    "diamond": "Raute",
+    "pentagon": "Fünfeck",
+    "hexagon": "Sechseck",
+    "star": "Stern",
+    "polygon": "Vieleck"
+  },
+  "keys": {
+    "title": "Tastenkürzel",
+    "resetAll": "Alle zurücksetzen",
+    "pressCombo": "Drücke eine Tastenkombination…",
+    "notSet": "Nicht belegt",
+    "changeAction": "{{action}} ändern",
+    "cancelAction": "{{action}} abbrechen",
+    "unbind": "Belegung entfernen",
+    "unbindAction": "Belegung von {{action}} entfernen",
+    "resetAction": "{{action}} zurücksetzen",
+    "useCmd": "Cmd (nicht Strg) als Modifikator verwenden.",
+    "noMeta": "Die Windows-/Meta-Taste kann nicht verwendet werden.",
+    "reserved": "{{keys}} ist reserviert und kann nicht verwendet werden. Drücke eine andere Kombination.",
+    "taken": "{{keys}} wird bereits von „{{action}}“ verwendet. Drücke eine andere Kombination.",
+    "groups": {
+      "tools": "Werkzeuge",
+      "edit": "Bearbeiten",
+      "selection": "Auswahl",
+      "arrange": "Anordnen",
+      "view": "Ansicht",
+      "pages": "Seiten",
+      "tabs": "Tabs und Fenster",
+      "general": "Allgemein"
+    },
+    "actions": {
+      "pen": "Stift",
+      "highlighter": "Markierer",
+      "eraser": "Radierer",
+      "cursor": "Auswählen (Cursor)",
+      "lasso": "Lasso",
+      "shape": "Form",
+      "text": "Text",
+      "insertSpace": "Platz einfügen",
+      "presetSlot": "Voreinstellung 1 bis 9",
+      "pan": "Verschieben (halten)",
+      "undo": "Rückgängig",
+      "redo": "Wiederholen",
+      "copy": "Kopieren",
+      "cut": "Ausschneiden",
+      "paste": "Einfügen",
+      "duplicate": "Auswahl (oder Seite) duplizieren",
+      "delete": "Löschen",
+      "save": "Jetzt speichern",
+      "escape": "Auswahl aufheben",
+      "selectAll": "Alles auswählen",
+      "deselect": "Auswahl aufheben",
+      "group": "Gruppieren",
+      "ungroup": "Gruppierung aufheben",
+      "bringForward": "Nach vorne holen",
+      "sendBackward": "Nach hinten schieben",
+      "bringToFront": "Ganz nach vorne",
+      "sendToBack": "Ganz nach hinten",
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern",
+      "zoomReset": "Zoom zurücksetzen",
+      "toggleSidebar": "Seitenleiste ein-/ausblenden",
+      "prevPage": "Vorherige Seite",
+      "nextPage": "Nächste Seite",
+      "duplicatePage": "Seite duplizieren",
+      "renamePage": "Seite umbenennen",
+      "movePageUp": "Seite nach oben",
+      "movePageDown": "Seite nach unten",
+      "promotePage": "Seite hochstufen",
+      "demotePage": "Seite herabstufen",
+      "newTab": "Neuer Tab",
+      "closeTab": "Tab schließen",
+      "moveTabLeft": "Tab nach links verschieben",
+      "moveTabRight": "Tab nach rechts verschieben",
+      "openPageWindow": "Seite in neuem Fenster öffnen",
+      "palette": "Suche und Aktionen",
+      "shortcuts": "Tastenkürzel"
+    }
+  },
+  "palette": {
+    "label": "Befehlspalette",
+    "searchLabel": "Seiten, Handschrift und Aktionen durchsuchen",
+    "searchPlaceholder": "Seiten und Handschrift durchsuchen oder eine Aktion ausführen",
+    "results": "Ergebnisse",
+    "working": "Wird bearbeitet…",
+    "similar": "{{percent}} % ähnlich",
+    "noRelated": "Noch keine andere ähnliche Seite. Verwandte Seiten erscheinen, sobald der Tutor mehr deiner Notizen gelesen hat.",
+    "applyTitle": "Titel übernehmen",
+    "titleApplied": "Titel übernommen",
+    "noMatches": "Keine Seite und keine Handschrift passt.",
+    "summarise": "Diese Seite zusammenfassen",
+    "suggestTitle": "Titel vorschlagen",
+    "related": "Was ist verwandt?",
+    "openGraph": "Graph öffnen",
+    "panel": {
+      "summary": "Zusammenfassung dieser Seite",
+      "title": "Vorgeschlagener Titel",
+      "related": "Verwandte Seiten"
+    },
+    "sections": {
+      "pages": "Seiten",
+      "recent": "Zuletzt verwendete Seiten",
+      "quick": "Schnellaktionen",
+      "everything": "Alles durchsuchen",
+      "actions": "Aktionen"
+    },
+    "switchTo": {
+      "pen": "Zu Stift wechseln",
+      "highlighter": "Zu Markierer wechseln",
+      "eraser": "Zu Radierer wechseln",
+      "cursor": "Zu Auswählen (Cursor) wechseln",
+      "lasso": "Zu Lasso wechseln",
+      "shape": "Zu Form wechseln",
+      "text": "Zu Text wechseln",
+      "insertSpace": "Zu Platz einfügen wechseln"
+    },
+    "insertText": "Textfeld einfügen",
+    "insertCode": "Codeblock einfügen",
+    "insertTable": "Tabelle einfügen",
+    "insertGraph": "Graph einfügen",
+    "insertImage": "Bild einfügen",
+    "newPage": "Neue Seite",
+    "newSection": "Neuer Abschnitt",
+    "openSettings": "Einstellungen öffnen",
+    "openLibrary": "Bibliothek öffnen",
+    "disabled": {
+      "editor": "Öffne zuerst eine Seite im Editor",
+      "selection": "Wähle zuerst etwas aus",
+      "page": "Öffne zuerst eine Seite"
+    }
+  },
+  "nav": {
+    "home": "Start",
+    "main": "Hauptbereich",
+    "library": "Bibliothek",
+    "graph": "Graph",
+    "trash": "Papierkorb",
+    "settings": "Einstellungen"
+  },
+  "about": {
+    "version": "Version {{version}}",
+    "tagline": "Handschrift- und Mathe-Notizen, die zuerst auf deinem Gerät bleiben.",
+    "starPitch": "Wenn Mate dir hilft, hilft ein Stern auf GitHub anderen, es zu finden.",
+    "star": "Auf GitHub mit Stern bewerten",
+    "githubFailed": "GitHub konnte nicht geöffnet werden.",
+    "updates": "Updates",
+    "latest": "Du hast die neueste Version",
+    "available": "Version {{version}} ist verfügbar",
+    "updateSettings": "Update-Einstellungen"
+  },
+  "toolbar": {
+    "label": "Editor-Werkzeuge",
+    "hintWithKeys": "{{label}} ({{keys}})",
+    "presetRemoveHint": "{{title}} · Rechtsklick zum Entfernen",
+    "presetLabel": "{{ink}} {{color}}",
+    "ink": {
+      "pen": "Stift",
+      "fountainPen": "Füllfederhalter",
+      "highlighter": "Markierer"
+    },
+    "addPen": "Stift hinzufügen",
+    "eraser": "Radierer",
+    "eraserOptions": "Radiereroptionen",
+    "eraserType": "Radierertyp",
+    "eraserWhole": "Ganz",
+    "eraserPartial": "Teilweise",
+    "eraserSizePx": "Radierergröße (px)",
+    "eraserSize": "Radierergröße",
+    "shape": "Form",
+    "shapeHint": "Form: {{shape}}",
+    "shapeOptions": "Formoptionen",
+    "shapeType": "Formtyp",
+    "stroke": "Kontur",
+    "strokeColor": "Kontur {{color}}",
+    "strokeWidth": "Konturstärke",
+    "fill": "Füllung",
+    "fillColor": "Füllung {{color}}",
+    "noFill": "Keine Füllung",
+    "fillOpacity": "Deckkraft der Füllung",
+    "insertSpace": "Platz einfügen",
+    "insertSpaceOptions": "Optionen für Platz einfügen",
+    "insertSpaceMode": "Modus für Platz einfügen",
+    "spaceInsert": "Einfügen",
+    "spaceRemove": "Entfernen",
+    "cutImages": "Bilder zuschneiden",
+    "text": "Text",
+    "insertImage": "Bild einfügen…",
+    "insertTable": "Tabelle einfügen",
+    "insertCode": "Code einfügen",
+    "insertEquation": "Gleichung einfügen",
+    "insertGraph": "Graph einfügen",
+    "select": "Auswählen",
+    "lasso": "Lasso"
+  },
+  "topbar": {
+    "more": "Weitere Aktionen",
+    "moreUpdate": "Weitere Aktionen, Update verfügbar",
+    "updateAvailable": "Update verfügbar: {{version}}",
+    "exportPage": "Seite exportieren…",
+    "importNotes": "Notizen importieren…",
+    "pageSettings": "Seiteneinstellungen",
+    "searchActions": "Suche und Aktionen…",
+    "about": "Über Mate",
+    "pageTitle": "Seitentitel"
+  },
+  "tabs": {
+    "label": "Geöffnete Seiten",
+    "close": "{{title}} schließen",
+    "split": "Geteilte Ansicht",
+    "keepLeft": "Nur links behalten",
+    "keepRight": "Nur rechts behalten"
+  },
+  "editor": {
+    "zoomReset": "Zoom {{percent}} %, zurücksetzen",
+    "pageFull": "Diese Seite ist voll ({{max}} Elemente). Beginne eine neue Seite.",
+    "tableLimit": "Die Tabelle hat ihre Größengrenze erreicht ({{max}} Zellen)",
+    "insertImageFailed": "Dieses Bild konnte nicht eingefügt werden.",
+    "imagesFilter": "Bilder"
+  },
+  "whatsNew": {
+    "title": "Neuigkeiten",
+    "gotIt": "Verstanden"
+  },
+  "sidebar": {
+    "label": "Notizbuch-Seitenleiste",
+    "noPages": "Noch keine Seiten",
+    "pages": "Seiten",
+    "collapse": "Seitenleiste einklappen",
+    "newNotebook": "Neues Notizbuch",
+    "notebook": "Notizbuch",
+    "noSections": "Keine Abschnitte",
+    "sections": "Abschnitte",
+    "newPageIn": "Neue Seite in {{section}}",
+    "resize": "Seitenleiste in der Größe ändern",
+    "windowFailed": "Die Seite konnte nicht in einem neuen Fenster geöffnet werden.",
+    "icon": "Symbol {{icon}}",
+    "noIcon": "Kein Symbol",
+    "collapsePage": "Einklappen",
+    "expandPage": "Ausklappen",
+    "menu": {
+      "rename": "Umbenennen",
+      "changeIcon": "Symbol ändern",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "promote": "Hochstufen",
+      "demote": "Herabstufen",
+      "duplicate": "Duplizieren",
+      "split": "In geteilter Ansicht öffnen",
+      "window": "In neuem Fenster öffnen"
+    }
+  },
+  "library": {
+    "openBook": "{{title}} öffnen",
+    "bookTitle": "Notizbuchtitel",
+    "bookActions": "Aktionen für {{title}}",
+    "changeColour": "Farbe ändern",
+    "favourite": "Als Favorit markieren",
+    "unfavourite": "Favorit entfernen",
+    "moveToShelf": "In Regal verschieben",
+    "practice": "Mit diesem Notizbuch üben…",
+    "exportBook": "Notizbuch exportieren…",
+    "share": "Teilen…",
+    "importInto": "In dieses Notizbuch importieren…",
+    "colour": "Farbe {{color}}",
+    "noShelf": "Kein Regal",
+    "shelfName": "Regalname",
+    "unshelved": "Ohne Regal",
+    "renameShelf": "Regal umbenennen",
+    "deleteShelf": "Regal löschen",
+    "emptyShelf": "Keine Notizbücher in diesem Regal",
+    "imported": "Notizbuch importiert: {{pages}} Seiten, {{elements}} Elemente.",
+    "importedSkipped": "Notizbuch importiert: {{pages}} Seiten, {{elements}} Elemente, {{skipped}} übersprungen (über den Grenzwerten).",
+    "importFailed": "Import fehlgeschlagen: {{message}}",
+    "search": "Notizbücher durchsuchen",
+    "importBook": "Notizbuch importieren…",
+    "sort": "Notizbücher sortieren",
+    "az": "A–Z",
+    "emptyHint": "Erstelle dein erstes Notizbuch, um deine Notizen, Gleichungen und Ideen zu ordnen",
+    "noneFound": "Keine Notizbücher gefunden",
+    "clearSearch": "Suche löschen",
+    "newShelf": "Neues Regal",
+    "newShelfName": "Name des neuen Regals"
+  },
+  "export": {
+    "failed": "Export fehlgeschlagen: {{message}}",
+    "title": "Exportieren",
+    "export": "Exportieren",
+    "exporting": "Wird exportiert…",
+    "notInBook": "Diese Seite gehört zu keinem Notizbuch",
+    "format": "Format",
+    "paper": "Papier",
+    "plain": "Schlicht",
+    "transparent": "Transparent",
+    "scale": "Skalierung",
+    "times": "{{n}}×",
+    "pages": "Seiten",
+    "allSheets": "Alle Blätter",
+    "currentSheet": "Aktuelles Blatt",
+    "searchable": "Durchsuchbarer Text",
+    "latexHint": "Speichert eine .tex-Datei; Bilder werden zu Platzhaltern.",
+    "mateHint": "Exportiert das gesamte Notizbuch, zu dem diese Seite gehört.",
+    "shareHint": "Um dieses Notizbuch an jemanden zu senden, nutze Teilen… im Notizbuchmenü.",
+    "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
+    "boxMissing": "Feld {{id}} wurde für den Export nicht gerendert."
+  },
+  "selection": {
+    "label": "Auswahl",
+    "arrange": "Anordnen ▸",
+    "align": "Ausrichten ▸",
+    "alignLeft": "Links ausrichten",
+    "alignCenter": "Zentrieren",
+    "alignRight": "Rechts ausrichten",
+    "alignTop": "Oben ausrichten",
+    "alignMiddle": "Mitte ausrichten",
+    "alignBottom": "Unten ausrichten",
+    "distributeH": "Horizontal verteilen",
+    "distributeV": "Vertikal verteilen",
+    "fillColour": "Füllfarbe",
+    "duplicate": "Duplizieren",
+    "copyLatex": "Als LaTeX kopieren",
+    "graphFromEquation": "Graph aus Gleichung",
+    "graph": "Graph",
+    "widthPx": "Breite (px)",
+    "width": "Breite der Auswahl"
+  },
+  "preset": {
+    "edit": "Voreinstellung bearbeiten",
+    "hue": "Farbton",
+    "hex": "Hex-Farbe",
+    "recent": "Zuletzt verwendete Farben",
+    "width": "Stärke",
+    "moveLeft": "Nach links verschieben",
+    "moveRight": "Nach rechts verschieben"
+  },
+  "text": {
+    "bold": "Fett",
+    "italic": "Kursiv",
+    "underline": "Unterstrichen",
+    "strikethrough": "Durchgestrichen",
+    "bulletList": "Aufzählungsliste",
+    "numberedList": "Nummerierte Liste",
+    "font": "Schrift",
+    "fonts": {
+      "sans": "Serifenlos",
+      "serif": "Serif",
+      "mono": "Monospace",
+      "hand": "Handschrift",
+      "script": "Schreibschrift"
+    },
+    "smaller": "Kleinerer Text",
+    "size": "Textgröße",
+    "larger": "Größerer Text",
+    "colour": "Textfarbe {{color}}",
+    "alignCentre": "Zentrieren",
+    "formatting": "Textformatierung",
+    "box": "Textfeld"
+  },
+  "pageSettings": {
+    "mode": "Modus",
+    "paperSize": "Papierformat",
+    "gridUniform": "Raster (gleichmäßig)",
+    "spacing": "Abstand"
+  },
+  "import": {
+    "title": "Notizen importieren",
+    "filter": "Notizbuchdateien und Mate-Archive",
+    "duplicates_one": "{{count}} Seite war bereits importiert und wurde deshalb nicht erneut hinzugefügt.",
+    "duplicates_other": "{{count}} Seiten waren bereits importiert und wurden deshalb nicht erneut hinzugefügt.",
+    "tablesAndShapes": "Tabellen und Formen werden noch nicht importiert.",
+    "kilobytes": "{{value}} KB",
+    "progress": {
+      "waiting": "Wartet",
+      "reading": "Datei wird gelesen",
+      "parsing": "Seiten werden gelesen",
+      "placing": "Seiten werden platziert",
+      "placingCount": "Seiten werden platziert ({{done}} von {{total}})"
+    },
+    "fileOk": "{{source}}-Datei, {{size}}",
+    "fileRejected": "Kann nicht importiert werden. {{reason}}",
+    "removeFile": "{{name}} entfernen",
+    "importing": "Wird importiert",
+    "progressLabel": "Fortschritt",
+    "cancelling": "Wird abgebrochen… die aktuelle Datei wird noch fertig verarbeitet.",
+    "queued_one": "Nach Abschluss dieses Imports wird dir noch {{count}} Datei angeboten.",
+    "queued_other": "Nach Abschluss dieses Imports werden dir noch {{count}} Dateien angeboten.",
+    "cancel": "Import abbrechen",
+    "finished": "Import abgeschlossen",
+    "nothing": "Es wurde nichts importiert",
+    "summary": "{{pages}}, {{strokes}}, {{texts}}, {{images}}.",
+    "counts": {
+      "pages_one": "{{count}} Seite",
+      "pages_other": "{{count}} Seiten",
+      "strokes_one": "{{count}} Strich",
+      "strokes_other": "{{count}} Striche",
+      "texts_one": "{{count}} Textfeld",
+      "texts_other": "{{count}} Textfelder",
+      "images_one": "{{count}} Bild",
+      "images_other": "{{count}} Bilder"
+    },
+    "skipped": "Übersprungen",
+    "warnings": "Warnungen",
+    "failedFiles": "Fehlgeschlagene Dateien",
+    "importMore_one": "{{count}} weitere Datei importieren…",
+    "importMore_other": "{{count}} weitere Dateien importieren…",
+    "openBook": "Notizbuch öffnen",
+    "checking": "Dateien werden geprüft…",
+    "noFiles": "Noch keine Dateien ausgewählt.",
+    "files": "Dateien",
+    "addFiles": "Dateien hinzufügen…",
+    "destination": "Ziel",
+    "putPagesIn": "Seiten einfügen in",
+    "newBook": "Ein neues Notizbuch",
+    "bookName": "Name des Notizbuchs",
+    "existingBook": "Ein vorhandenes Notizbuch",
+    "book": "Notizbuch",
+    "chooseBook": "Notizbuch auswählen",
+    "import": "Importieren"
+  },
+  "share": {
+    "title": "{{title}} teilen",
+    "folderTitle": "Eine Kopie in einem synchronisierten Ordner speichern",
+    "noFolders": "Auf diesem Computer wurden keine synchronisierten Ordner gefunden.",
+    "lookingForFolders": "Suche nach synchronisierten Ordnern…",
+    "chooseFolder":"Anderen Ordner wählen…",
+    "savedTo": "Gespeichert unter {{path}}",
+    "showInFolder": "Im Ordner anzeigen",
+    "nextcloudHint": "Sende einen Link zu diesem Notizbuch aus deiner Nextcloud.",
+    "setUpInSettings": "Einrichtung in den Einstellungen",
+    "publicLink": "Jeder mit dem Link kann dieses Notizbuch herunterladen.",
+    "expires": "Link läuft ab",
+    "expiry": {
+      "never": "Nie",
+      "week": "Nach 7 Tagen",
+      "month": "Nach 30 Tagen"
+    },
+    "working": "Wird bearbeitet…",
+    "upload": "Hochladen und Link erhalten",
+    "link": "Freigabelink"
+  },
+  "practice": {
+    "title": "Mit diesem Notizbuch üben",
+    "pageTitle": "Übung — {{date}}",
+    "tooMany": "Eine Übungsseite fasst bis zu {{max}} Fragen; die restlichen wurden weggelassen.",
+    "noSection": "Dieses Notizbuch hat keinen Abschnitt, in den die Fragen gehören.",
+    "count": "Anzahl der Fragen",
+    "types": {
+      "label": "Fragetypen",
+      "multipleChoice": "Multiple Choice",
+      "multiSelect": "Mehrfachauswahl",
+      "trueFalse": "Wahr / Falsch",
+      "fillInBlank": "Lückentext",
+      "shortAnswer": "Kurzantwort"
+    },
+    "extra": "Noch etwas? (optional)",
+    "extraLabel": "Zusätzliche Hinweise",
+    "extraPlaceholder": "Zum Beispiel: Schwerpunkt auf partieller Integration",
+    "privacy": "Die Fragen stammen aus dem, was der Tutor in diesem Notizbuch gelesen hat. Der Text wird an deinen KI-Anbieter gesendet.",
+    "writing": "Fragen werden geschrieben…",
+    "generate": "Erzeugen",
+    "generating": "Wird erzeugt…",
+    "ready_one": "{{count}} Frage bereit.",
+    "ready_other": "{{count}} Fragen bereit.",
+    "questions": "Fragen",
+    "add": "Auf eine neue Seite hinzufügen",
+    "adding": "Wird hinzugefügt…",
+    "pageFull": "Diese Seite ist voll."
+  },
+  "math": {
+    "compute": "Berechnen",
+    "computeMenu": "Berechnen ▸",
+    "computing": "Wird berechnet…",
+    "resultNotAdded": "Das Ergebnis konnte nicht zu dieser Seite hinzugefügt werden.",
+    "ops": {
+      "evaluate": "Auswerten",
+      "simplify": "Vereinfachen",
+      "expand": "Ausmultiplizieren",
+      "solve": "Lösen",
+      "numeric": "Numerischer Wert"
+    },
+    "wolfram": {
+      "ask": "Wolfram|Alpha fragen",
+      "needsAppid": "Füge zuerst eine Wolfram|Alpha-AppID in den Einstellungen hinzu.",
+      "needsConsent": "Wolfram|Alpha ist aus. Schalte es in den Einstellungen ein."
+    },
+    "errors": {
+      "unreadable": "Diese Mathematik konnte nicht gelesen werden",
+      "unreadableDetail": "Diese Mathematik konnte nicht gelesen werden: {{detail}}",
+      "oneEquation": "Löse jeweils eine Gleichung",
+      "inequality": "Ungleichungen können hier nicht gelöst werden",
+      "noUnknown": "Es gibt nichts zu lösen",
+      "severalUnknowns": "Mehrere Unbekannte ({{unknowns}}) und kein x zum Lösen",
+      "unsolved": "Diese Gleichung konnte nicht gelöst werden",
+      "noSolution": "Keine Lösung gefunden",
+      "empty": "Es gibt nichts zu berechnen",
+      "engine": "Die Mathe-Engine konnte nicht geladen werden",
+      "failed": "Dies konnte nicht berechnet werden",
+      "engineGraph": "Die Mathe-Engine konnte nicht geladen werden"
+    },
+    "check": {
+      "agree": "Beide Seiten stimmen überein",
+      "differ": "Sie unterscheiden sich",
+      "differAt": "Sie unterscheiden sich bei {{at}}",
+      "holds": "Wahr, wenn {{solutions}}",
+      "never": "Niemals wahr",
+      "undecided":"Keine Entscheidung möglich: {{reason}}",
+      "notEquation": "Keine Entscheidung möglich: dies ist keine Gleichung",
+      "reasons": {
+        "noNumeric": "die beiden Seiten haben keinen numerischen Wert",
+        "noReal": "die Seiten haben an den geprüften Stellen keinen reellen Wert",
+        "engine": "die Mathe-Engine konnte nicht geladen werden",
+        "failed": "die Prüfung ist fehlgeschlagen"
+      }
+    },
+    "equation": "Gleichung"
+  },
+  "tutor": {
+    "title": "Tutor",
+    "tryAgain": "Erneut versuchen",
+    "hint": "Hinweis",
+    "why": "Warum",
+    "whyButton": "Warum?",
+    "nextStep": "Nächster Schritt",
+    "markCorrect": "Als richtig markieren",
+    "checkLocally": "Lokal prüfen",
+    "checkingLocally": "Wird auf diesem Computer geprüft…",
+    "saveFailed": "Das konnte nicht gespeichert werden. Versuche es erneut.",
+    "uncheckedTip": "Prüfung nicht möglich – tippe für Details",
+    "status": {
+      "checking": "Diese Notiz wird geprüft…",
+      "unchecked": "Diese Notiz wurde noch nicht geprüft.",
+      "illegible": "Diese Notiz konnte nicht gelesen werden.",
+      "markedCorrect": "Du hast dies als richtig markiert.",
+      "correct": "Das sieht richtig aus.",
+      "wrong": "Hier sollte noch einmal genauer hingesehen werden.",
+      "unfinished": "Das sieht unvollständig aus."
+    },
+    "errors": {
+      "couldNotCheck": "Diese Notiz konnte nicht geprüft werden.",
+      "noInk": "Diese Gruppe enthält keine Tinte zum Prüfen.",
+      "capture": "Diese Notiz konnte nicht erfasst werden.",
+      "busy": "Es warten zu viele Prüfungen. Diese Notiz wird bald geprüft."
+    },
+    "ask": {
+      "button": "Fragen",
+      "asking": "Frage wird gestellt…",
+      "label": "Deine Frage",
+      "placeholder": "Was möchtest du über diese Zeile wissen?",
+      "tooLong": "Halte die Frage unter {{max}} Zeichen.",
+      "empty": "Schreibe zuerst eine Frage.",
+      "failed": "Es konnte keine Antwort abgerufen werden. Versuche es erneut.",
+      "checkingFirst": "Diese Notiz wird zuerst geprüft…",
+      "needsCheck": "Diese Notiz muss geprüft werden, bevor du dazu fragen kannst.",
+      "answer": "Antwort"
+    }
+  },
+  "ai": {
+    "privacyRemote": "Deine Handschrift und dein Text werden an die oben angegebene Adresse gesendet.",
+    "addressInvalid": "Verwende eine https://-Adresse oder eine lokale Adresse wie http://localhost:11434.",
+    "addressMissing": "Gib die Adresse des Dienstes ein.",
+    "typeModel": "Gib den Namen des Modells ein",
+    "modelMissing": "Gib einen Modellnamen ein.",
+    "visionHint": "Wähle ein Modell, das Bilder lesen kann, sonst kann der Tutor keine Handschrift prüfen.",
+    "fetchModelsNote": "Sendet deinen Schlüssel an {{provider}}, um dessen Modelle abzurufen; sonst wird nichts gesendet.",
+    "loadFailed":"Die Liste der KI-Dienste konnte nicht geladen werden.",
+    "noVision": "Dieser Anbieter kann keine Handschrift lesen, daher ist die Prüfung aus. Fragen, Zusammenfassungen und Übungen funktionieren weiterhin.",
+    "noModels": "Keine Modelle gefunden.",
+    "foundModels_one": "{{count}} Modell gefunden.",
+    "foundModels_other": "{{count}} Modelle gefunden.",
+    "keySaved": "Schlüssel gespeichert",
+    "noKey": "Kein Schlüssel",
+    "noKeyOptional": "Kein Schlüssel (optional)",
+    "noKeyNeeded": "Kein Schlüssel nötig",
+    "connectionWorks": "Die Verbindung funktioniert.",
+    "keySavedUntested": "Schlüssel gespeichert (nicht getestet – aktiviere die Berechtigung, um zu testen)",
+    "consent": {
+      "local": "Mate erlauben, {{provider}} für die Prüfung deiner Arbeit zu verwenden. Alles wird auf diesem Computer verarbeitet; nichts wird ins Internet gesendet.",
+      "custom": "Handschriftbilder und Text an den Server unter der oben angegebenen Adresse senden, um deine Arbeit zu prüfen. Nichts wird gesendet, bis du dies aktivierst.",
+      "cloud": "Handschriftbilder und Text an {{provider}} senden, um deine Arbeit zu prüfen. Nichts wird gesendet, bis du dies aktivierst.",
+      "cloudText": "Sendet den Text deiner Notizen an {{provider}} für Fragen, Zusammenfassungen und Übungen. Nichts wird gesendet, bis du dies aktivierst."
+    },
+    "model":"Modell",
+    "fetchModels": "Modelle abrufen",
+    "address": "Adresse",
+    "apiKey": "API-Schlüssel",
+    "apiKeyOptional": "API-Schlüssel (optional)",
+    "pasteKey": "Füge deinen {{provider}}-Schlüssel ein",
+    "saveKey": "Schlüssel speichern",
+    "removeKey": "Schlüssel entfernen",
+    "status": "Status",
+    "testConnection": "Verbindung testen",
+    "permission": "Berechtigung",
+    "needs": {
+      "title": "Was braucht Mate von einer KI?",
+      "feature": "Funktion",
+      "needs": "Benötigt",
+      "fallback": "Wenn das Modell es nicht kann",
+      "tutor": "Handschriftliche Mathematik prüfen (der Tutor)",
+      "tutorNeeds": "Bildeingabe („Vision“) und eine JSON-Antwort",
+      "tutorFallback": "Der Tutor ist aus; alles andere funktioniert",
+      "text": "Nachfragen zu einer Zeile, Zusammenfassungen, Titel, Übungsfragen",
+      "textNeeds": "Text als Eingabe und Ausgabe"
+    },
+    "groups": {
+      "cloud": "Cloud-Dienste",
+      "local": "Auf diesem Computer",
+      "custom": "Benutzerdefiniert"
+    },
+    "vision": {
+      "yes": "Handschrift: kann sie lesen",
+      "dependsOnModel": "Handschrift: hängt vom Modell ab",
+      "no": "Handschrift: nur Text, daher ist die Prüfung aus"
+    },
+    "needsLocal": "Benötigt: das Programm auf diesem Computer, ohne Schlüssel",
+    "needsCustom": "Benötigt: eine Web-Adresse und, falls der Dienst es verlangt, einen Schlüssel",
+    "needsCloud": "Benötigt: einen API-Schlüssel des Dienstes",
+    "cost": "Kosten: {{cost}}",
+    "getKey": "Schlüssel holen"
+  },
+  "home": {
+    "firstNotebook": "Mein Notizbuch",
+    "recovery": "Mate wurde neu gestartet, während diese Seite geöffnet war",
+    "notNow": "Nicht jetzt",
+    "openPage": "Seite öffnen",
+    "newBook": "Neues Notizbuch",
+    "importPdf": "PDF importieren…",
+    "noRecentPages": "Seiten, die du bearbeitest, erscheinen hier.",
+    "recentBooks": "Zuletzt verwendete Notizbücher",
+    "noBooks": "Noch keine Notizbücher",
+    "favourites": "Favorisierte Seiten",
+    "noFavourites": "Markiere eine Seite als Favorit, um sie hier anzuheften."
+  },
+  "trash": {
+    "search": "Papierkorb durchsuchen",
+    "empty": "Papierkorb leeren",
+    "isEmpty": "Der Papierkorb ist leer",
+    "emptyHint": "Gelöschte Seiten, Kapitel und Notizbücher erscheinen hier zur Wiederherstellung.",
+    "deleted": "{{kind}} – gelöscht am {{date}}",
+    "kinds": {
+      "bookshelf": "Regal",
+      "unit": "Einheit",
+      "section": "Abschnitt",
+      "page": "Seite"
+    },
+    "restore": "Wiederherstellen",
+    "deletePermanently": "Endgültig löschen",
+    "confirmTitle": "Papierkorb leeren?",
+    "confirmBody": "Dadurch werden alle Elemente im Papierkorb endgültig gelöscht. Diese Aktion kann nicht rückgängig gemacht werden."
+  },
+  "graph": {
+    "cutoff": "Ähnlichkeitsgrenze",
+    "empty": "Noch nichts zu verbinden. Seiten erscheinen hier, sobald der Tutor deine Handschrift gelesen hat, und ähnliche Seiten werden verknüpft.",
+    "noEdges": "Keine Seiten sind so ähnlich. Senke die Ähnlichkeitsgrenze, um schwächere Verbindungen zu sehen.",
+    "label": "Seitengraph: {{pages}} und {{links}}",
+    "pages_one": "{{count}} Seite",
+    "pages_other": "{{count}} Seiten",
+    "links_one": "{{count}} Verbindung",
+    "links_other": "{{count}} Verbindungen",
+    "errors": {
+      "tooExpensive": "Ausdruck zu aufwendig zum Zeichnen",
+      "evalBlocked": "Das Zeichnen ist durch die Sicherheitsrichtlinie der App blockiert",
+      "missing": "Etwas fehlt",
+      "missingClose": "Schließende Klammer fehlt",
+      "missingOpen": "Öffnende Klammer fehlt",
+      "unexpectedClose": "Unerwartete schließende Klammer",
+      "incompatible": "Inkompatible Typen",
+      "unknownCommand": "Unbekannter Befehl",
+      "unexpectedSymbol": "Unerwartetes Symbol",
+      "notPlottable": "Dieser Ausdruck kann nicht gezeichnet werden",
+      "implicit": "Implizite Gleichungen werden nicht unterstützt",
+      "writeForm": "Schreibe y = …, x = … oder r = …",
+      "parametricParts": "Eine Parameterkurve braucht zwei Teile: (x(t), y(t))",
+      "parametricT": "Schreibe x = …, y = … in Abhängigkeit von t",
+      "singleEquals": "Verwende ein einzelnes Gleichheitszeichen",
+      "parametricForm": "Schreibe eine Parameterkurve als (x(t), y(t))",
+      "empty": "Leerer Ausdruck",
+      "invalid": "Ungültiger Ausdruck",
+      "unreadable": "Dieser Ausdruck konnte nicht gelesen werden",
+      "unknownSymbols_one": "Unbekanntes Symbol: {{symbols}}",
+      "unknownSymbols_other": "Unbekannte Symbole: {{symbols}}"
+    },
+    "editor": {
+      "settings": "Graph-Einstellungen",
+      "colourOf": "Farbe von Ausdruck {{n}}",
+      "expression": "Ausdruck {{n}}",
+      "hide": "Ausdruck {{n}} ausblenden",
+      "show": "Ausdruck {{n}} einblenden",
+      "delete": "Ausdruck {{n}} löschen",
+      "slow": "Zu langsam für eine vollständige Darstellung",
+      "add": "Ausdruck hinzufügen",
+      "addShort": "+ Hinzufügen",
+      "xMin": "x min",
+      "xMax": "x max",
+      "yMin": "y min",
+      "yMax": "y max",
+      "grid": "Raster",
+      "plot": "Graph-Darstellung"
+    }
+  },
+  "welcome": {
+    "steps": {
+      "welcome": "Willkommen",
+      "ai": "KI-Einrichtung",
+      "playground": "Spielwiese"
+    },
+    "stepLabel": "Willkommen, Schritt {{step}} von {{total}}",
+    "playgroundFailed": "Die Seite Spielwiese konnte nicht erstellt werden. Du kannst es unter Einstellungen > Über erneut versuchen.",
+    "saveFailed": "Deine Einstellungen konnten nicht gespeichert werden, daher wird die Willkommensseite beim nächsten Mal vielleicht wieder angezeigt.",
+    "title": "Willkommen bei Mate",
+    "intro": "Mate ist ein Notizbuch zum Schreiben, Zeichnen und Tippen mit einem optionalen Tutor, der deine Arbeit prüft.",
+    "local": "Deine Notizen bleiben auf diesem Gerät.",
+    "aiTitle": "KI einrichten (optional)",
+    "aiIntro": "Der Tutor und die Übungsfragen nutzen einen KI-Anbieter mit deinem eigenen API-Schlüssel. Du kannst dies später in den Einstellungen tun.",
+    "tryTitle": "Probier es aus",
+    "tryIntro": "Öffne eine Spielwiesen-Seite mit ein paar Werkzeugen zum Ausprobieren. Hier ist nichts wichtig, also kritzle frei drauflos.",
+    "skip": "Überspringen",
+    "skipForNow": "Vorerst überspringen",
+    "next": "Weiter",
+    "openPlayground": "Spielwiese öffnen",
+    "playground": "Spielwiese",
+    "playgroundHint": "Probiere den Stift (P), den Markierer (H), den Radierer (E)… Drücke ? für Tastenkürzel.",
+    "playgroundCreateFailed": "Die Seite Spielwiese konnte nicht erstellt werden."
+  },
+  "lifecycle": {
+    "safeClose": "Konnte nicht sicher geschlossen werden – deine Notizen sind nicht vollständig gespeichert. Lass Mate geöffnet und versuche es erneut.",
+    "safeCloseRecovery": "Konnte nicht sicher geschlossen werden – deine Notizen sind nicht vollständig gespeichert. Lass Mate geöffnet und versuche es erneut. Eine Wiederherstellungsdatei wurde gespeichert: {{path}}",
+    "closeAnyway": "Trotzdem schließen",
+    "stillSaving": "Mate speichert noch – versuche es in einem Moment erneut.",
+    "saveFailed": "Einige Striche konnten nicht gespeichert werden – Mate versucht es weiter."
+  },
+  "pdf": {
+    "tooManyPages": "Diese PDF hat {{n}} Seiten; Mate importiert bis zu {{max}}.",
+    "noPages": "Diese PDF hat keine Seiten.",
+    "imported": "Importiert",
+    "tooLarge": "Die PDF ist größer als 50 MiB.",
+    "importFailed": "Die PDF konnte nicht importiert werden."
+  },
+  "table": {
+    "label": "Tabelle",
+    "addRow": "Zeile hinzufügen",
+    "addColumn": "Spalte hinzufügen",
+    "deleteRow": "Zeile löschen",
+    "deleteColumn": "Spalte löschen",
+    "cell": "Zeile {{row}}, Spalte {{column}}"
+  },
+  "code": {
+    "label": "Code",
+    "language": "Sprache",
+    "plain": "Reiner Text"
+  }
+}
