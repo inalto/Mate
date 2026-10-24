@@ -1,8 +1,19 @@
+import { useTranslation } from "react-i18next";
+import { LANGUAGE_NAMES } from "../../../i18n/language";
 import { SelectRow, SettingsSection, ToggleRow } from "../rows";
 
 export default function GeneralSection() {
+  const { t } = useTranslation();
   return (
     <SettingsSection id="general" title="General">
+      <SelectRow
+        k="language"
+        label={t("settings.general.language.label")}
+        options={[
+          { value: "system", label: t("settings.general.language.system") },
+          ...LANGUAGE_NAMES.map((l) => ({ value: l.code, label: l.label })),
+        ]}
+      />
       <SelectRow
         k="handedness"
         label="Handedness"

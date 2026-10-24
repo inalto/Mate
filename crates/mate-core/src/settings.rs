@@ -127,6 +127,8 @@ pub struct Settings {
     pub ai_base_url: String,
     /// Wolfram|Alpha may be asked (the typed maths is sent to it). Off until the user turns it on.
     pub wolfram_consent: bool,
+    /// Interface language: `"system"` (follow the OS) or a supported code (`"en"`, `"it"`, …).
+    pub language: String,
     pub trash_retention_days: u32,
     pub default_export_format: String,
     // Mate additions
@@ -207,6 +209,7 @@ impl Default for Settings {
             ai_model: String::new(),
             ai_base_url: String::new(),
             wolfram_consent: false,
+            language: s("system"),
             trash_retention_days: 30,
             default_export_format: s("pdf"),
             recent_colors: Vec::new(),

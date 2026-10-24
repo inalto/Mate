@@ -356,6 +356,8 @@ export interface Settings {
   aiBaseUrl: string;
   /** Wolfram|Alpha may be sent typed maths when the user asks. */
   wolframConsent: boolean;
+  /** Interface language: "system" (follow the OS) or a supported code ("en", "it", …). */
+  language: string;
   trashRetentionDays: number;
   defaultExportFormat: string;
   recentColors: string[];

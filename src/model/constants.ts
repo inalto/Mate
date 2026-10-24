@@ -82,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   aiModel: "",
   aiBaseUrl: "",
   wolframConsent: false,
+  language: "system",
   trashRetentionDays: 30,
   defaultExportFormat: "pdf",
   recentColors: [],

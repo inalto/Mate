@@ -1,0 +1,10 @@
+{
+  "settings": {
+    "general": {
+      "language": {
+        "label": "Language",
+        "system": "System"
+      }
+    }
+  }
+}

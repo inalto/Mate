@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { DEFAULT_SETTINGS } from "../model/constants";
 import type { Settings } from "../model/types";
 import { getSettings, onSettingsChanged, patchSettings } from "../ipc/settings";
+import { syncLanguageSetting } from "../i18n/language";
 
 interface SettingsState {
   settings: Settings;
@@ -19,8 +20,10 @@ interface SettingsState {
 /** Trailing quiet period before settings are written (a slider drag is one write). */
 export const SETTINGS_WRITE_DEBOUNCE_MS = 300;
 
+/** Applies the settings that act on the whole document: theme and interface language. */
 const applyTheme = (s: Settings) => {
   document.documentElement.dataset.theme = s.theme;
+  syncLanguageSetting(s.language ?? "system");
 };
 
 interface Waiter {
