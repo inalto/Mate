@@ -3,6 +3,7 @@ import { NAV_GROUPS } from "./nav";
 import { collectEntries, jumpToRow, searchEntries, type SearchEntry } from "./search";
 import AboutSection from "./sections/AboutSection";
 import BackupSection from "./sections/BackupSection";
+import SharingSection from "./sections/SharingSection";
 import GeneralSection from "./sections/GeneralSection";
 import GesturesSection from "./sections/GesturesSection";
 import KeyboardShortcutsSection from "./sections/KeyboardShortcutsSection";
@@ -155,6 +156,7 @@ export default function Settings() {
           <KeyboardShortcutsSection />
           <TrashSection />
           <BackupSection />
+          <SharingSection />
           <UpdatesSection />
           <AboutSection />
         </div>

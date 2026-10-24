@@ -1540,3 +1540,25 @@ button.card:hover {
   padding-inline: 0;
   color: var(--color-primary);
 }
+
+/* Share dialog */
+.share-dialog {
+  width: min(520px, 92vw);
+}
+
+.share-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.share-folders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.share-dialog .field .input {
+  flex: 1;
+  min-width: 0;
+}

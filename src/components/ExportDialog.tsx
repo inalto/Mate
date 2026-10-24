@@ -91,6 +91,7 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
         )}
         {format === "latex" && <p className="field-hint">Saves a .tex file; pictures become image placeholders.</p>}
         {format === "mate" && <p className="field-hint">Exports the whole book this page belongs to.</p>}
+        {format === "mate" && <p className="field-hint">To send this book to someone, use Share… from the book menu.</p>}
         {error && <p role="alert" className="form-error">Export failed: {error}</p>}
         <div className="dialog-actions">
           <button type="button" className="btn" onClick={onClose} disabled={busy}>Cancel</button>

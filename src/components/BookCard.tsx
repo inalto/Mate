@@ -7,6 +7,7 @@ import type { Unit } from "../model/types";
 import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import PracticeDialog from "./PracticeDialog";
+import ShareDialog from "./ShareDialog";
 import { useDismiss } from "./useDismiss";
 
 export const COVER_PALETTE = [
@@ -37,6 +38,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
   const [menu, setMenu] = useState<MenuMode>("closed");
   const [renaming, setRenaming] = useState(false);
   const [practising, setPractising] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [draft, setDraft] = useState(unit.title);
 
   // The cover shows the thumbnail of the book's first page that has one.
@@ -133,6 +135,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
               <button role="menuitem" onClick={() => setMenu("shelf")}>Move to shelf</button>
               <button role="menuitem" onClick={act(async () => setPractising(true))}>Practice from this book…</button>
               <button role="menuitem" onClick={act(exportBook)}>Export book…</button>
+              <button role="menuitem" onClick={act(async () => setSharing(true))}>Share…</button>
               <button role="menuitem" onClick={act(() => useImportStore.getState().openDialog({ unitId: unit.id }))}>Import into this book…</button>
               <button role="menuitem" onClick={act(() => trash("unit", unit.id))}>Delete</button>
             </>
@@ -164,6 +167,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
         </div>
       )}
       {practising && <PracticeDialog unit={unit} onClose={() => setPractising(false)} />}
+      {sharing && <ShareDialog unit={unit} onClose={() => setSharing(false)} />}
     </div>
   );
 }

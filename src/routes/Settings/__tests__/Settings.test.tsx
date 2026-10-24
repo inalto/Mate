@@ -4,15 +4,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../../model/constants";
 
 vi.mock("../../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
-vi.mock("../../../ipc/ai", () => ({
+  listAiProviders: vi.fn(async () => []),
   getAiStatus: vi.fn(async () => ({ configured: false, provider: "anthropic", model: "claude-opus-5-5", consent: false })),
   setAiKey: vi.fn(),
   clearAiKey: vi.fn(),
   testAiKey: vi.fn(),
+  listAiProviders: vi.fn(async () => [{ id: "anthropic", label: "Anthropic", group: "cloud", needsKey: true, editableBaseUrl: false, defaultBaseUrl: "", defaultModel: "claude-opus-5-5", vision: "yes", canListModels: false, keyUrl: "", cost: "Paid", privacy: "" }]),
+  listAiModels: vi.fn(async () => []),
 }));
 vi.mock("../../../ipc/backup", () => ({
   exportBackup: vi.fn(async () => "C:/tmp/mate-backup-2026-10-23.zip"),
   resetLocalData: vi.fn(async () => {}),
+}));
+vi.mock("../../../ipc/share", () => ({
+  nextcloudStatus: vi.fn(async () => ({ signedIn: false, server: "", user: "" })),
+  nextcloudLoginStart: vi.fn(),
+  nextcloudLoginPoll: vi.fn(),
+  nextcloudLogout: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "9.9.9") }));
 
@@ -145,7 +153,7 @@ describe("Settings rows", () => {
   it("shows_the_ai_settings_off_by_default", async () => {
     vi.useRealTimers();
     renderPane();
-    expect((screen.getByLabelText(/Nothing is sent until you turn this on/) as HTMLInputElement).checked).toBe(false);
+    expect(((await screen.findByLabelText(/Nothing is sent until you turn this on/)) as HTMLInputElement).checked).toBe(false);
     expect(await screen.findByText("No key")).toBeTruthy();
   });
 });
@@ -245,6 +253,7 @@ describe("navigation and landmarks", () => {
       "Keyboard shortcuts",
       "Trash",
       "Backup",
+      "Sharing",
       "Updates",
       "About",
     ]) {

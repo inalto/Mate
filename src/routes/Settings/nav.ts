@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "shortcuts", title: "Keyboard shortcuts" },
       { id: "trash", title: "Trash" },
       { id: "backup", title: "Backup" },
+      { id: "sharing", title: "Sharing" },
       { id: "updates", title: "Updates" },
       { id: "about", title: "About" },
     ],
