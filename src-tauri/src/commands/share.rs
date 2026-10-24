@@ -6,12 +6,15 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
+use std::time::Instant;
 
 use mate_core::ai::keystore::KeyStore;
 use mate_core::archive::export_unit;
 use mate_core::share::folders::{OsEnv, SyncFolder, detect};
-use mate_core::share::nextcloud::{Credentials, LoginFlow, NextcloudClient};
-use mate_core::share::{safe_file_name, unique_archive_path};
+use mate_core::share::nextcloud::{
+    Credentials, LOGIN_EXPIRED, LOGIN_TIMEOUT, LoginFlow, NextcloudClient, PollError,
+};
+use mate_core::share::{remote_file_name, safe_file_name, unique_archive_path};
 use mate_core::storage::Storage;
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -26,10 +29,83 @@ pub const NEXTCLOUD_ACCOUNT: &str = "nextcloud";
 /// Longest link expiry accepted, in days.
 pub const MAX_EXPIRE_DAYS: u32 = 3650;
 
+/// Network failures in a row a sign-in poll reports as "still waiting" before giving up.
+pub const MAX_POLL_FAILURES: u32 = 5;
+
 /// The Nextcloud sign-in in progress (its poll token stays here, in Rust).
 #[derive(Default)]
 pub struct ShareState {
-    login: Mutex<Option<LoginFlow>>,
+    login: Mutex<Option<PendingLogin>>,
+}
+
+/// A started sign-in: the flow, when it started and the network failures in a row since.
+#[derive(Debug, Clone)]
+pub struct PendingLogin {
+    flow: LoginFlow,
+    started: Instant,
+    failures: u32,
+}
+
+impl PendingLogin {
+    pub fn new(flow: LoginFlow, started: Instant) -> PendingLogin {
+        PendingLogin {
+            flow,
+            started,
+            failures: 0,
+        }
+    }
+}
+
+/// The flow to poll at `now`; a sign-in older than [`LOGIN_TIMEOUT`] is forgotten and reported
+/// as expired.
+pub fn pending_flow(slot: &mut Option<PendingLogin>, now: Instant) -> Result<LoginFlow, String> {
+    let pending = slot
+        .as_ref()
+        .ok_or_else(|| "Start signing in first.".to_string())?;
+    if now.saturating_duration_since(pending.started) >= LOGIN_TIMEOUT {
+        *slot = None;
+        return Err(LOGIN_EXPIRED.into());
+    }
+    Ok(pending.flow.clone())
+}
+
+/// What one poll means for the UI: `Ok(None)` keeps waiting. A network failure keeps waiting
+/// up to [`MAX_POLL_FAILURES`] times in a row before it is reported; other errors are reported
+/// at once.
+pub fn apply_poll(
+    slot: &mut Option<PendingLogin>,
+    result: Result<Option<Credentials>, PollError>,
+) -> Result<Option<Credentials>, String> {
+    match result {
+        Ok(done) => {
+            if let Some(p) = slot.as_mut() {
+                p.failures = 0;
+            }
+            Ok(done)
+        }
+        Err(PollError::Network(message)) => {
+            let Some(p) = slot.as_mut() else {
+                return Err(message);
+            };
+            p.failures += 1;
+            if p.failures > MAX_POLL_FAILURES {
+                Err(message)
+            } else {
+                Ok(None)
+            }
+        }
+        Err(PollError::Failed(message)) => Err(message),
+    }
+}
+
+/// Today's date on this computer (`now_local`), or in UTC when the local offset is unknown.
+pub fn local_today(now_local: Option<time::OffsetDateTime>, now_utc: time::OffsetDateTime) -> time::Date {
+    now_local.unwrap_or(now_utc).date()
+}
+
+/// The name a book is uploaded to Nextcloud under (unique per book).
+pub fn nextcloud_file_name(title: &str, unit_id: &str) -> String {
+    remote_file_name(title, unit_id)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -200,7 +276,7 @@ pub async fn nextcloud_login_start(
     app.opener()
         .open_url(flow.login_url.clone(), None::<&str>)
         .map_err(|_| "Could not open the browser.".to_string())?;
-    *share.login.lock().map_err(|e| e.to_string())? = Some(flow);
+    *share.login.lock().map_err(|e| e.to_string())? = Some(PendingLogin::new(flow, Instant::now()));
     Ok(())
 }
 
@@ -210,16 +286,18 @@ pub async fn nextcloud_login_poll(
     state: State<'_, AppState>,
     share: State<'_, ShareState>,
 ) -> Result<LoginPoll, String> {
-    let flow = share
-        .login
-        .lock()
-        .map_err(|e| e.to_string())?
-        .clone()
-        .ok_or_else(|| "Start signing in first.".to_string())?;
-    let creds =
-        tauri::async_runtime::spawn_blocking(move || NextcloudClient::new()?.login_poll(&flow))
-            .await
-            .map_err(blocking_err)??;
+    let flow = pending_flow(
+        &mut *share.login.lock().map_err(|e| e.to_string())?,
+        Instant::now(),
+    )?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        NextcloudClient::new()
+            .map_err(PollError::Failed)?
+            .login_poll(&flow)
+    })
+    .await
+    .map_err(blocking_err)?;
+    let creds = apply_poll(&mut *share.login.lock().map_err(|e| e.to_string())?, result)?;
     let Some(creds) = creds else {
         return Ok(LoginPoll { done: false });
     };
@@ -247,7 +325,8 @@ pub async fn nextcloud_logout(
     state.keys.delete(NEXTCLOUD_ACCOUNT)
 }
 
-/// Uploads the book to `/Mate/` on Nextcloud and returns a read-only public link to it.
+/// Uploads the book to `/Mate/<title>-<id>.mate` on Nextcloud and returns a read-only public link
+/// to it, with the uploaded path. The expiry counts days from today's local date.
 #[tauri::command]
 pub async fn nextcloud_share(
     app: AppHandle,
@@ -258,10 +337,14 @@ pub async fn nextcloud_share(
         let state: State<'_, AppState> = tauri::Manager::state(&app);
         let creds = saved_credentials(state.keys.as_ref())
             .ok_or_else(|| "Sign in to Nextcloud in Settings first.".to_string())?;
-        let expire = expiry_date(expire_days, time::OffsetDateTime::now_utc().date())?;
+        let today = local_today(
+            time::OffsetDateTime::now_local().ok(),
+            time::OffsetDateTime::now_utc(),
+        );
+        let expire = expiry_date(expire_days, today)?;
         let (title, bytes) = export_book(&state.storage, &state.data_dir.join("assets"), &unit_id)?;
         let client = NextcloudClient::new()?;
-        let path = client.upload(&creds, &format!("{}.mate", safe_file_name(&title)), bytes)?;
+        let path = client.upload(&creds, &nextcloud_file_name(&title, &unit_id), bytes)?;
         let url = client.create_public_link(&creds, &path, expire)?;
         Ok(ShareLink { url, path })
     })
@@ -273,6 +356,7 @@ pub async fn nextcloud_share(
 mod tests {
     use super::*;
     use mate_core::ai::keystore::MemoryStore;
+    use std::time::Duration;
 
     fn temp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("mate-share-{name}-{}", std::process::id()));
@@ -374,6 +458,69 @@ mod tests {
         );
         assert!(expiry_date(Some(0), today).is_err());
         assert!(expiry_date(Some(MAX_EXPIRE_DAYS + 1), today).is_err());
+    }
+
+    #[test]
+    fn today_is_the_local_date_with_a_utc_fallback() {
+        use time::macros::datetime;
+        let utc = datetime!(2026-10-24 23:30 UTC);
+        // Already the 25th in Rome.
+        let rome = utc.to_offset(time::macros::offset!(+2));
+        assert_eq!(local_today(Some(rome), utc), time::macros::date!(2026 - 10 - 25));
+        // Still the 24th in New York, an hour before the UTC midnight.
+        let ny = datetime!(2026-10-25 00:30 UTC).to_offset(time::macros::offset!(-4));
+        assert_eq!(local_today(Some(ny), utc), time::macros::date!(2026 - 10 - 24));
+        assert_eq!(local_today(None, utc), time::macros::date!(2026 - 10 - 24));
+    }
+
+    #[test]
+    fn uploads_get_a_per_book_name() {
+        assert_eq!(nextcloud_file_name("Maths", "0123456789ab"), "Maths-01234567.mate");
+    }
+
+    fn flow() -> LoginFlow {
+        LoginFlow { login_url: "https://x/login".into(), poll_endpoint: "https://x/poll".into(), token: "t".into() }
+    }
+
+    fn creds() -> Credentials {
+        Credentials { server: "https://x".into(), user: "ann".into(), app_password: "pw".into() }
+    }
+
+    #[test]
+    fn a_sign_in_expires_after_twenty_minutes() {
+        let start = Instant::now();
+        let mut slot = None;
+        assert_eq!(pending_flow(&mut slot, start).unwrap_err(), "Start signing in first.");
+        slot = Some(PendingLogin::new(flow(), start));
+        assert_eq!(pending_flow(&mut slot, start + Duration::from_secs(19 * 60)).unwrap(), flow());
+        assert_eq!(
+            pending_flow(&mut slot, start + Duration::from_secs(20 * 60)).unwrap_err(),
+            "The sign-in link has expired. Start again."
+        );
+        assert!(slot.is_none(), "an expired sign-in is forgotten");
+    }
+
+    #[test]
+    fn network_errors_while_polling_are_retried_five_times() {
+        let mut slot = Some(PendingLogin::new(flow(), Instant::now()));
+        let net = || Err(PollError::Network("Could not reach the Nextcloud server.".into()));
+        for _ in 0..5 {
+            assert_eq!(apply_poll(&mut slot, net()), Ok(None));
+        }
+        assert_eq!(apply_poll(&mut slot, net()).unwrap_err(), "Could not reach the Nextcloud server.");
+        // A good answer resets the count.
+        let mut slot = Some(PendingLogin::new(flow(), Instant::now()));
+        for _ in 0..4 {
+            apply_poll(&mut slot, net()).unwrap();
+        }
+        assert_eq!(apply_poll(&mut slot, Ok(None)), Ok(None));
+        for _ in 0..5 {
+            assert_eq!(apply_poll(&mut slot, net()), Ok(None));
+        }
+        // Other errors are reported at once.
+        let mut slot = Some(PendingLogin::new(flow(), Instant::now()));
+        assert_eq!(apply_poll(&mut slot, Err(PollError::Failed("bad".into()))).unwrap_err(), "bad");
+        assert_eq!(apply_poll(&mut slot, Ok(Some(creds()))), Ok(Some(creds())));
     }
 
     #[test]

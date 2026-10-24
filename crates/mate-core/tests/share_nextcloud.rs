@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use base64::Engine;
-use mate_core::share::nextcloud::{Credentials, LoginFlow, NextcloudClient, normalize_server};
+use mate_core::share::nextcloud::{Credentials, LoginFlow, NextcloudClient, PollError, normalize_server};
 use serde_json::{Value, json};
 use time::macros::date;
 
@@ -292,15 +292,20 @@ fn upload_errors_are_plain_sentences() {
     assert!(err.contains("Could not reach"), "{err}");
 }
 
+const NO_SHARES: fn() -> (u16, String) = || (200, ocs(200, json!([])));
+
 #[test]
-fn creates_a_read_only_public_link_with_expiry() {
-    let (base, seen) = stub(vec![(
-        200,
-        ocs(
+fn lists_existing_shares_then_creates_a_read_only_public_link_with_expiry() {
+    let (base, seen) = stub(vec![
+        NO_SHARES(),
+        (
             200,
-            json!({ "id": "7", "url": "https://cloud.example.com/s/AbC" }),
+            ocs(
+                200,
+                json!({ "id": "7", "url": "https://cloud.example.com/s/AbC" }),
+            ),
         ),
-    )]);
+    ]);
     let url = NextcloudClient::new()
         .unwrap()
         .create_public_link(
@@ -311,16 +316,26 @@ fn creates_a_read_only_public_link_with_expiry() {
         .unwrap();
     assert_eq!(url, "https://cloud.example.com/s/AbC");
     let s = seen.lock().unwrap();
-    assert_eq!(s[0].method, "POST");
+    assert_eq!(s.len(), 2);
+    assert_eq!(s[0].method, "GET");
     assert!(
         s[0].path
-            .starts_with("/ocs/v2.php/apps/files_sharing/api/v1/shares"),
+            .starts_with("/ocs/v2.php/apps/files_sharing/api/v1/shares?"),
         "{}",
         s[0].path
     );
-    assert_eq!(s[0].header("ocs-apirequest"), Some("true"));
-    assert_eq!(s[0].header("accept"), Some("application/json"));
-    let form: Vec<(String, String)> = url_pairs(&s[0].body_str());
+    assert!(s[0].path.contains("path=%2FMate%2FMaths+1.mate") || s[0].path.contains("path=%2FMate%2FMaths%201.mate"), "{}", s[0].path);
+    assert!(s[0].path.contains("reshares=true"), "{}", s[0].path);
+    assert_eq!(s[1].method, "POST");
+    assert!(
+        s[1].path
+            .starts_with("/ocs/v2.php/apps/files_sharing/api/v1/shares"),
+        "{}",
+        s[1].path
+    );
+    assert_eq!(s[1].header("ocs-apirequest"), Some("true"));
+    assert_eq!(s[1].header("accept"), Some("application/json"));
+    let form: Vec<(String, String)> = url_pairs(&s[1].body_str());
     assert!(
         form.contains(&("path".into(), "/Mate/Maths 1.mate".into())),
         "{form:?}"
@@ -332,54 +347,34 @@ fn creates_a_read_only_public_link_with_expiry() {
 
 #[test]
 fn link_without_expiry_sends_no_expire_date() {
-    let (base, seen) = stub(vec![(200, ocs(200, json!({ "url": "https://c/s/x" })))]);
+    let (base, seen) = stub(vec![
+        NO_SHARES(),
+        (200, ocs(200, json!({ "url": "https://c/s/x" }))),
+    ]);
     NextcloudClient::new()
         .unwrap()
         .create_public_link(&creds(&base), "/Mate/a.mate", None)
         .unwrap();
-    assert!(!seen.lock().unwrap()[0].body_str().contains("expireDate"));
+    let s = seen.lock().unwrap();
+    assert_eq!(s[1].method, "POST");
+    assert!(!s[1].body_str().contains("expireDate"));
 }
 
 #[test]
-fn an_already_shared_file_reuses_its_public_link() {
+fn an_existing_public_link_is_reused_with_the_new_expiry() {
     let (base, seen) = stub(vec![
-        (403, ocs(403, Value::Array(vec![]))),
         (
             200,
             ocs(
                 200,
                 json!([
                     { "id": "3", "share_type": 0, "url": null },
-                    { "id": "9", "share_type": 3, "url": "https://cloud.example.com/s/Old" }
+                    { "id": 9, "share_type": 3, "url": "https://c/s/Old" },
+                    { "id": "10", "share_type": 3, "url": "https://c/s/Newer" }
                 ]),
             ),
         ),
-    ]);
-    let url = NextcloudClient::new()
-        .unwrap()
-        .create_public_link(&creds(&base), "/Mate/a.mate", None)
-        .unwrap();
-    assert_eq!(url, "https://cloud.example.com/s/Old");
-    let s = seen.lock().unwrap();
-    assert_eq!(s[1].method, "GET");
-    assert!(s[1].path.contains("path=%2FMate%2Fa.mate"), "{}", s[1].path);
-}
-
-#[test]
-fn an_already_shared_file_gets_the_requested_expiry() {
-    let (base, seen) = stub(vec![
-        (403, ocs(403, Value::Null)),
-        (
-            200,
-            ocs(
-                200,
-                json!([{ "id": "9", "share_type": 3, "url": "https://c/s/Old" }]),
-            ),
-        ),
-        (
-            200,
-            ocs(200, json!({ "id": "9", "url": "https://c/s/Old" })),
-        ),
+        (200, ocs(200, json!({ "id": "9", "url": "https://c/s/Old" }))),
     ]);
     let url = NextcloudClient::new()
         .unwrap()
@@ -387,25 +382,100 @@ fn an_already_shared_file_gets_the_requested_expiry() {
         .unwrap();
     assert_eq!(url, "https://c/s/Old");
     let s = seen.lock().unwrap();
-    assert_eq!(s[2].method, "PUT");
+    assert_eq!(s.len(), 2, "nothing is created");
+    assert_eq!(s[1].method, "PUT");
     assert!(
-        s[2].path
+        s[1].path
             .starts_with("/ocs/v2.php/apps/files_sharing/api/v1/shares/9"),
         "{}",
-        s[2].path
+        s[1].path
     );
-    assert!(s[2].body_str().contains("expireDate=2026-12-24"));
+    assert_eq!(url_pairs(&s[1].body_str()), [("expireDate".to_string(), "2026-12-24".to_string())]);
+}
+
+#[test]
+fn an_existing_public_link_without_expiry_has_its_expiry_cleared() {
+    let (base, seen) = stub(vec![
+        (
+            200,
+            ocs(
+                200,
+                json!([{ "id": "9", "share_type": 3, "url": "https://c/s/Old", "expiration": "2026-01-01 00:00:00" }]),
+            ),
+        ),
+        (200, ocs(200, json!({ "id": "9", "url": "https://c/s/Old" }))),
+    ]);
+    let url = NextcloudClient::new()
+        .unwrap()
+        .create_public_link(&creds(&base), "/Mate/a.mate", None)
+        .unwrap();
+    assert_eq!(url, "https://c/s/Old");
+    let s = seen.lock().unwrap();
+    assert_eq!(s.len(), 2);
+    assert_eq!(s[1].method, "PUT");
+    assert_eq!(url_pairs(&s[1].body_str()), [("expireDate".to_string(), String::new())]);
+}
+
+#[test]
+fn a_forbidden_link_says_public_links_are_off() {
+    let (base, seen) = stub(vec![NO_SHARES(), (403, ocs(403, Value::Null))]);
+    let err = NextcloudClient::new()
+        .unwrap()
+        .create_public_link(&creds(&base), "/Mate/a.mate", None)
+        .unwrap_err();
+    assert_eq!(err, "Public links are not allowed on this server.");
+    assert_eq!(seen.lock().unwrap().len(), 2, "no fallback request");
+}
+
+#[test]
+fn a_failed_share_listing_is_reported() {
+    let (base, seen) = stub(vec![(401, ocs(401, Value::Null))]);
+    let err = NextcloudClient::new()
+        .unwrap()
+        .create_public_link(&creds(&base), "/Mate/a.mate", None)
+        .unwrap_err();
+    assert!(err.contains("Sign in again"), "{err}");
+    assert_eq!(seen.lock().unwrap().len(), 1);
 }
 
 #[test]
 fn a_refused_link_reports_the_server_message() {
     let body = json!({ "ocs": { "meta": { "status": "failure", "statuscode": 400, "message": "Passwords are enforced for link shares" }, "data": [] } });
-    let (base, _) = stub(vec![(400, body.to_string())]);
+    let (base, _) = stub(vec![NO_SHARES(), (400, body.to_string())]);
     let err = NextcloudClient::new()
         .unwrap()
         .create_public_link(&creds(&base), "/Mate/a.mate", None)
         .unwrap_err();
     assert!(err.contains("Passwords are enforced"), "{err}");
+}
+
+#[test]
+fn login_poll_errors_say_whether_trying_again_may_help() {
+    let addr = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap();
+    let flow = |endpoint: String| LoginFlow {
+        login_url: "https://x/login".into(),
+        poll_endpoint: endpoint,
+        token: "tok".into(),
+    };
+    let client = NextcloudClient::new().unwrap();
+    let err = client
+        .login_poll(&flow(format!("http://{addr}/login/v2/poll")))
+        .unwrap_err();
+    assert!(matches!(err, PollError::Network(_)), "{err:?}");
+    assert!(err.to_string().contains("Could not reach"), "{err}");
+
+    let (base, _) = stub(vec![(500, String::new()), (200, "{}".into())]);
+    let err = client
+        .login_poll(&flow(format!("{base}/login/v2/poll")))
+        .unwrap_err();
+    assert!(matches!(err, PollError::Failed(_)), "{err:?}");
+    let err = client
+        .login_poll(&flow(format!("{base}/login/v2/poll")))
+        .unwrap_err();
+    assert!(matches!(err, PollError::Failed(_)), "{err:?}");
 }
 
 #[test]

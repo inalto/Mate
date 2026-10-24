@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use mate_core::share::folders::{Env, SyncFolder, SyncService, detect};
-use mate_core::share::{safe_file_name, unique_archive_path};
+use mate_core::share::{remote_file_name, safe_file_name, unique_archive_path};
 
 #[derive(Default)]
 struct FakeEnv {
@@ -363,6 +363,33 @@ fn safe_file_name_strips_reserved_characters() {
     assert_eq!(safe_file_name("..."), "Book");
     assert_eq!(safe_file_name("Tab\there"), "Tabhere");
     assert_eq!(safe_file_name(&"x".repeat(300)).chars().count(), 120);
+}
+
+#[test]
+fn safe_file_name_avoids_windows_reserved_names() {
+    for name in ["CON", "prn", "Aux", "nul", "COM1", "com9", "LPT1", "lpt9"] {
+        assert_eq!(safe_file_name(name), format!("{name}_"));
+    }
+    // Windows also refuses them with an extension, so the stem is what matters.
+    assert_eq!(safe_file_name("con."), "con_");
+    assert_eq!(safe_file_name(" nul "), "nul_");
+    for fine in ["CONSOLE", "COM10", "LPT0", "COM", "Auxiliary", "NUL1"] {
+        assert_eq!(safe_file_name(fine), fine);
+    }
+}
+
+#[test]
+fn remote_file_names_are_unique_per_book() {
+    assert_eq!(
+        remote_file_name("Maths: term 1", "1a2b3c4d-5e6f-7a8b-9c0d-112233445566"),
+        "Maths term 1-1a2b3c4d.mate"
+    );
+    assert_ne!(
+        remote_file_name("Maths", "aaaaaaaa-0000"),
+        remote_file_name("Maths", "bbbbbbbb-0000")
+    );
+    assert_eq!(remote_file_name("", "u1"), "Book-u1.mate");
+    assert_eq!(remote_file_name("CON", "../x/y"), "CON_-xy.mate");
 }
 
 #[test]

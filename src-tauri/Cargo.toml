@@ -33,7 +33,7 @@ tokio = { version = "1", features = ["sync", "time"] }
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "zip"] }
 semver = "1"
 tauri-plugin-clipboard-manager = "2"
-time = { version = "0.3", features = ["macros"] }
+time = { version = "0.3", features = ["macros", "local-offset"] }
 
 [target.'cfg(windows)'.dependencies]
 # Pen haptics (commands/haptics.rs). Same version tauri/webview2 already pull in.

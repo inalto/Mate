@@ -14,6 +14,28 @@ pub const FOLDER: &str = "Mate";
 /// Per-request timeout; uploads get extra time for their size.
 const TIMEOUT: Duration = Duration::from_secs(30);
 const BAD_ADDRESS: &str = "The saved Nextcloud address is not valid. Sign in again.";
+/// How long a Login Flow v2 token is valid on the server.
+pub const LOGIN_TIMEOUT: Duration = Duration::from_secs(20 * 60);
+/// Shown when polling a sign-in older than [`LOGIN_TIMEOUT`].
+pub const LOGIN_EXPIRED: &str = "The sign-in link has expired. Start again.";
+const NO_PUBLIC_LINKS: &str = "Public links are not allowed on this server.";
+
+/// Why a sign-in poll failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PollError {
+    /// The server could not be reached or did not answer in time; polling again may work.
+    Network(String),
+    /// The server answered with an error or an unreadable reply.
+    Failed(String),
+}
+
+impl fmt::Display for PollError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PollError::Network(m) | PollError::Failed(m) => f.write_str(m),
+        }
+    }
+}
 
 /// A started Login Flow v2: the page the user signs in on, and where to poll for the result.
 #[derive(Clone, PartialEq, Eq)]
@@ -236,19 +258,21 @@ impl NextcloudClient {
     }
 
     /// Asks whether the user has granted access yet: `None` while waiting.
-    pub fn login_poll(&self, flow: &LoginFlow) -> Result<Option<Credentials>, String> {
+    pub fn login_poll(&self, flow: &LoginFlow) -> Result<Option<Credentials>, PollError> {
         const UNEXPECTED: &str = "Nextcloud sent an unexpected sign-in reply.";
         let req = self
             .http
             .post(&flow.poll_endpoint)
             .form(&[("token", flow.token.as_str())]);
-        let resp = self.send(req)?;
+        let resp = self.send(req).map_err(PollError::Network)?;
         match resp.status() {
             StatusCode::NOT_FOUND => return Ok(None),
-            s if !s.is_success() => return Err(status_error(s)),
+            s if !s.is_success() => return Err(PollError::Failed(status_error(s))),
             _ => {}
         }
-        let body: Value = resp.json().map_err(|_| UNEXPECTED.to_string())?;
+        let body: Value = resp
+            .json()
+            .map_err(|_| PollError::Failed(UNEXPECTED.into()))?;
         let field = |k: &str| {
             body[k]
                 .as_str()
@@ -258,10 +282,10 @@ impl NextcloudClient {
         let (Some(server), Some(user), Some(app_password)) =
             (field("server"), field("loginName"), field("appPassword"))
         else {
-            return Err(UNEXPECTED.into());
+            return Err(PollError::Failed(UNEXPECTED.into()));
         };
         Ok(Some(Credentials {
-            server: normalize_server(&server)?,
+            server: normalize_server(&server).map_err(PollError::Failed)?,
             user,
             app_password,
         }))
@@ -327,7 +351,8 @@ impl NextcloudClient {
     }
 
     /// A read-only public link to `path` (as returned by [`upload`](Self::upload)), valid until
-    /// `expire` when given. A file that already has a public link keeps it (with the new expiry).
+    /// `expire` when given. The file's existing public link is reused (its expiry set to `expire`,
+    /// or cleared); a new one is created only when it has none.
     pub fn create_public_link(
         &self,
         creds: &Credentials,
@@ -338,57 +363,55 @@ impl NextcloudClient {
         const NO_LINK: &str = "Nextcloud did not return a link.";
         let expire =
             expire.map(|d| format!("{:04}-{:02}-{:02}", d.year(), u8::from(d.month()), d.day()));
+
+        let listed = self.ocs_reply(
+            self.ocs(creds, Method::GET, SHARES)?
+                .query(&[("path", path), ("reshares", "true")]),
+        )?;
+        if !listed.ok() {
+            return Err(listed.error());
+        }
+        let existing = listed.data.as_array().and_then(|shares| {
+            shares
+                .iter()
+                .find(|s| s["share_type"].as_u64() == Some(3) && s["url"].is_string())
+        });
+        if let Some(share) = existing {
+            let id = match &share["id"] {
+                Value::String(s) if !s.is_empty() => s.clone(),
+                Value::Number(n) => n.to_string(),
+                _ => return Err(NO_LINK.into()),
+            };
+            // An empty date removes the expiry.
+            let updated = self.ocs_reply(
+                self.ocs(creds, Method::PUT, &format!("{SHARES}/{id}"))?
+                    .form(&[("expireDate", expire.unwrap_or_default())]),
+            )?;
+            if !updated.ok() {
+                return Err(updated.error());
+            }
+            return Ok(share["url"].as_str().unwrap_or_default().to_owned());
+        }
+
         let mut form = vec![
             ("path", path.to_owned()),
             ("shareType", "3".to_owned()),
             ("permissions", "1".to_owned()),
         ];
-        if let Some(date) = &expire {
-            form.push(("expireDate", date.clone()));
+        if let Some(date) = expire {
+            form.push(("expireDate", date));
         }
         let created = self.ocs_reply(self.ocs(creds, Method::POST, SHARES)?.form(&form))?;
-        if created.ok() {
-            return created.data["url"]
-                .as_str()
-                .map(str::to_owned)
-                .ok_or_else(|| NO_LINK.to_string());
+        if created.status == StatusCode::FORBIDDEN || created.code == Some(403) {
+            return Err(NO_PUBLIC_LINKS.into());
         }
-        if created.status != StatusCode::FORBIDDEN && created.code != Some(403) {
+        if !created.ok() {
             return Err(created.error());
         }
-        // Already shared: reuse the file's existing public link.
-        let listed = self.ocs_reply(
-            self.ocs(creds, Method::GET, SHARES)?
-                .query(&[("path", path), ("reshares", "false")]),
-        )?;
-        let existing = listed
-            .ok()
-            .then(|| listed.data.as_array())
-            .flatten()
-            .and_then(|shares| {
-                shares
-                    .iter()
-                    .find(|s| s["share_type"].as_u64() == Some(3) && s["url"].is_string())
-            });
-        let Some(share) = existing else {
-            return Err(created.error());
-        };
-        let url = share["url"].as_str().unwrap_or_default().to_owned();
-        if let Some(date) = expire {
-            let id = match &share["id"] {
-                Value::String(s) => s.clone(),
-                Value::Number(n) => n.to_string(),
-                _ => return Err(NO_LINK.into()),
-            };
-            let updated = self.ocs_reply(
-                self.ocs(creds, Method::PUT, &format!("{SHARES}/{id}"))?
-                    .form(&[("expireDate", date)]),
-            )?;
-            if !updated.ok() {
-                return Err(updated.error());
-            }
-        }
-        Ok(url)
+        created.data["url"]
+            .as_str()
+            .map(str::to_owned)
+            .ok_or_else(|| NO_LINK.to_string())
     }
 
     /// Revokes the app password on the server (sign out).
