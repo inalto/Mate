@@ -189,13 +189,57 @@ fn icloud(env: &dyn Env, found: &mut Found) {
     }
 }
 
-/// The `N\Folders\M\localPath=` values of a Nextcloud client `nextcloud.cfg`.
+/// A QSettings INI value as written: surrounding `"…"` removed and `\\`, `\"` and `\xHHHH`
+/// escapes decoded (any other backslash is kept).
+fn qt_value(raw: &str) -> String {
+    let inner = raw
+        .strip_prefix('"')
+        .and_then(|r| r.strip_suffix('"'))
+        .unwrap_or(raw);
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.peek() {
+            Some('\\') | Some('"') => out.push(chars.next().unwrap_or('\\')),
+            Some('x') => {
+                let mut ahead = chars.clone();
+                ahead.next();
+                let hex: String = std::iter::from_fn(|| ahead.next_if(char::is_ascii_hexdigit))
+                    .take(4)
+                    .collect();
+                match u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32) {
+                    Some(decoded) if !hex.is_empty() => {
+                        out.push(decoded);
+                        chars = ahead;
+                    }
+                    _ => out.push('\\'),
+                }
+            }
+            _ => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// The `localPath=` values of a Nextcloud client `nextcloud.cfg`, from its `Folders`,
+/// `FoldersWithPlaceholders` (virtual files) and `Multifolders` sections.
 fn nextcloud_paths(cfg: &str) -> Vec<PathBuf> {
     cfg.lines()
         .filter_map(|line| line.trim().split_once('='))
-        .filter(|(key, _)| key.contains("\\Folders\\") && key.ends_with("\\localPath"))
+        .filter(|(key, _)| {
+            let key = key.trim();
+            key.ends_with("\\localPath")
+                && ["\\Folders\\", "\\FoldersWithPlaceholders\\", "\\Multifolders\\"]
+                    .iter()
+                    .any(|section| key.contains(section))
+        })
         .map(|(_, value)| {
-            let v = value.trim();
+            let unquoted = qt_value(value.trim());
+            let v = unquoted.as_str();
             let trimmed = v.trim_end_matches(['/', '\\']);
             // Keep a bare root ("/" or "C:/") whole.
             if trimmed.is_empty() || trimmed.ends_with(':') {
@@ -281,16 +325,39 @@ impl Env for OsEnv {
     }
 }
 
+// GetDriveTypeW results (winbase.h).
+#[cfg_attr(not(test), allow(dead_code))]
+const DRIVE_UNKNOWN: u32 = 0;
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+const DRIVE_NO_ROOT_DIR: u32 = 1;
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+const DRIVE_REMOVABLE: u32 = 2;
+#[cfg_attr(not(test), allow(dead_code))]
+const DRIVE_FIXED: u32 = 3;
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+const DRIVE_REMOTE: u32 = 4;
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+const DRIVE_CDROM: u32 = 5;
+#[cfg_attr(not(test), allow(dead_code))]
+const DRIVE_RAMDISK: u32 = 6;
+
+/// Whether a drive of this `GetDriveTypeW` kind may be asked for its label. Network drives are
+/// skipped (a disconnected one can block for a long time), as are empty removable and optical
+/// drives (slow, and can prompt for a disk).
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
+fn worth_probing(kind: u32) -> bool {
+    !matches!(
+        kind,
+        DRIVE_REMOVABLE | DRIVE_CDROM | DRIVE_NO_ROOT_DIR | DRIVE_REMOTE
+    )
+}
+
 #[cfg(windows)]
 fn os_volumes() -> Vec<(PathBuf, String)> {
     use windows::Win32::Storage::FileSystem::{
         GetDriveTypeW, GetLogicalDrives, GetVolumeInformationW,
     };
     use windows::core::PCWSTR;
-    // GetDriveTypeW results (winbase.h).
-    const DRIVE_REMOVABLE: u32 = 2;
-    const DRIVE_CDROM: u32 = 5;
-    const DRIVE_NO_ROOT_DIR: u32 = 1;
 
     let mask = unsafe { GetLogicalDrives() };
     let mut out = Vec::new();
@@ -301,8 +368,7 @@ fn os_volumes() -> Vec<(PathBuf, String)> {
         let root = format!("{}:\\", char::from(b'A' + i as u8));
         let wide: Vec<u16> = root.encode_utf16().chain(std::iter::once(0)).collect();
         let kind = unsafe { GetDriveTypeW(PCWSTR(wide.as_ptr())) };
-        // Probing empty removable or optical drives is slow and can prompt for a disk.
-        if matches!(kind, DRIVE_REMOVABLE | DRIVE_CDROM | DRIVE_NO_ROOT_DIR) {
+        if !worth_probing(kind) {
             continue;
         }
         let mut name = [0u16; 261];
@@ -327,4 +393,22 @@ fn os_volumes() -> Vec<(PathBuf, String)> {
 #[cfg(not(windows))]
 fn os_volumes() -> Vec<(PathBuf, String)> {
     Vec::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn network_removable_and_optical_drives_are_not_probed() {
+        // A disconnected network drive can block for a long time, empty removable or optical
+        // drives can prompt for a disk: none of them is asked for its label.
+        for kind in [DRIVE_NO_ROOT_DIR, DRIVE_REMOVABLE, DRIVE_REMOTE, DRIVE_CDROM] {
+            assert!(!worth_probing(kind), "{kind}");
+        }
+        // Google Drive for desktop mounts a fixed (or unclassified) drive.
+        for kind in [DRIVE_UNKNOWN, DRIVE_FIXED, DRIVE_RAMDISK] {
+            assert!(worth_probing(kind), "{kind}");
+        }
+    }
 }

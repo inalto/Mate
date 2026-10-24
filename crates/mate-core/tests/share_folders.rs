@@ -391,3 +391,47 @@ fn the_real_machine_can_be_scanned() {
         assert!(Path::new(&f.path).is_dir(), "{f:?}");
     }
 }
+
+fn nextcloud_env(cfg: &str) -> FakeEnv {
+    FakeEnv::home("/home/u").file(
+        Path::new("/home/u").join(".config").join("Nextcloud").join("nextcloud.cfg"),
+        cfg,
+    )
+}
+
+#[test]
+fn nextcloud_virtual_files_and_multifolders_sections() {
+    let cfg = r"[Accounts]
+0\FoldersWithPlaceholders\1\localPath=/home/u/Virtual/
+0\Multifolders\2\localPath=/home/u/Multi
+0\Other\3\localPath=/home/u/Other
+0\Folders\4\localPathX=/home/u/Nope
+";
+    let env = nextcloud_env(cfg)
+        .dir("/home/u/Virtual")
+        .dir("/home/u/Multi")
+        .dir("/home/u/Other")
+        .dir("/home/u/Nope");
+    assert_eq!(
+        detect(&env),
+        vec![
+            folder(SyncService::Nextcloud, "Nextcloud (Virtual)", "/home/u/Virtual"),
+            folder(SyncService::Nextcloud, "Nextcloud (Multi)", "/home/u/Multi"),
+        ]
+    );
+}
+
+#[test]
+fn nextcloud_paths_are_unquoted_and_unescaped() {
+    // Qt writes values with commas in quotes, and doubles backslashes.
+    let cfg = r#"0\Folders\1\localPath="/home/u/My, cloud/"
+0\Folders\2\localPath=C:\\Users\\u\\Nextcloud\\
+0\Folders\3\localPath="/home/u/say \"hi\""
+"#;
+    let env = nextcloud_env(cfg)
+        .dir("/home/u/My, cloud")
+        .dir(r"C:\Users\u\Nextcloud")
+        .dir(r#"/home/u/say "hi""#);
+    let paths: Vec<String> = detect(&env).into_iter().map(|f| f.path).collect();
+    assert_eq!(paths, ["/home/u/My, cloud", r"C:\Users\u\Nextcloud", r#"/home/u/say "hi""#]);
+}
