@@ -8,8 +8,6 @@ import { Row } from "../routes/Settings/rows";
 import { showToast } from "./Toast";
 import { NOT_CONFIGURED_COPY, formatProgress, useUpdater } from "./useUpdater";
 
-export { NOT_CONFIGURED_COPY, formatProgress };
-
 /** Version, "Check for updates", download progress and "Restart to update". */
 export default function UpdateSection() {
   const { state, busy, check, install, restart } = useUpdater();

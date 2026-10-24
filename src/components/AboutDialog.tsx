@@ -1,6 +1,5 @@
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
-import { getAppVersion } from "../ipc/app";
+import { getAppVersion, openExternal } from "../ipc/app";
 import { isPageWindow } from "../ipc/windows";
 import { navigateTo } from "../stores/navigation";
 import { showToast } from "./Toast";
@@ -57,7 +56,7 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
   }, []);
 
   const star = () => {
-    openUrl(REPO_URL).catch(() => showToast("Could not open GitHub."));
+    openExternal(REPO_URL).catch(() => showToast("Could not open GitHub."));
   };
 
   return (

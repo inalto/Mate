@@ -17,6 +17,7 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useDismiss(ref, open, () => setOpen(false));
   const chrome = useChromeStore.getState;
   const updateAvailable = useChromeStore((s) => s.updateAvailable);
@@ -27,7 +28,7 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
   };
   return (
     <div ref={ref} className="menu-anchor">
-      <button className="icon-btn" aria-label={updateAvailable ? "More actions, update available" : "More actions"} title={updateAvailable ? `Update available: ${updateAvailable}` : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button ref={trigger} className="icon-btn" aria-label={updateAvailable ? "More actions, update available" : "More actions"} title={updateAvailable ? `Update available: ${updateAvailable}` : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <DotsThree size={20} weight="bold" />
         {updateAvailable && <span className="update-dot" aria-hidden="true" />}
       </button>
@@ -43,7 +44,11 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
           <button role="menuitem" onClick={pick(() => chrome().setAboutOpen(true))}>About Mate</button>
         </div>
       )}
-      {aboutOpen && <AboutDialog onClose={() => chrome().setAboutOpen(false)} />}
+      {aboutOpen && <AboutDialog onClose={() => {
+        chrome().setAboutOpen(false);
+        // The menu item that opened the dialog is gone: hand focus back to the More button.
+        trigger.current?.focus();
+      }} />}
     </div>
   );
 }

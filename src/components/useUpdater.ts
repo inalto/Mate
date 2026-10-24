@@ -25,7 +25,10 @@ const errorText = (e: unknown) => (e instanceof Error ? e.message : typeof e ===
 
 /** The check / install / restart state machine shared by Settings and the About dialog. */
 export function useUpdater() {
-  const [state, setState] = useState<UpdaterState>({ kind: "idle" });
+  const [state, setState] = useState<UpdaterState>(() => {
+    const known = useChromeStore.getState().updateAvailable;
+    return known ? { kind: "available", version: known } : { kind: "idle" };
+  });
   const busy = state.kind === "checking" || state.kind === "downloading";
   const live = useRef(true);
 
@@ -58,6 +61,7 @@ export function useUpdater() {
         if (live.current) setState({ kind: "downloading", version: target, progress });
       });
       await installUpdate(target);
+      useChromeStore.getState().setUpdateAvailable(null);
       if (live.current) setState({ kind: "ready", version: target });
     } catch (e) {
       if (live.current) setState({ kind: "error", message: errorText(e) });
