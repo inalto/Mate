@@ -1,10 +1,19 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
-import type { Page, Section } from "../../model/types";
+import type { Page, Section, Unit } from "../../model/types";
 
 vi.mock("../../export/exportPage", () => ({ exportPage: vi.fn(async () => "C:/out.png") }));
 vi.mock("../../ipc/archive", () => ({ exportUnitArchive: vi.fn(async () => "C:/book.mate") }));
+vi.mock("../ShareDialog", () => ({
+  default: ({ unit, onClose }: { unit: Unit; onClose(): void }) => (
+    <div role="dialog" aria-label={`Share ${unit.title}`}>
+      <button type="button" onClick={onClose}>
+        close share
+      </button>
+    </div>
+  ),
+}));
 
 import { exportPage } from "../../export/exportPage";
 import { exportUnitArchive } from "../../ipc/archive";
@@ -108,6 +117,21 @@ describe("ExportDialog", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(exportUnitArchive).toHaveBeenCalledWith("u1");
     expect(exportPage).not.toHaveBeenCalled();
+  });
+
+  it("offers to share the book instead of exporting the archive", () => {
+    const unit: Unit = { id: "u1", title: "Algebra", isFavourite: false, isExpanded: true, orderIndex: 0, createdAt: STAMP, updatedAt: STAMP, version: 0 };
+    useNotebookStore.setState({ tree: { bookshelves: [], units: [unit], sections: [section], pages: [page] }, loaded: true });
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    expect(screen.queryByRole("button", { name: "Share instead…" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Mate archive" }));
+    fireEvent.click(screen.getByRole("button", { name: "Share instead…" }));
+    expect(screen.queryByRole("dialog", { name: "Export" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Share Algebra" })).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "close share" }));
+    expect(onClose).toHaveBeenCalled();
+    expect(exportUnitArchive).not.toHaveBeenCalled();
   });
 
   it("stays open and shows the error when export fails", async () => {

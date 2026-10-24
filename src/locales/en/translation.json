@@ -639,6 +639,7 @@
     "latexHint": "Saves a .tex file; pictures become image placeholders.",
     "mateHint": "Exports the whole book this page belongs to.",
     "shareHint": "To send this book to someone, use Share… from the book menu.",
+    "shareInstead": "Share instead…",
     "boxRender": "Could not render the content of box {{id}} for export.",
     "boxMissing": "Box {{id}} was not rendered for export."
   },

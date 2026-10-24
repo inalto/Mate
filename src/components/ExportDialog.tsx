@@ -6,6 +6,7 @@ import { exportPage } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
+import ShareDialog from "./ShareDialog";
 
 type Format = "png" | "svg" | "pdf" | "latex" | "mate";
 
@@ -17,13 +18,16 @@ const initialFormat = (setting: string): Format =>
   FORMATS.some((f) => f === setting) ? (setting as Format) : "pdf";
 
 export default function ExportDialog({ pageId, onClose }: { pageId: string; onClose(): void }) {
-  useModal();
+  /** "Share instead…" replaces this dialog with the Share dialog for the book. */
+  const [sharing, setSharing] = useState(false);
+  useModal(!sharing);
   const { t } = useTranslation();
   const defaultFormat = useSettingsStore((s) => s.settings.defaultExportFormat);
   const unitId = useNotebookStore((s) => {
     const page = s.tree.pages.find((p) => p.id === pageId);
     return s.tree.sections.find((sec) => sec.id === page?.sectionId)?.unitId ?? null;
   });
+  const unit = useNotebookStore((s) => s.tree.units.find((u) => u.id === unitId) ?? null);
   const [format, setFormat] = useState<Format>(() => initialFormat(defaultFormat));
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [background, setBackground] = useState<"plain" | "transparent">("plain");
@@ -66,6 +70,8 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
     </div>
   );
 
+  if (sharing && unit) return <ShareDialog unit={unit} onClose={onClose} />;
+
   return (
     <div className="backdrop">
       <div className="card dialog" role="dialog" aria-modal="true" aria-label={t("export.title")}>
@@ -99,7 +105,16 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
         )}
         {format === "latex" && <p className="field-hint">{t("export.latexHint")}</p>}
         {format === "mate" && <p className="field-hint">{t("export.mateHint")}</p>}
-        {format === "mate" && <p className="field-hint">{t("export.shareHint")}</p>}
+        {format === "mate" && (
+          <p className="field-hint">
+            {t("export.shareHint")}{" "}
+            {unit && (
+              <button type="button" className="btn" disabled={busy} onClick={() => setSharing(true)}>
+                {t("export.shareInstead")}
+              </button>
+            )}
+          </p>
+        )}
         {error && <p role="alert" className="form-error">{t("export.failed", { message: error })}</p>}
         <div className="dialog-actions">
           <button type="button" className="btn" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>
