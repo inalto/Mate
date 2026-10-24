@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../../model/constants";
-import type { AiProviderInfo, AiStatus } from "../../../model/types";
+import type { AiProviderInfo, AiStatus, Settings } from "../../../model/types";
 
 vi.mock("../../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../../ipc/app", () => ({ openExternal: vi.fn(async () => {}) }));
@@ -30,26 +30,45 @@ const PROVIDERS: AiProviderInfo[] = [
   { ...base, id: "anthropic", label: "Anthropic", group: "cloud", needsKey: true, defaultModel: "claude-opus-5-5", vision: "yes", canListModels: true, keyUrl: "https://console.anthropic.com" },
   { ...base, id: "openai", label: "OpenAI", group: "cloud", needsKey: true, defaultModel: "gpt-5", vision: "yes" },
   { ...base, id: "deepseek", label: "DeepSeek", group: "cloud", needsKey: true, defaultModel: "deepseek-flash", vision: "no" },
-  { ...base, id: "ollama", label: "Ollama", group: "local", needsKey: false, defaultModel: "qwen3-vl:8b", vision: "dependsOnModel", canListModels: true, editableBaseUrl: true, defaultBaseUrl: "http://localhost:11434", cost: "Free (local)" },
+  { ...base, id: "ollama", label: "Ollama", group: "local", needsKey: false, defaultModel: "qwen3-vl:8b", vision: "dependsOnModel", canListModels: true, editableBaseUrl: true, defaultBaseUrl: "http://localhost:11434", cost: "Free (local)", privacy: "Nothing leaves this computer." },
+  { ...base, id: "lmstudio", label: "LM Studio", group: "local", needsKey: false, defaultModel: "", vision: "dependsOnModel", canListModels: true, editableBaseUrl: true, defaultBaseUrl: "http://localhost:1234", cost: "Free (local)", privacy: "Nothing leaves this computer." },
   { ...base, id: "custom", label: "Custom endpoint", group: "custom", needsKey: false, defaultModel: "", vision: "dependsOnModel", editableBaseUrl: true },
 ];
-let status: AiStatus;
 
-const statusFor = (id: string): AiStatus => {
-  const p = PROVIDERS.find((x) => x.id === id)!;
-  return { configured: !p.needsKey && id !== "custom", provider: id, model: p.defaultModel, consent: false, needsKey: p.needsKey, vision: p.vision, baseUrl: p.defaultBaseUrl };
+/** Keys stored per provider (the fake keychain). */
+let keys: Set<string>;
+
+/** The Rust status rules: configured = key (cloud) / always (local) / an address (custom). */
+const statusOf = (s: Settings): AiStatus => {
+  const p = PROVIDERS.find((x) => x.id === s.aiProvider)!;
+  const typed = s.aiBaseUrl.trim();
+  const url = typed || p.defaultBaseUrl;
+  const localHost = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.)/.test(url);
+  const valid = typed === "" || url.startsWith("https://") || localHost;
+  const hasKey = keys.has(p.id);
+  return {
+    configured: valid && (p.needsKey ? hasKey : p.group === "local" || url !== ""),
+    hasKey,
+    local: valid && p.group !== "cloud" && localHost,
+    provider: p.id,
+    model: s.aiModel || p.defaultModel,
+    consent: s.aiConsent === true,
+    needsKey: p.needsKey,
+    vision: p.vision,
+    baseUrl: url,
+  };
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  status = statusFor("anthropic");
+  keys = new Set();
   vi.mocked(listAiProviders).mockResolvedValue(PROVIDERS);
-  vi.mocked(getAiStatus).mockImplementation(async () => ({ ...status, provider: useSettingsStore.getState().settings.aiProvider }));
-  vi.mocked(setAiKey).mockImplementation(async () => {
-    status.configured = true;
+  vi.mocked(getAiStatus).mockImplementation(async () => statusOf(useSettingsStore.getState().settings));
+  vi.mocked(setAiKey).mockImplementation(async (id) => {
+    keys.add(id);
   });
-  vi.mocked(clearAiKey).mockImplementation(async () => {
-    status.configured = false;
+  vi.mocked(clearAiKey).mockImplementation(async (id) => {
+    keys.delete(id);
   });
   useSettingsStore.setState({ settings: DEFAULT_SETTINGS, loaded: true });
 });
@@ -59,6 +78,8 @@ const pick = async (label: string) => {
   fireEvent.click(await screen.findByRole("radio", { name: label }));
   await act(flushSettings);
 };
+
+const statusLine = () => screen.getByRole("status").textContent ?? "";
 
 describe("AiSetup", () => {
   it("lists providers in three groups", async () => {
@@ -76,7 +97,7 @@ describe("AiSetup", () => {
     expect(container.querySelector("details")!.open).toBe(true);
     expect(screen.getByText("Checking handwritten maths (the tutor)")).toBeTruthy();
     cleanup();
-    status.configured = true;
+    keys.add("anthropic");
     const second = render(<AiSettings />);
     await waitFor(() => expect(second.container.querySelector("details")!.open).toBe(false));
   });
@@ -103,13 +124,14 @@ describe("AiSetup", () => {
     await waitFor(() => expect(setAiKey).toHaveBeenCalledWith("anthropic", `  ${SECRET}  `));
     expect(await screen.findByText("Key saved")).toBeTruthy();
     expect(input.value).toBe("");
+    expect(input.placeholder).toBe("Saved (hidden)");
     await act(flushSettings);
     expect(JSON.stringify(useSettingsStore.getState().settings)).not.toContain(SECRET);
     for (const call of vi.mocked(patchSettings).mock.calls) expect(JSON.stringify(call)).not.toContain(SECRET);
   });
 
   it("tests and removes a saved key and shows errors", async () => {
-    status.configured = true;
+    keys.add("anthropic");
     useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, aiConsent: true } });
     render(<AiSettings />);
     expect(await screen.findByText("Key saved")).toBeTruthy();
@@ -124,7 +146,7 @@ describe("AiSetup", () => {
   });
 
   it("does not claim a cloud key works when permission is off", async () => {
-    status.configured = true;
+    keys.add("anthropic");
     render(<AiSettings />);
     await screen.findByText("Key saved");
     fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
@@ -138,13 +160,41 @@ describe("AiSetup", () => {
     expect(screen.queryByRole("button", { name: "Save key" })).toBeNull();
     expect(screen.getByText("No key needed")).toBeTruthy();
     expect(screen.getByText(/processed on this computer; nothing is sent to the internet/)).toBeTruthy();
+    expect(screen.getByText("Nothing leaves this computer.")).toBeTruthy();
     const address = screen.getByLabelText("Address") as HTMLInputElement;
     expect(address.placeholder).toBe("http://localhost:11434");
     fireEvent.change(address, { target: { value: "http://192.168.1.5:11434" } });
     expect(useSettingsStore.getState().settings.aiBaseUrl).toBe("http://192.168.1.5:11434");
+    expect(screen.getByText(/processed on this computer/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
     expect(await screen.findByText("Connection works.")).toBeTruthy();
     expect(testAiKey).toHaveBeenCalledWith("ollama");
+    await act(flushSettings);
+  });
+
+  it("a local provider at a remote address does not claim to stay on this computer", async () => {
+    render(<AiSettings />);
+    await pick("Ollama");
+    fireEvent.change(screen.getByLabelText("Address"), { target: { value: "https://ollama.example.com" } });
+    await act(flushSettings);
+    await waitFor(() => expect(screen.getByText("Your handwriting and text are sent to the address above.")).toBeTruthy());
+    expect(screen.queryByText(/processed on this computer/)).toBeNull();
+    expect(screen.queryByText("Nothing leaves this computer.")).toBeNull();
+    expect(screen.getByText(/to the server at the address above/)).toBeTruthy();
+  });
+
+  it("refuses a plain http address that is not local", async () => {
+    render(<AiSettings />);
+    await pick("Custom endpoint");
+    const address = screen.getByLabelText("Address");
+    const error = "Use an https:// address, or a local address such as http://localhost:11434.";
+    expect(screen.queryByText(error)).toBeNull();
+    fireEvent.change(address, { target: { value: "http://api.example.com" } });
+    expect(screen.getByText(error)).toBeTruthy();
+    fireEvent.change(address, { target: { value: "http://localhost:8080" } });
+    expect(screen.queryByText(error)).toBeNull();
+    fireEvent.change(address, { target: { value: "https://api.example.com" } });
+    expect(screen.queryByText(error)).toBeNull();
     await act(flushSettings);
   });
 
@@ -156,10 +206,51 @@ describe("AiSetup", () => {
     expect(screen.getByText("No key (optional)")).toBeTruthy();
   });
 
-  it("fetch models fills the datalist and shows errors", async () => {
+  it("custom with an address and no key: no key, nothing to remove", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, aiProvider: "custom", aiBaseUrl: "https://api.example.com" } });
+    render(<AiSettings />);
+    await waitFor(() => expect(getAiStatus).toHaveBeenCalled());
+    expect(await screen.findByText("No key (optional)")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Remove key" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByLabelText("API key (optional)") as HTMLInputElement).placeholder).not.toBe("Saved (hidden)");
+    expect(statusLine()).not.toContain("Enter the address");
+  });
+
+  it("custom with a key and no address: key saved, address missing", async () => {
+    keys.add("custom");
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, aiProvider: "custom", aiModel: "m" } });
+    render(<AiSettings />);
+    expect(await screen.findByText("Key saved")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Remove key" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByLabelText("API key (optional)") as HTMLInputElement).placeholder).toBe("Saved (hidden)");
+    expect(statusLine()).toContain("Enter the address of the service.");
+  });
+
+  it("asks for a model name where there is no default", async () => {
+    render(<AiSettings />);
+    await pick("LM Studio");
+    const model = screen.getByLabelText("Model") as HTMLInputElement;
+    expect(model.placeholder).toBe("Type the model name");
+    expect(statusLine()).toContain("Enter a model name.");
+    fireEvent.change(model, { target: { value: "qwen" } });
+    expect(statusLine()).not.toContain("Enter a model name.");
+    await act(flushSettings);
+  });
+
+  it("hints at a vision model when it depends on the model", async () => {
+    const hint = "Pick a model that can read images, or the tutor cannot check handwriting.";
+    render(<AiSettings />);
+    await screen.findByRole("radio", { name: "Anthropic" });
+    expect(screen.queryByText(hint)).toBeNull();
+    await pick("Ollama");
+    expect(screen.getByText(hint)).toBeTruthy();
+  });
+
+  it("fetch models fills the datalist, says what it sends and shows errors", async () => {
     vi.mocked(listAiModels).mockResolvedValueOnce(["claude-a", "claude-b"]);
     const { container } = render(<AiSettings />);
     fireEvent.click(await screen.findByRole("button", { name: "Fetch models" }));
+    expect(screen.getByText("Sends your key to Anthropic to list its models; nothing else is sent.")).toBeTruthy();
     expect(await screen.findByText("Found 2 models.")).toBeTruthy();
     expect([...container.querySelectorAll("datalist option")].map((o) => (o as HTMLOptionElement).value)).toEqual(["claude-a", "claude-b"]);
     vi.mocked(listAiModels).mockRejectedValueOnce("Could not reach the service.");
@@ -167,13 +258,18 @@ describe("AiSetup", () => {
     expect(await screen.findByText("Could not reach the service.")).toBeTruthy();
   });
 
-  it("a text-only provider shows the tutor note", async () => {
+  it("a text-only provider shows the tutor note under the picker and asks to send text only", async () => {
     render(<AiSettings />);
     await screen.findByRole("radio", { name: "Anthropic" });
     expect(screen.queryByText(NO_VISION_NOTE)).toBeNull();
-    status = statusFor("deepseek");
     await pick("DeepSeek");
-    expect(await screen.findByText(NO_VISION_NOTE)).toBeTruthy();
+    const note = await screen.findByText(NO_VISION_NOTE);
+    const picker = screen.getByRole("group", { name: "Custom" });
+    const model = screen.getByLabelText("Model");
+    expect(picker.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(note.compareDocumentPosition(model) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const consent = screen.getByText(/Send the text of your notes to DeepSeek/);
+    expect(consent.textContent).not.toMatch(/image|handwriting/i);
   });
 
   it("provider cards are searchable by label", async () => {

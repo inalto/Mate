@@ -889,6 +889,13 @@
     }
   },
   "ai": {
+    "privacyRemote": "Your handwriting and text are sent to the address above.",
+    "addressInvalid": "Use an https:// address, or a local address such as http://localhost:11434.",
+    "addressMissing": "Enter the address of the service.",
+    "typeModel": "Type the model name",
+    "modelMissing": "Enter a model name.",
+    "visionHint": "Pick a model that can read images, or the tutor cannot check handwriting.",
+    "fetchModelsNote": "Sends your key to {{provider}} to list its models; nothing else is sent.",
     "loadFailed": "Could not load the list of AI services.",
     "noVision": "This provider cannot read handwriting, so checking is off. Ask, summaries and practice still work.",
     "noModels": "No models found.",
@@ -903,7 +910,8 @@
     "consent": {
       "local": "Let Mate use {{provider}} to check your work. Everything is processed on this computer; nothing is sent to the internet.",
       "custom": "Send handwriting images and text to the server at the address above to check your work. Nothing is sent until you turn this on.",
-      "cloud": "Send handwriting images and text to {{provider}} to check your work. Nothing is sent until you turn this on."
+      "cloud": "Send handwriting images and text to {{provider}} to check your work. Nothing is sent until you turn this on.",
+    "cloudText": "Send the text of your notes to {{provider}} for questions, summaries and practice. Nothing is sent until you turn this on."
     },
     "model": "Model",
     "fetchModels": "Fetch models",

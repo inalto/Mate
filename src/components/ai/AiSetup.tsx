@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getAiStatus, listAiProviders } from "../../ipc/ai";
 import type { AiProviderInfo, AiStatus } from "../../model/types";
-import { useSettingsStore } from "../../stores/settings";
+import { flushSettings, useSettingsStore } from "../../stores/settings";
+import { ADDRESS_REFRESH_MS } from "../../tutor/aiStatus";
 import "./ai.css";
 import ConnectionFields from "./ConnectionFields";
 import NeedsExplainer from "./NeedsExplainer";
@@ -39,6 +40,21 @@ export default function AiSetup() {
     };
   }, [refresh]);
 
+  // A typed address changes what the status says (configured, local); read it once typing pauses
+  // and the setting is on disk.
+  const address = settings.aiBaseUrl;
+  const firstAddress = useRef(address);
+  useEffect(() => {
+    if (address === firstAddress.current) return;
+    firstAddress.current = address;
+    const timer = setTimeout(() => {
+      void flushSettings()
+        .catch(() => {})
+        .then(refresh);
+    }, ADDRESS_REFRESH_MS);
+    return () => clearTimeout(timer);
+  }, [address, refresh]);
+
   const select = async (id: string) => {
     // The status reads the persisted settings, so wait for the write before asking.
     await update({ aiProvider: id, aiModel: "", aiBaseUrl: "" }).catch(() => {});
@@ -54,8 +70,8 @@ export default function AiSetup() {
       <NeedsExplainer open={!current?.configured} />
       {loadFailed && <p className="form-error">{t("ai.loadFailed")}</p>}
       <ProviderPicker providers={providers} value={settings.aiProvider} onSelect={(id) => void select(id)} />
-      {info && <ConnectionFields key={info.id} info={info} status={status} onChanged={refresh} />}
       {textOnly && <p className="muted" role="note">{t("ai.noVision")}</p>}
+      {info && <ConnectionFields key={info.id} info={info} status={status} onChanged={refresh} />}
     </div>
   );
 }
