@@ -1,5 +1,4 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { appDataDir, join } from "@tauri-apps/api/path";
 import { useEffect, useState } from "react";
 
 export interface ThumbnailSaved {
@@ -15,9 +14,9 @@ export const saveThumbnail = (pageId: string, bytes: Uint8Array): Promise<Thumbn
 let thumbDir: Promise<string> | null = null;
 let resolvedDir: string | null = null;
 
-/** Resolve the thumbnails directory once; `thumbnailUrl` works after this settles. */
+/** Resolve the thumbnails directory once (Rust knows the data dir in use); `thumbnailUrl` works after this settles. */
 export function initThumbnails(): Promise<void> {
-  thumbDir ??= appDataDir().then((d) => join(d, "thumbnails")).then((d) => (resolvedDir = d));
+  thumbDir ??= invoke<string>("thumbnails_dir").then((d) => (resolvedDir = d));
   return thumbDir.then(() => undefined);
 }
 

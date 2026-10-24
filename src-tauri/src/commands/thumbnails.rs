@@ -41,6 +41,12 @@ pub struct ThumbnailSaved {
     pub version: i64,
 }
 
+/// The thumbnails directory, so URLs follow the data dir in use (`MATE_DATA_DIR` included).
+#[tauri::command]
+pub fn thumbnails_dir(state: State<'_, AppState>) -> String {
+    state.data_dir.join("thumbnails").to_string_lossy().into_owned()
+}
+
 #[tauri::command]
 pub fn save_thumbnail(
     state: State<'_, AppState>,

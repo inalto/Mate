@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 
 const invoke = vi.hoisted(() => vi.fn(async () => ({ path: "C:/data/thumbnails/p.webp", version: 7 })));
 vi.mock("@tauri-apps/api/core", () => ({ invoke, convertFileSrc: (p: string) => p }));
-vi.mock("@tauri-apps/api/path", () => ({ appDataDir: vi.fn(), join: vi.fn() }));
 
 import { saveThumbnail } from "../thumbnails";
 

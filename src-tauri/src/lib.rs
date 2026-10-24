@@ -116,6 +116,7 @@ pub fn run() {
       math::test_wolfram_appid,
       math::wolfram_short_answer,
       thumbnails::save_thumbnail,
+      thumbnails::thumbnails_dir,
       assets::save_asset,
       assets::save_asset_from_path,
       assets::asset_info,
