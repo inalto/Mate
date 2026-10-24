@@ -590,7 +590,24 @@
     "emptyShelf": "No books on this shelf"
   },
   "export": {
-    "failed": "Export failed: {{message}}"
+    "failed": "Export failed: {{message}}",
+    "title": "Export",
+    "export": "Export",
+    "exporting": "Exporting…",
+    "notInBook": "This page is not in a book",
+    "format": "Format",
+    "paper": "Paper",
+    "plain": "Plain",
+    "transparent": "Transparent",
+    "scale": "Scale",
+    "times": "{{n}}×",
+    "pages": "Pages",
+    "allSheets": "All sheets",
+    "currentSheet": "Current sheet",
+    "searchable": "Searchable text",
+    "latexHint": "Saves a .tex file; pictures become image placeholders.",
+    "mateHint": "Exports the whole book this page belongs to.",
+    "shareHint": "To send this book to someone, use Share… from the book menu."
   },
   "selection": {
     "label": "Selection",
@@ -647,5 +664,149 @@
     "paperSize": "Paper size",
     "gridUniform": "Grid (uniform)",
     "spacing": "Spacing"
+  },
+  "import": {
+    "title": "Import notes",
+    "filter": "Notebook files and Mate archives",
+    "duplicates_one": "{{count}} page already imported, so not added again.",
+    "duplicates_other": "{{count}} pages already imported, so not added again.",
+    "tablesAndShapes": "Tables and shapes are not imported yet.",
+    "kilobytes": "{{value}} KB",
+    "progress": {
+      "waiting": "Waiting",
+      "reading": "Reading the file",
+      "parsing": "Reading pages",
+      "placing": "Placing pages",
+      "placingCount": "Placing pages ({{done}} of {{total}})"
+    },
+    "fileOk": "{{source}} file, {{size}}",
+    "fileRejected": "Cannot be imported. {{reason}}",
+    "removeFile": "Remove {{name}}",
+    "importing": "Importing",
+    "progressLabel": "Progress",
+    "cancelling": "Cancelling… finishing the current file.",
+    "queued_one": "{{count}} more file will be offered when this import finishes.",
+    "queued_other": "{{count}} more files will be offered when this import finishes.",
+    "cancel": "Cancel import",
+    "finished": "Import finished",
+    "nothing": "Nothing was imported",
+    "summary": "{{pages}}, {{strokes}}, {{texts}}, {{images}}.",
+    "counts": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "strokes_one": "{{count}} stroke",
+      "strokes_other": "{{count}} strokes",
+      "texts_one": "{{count}} text box",
+      "texts_other": "{{count}} text boxes",
+      "images_one": "{{count}} image",
+      "images_other": "{{count}} images"
+    },
+    "skipped": "Skipped",
+    "warnings": "Warnings",
+    "failedFiles": "Failed files",
+    "importMore_one": "Import {{count}} more file…",
+    "importMore_other": "Import {{count}} more files…",
+    "openBook": "Open book",
+    "checking": "Checking files…",
+    "noFiles": "No files chosen yet.",
+    "files": "Files",
+    "addFiles": "Add files…",
+    "destination": "Destination",
+    "putPagesIn": "Put the pages in",
+    "newBook": "A new book",
+    "bookName": "Book name",
+    "existingBook": "An existing book",
+    "book": "Book",
+    "chooseBook": "Choose a book",
+    "import": "Import"
+  },
+  "share": {
+    "title": "Share {{title}}",
+    "folderTitle": "Save a copy to a synced folder",
+    "noFolders": "No synced folders found on this computer.",
+    "chooseFolder": "Choose another folder…",
+    "savedTo": "Saved to {{path}}",
+    "showInFolder": "Show in folder",
+    "nextcloudHint": "Send a link to this book from your Nextcloud. Set up in Settings → Sharing.",
+    "expires": "Link expires",
+    "expiry": {
+      "never": "Never",
+      "week": "After 7 days",
+      "month": "After 30 days"
+    },
+    "working": "Working…",
+    "upload": "Upload and get link",
+    "link": "Share link"
+  },
+  "practice": {
+    "title": "Practice from this book",
+    "pageTitle": "Practice — {{date}}",
+    "tooMany": "A practice page holds up to {{max}} questions; the rest were left out.",
+    "noSection": "This book has no section to put the questions in.",
+    "count": "Number of questions",
+    "types": {
+      "label": "Question types",
+      "multipleChoice": "Multiple choice",
+      "multiSelect": "Multi-select",
+      "trueFalse": "True / false",
+      "fillInBlank": "Fill in the blank",
+      "shortAnswer": "Short answer"
+    },
+    "extra": "Anything else? (optional)",
+    "extraLabel": "Extra instructions",
+    "extraPlaceholder": "For example: focus on integration by parts",
+    "privacy": "Questions come from what the tutor has read in this book. The text is sent to your AI provider.",
+    "writing": "Writing questions…",
+    "generate": "Generate",
+    "generating": "Generating…",
+    "ready_one": "{{count}} question ready.",
+    "ready_other": "{{count}} questions ready.",
+    "questions": "Questions",
+    "add": "Add to a new page",
+    "adding": "Adding…"
+  },
+  "math": {
+    "compute": "Compute",
+    "computeMenu": "Compute ▸",
+    "computing": "Computing…",
+    "resultNotAdded": "The result could not be added to this page.",
+    "ops": {
+      "evaluate": "Evaluate",
+      "simplify": "Simplify",
+      "expand": "Expand",
+      "solve": "Solve",
+      "numeric": "Numeric value"
+    },
+    "wolfram": {
+      "ask": "Ask Wolfram|Alpha",
+      "needsAppid": "Add a Wolfram|Alpha AppID in Settings first.",
+      "needsConsent": "Wolfram|Alpha is off. Turn it on in Settings."
+    },
+    "errors": {
+      "unreadable": "This maths could not be read",
+      "unreadableDetail": "This maths could not be read: {{detail}}",
+      "oneEquation": "Solve one equation at a time",
+      "inequality": "Inequalities cannot be solved here",
+      "noUnknown": "Nothing to solve for",
+      "severalUnknowns": "Several unknowns ({{unknowns}}) and no x to solve for",
+      "unsolved": "Could not solve this equation",
+      "noSolution": "No solution found",
+      "empty": "Nothing to compute",
+      "engine": "The maths engine could not be loaded",
+      "failed": "Could not compute this"
+    },
+    "check": {
+      "agree": "Both sides agree",
+      "differ": "They differ",
+      "differAt": "They differ at {{at}}",
+      "undecided": "Could not decide: {{reason}}",
+      "notEquation": "Could not decide: this is not an equation",
+      "reasons": {
+        "noNumeric": "the two sides have no numeric value",
+        "noReal": "the sides have no real value at the points tried",
+        "engine": "the maths engine could not be loaded",
+        "failed": "the check failed"
+      }
+    }
   }
 }

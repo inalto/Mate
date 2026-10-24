@@ -9,6 +9,7 @@
 import type { ComputeEngine } from "@cortex-js/compute-engine";
 import { engineSync, loadEngine, type Engine } from "../graph/engine";
 import { firstError } from "../graph/expressions";
+import i18n from "../i18n";
 
 export type Op = "evaluate" | "simplify" | "expand" | "solve" | "numeric";
 export type ComputeResult = { latex: string } | { error: string };
@@ -49,7 +50,7 @@ function engine(): Promise<Engine> {
   return cas;
 }
 
-const UNREADABLE = "This maths could not be read";
+const unreadable = () => i18n.t("math.errors.unreadable");
 
 /** Compute Engine LaTeX that KaTeX does not know, rewritten. */
 function katexSafe(latex: string): string {
@@ -65,7 +66,7 @@ function katexSafe(latex: string): string {
 function parseProblem(e: Expr): string | null {
   if (e.isValid) return null;
   const msg = firstError(e.json);
-  return msg ? `${UNREADABLE}: ${msg.charAt(0).toLowerCase()}${msg.slice(1)}` : UNREADABLE;
+  return msg ? i18n.t("math.errors.unreadableDetail", { detail: `${msg.charAt(0).toLowerCase()}${msg.slice(1)}` }) : unreadable();
 }
 
 /** The sides of an equation or equality chain (`a = b = c`), or null when `e` is not one. */
@@ -102,21 +103,21 @@ function apply(ce: ComputeEngine, e: Expr, op: Exclude<Op, "solve">): Expr {
 
 function solve(eng: Engine, e: Expr): ComputeResult {
   const sides = sidesOf(eng, e);
-  if (sides && sides.length > 2) return { error: "Solve one equation at a time" };
+  if (sides && sides.length > 2) return { error: i18n.t("math.errors.oneEquation") };
   if (!sides && e.operator && e.operator !== "Equal" && /^(Less|Greater|NotEqual)/.test(e.operator)) {
-    return { error: "Inequalities cannot be solved here" };
+    return { error: i18n.t("math.errors.inequality") };
   }
   const unknowns = e.unknowns;
-  if (unknowns.length === 0) return { error: "Nothing to solve for" };
+  if (unknowns.length === 0) return { error: i18n.t("math.errors.noUnknown") };
   const v = unknowns.length === 1 ? unknowns[0] : unknowns.includes("x") ? "x" : null;
-  if (!v) return { error: `Several unknowns (${unknowns.join(", ")}) and no x to solve for` };
+  if (!v) return { error: i18n.t("math.errors.severalUnknowns", { unknowns: unknowns.join(", ") }) };
   const roots = e.solve(v);
-  if (roots === null) return { error: "Could not solve this equation" };
-  if (!Array.isArray(roots)) return { error: "Could not solve this equation" };
+  if (roots === null) return { error: i18n.t("math.errors.unsolved") };
+  if (!Array.isArray(roots)) return { error: i18n.t("math.errors.unsolved") };
   const list = (roots as ReadonlyArray<unknown>).filter((r): r is Expr => eng.mod.isExpression(r));
-  if (list.length !== roots.length) return { error: "Could not solve this equation" };
-  if (list.length === 0) return { error: "No solution found" };
-  if (list.some((r) => hasError(r.json))) return { error: "Could not solve this equation" };
+  if (list.length !== roots.length) return { error: i18n.t("math.errors.unsolved") };
+  if (list.length === 0) return { error: i18n.t("math.errors.noSolution") };
+  if (list.some((r) => hasError(r.json))) return { error: i18n.t("math.errors.unsolved") };
   const name = eng.ce.box(v).latex;
   return { latex: katexSafe(list.map((r) => `${name}=${r.latex}`).join(",\\quad ")) };
 }
@@ -127,12 +128,12 @@ function solve(eng: Engine, e: Expr): ComputeResult {
  * operation is applied to each side, except solve.
  */
 export async function compute(latex: string, op: Op): Promise<ComputeResult> {
-  if (latex.trim() === "") return { error: "Nothing to compute" };
+  if (latex.trim() === "") return { error: i18n.t("math.errors.empty") };
   let eng: Engine;
   try {
     eng = await engine();
   } catch {
-    return { error: "The maths engine could not be loaded" };
+    return { error: i18n.t("math.errors.engine") };
   }
   try {
     const e = eng.ce.parse(latex);
@@ -141,10 +142,10 @@ export async function compute(latex: string, op: Op): Promise<ComputeResult> {
     if (op === "solve") return solve(eng, e);
     const sides = sidesOf(eng, e);
     const parts = (sides ?? [e]).map((s) => apply(eng.ce, s, op));
-    if (parts.some((p) => hasError(p.json))) return { error: "Could not compute this" };
+    if (parts.some((p) => hasError(p.json))) return { error: i18n.t("math.errors.failed") };
     return { latex: katexSafe(parts.map((p) => serialise(p, op)).join("=")) };
   } catch {
-    return { error: "Could not compute this" };
+    return { error: i18n.t("math.errors.failed") };
   }
 }
 
@@ -178,7 +179,7 @@ function checkPair(ce: ComputeEngine, a: Expr, b: Expr, rand: () => number): Pai
     const eq = a.isEqual(b);
     if (eq === true) return { kind: "agree" };
     if (eq === false) return { kind: "differ", at: {} };
-    return { kind: "undecided", reason: "the two sides have no numeric value" };
+    return { kind: "undecided", reason: i18n.t("math.check.reasons.noNumeric") };
   }
   try {
     if (ce.box(["Subtract", a, b]).simplify().isSame(0)) return { kind: "agree" };
@@ -195,7 +196,7 @@ function checkPair(ce: ComputeEngine, a: Expr, b: Expr, rand: () => number): Pai
     valid++;
     if (!close(va, vb)) return { kind: "differ", at: env };
   }
-  if (valid < MIN_SAMPLES) return { kind: "undecided", reason: "the sides have no real value at the points tried" };
+  if (valid < MIN_SAMPLES) return { kind: "undecided", reason: i18n.t("math.check.reasons.noReal") };
   return { kind: "agree" };
 }
 
@@ -210,7 +211,7 @@ export async function localCheck(latex: string, rand: () => number = Math.random
   try {
     eng = await engine();
   } catch {
-    return { kind: "undecided", reason: "the maths engine could not be loaded" };
+    return { kind: "undecided", reason: i18n.t("math.check.reasons.engine") };
   }
   try {
     const e = eng.ce.parse(latex);
@@ -226,7 +227,7 @@ export async function localCheck(latex: string, rand: () => number = Math.random
     }
     return undecided ?? { kind: "agree" };
   } catch {
-    return { kind: "undecided", reason: "the check failed" };
+    return { kind: "undecided", reason: i18n.t("math.check.reasons.failed") };
   }
 }
 
@@ -234,15 +235,15 @@ export async function localCheck(latex: string, rand: () => number = Math.random
 export function localCheckMessage(r: LocalCheckResult): string {
   switch (r.kind) {
     case "agree":
-      return "Both sides agree";
+      return i18n.t("math.check.agree");
     case "differ": {
       const at = Object.entries(r.at).map(([v, n]) => `${v} = ${n}`);
-      return at.length > 0 ? `They differ at ${at.join(", ")}` : "They differ";
+      return at.length > 0 ? i18n.t("math.check.differAt", { at: at.join(", ") }) : i18n.t("math.check.differ");
     }
     case "undecided":
-      return `Could not decide: ${r.reason}`;
+      return i18n.t("math.check.undecided", { reason: r.reason });
     case "notApplicable":
-      return "Could not decide: this is not an equation";
+      return i18n.t("math.check.notEquation");
   }
 }
 

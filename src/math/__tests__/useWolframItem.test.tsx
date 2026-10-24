@@ -20,7 +20,11 @@ import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
 import { textAttrsOf } from "../../text/textBox";
 import { latexToPlain } from "../cas";
-import { useWolframItem, NEEDS_APPID, NEEDS_CONSENT } from "../useWolframItem";
+import i18n from "../../i18n";
+import { useWolframItem } from "../useWolframItem";
+
+const NEEDS_APPID = i18n.t("math.wolfram.needsAppid");
+const NEEDS_CONSENT = i18n.t("math.wolfram.needsConsent");
 
 const s = () => useEditorStore.getState();
 

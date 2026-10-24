@@ -2,23 +2,25 @@
 // existing book, import with progress, then read the report and open the book.
 import { useModal } from "./useModal";
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import type { ImportProgress, SniffResult } from "../ipc/import";
 import { bookNameFromFile, reportNotes, sumReports, useImportStore } from "../stores/importStore";
 import { navigateTo } from "../stores/navigation";
 import { useNotebookStore } from "../stores/notebook";
 
-const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
-
 function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  if (bytes >= 1024 * 1024) return i18n.t("update.megabytes", { value: (bytes / (1024 * 1024)).toFixed(1) });
+  return i18n.t("import.kilobytes", { value: Math.max(1, Math.round(bytes / 1024)) });
 }
 
 function progressText(p: ImportProgress | undefined): string {
-  if (!p) return "Waiting";
-  if (p.phase === "reading") return "Reading the file";
-  if (p.phase === "parsing") return "Reading pages";
-  return p.pagesTotal > 0 ? `Placing pages (${p.pagesDone} of ${p.pagesTotal})` : "Placing pages";
+  if (!p) return i18n.t("import.progress.waiting");
+  if (p.phase === "reading") return i18n.t("import.progress.reading");
+  if (p.phase === "parsing") return i18n.t("import.progress.parsing");
+  return p.pagesTotal > 0
+    ? i18n.t("import.progress.placingCount", { done: p.pagesDone, total: p.pagesTotal })
+    : i18n.t("import.progress.placing");
 }
 
 /** Id of the first page of `unitId`, once the tree is loaded. */
@@ -33,18 +35,21 @@ function firstPageOf(unitId: string): string | null {
 }
 
 function FileRow({ file, onRemove }: { file: SniffResult; onRemove?: () => void }) {
+  const { t } = useTranslation();
   const ok = file.status === "ok";
   return (
     <li className="import-file" data-status={file.status}>
       <div>
         <strong>{file.filename}</strong>
         <div className="field-hint">
-          {ok ? `${file.sourceName} file, ${formatSize(file.size)}` : `Cannot be imported. ${file.reason ?? ""}`}
+          {ok
+            ? t("import.fileOk", { source: file.sourceName, size: formatSize(file.size) })
+            : t("import.fileRejected", { reason: file.reason ?? "" }).trim()}
         </div>
       </div>
       {onRemove && (
-        <button type="button" className="btn" aria-label={`Remove ${file.filename}`} onClick={onRemove}>
-          Remove
+        <button type="button" className="btn" aria-label={t("import.removeFile", { name: file.filename })} onClick={onRemove}>
+          {t("common.remove")}
         </button>
       )}
     </li>
@@ -52,6 +57,7 @@ function FileRow({ file, onRemove }: { file: SniffResult; onRemove?: () => void 
 }
 
 export default function ImportDialog() {
+  const { t } = useTranslation();
   const s = useImportStore();
   const units = useNotebookStore((n) => n.tree.units);
   const isOpen = s.open;
@@ -103,8 +109,8 @@ export default function ImportDialog() {
     if (s.stage === "importing") {
       return (
         <>
-          <h2>Importing</h2>
-          <ul className="import-files" aria-label="Progress">
+          <h2>{t("import.importing")}</h2>
+          <ul className="import-files" aria-label={t("import.progressLabel")}>
             {accepted.map((f) => (
               <li key={f.path} className="import-file">
                 <strong>{f.filename}</strong>
@@ -113,11 +119,11 @@ export default function ImportDialog() {
             ))}
           </ul>
           <div className="dialog-actions">
-            {s.cancelling && <span role="status">Cancelling… finishing the current file.</span>}
-            {s.queued.length > 0 && (
-              <span>{plural(s.queued.length, "more file")} will be offered when this import finishes.</span>
-            )}
-            <button type="button" className="btn" disabled={s.cancelling} onClick={() => void s.cancel()}>Cancel import</button>
+            {s.cancelling && <span role="status">{t("import.cancelling")}</span>}
+            {s.queued.length > 0 && <span>{t("import.queued", { count: s.queued.length })}</span>}
+            <button type="button" className="btn" disabled={s.cancelling} onClick={() => void s.cancel()}>
+              {t("import.cancel")}
+            </button>
           </div>
         </>
       );
@@ -129,25 +135,29 @@ export default function ImportDialog() {
       const { notes, warnings } = reportNotes(total);
       return (
         <>
-          <h2>{imported ? "Import finished" : "Nothing was imported"}</h2>
+          <h2>{imported ? t("import.finished") : t("import.nothing")}</h2>
           {imported && (
             <p>
-              {plural(total.pagesImported, "page")}, {plural(total.strokes, "stroke")}, {plural(total.texts, "text box", "text boxes")},{" "}
-              {plural(total.images, "image")}.
+              {t("import.summary", {
+                pages: t("import.counts.pages", { count: total.pagesImported }),
+                strokes: t("import.counts.strokes", { count: total.strokes }),
+                texts: t("import.counts.texts", { count: total.texts }),
+                images: t("import.counts.images", { count: total.images }),
+              })}
             </p>
           )}
           {notes.length > 0 && (
-            <ul aria-label="Skipped">
+            <ul aria-label={t("import.skipped")}>
               {notes.map((n) => <li key={n}>{n}</li>)}
             </ul>
           )}
           {warnings.length > 0 && (
-            <ul aria-label="Warnings">
+            <ul aria-label={t("import.warnings")}>
               {warnings.map((w) => <li key={w}>{w}</li>)}
             </ul>
           )}
           {failed.length > 0 && (
-            <ul aria-label="Failed files" className="import-files">
+            <ul aria-label={t("import.failedFiles")} className="import-files">
               {failed.map((r) => (
                 <li key={r.path} className="import-file" data-status="failed">
                   <div>
@@ -159,32 +169,36 @@ export default function ImportDialog() {
             </ul>
           )}
           <div className="dialog-actions">
-            <button type="button" className="btn" onClick={s.close}>Close</button>
+            <button type="button" className="btn" onClick={s.close}>
+              {t("common.close")}
+            </button>
             {s.queued.length > 0 && (
               <button type="button" className="btn" onClick={() => void s.openDialog({ paths: s.queued })}>
-                Import {plural(s.queued.length, "more file")}…
+                {t("import.importMore", { count: s.queued.length })}
               </button>
             )}
-            {imported && <button type="button" className="btn btn-primary" onClick={openBook}>Open book</button>}
+            {imported && <button type="button" className="btn btn-primary" onClick={openBook}>{t("import.openBook")}</button>}
           </div>
         </>
       );
     }
     return (
       <>
-        <h2>Import notes</h2>
+        <h2>{t("import.title")}</h2>
         {s.files.length === 0 ? (
-          <p>{s.sniffing ? "Checking files…" : "No files chosen yet."}</p>
+          <p>{s.sniffing ? t("import.checking") : t("import.noFiles")}</p>
         ) : (
-          <ul className="import-files" aria-label="Files">
+          <ul className="import-files" aria-label={t("import.files")}>
             {s.files.map((f) => <FileRow key={f.path} file={f} onRemove={() => s.removeFile(f.path)} />)}
           </ul>
         )}
         <div>
-          <button type="button" className="btn" onClick={() => void s.pickFiles()}>Add files…</button>
+          <button type="button" className="btn" onClick={() => void s.pickFiles()}>
+            {t("import.addFiles")}
+          </button>
         </div>
-        <div className="field" role="radiogroup" aria-label="Destination">
-          <span className="field-label">Put the pages in</span>
+        <div className="field" role="radiogroup" aria-label={t("import.destination")}>
+          <span className="field-label">{t("import.putPagesIn")}</span>
           <label>
             <input
               type="radio"
@@ -192,12 +206,12 @@ export default function ImportDialog() {
               checked={s.destination.kind === "new"}
               onChange={() => s.setDestination({ kind: "new", title: accepted[0] ? bookNameFromFile(accepted[0].filename) : "" })}
             />{" "}
-            A new book
+            {t("import.newBook")}
           </label>
           {s.destination.kind === "new" && (
             <input
               className="input"
-              aria-label="Book name"
+              aria-label={t("import.bookName")}
               value={s.destination.title}
               onChange={(e) => s.setDestination({ kind: "new", title: e.target.value })}
             />
@@ -210,30 +224,32 @@ export default function ImportDialog() {
               disabled={units.length === 0}
               onChange={() => units[0] && s.setDestination({ kind: "existing", unitId: units[0].id })}
             />{" "}
-            An existing book
+            {t("import.existingBook")}
           </label>
           {s.destination.kind === "existing" && (
             <select
               className="input"
-              aria-label="Book"
+              aria-label={t("import.book")}
               value={s.destination.unitId}
               onChange={(e) => s.setDestination({ kind: "existing", unitId: e.target.value })}
             >
-              {!destinationReady && <option value={s.destination.unitId}>Choose a book</option>}
+              {!destinationReady && <option value={s.destination.unitId}>{t("import.chooseBook")}</option>}
               {units.map((u) => <option key={u.id} value={u.id}>{u.title}</option>)}
             </select>
           )}
         </div>
         {s.error && <p role="alert" className="field-hint">{s.error}</p>}
         <div className="dialog-actions">
-          <button type="button" className="btn" onClick={s.close}>Cancel</button>
+          <button type="button" className="btn" onClick={s.close}>
+            {t("common.cancel")}
+          </button>
           <button
             type="button"
             className="btn btn-primary"
             disabled={accepted.length === 0 || s.sniffing || !destinationReady}
             onClick={() => void s.run()}
           >
-            Import
+            {t("import.import")}
           </button>
         </div>
       </>
@@ -247,7 +263,7 @@ export default function ImportDialog() {
         if (e.target === e.currentTarget && s.stage !== "importing") s.close();
       }}
     >
-      <div ref={dialogRef} className="card dialog" role="dialog" aria-modal="true" aria-label="Import notes">
+      <div ref={dialogRef} className="card dialog" role="dialog" aria-modal="true" aria-label={t("import.title")}>
         {body()}
       </div>
     </div>

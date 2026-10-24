@@ -2,6 +2,8 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage as message, type TKey } from "../i18n";
 import {
   detectSyncFolders,
   nextcloudShare,
@@ -14,17 +16,15 @@ import {
 import type { Unit } from "../model/types";
 import { useModal } from "./useModal";
 
-const message = (err: unknown): string =>
-  typeof err === "string" ? err : err instanceof Error ? err.message : "Something went wrong.";
-
-const EXPIRY: [string, string][] = [
-  ["never", "Never"],
-  ["7", "After 7 days"],
-  ["30", "After 30 days"],
+const EXPIRY: [string, TKey][] = [
+  ["never", "share.expiry.never"],
+  ["7", "share.expiry.week"],
+  ["30", "share.expiry.month"],
 ];
 
 export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): void }) {
   useModal();
+  const { t } = useTranslation();
   const [folders, setFolders] = useState<SyncFolder[]>([]);
   const [nc, setNc] = useState<NextcloudStatus | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
@@ -81,12 +81,12 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
 
   return (
     <div className="backdrop">
-      <div className="card dialog share-dialog" role="dialog" aria-modal="true" aria-label={`Share ${unit.title}`}>
-        <h2>Share {unit.title}</h2>
+      <div className="card dialog share-dialog" role="dialog" aria-modal="true" aria-label={t("share.title", { title: unit.title })}>
+        <h2>{t("share.title", { title: unit.title })}</h2>
 
-        <section className="share-section" aria-label="Save a copy to a synced folder">
-          <h3 className="field-subtitle">Save a copy to a synced folder</h3>
-          {folders.length === 0 && <p className="field-hint">No synced folders found on this computer.</p>}
+        <section className="share-section" aria-label={t("share.folderTitle")}>
+          <h3 className="field-subtitle">{t("share.folderTitle")}</h3>
+          {folders.length === 0 && <p className="field-hint">{t("share.noFolders")}</p>}
           <div className="share-folders">
             {folders.map((f) => (
               <button key={f.path} type="button" className="btn" disabled={busy} title={f.path} onClick={() => void saveTo(f.path)}>
@@ -94,45 +94,43 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
               </button>
             ))}
             <button type="button" className="btn" disabled={busy} onClick={() => void chooseFolder()}>
-              Choose another folder…
+              {t("share.chooseFolder")}
             </button>
           </div>
           {saved && (
             <p className="field-hint" role="status">
-              Saved to {saved}{" "}
+              {t("share.savedTo", { path: saved })}{" "}
               <button type="button" className="btn" onClick={() => void revealItemInDir(saved)}>
-                Show in folder
+                {t("share.showInFolder")}
               </button>
             </p>
           )}
         </section>
 
-        <section className="share-section" aria-label="Nextcloud">
-          <h3 className="field-subtitle">Nextcloud</h3>
-          {nc && !nc.signedIn && (
-            <p className="field-hint">Send a link to this book from your Nextcloud. Set up in Settings → Sharing.</p>
-          )}
+        <section className="share-section" aria-label={t("settings.sharing.nextcloud.label")}>
+          <h3 className="field-subtitle">{t("settings.sharing.nextcloud.label")}</h3>
+          {nc && !nc.signedIn && <p className="field-hint">{t("share.nextcloudHint")}</p>}
           {nc?.signedIn && (
             <>
-              <p className="field-hint">Signed in as {nc.user} on {nc.server}</p>
+              <p className="field-hint">{t("settings.sharing.nextcloud.signedIn", { user: nc.user, server: nc.server })}</p>
               <label className="field">
-                <span className="field-label">Link expires</span>
+                <span className="field-label">{t("share.expires")}</span>
                 <select className="input" value={expiry} onChange={(e) => setExpiry(e.target.value)} disabled={busy}>
                   {EXPIRY.map(([v, text]) => (
-                    <option key={v} value={v}>{text}</option>
+                    <option key={v} value={v}>{t(text)}</option>
                   ))}
                 </select>
               </label>
               <div>
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void upload()}>
-                  {busy ? "Working…" : "Upload and get link"}
+                  {busy ? t("share.working") : t("share.upload")}
                 </button>
               </div>
               {link && (
                 <div className="field">
-                  <input className="input" readOnly aria-label="Share link" value={link} onFocus={(e) => e.currentTarget.select()} />
+                  <input className="input" readOnly aria-label={t("share.link")} value={link} onFocus={(e) => e.currentTarget.select()} />
                   <button type="button" className="btn" onClick={() => void copy()}>
-                    {copied ? "Copied" : "Copy"}
+                    {copied ? t("common.copied") : t("common.copy")}
                   </button>
                 </div>
               )}
@@ -142,7 +140,9 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
 
         {error && <p role="alert" className="form-error">{error}</p>}
         <div className="dialog-actions">
-          <button type="button" className="btn" onClick={onClose}>Close</button>
+          <button type="button" className="btn" onClick={onClose}>
+            {t("common.close")}
+          </button>
         </div>
       </div>
     </div>

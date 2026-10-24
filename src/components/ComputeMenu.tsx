@@ -3,6 +3,8 @@
 // step (see ../math/computeResult); problems show as a toast.
 import { Function as FunctionIcon } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n, { errorMessage } from "../i18n";
 import { compute, type Op } from "../math/cas";
 import { COMPUTE_OPS, insertResultBelow, resultLatex } from "../math/computeResult";
 import { latexOf } from "../math/mathBox";
@@ -37,10 +39,11 @@ async function runOp(store: EditorStore, source: Element, op: Op): Promise<void>
     showToast(r.error);
     return;
   }
-  if (!insertResultBelow(store, source, { latex: resultLatex(src, op, r.latex) })) showToast("The result could not be added to this page.");
+  if (!insertResultBelow(store, source, { latex: resultLatex(src, op, r.latex) })) showToast(i18n.t("math.resultNotAdded"));
 }
 
 export default function ComputeMenu({ store, source, extraItems = [] }: ComputeMenuProps) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,7 +56,7 @@ export default function ComputeMenu({ store, source, extraItems = [] }: ComputeM
       try {
         await fn();
       } catch (err) {
-        showToast(err instanceof Error ? err.message : String(err));
+        showToast(errorMessage(err));
       } finally {
         setBusy(false);
       }
@@ -74,14 +77,14 @@ export default function ComputeMenu({ store, source, extraItems = [] }: ComputeM
         aria-expanded={open}
         aria-busy={busy}
         disabled={busy}
-        title="Compute"
+        title={t("math.compute")}
         onClick={() => setOpen((o) => !o)}
       >
-        <FunctionIcon size={16} /> {busy ? "Computing…" : "Compute ▸"}
+        <FunctionIcon size={16} /> {busy ? t("math.computing") : t("math.computeMenu")}
       </button>
       {open && (
-        <div className="tb-popover tb-menu" role="menu" aria-label="Compute">
-          {COMPUTE_OPS.map(({ op, label }) => item(op, label, () => run(() => runOp(store, source, op))))}
+        <div className="tb-popover tb-menu" role="menu" aria-label={t("math.compute")}>
+          {COMPUTE_OPS.map(({ op, labelKey }) => item(op, t(labelKey), () => run(() => runOp(store, source, op))))}
           {extraItems.map((x) => item(x.key, x.label, () => run(() => x.run({ store, source })), { disabled: x.disabled, title: x.title }))}
         </div>
       )}

@@ -2,11 +2,13 @@
 // wrote, then add them to a new page in the book.
 import { useModal } from "./useModal";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { errorMessage } from "../i18n";
 import { useNavigate } from "react-router";
 import {
   MAX_PRACTICE_QUESTIONS,
   QUESTION_TYPES,
-  QUESTION_TYPE_LABEL,
+  QUESTION_TYPE_LABEL_KEY,
   practiceGenerate,
   type PracticeQuestion,
   type QuestionType,
@@ -16,10 +18,11 @@ import { placePractice } from "../practice/placePractice";
 import { useNotebookStore } from "../stores/notebook";
 import { showToast } from "./Toast";
 
-const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+const message = (err: unknown): string => errorMessage(err);
 
 export default function PracticeDialog({ unit, onClose }: { unit: Unit; onClose(): void }) {
   useModal();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [count, setCount] = useState(5);
   const [types, setTypes] = useState<QuestionType[]>([...QUESTION_TYPES]);
@@ -28,8 +31,8 @@ export default function PracticeDialog({ unit, onClose }: { unit: Unit; onClose(
   const [questions, setQuestions] = useState<PracticeQuestion[] | null>(null);
 
   const clamped = Math.min(MAX_PRACTICE_QUESTIONS, Math.max(1, Math.round(count) || 1));
-  const toggle = (t: QuestionType) =>
-    setTypes((cur) => (cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t]));
+  const toggle = (q: QuestionType) =>
+    setTypes((cur) => (cur.includes(q) ? cur.filter((x) => x !== q) : [...cur, q]));
 
   const generate = async () => {
     setBusy("generating");
@@ -47,7 +50,7 @@ export default function PracticeDialog({ unit, onClose }: { unit: Unit; onClose(
     const { sections } = useNotebookStore.getState().tree;
     const section = sections.filter((s) => s.unitId === unit.id).sort((a, b) => a.orderIndex - b.orderIndex)[0];
     if (!section) {
-      showToast("This book has no section to put the questions in.");
+      showToast(t("practice.noSection"));
       return;
     }
     setBusy("adding");
@@ -63,12 +66,12 @@ export default function PracticeDialog({ unit, onClose }: { unit: Unit; onClose(
 
   return (
     <div className="backdrop">
-      <div className="card dialog" role="dialog" aria-modal="true" aria-label="Practice from this book">
-        <h2>Practice from this book</h2>
+      <div className="card dialog" role="dialog" aria-modal="true" aria-label={t("practice.title")}>
+        <h2>{t("practice.title")}</h2>
         {questions === null ? (
           <>
             <label className="field">
-              <span className="field-label">Number of questions</span>
+              <span className="field-label">{t("practice.count")}</span>
               <input
                 className="input"
                 type="number"
@@ -76,63 +79,63 @@ export default function PracticeDialog({ unit, onClose }: { unit: Unit; onClose(
                 max={MAX_PRACTICE_QUESTIONS}
                 value={count}
                 disabled={busy !== null}
-                aria-label="Number of questions"
+                aria-label={t("practice.count")}
                 onChange={(e) => setCount(Number(e.target.value))}
                 onBlur={() => setCount(clamped)}
               />
             </label>
-            <div className="field" role="group" aria-label="Question types">
-              <span className="field-label">Question types</span>
-              {QUESTION_TYPES.map((t) => (
-                <label key={t}>
-                  <input type="checkbox" checked={types.includes(t)} disabled={busy !== null} onChange={() => toggle(t)} />{" "}
-                  {QUESTION_TYPE_LABEL[t]}
+            <div className="field" role="group" aria-label={t("practice.types.label")}>
+              <span className="field-label">{t("practice.types.label")}</span>
+              {QUESTION_TYPES.map((q) => (
+                <label key={q}>
+                  <input type="checkbox" checked={types.includes(q)} disabled={busy !== null} onChange={() => toggle(q)} />{" "}
+                  {t(QUESTION_TYPE_LABEL_KEY[q])}
                 </label>
               ))}
             </div>
             <label className="field">
-              <span className="field-label">Anything else? (optional)</span>
+              <span className="field-label">{t("practice.extra")}</span>
               <textarea
                 className="input"
                 rows={2}
                 maxLength={500}
                 value={custom}
                 disabled={busy !== null}
-                aria-label="Extra instructions"
-                placeholder="For example: focus on integration by parts"
+                aria-label={t("practice.extraLabel")}
+                placeholder={t("practice.extraPlaceholder")}
                 onChange={(e) => setCustom(e.target.value)}
               />
             </label>
-            <p className="field-hint">Questions come from what the tutor has read in this book. The text is sent to your AI provider.</p>
-            {busy === "generating" && <p role="status">Writing questions…</p>}
+            <p className="field-hint">{t("practice.privacy")}</p>
+            {busy === "generating" && <p role="status">{t("practice.writing")}</p>}
             <div className="dialog-actions">
-              <button type="button" className="btn" onClick={onClose}>Cancel</button>
+              <button type="button" className="btn" onClick={onClose}>{t("common.cancel")}</button>
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={busy !== null || types.length === 0}
                 onClick={() => void generate()}
               >
-                {busy === "generating" ? "Generating…" : "Generate"}
+                {busy === "generating" ? t("practice.generating") : t("practice.generate")}
               </button>
             </div>
           </>
         ) : (
           <>
-            <p className="field-hint">{questions.length} {questions.length === 1 ? "question" : "questions"} ready.</p>
-            <ol className="practice-preview" aria-label="Questions">
+            <p className="field-hint">{t("practice.ready", { count: questions.length })}</p>
+            <ol className="practice-preview" aria-label={t("practice.questions")}>
               {questions.map((q, i) => (
                 <li key={i}>
                   <div>{q.problemText}</div>
                   {q.problemLatex && <code>{q.problemLatex}</code>}
-                  <div className="field-hint">{QUESTION_TYPE_LABEL[q.questionType]}</div>
+                  <div className="field-hint">{t(QUESTION_TYPE_LABEL_KEY[q.questionType])}</div>
                 </li>
               ))}
             </ol>
             <div className="dialog-actions">
-              <button type="button" className="btn" onClick={() => setQuestions(null)} disabled={busy !== null}>Back</button>
+              <button type="button" className="btn" onClick={() => setQuestions(null)} disabled={busy !== null}>{t("common.back")}</button>
               <button type="button" className="btn btn-primary" onClick={() => void add()} disabled={busy !== null}>
-                {busy === "adding" ? "Adding…" : "Add to a new page"}
+                {busy === "adding" ? t("practice.adding") : t("practice.add")}
               </button>
             </div>
           </>

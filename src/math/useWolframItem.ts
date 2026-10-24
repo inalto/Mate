@@ -2,6 +2,7 @@
 // (Rust-side status) and the consent setting; running it sends the typed maths (as plain text)
 // and inserts the short answer as a text box under the source.
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { ComputeMenuItem } from "../components/ComputeMenu";
 import { showToast } from "../components/Toast";
 import { wolframShortAnswer, wolframStatus } from "../ipc/math";
@@ -10,12 +11,9 @@ import { latexToPlain } from "./cas";
 import { insertResultBelow } from "./computeResult";
 import { latexOf } from "./mathBox";
 
-export const WOLFRAM_LABEL = "Ask Wolfram|Alpha";
-export const NEEDS_APPID = "Add a Wolfram|Alpha AppID in Settings first.";
-export const NEEDS_CONSENT = "Wolfram|Alpha is off. Turn it on in Settings.";
-
 export function useWolframItem(): ComputeMenuItem[] {
   const consent = useSettingsStore((s) => s.settings.wolframConsent);
+  const { t } = useTranslation();
   const [configured, setConfigured] = useState(false);
 
   useEffect(() => {
@@ -30,19 +28,19 @@ export function useWolframItem(): ComputeMenuItem[] {
   }, []);
 
   return useMemo(() => {
-    const title = !configured ? NEEDS_APPID : !consent ? NEEDS_CONSENT : undefined;
+    const title = !configured ? t("math.wolfram.needsAppid") : !consent ? t("math.wolfram.needsConsent") : undefined;
     return [
       {
         key: "wolfram",
-        label: WOLFRAM_LABEL,
+        label: t("math.wolfram.ask"),
         disabled: title !== undefined,
         title,
         async run({ store, source }) {
           const query = await latexToPlain(latexOf(source));
           const answer = await wolframShortAnswer(query);
-          if (!insertResultBelow(store, source, { text: answer })) showToast("The result could not be added to this page.");
+          if (!insertResultBelow(store, source, { text: answer })) showToast(t("math.resultNotAdded"));
         },
       },
     ];
-  }, [configured, consent]);
+  }, [configured, consent, t]);
 }

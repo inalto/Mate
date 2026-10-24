@@ -4,6 +4,7 @@
 import { PAGE_HEIGHT, PAGE_MODE_SIDE_MARGIN, PAGE_MODE_TOP_MARGIN, PAGE_WIDTH, LIMITS } from "../model/constants";
 import type { TextBoxContent } from "../model/content";
 import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { esc } from "../export/svgUtil";
 import { upsertElements } from "../ipc/elements";
 import { MAX_PRACTICE_QUESTIONS, type PracticeQuestion } from "../ipc/practice";
@@ -27,7 +28,7 @@ const LATEX_HEIGHT = FONT_SIZE * 2.6;
 
 export const practicePageTitle = (d: Date = new Date()): string => {
   const p = (n: number) => String(n).padStart(2, "0");
-  return `Practice — ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return i18n.t("practice.pageTitle", { date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` });
 };
 
 const boxWidth = PAGE_WIDTH - 2 * PAGE_MODE_SIDE_MARGIN;
@@ -123,7 +124,7 @@ export async function placePractice(questions: PracticeQuestion[], opts: PlaceOp
   let qs = questions;
   if (qs.length > MAX_PRACTICE_QUESTIONS) {
     qs = qs.slice(0, MAX_PRACTICE_QUESTIONS);
-    showToast(`A practice page holds up to ${MAX_PRACTICE_QUESTIONS} questions; the rest were left out.`);
+    showToast(i18n.t("practice.tooMany", { max: MAX_PRACTICE_QUESTIONS }));
   }
   if (qs.length === 0) return { pageIds: [], placed: 0 };
   const nowD = opts.now ?? new Date();

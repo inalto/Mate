@@ -2,6 +2,7 @@
 // plain text) as a new box under its source, one undo step. Shared by the Compute menu's local
 // operations and its remote-engine items.
 import { esc } from "../export/svgUtil";
+import type { TKey } from "../i18n";
 import { looksLikeEquation, type Op } from "./cas";
 import { MATH_HEIGHT_FACTOR, mathContent, mathElement } from "./mathBox";
 import type { TextBoxContent } from "../model/content";
@@ -15,12 +16,12 @@ import { topZ } from "../tools/zorder";
 /** Gap (page units) between the source box and the result under it. */
 export const RESULT_GAP = 12;
 
-export const COMPUTE_OPS: ReadonlyArray<{ op: Op; label: string }> = [
-  { op: "evaluate", label: "Evaluate" },
-  { op: "simplify", label: "Simplify" },
-  { op: "expand", label: "Expand" },
-  { op: "solve", label: "Solve" },
-  { op: "numeric", label: "Numeric value" },
+export const COMPUTE_OPS: ReadonlyArray<{ op: Op; labelKey: TKey }> = [
+  { op: "evaluate", labelKey: "math.ops.evaluate" },
+  { op: "simplify", labelKey: "math.ops.simplify" },
+  { op: "expand", labelKey: "math.ops.expand" },
+  { op: "solve", labelKey: "math.ops.solve" },
+  { op: "numeric", labelKey: "math.ops.numeric" },
 ];
 
 /**
