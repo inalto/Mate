@@ -26,7 +26,11 @@ pub struct AppState {
 
 impl AppState {
     pub fn init(app: &tauri::AppHandle) -> Result<AppState, String> {
-        let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+        // `MATE_DATA_DIR` points a dev build at a throwaway profile (screenshots, tests, demos).
+        let data_dir = match std::env::var_os("MATE_DATA_DIR").filter(|v| !v.is_empty()) {
+            Some(dir) => std::path::PathBuf::from(dir),
+            None => app.path().app_data_dir().map_err(|e| e.to_string())?,
+        };
         fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
         eprintln!("mate: data dir = {}", data_dir.display());
         let storage = Storage::open(&data_dir.join("mate.db")).map_err(|e| e.to_string())?;
