@@ -286,6 +286,20 @@ describe("navigation and landmarks", () => {
     expect(scroll).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Backup" }).getAttribute("aria-current")).toBe("location");
   });
+
+  it("opens_at_the_section_named_in_the_address", () => {
+    const scroll = vi.fn(function (this: Element) {
+      return this;
+    });
+    Element.prototype.scrollIntoView = scroll;
+    render(
+      <MemoryRouter initialEntries={["/settings#sharing"]}>
+        <Settings />
+      </MemoryRouter>,
+    );
+    expect(scroll.mock.contexts.some((el) => (el as Element).id === "set-sec-sharing")).toBe(true);
+    expect(screen.getByRole("button", { name: "Sharing" }).getAttribute("aria-current")).toBe("location");
+  });
 });
 
 describe("about and backup", () => {

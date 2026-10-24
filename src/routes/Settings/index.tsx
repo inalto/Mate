@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router";
 import { NAV_GROUPS } from "./nav";
 import { collectEntries, jumpToRow, searchEntries, type SearchEntry } from "./search";
 import AboutSection from "./sections/AboutSection";
@@ -19,13 +20,25 @@ import TutorSection from "./sections/TutorSection";
 import UpdatesSection from "./sections/UpdatesSection";
 import "./settings.css";
 
+/** The settings section a location hash (`#sharing`) names, or null. */
+const sectionOf = (hash: string): string | null => {
+  const id = hash.replace(/^#/, "");
+  return NAV_GROUPS.some((g) => g.sections.some((s) => s.id === id)) ? id : null;
+};
+
 export default function Settings() {
   const { t } = useTranslation();
   const contentRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<SearchEntry[]>([]);
-  const [active, setActive] = useState(NAV_GROUPS[0].sections[0].id);
+  // `/settings#sharing` opens at that section (links from dialogs elsewhere in the app).
+  const { hash } = useLocation();
+  const linked = sectionOf(hash);
+  const [active, setActive] = useState(linked ?? NAV_GROUPS[0].sections[0].id);
+  useEffect(() => {
+    if (linked) document.getElementById(`set-sec-${linked}`)?.scrollIntoView?.({ block: "start" });
+  }, [linked]);
 
   // Rows are read from the rendered pane so the index can never drift from what is shown.
   // They are re-read whenever the pane's DOM changes (sections that load late or swap in).

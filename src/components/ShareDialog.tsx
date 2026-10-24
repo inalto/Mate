@@ -14,6 +14,7 @@ import {
   type SyncFolder,
 } from "../ipc/share";
 import type { Unit } from "../model/types";
+import { navigateTo } from "../stores/navigation";
 import { useModal } from "./useModal";
 
 const EXPIRY: [string, TKey][] = [
@@ -25,10 +26,11 @@ const EXPIRY: [string, TKey][] = [
 export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): void }) {
   useModal();
   const { t } = useTranslation();
-  const [folders, setFolders] = useState<SyncFolder[]>([]);
+  /** Detected folders; null while the search runs. */
+  const [folders, setFolders] = useState<SyncFolder[] | null>(null);
   const [nc, setNc] = useState<NextcloudStatus | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
-  const [expiry, setExpiry] = useState("never");
+  const [expiry, setExpiry] = useState("30");
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -86,9 +88,14 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
 
         <section className="share-section" aria-label={t("share.folderTitle")}>
           <h3 className="field-subtitle">{t("share.folderTitle")}</h3>
-          {folders.length === 0 && <p className="field-hint">{t("share.noFolders")}</p>}
+          {folders === null && (
+            <p className="field-hint" role="status">
+              {t("share.lookingForFolders")}
+            </p>
+          )}
+          {folders?.length === 0 && <p className="field-hint">{t("share.noFolders")}</p>}
           <div className="share-folders">
-            {folders.map((f) => (
+            {folders?.map((f) => (
               <button key={f.path} type="button" className="btn" disabled={busy} title={f.path} onClick={() => void saveTo(f.path)}>
                 {f.label}
               </button>
@@ -109,10 +116,25 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
 
         <section className="share-section" aria-label={t("settings.sharing.nextcloud.label")}>
           <h3 className="field-subtitle">{t("settings.sharing.nextcloud.label")}</h3>
-          {nc && !nc.signedIn && <p className="field-hint">{t("share.nextcloudHint")}</p>}
+          {nc && !nc.signedIn && (
+            <p className="field-hint">
+              {t("share.nextcloudHint")}{" "}
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  onClose();
+                  navigateTo("/settings#sharing");
+                }}
+              >
+                {t("share.setUpInSettings")}
+              </button>
+            </p>
+          )}
           {nc?.signedIn && (
             <>
               <p className="field-hint">{t("settings.sharing.nextcloud.signedIn", { user: nc.user, server: nc.server })}</p>
+              <p className="field-hint">{t("share.publicLink")}</p>
               <label className="field">
                 <span className="field-label">{t("share.expires")}</span>
                 <select className="input" value={expiry} onChange={(e) => setExpiry(e.target.value)} disabled={busy}>

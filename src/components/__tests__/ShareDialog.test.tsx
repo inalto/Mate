@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Unit } from "../../model/types";
 
@@ -11,7 +11,9 @@ vi.mock("../../ipc/share", () => ({
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: vi.fn(async () => {}) }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn(async () => {}) }));
+vi.mock("../../stores/navigation", () => ({ navigateTo: vi.fn() }));
 
+import { navigateTo } from "../../stores/navigation";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { detectSyncFolders, nextcloudShare, nextcloudStatus, pickFolder, saveArchiveTo } from "../../ipc/share";
@@ -62,10 +64,32 @@ describe("ShareDialog", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("disk full");
   });
 
+  it("says it is looking for folders until the search ends", async () => {
+    let resolve!: (v: Array<{ service: string; label: string; path: string }>) => void;
+    vi.mocked(detectSyncFolders).mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<ShareDialog unit={unit} onClose={onClose} />);
+    expect(screen.getByText("Looking for synced folders…")).toBeTruthy();
+    expect(screen.queryByText(/No synced folders found/)).toBeNull();
+    await act(async () => resolve([]));
+    expect(screen.queryByText("Looking for synced folders…")).toBeNull();
+    expect(screen.getByText(/No synced folders found/)).toBeTruthy();
+  });
+
   it("points to Settings when Nextcloud is not set up", async () => {
     render(<ShareDialog unit={unit} onClose={onClose} />);
-    expect(await screen.findByText(/Set up in Settings → Sharing/)).toBeTruthy();
+    const setUp = await screen.findByRole("button", { name: "Set up in Settings" });
     expect(screen.queryByRole("button", { name: "Upload and get link" })).toBeNull();
+    fireEvent.click(setUp);
+    expect(onClose).toHaveBeenCalled();
+    expect(navigateTo).toHaveBeenCalledWith("/settings#sharing");
+  });
+
+  it("warns that the link is public and defaults to 30 days", async () => {
+    vi.mocked(nextcloudStatus).mockResolvedValue(signedIn);
+    render(<ShareDialog unit={unit} onClose={onClose} />);
+    const select = (await screen.findByLabelText("Link expires")) as HTMLSelectElement;
+    expect(select.value).toBe("30");
+    expect(screen.getByText("Anyone with the link can download this book.")).toBeTruthy();
   });
 
   it("uploads with the chosen expiry and copies the link", async () => {
@@ -73,7 +97,6 @@ describe("ShareDialog", () => {
     vi.mocked(nextcloudShare).mockResolvedValue({ url: "https://cloud.example.com/s/abc", path: "/Mate/Algebra.mate" });
     render(<ShareDialog unit={unit} onClose={onClose} />);
     const select = await screen.findByLabelText("Link expires");
-    expect((select as HTMLSelectElement).value).toBe("never");
     fireEvent.change(select, { target: { value: "7" } });
     fireEvent.click(screen.getByRole("button", { name: "Upload and get link" }));
     const link = (await screen.findByLabelText("Share link")) as HTMLInputElement;
@@ -89,6 +112,7 @@ describe("ShareDialog", () => {
     vi.mocked(nextcloudStatus).mockResolvedValue(signedIn);
     vi.mocked(nextcloudShare).mockRejectedValue(new Error("Could not reach the server"));
     render(<ShareDialog unit={unit} onClose={onClose} />);
+    fireEvent.change(await screen.findByLabelText("Link expires"), { target: { value: "never" } });
     fireEvent.click(await screen.findByRole("button", { name: "Upload and get link" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Could not reach the server");
     expect(nextcloudShare).toHaveBeenCalledWith("u1", null);
