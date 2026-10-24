@@ -63,4 +63,8 @@ pub trait Provider: Send + Sync {
     fn id(&self) -> &'static str;
     fn recognize(&self, req: &RecognizeRequest) -> Result<Verdict, AiError>;
     fn complete(&self, req: &TextRequest) -> Result<String, AiError>;
+    /// The model ids the service offers, sorted. No user content is sent.
+    fn list_models(&self) -> Result<Vec<String>, AiError> {
+        Err(AiError::Rejected("not supported".into()))
+    }
 }

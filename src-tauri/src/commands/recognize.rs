@@ -1,6 +1,7 @@
 //! `recognize_group`: sends one captured stroke group to the configured AI provider.
 //!
-//! Nothing is sent unless `settings.aiConsent` is on and a key is stored. The key is read from the
+//! Nothing is sent unless `settings.aiConsent` is on and a key is stored (local providers need
+//! no key; custom ones need an address). The key is read from the
 //! keychain here and handed to the provider; it never crosses IPC. The provider call is blocking
 //! and runs in `spawn_blocking`; at most [`PER_PAGE_CONCURRENCY`] calls per page run at once.
 
@@ -12,7 +13,8 @@ use base64::Engine;
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, ContextLine, PracticeContext, Provider, RecognizeRequest};
 use mate_core::ai::verdict::Verdict;
-use mate_core::ai::{default_model, is_known_provider, provider_for};
+use mate_core::ai::catalog::{effective_base_url, spec_or_default};
+use mate_core::ai::{default_model, provider_for};
 use mate_core::settings::Settings;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -112,29 +114,30 @@ pub struct RecognizeResult {
     pub model: String,
 }
 
-/// One provider instance, rebuilt only when the provider id, model or key changes. Real providers
+/// One provider instance, rebuilt only when the provider id, model, key or address changes. Real providers
 /// hold a blocking HTTP client, which must be built and dropped off the async runtime: call
 /// [`ProviderCache::get`] only from `spawn_blocking`.
 #[derive(Default)]
 pub struct ProviderCache(Mutex<Option<(u64, Arc<dyn Provider>)>>);
 
-/// A hash identifying (provider, model, key); the key itself is never stored here.
-fn fingerprint(provider: &str, model: &str, key: &str) -> u64 {
+/// A hash identifying (provider, model, key, base URL); the key itself is never stored here.
+fn fingerprint(provider: &str, model: &str, key: &str, base_url: &str) -> u64 {
     let mut h = DefaultHasher::new();
-    (provider, model, key).hash(&mut h);
+    (provider, model, key, base_url).hash(&mut h);
     h.finish()
 }
 
 impl ProviderCache {
-    pub fn get(&self, provider: &str, model: &str, key: &str) -> Arc<dyn Provider> {
-        let fp = fingerprint(provider, model, key);
+    /// `base_url` overrides the catalog address where allowed; empty means the default.
+    pub fn get(&self, provider: &str, model: &str, key: &str, base_url: &str) -> Arc<dyn Provider> {
+        let fp = fingerprint(provider, model, key, base_url);
         let mut slot = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((f, p)) = slot.as_ref()
             && *f == fp
         {
             return p.clone();
         }
-        let p: Arc<dyn Provider> = Arc::from(provider_for(provider, model, key.to_string()));
+        let p: Arc<dyn Provider> = Arc::from(provider_for(provider, model, key.to_string(), Some(base_url)));
         let old = slot.replace((fp, p.clone()));
         drop(slot);
         // The replaced provider (if this was its last user) is dropped here, off the runtime.
@@ -151,19 +154,39 @@ pub fn effective_model(provider: &str, model: &str) -> String {
     }
 }
 
-/// Provider id, model and key when checking is allowed; `Disabled` otherwise.
-pub fn resolve(settings: &Settings, store: &dyn KeyStore) -> Result<(String, String, String), RecognizeError> {
+/// What a provider call needs: the catalog id, the model setting (empty = default), the key
+/// (empty for keyless providers) and the effective address.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Resolved {
+    pub provider: String,
+    pub model: String,
+    pub key: String,
+    pub base_url: String,
+}
+
+/// The provider settings, without the consent check: `Disabled` when a needed key or address is
+/// missing. Unknown provider ids fall back to Anthropic.
+pub fn connection(settings: &Settings, store: &dyn KeyStore) -> Result<Resolved, AiError> {
+    let spec = spec_or_default(&settings.ai_provider);
+    let key = store.get(spec.id).map_err(|_| AiError::Disabled)?.filter(|k| !k.trim().is_empty());
+    let key = match key {
+        Some(k) => k,
+        None if !spec.needs_key => String::new(),
+        None => return Err(AiError::Disabled),
+    };
+    let base_url = effective_base_url(spec.id, &settings.ai_base_url);
+    if base_url.is_empty() {
+        return Err(AiError::Disabled);
+    }
+    Ok(Resolved { provider: spec.id.to_string(), model: settings.ai_model.clone(), key, base_url })
+}
+
+/// The provider settings when checking is allowed; `Disabled` otherwise.
+pub fn resolve(settings: &Settings, store: &dyn KeyStore) -> Result<Resolved, RecognizeError> {
     if settings.ai_consent != Some(true) || !settings.tutor_enabled {
         return Err(AiError::Disabled.into());
     }
-    let provider = if is_known_provider(&settings.ai_provider) {
-        settings.ai_provider.clone()
-    } else {
-        "anthropic".to_string()
-    };
-    let key = store.get(&provider).map_err(internal)?.filter(|k| !k.trim().is_empty());
-    let Some(key) = key else { return Err(AiError::Disabled.into()) };
-    Ok((provider, settings.ai_model.clone(), key))
+    Ok(connection(settings, store)?)
 }
 
 pub fn to_request(dto: RecognizeRequestDto) -> Result<RecognizeRequest, RecognizeError> {
@@ -226,9 +249,9 @@ pub async fn recognize_group(
         let store: Arc<dyn KeyStore> = state.keys.clone();
         let cache = state.providers.clone();
         Ok(move || {
-            let (provider_id, model, key) = resolve(&settings, store.as_ref())?;
-            let model = effective_model(&provider_id, &model);
-            Ok((cache.get(&provider_id, &model, &key), model))
+            let r = resolve(&settings, store.as_ref())?;
+            let model = effective_model(&r.provider, &r.model);
+            Ok((cache.get(&r.provider, &model, &r.key, &r.base_url), model))
         })
     };
     run_gated(&state.recognize_gates, &page_id, make_prepare, request).await
@@ -245,13 +268,18 @@ mod tests {
     #[test]
     fn provider_cache_rebuilds_on_provider_switch_and_reuses_otherwise() {
         let cache = ProviderCache::default();
-        let a = cache.get("anthropic", "", "k");
+        let a = cache.get("anthropic", "", "k", "");
         assert_eq!(a.id(), "anthropic");
-        assert!(Arc::ptr_eq(&a, &cache.get("anthropic", "", "k")));
-        let o = cache.get("openai", "", "k");
+        assert!(Arc::ptr_eq(&a, &cache.get("anthropic", "", "k", "")));
+        let o = cache.get("openai", "", "k", "");
         assert_eq!(o.id(), "openai");
-        assert!(Arc::ptr_eq(&o, &cache.get("openai", "", "k")));
-        assert_eq!(cache.get("anthropic", "", "k").id(), "anthropic");
+        assert!(Arc::ptr_eq(&o, &cache.get("openai", "", "k", "")));
+        assert_eq!(cache.get("anthropic", "", "k", "").id(), "anthropic");
+        // A new address for the same provider builds a new one.
+        let l = cache.get("ollama", "", "", "http://localhost:11434");
+        assert_eq!(l.id(), "ollama");
+        assert!(Arc::ptr_eq(&l, &cache.get("ollama", "", "", "http://localhost:11434")));
+        assert!(!Arc::ptr_eq(&l, &cache.get("ollama", "", "", "http://gpu-box:11434")));
     }
 
     fn consenting() -> Settings {
@@ -270,8 +298,28 @@ mod tests {
         let empty = MemoryStore::default();
         assert_eq!(resolve(&consenting(), &empty).unwrap_err().kind, "disabled");
 
-        let (p, m, k) = resolve(&consenting(), &store).unwrap();
-        assert_eq!((p.as_str(), m.as_str(), k.as_str()), ("anthropic", "", "sk-1"));
+        let r = resolve(&consenting(), &store).unwrap();
+        assert_eq!((r.provider.as_str(), r.model.as_str(), r.key.as_str()), ("anthropic", "", "sk-1"));
+        assert_eq!(r.base_url, "https://api.anthropic.com");
+    }
+
+    #[test]
+    fn local_providers_need_no_key_and_custom_needs_an_address() {
+        let store = MemoryStore::default();
+        let local = Settings { ai_provider: "ollama".into(), ai_base_url: "http://box:11434".into(), ..consenting() };
+        let r = resolve(&local, &store).unwrap();
+        assert_eq!((r.provider.as_str(), r.key.as_str(), r.base_url.as_str()), ("ollama", "", "http://box:11434"));
+        let custom = Settings { ai_provider: "custom".into(), ..consenting() };
+        assert_eq!(resolve(&custom, &store).unwrap_err().kind, "disabled");
+        let custom = Settings { ai_base_url: "https://llm.example.org".into(), ..custom };
+        store.set("custom", "opt").unwrap();
+        let r = resolve(&custom, &store).unwrap();
+        assert_eq!((r.key.as_str(), r.base_url.as_str()), ("opt", "https://llm.example.org"));
+        // A cloud service ignores the address setting and still needs its key.
+        let cloud = Settings { ai_provider: "groq".into(), ai_base_url: "http://elsewhere".into(), ..consenting() };
+        assert_eq!(resolve(&cloud, &store).unwrap_err().kind, "disabled");
+        store.set("groq", "gk").unwrap();
+        assert_eq!(resolve(&cloud, &store).unwrap().base_url, "https://api.groq.com/openai");
     }
 
     #[test]
@@ -456,13 +504,13 @@ mod tests {
         let same = tauri::async_runtime::block_on(async move {
             tauri::async_runtime::spawn(async move {
                 tauri::async_runtime::spawn_blocking(move || {
-                    let a = c.get("anthropic", "claude-opus-5-5", "sk-1");
-                    let b = c.get("anthropic", "claude-opus-5-5", "sk-1");
+                    let a = c.get("anthropic", "claude-opus-5-5", "sk-1", "");
+                    let b = c.get("anthropic", "claude-opus-5-5", "sk-1", "");
                     let same = Arc::ptr_eq(&a, &b);
                     drop((a, b));
                     // A new key replaces it (the old one is dropped on this blocking thread).
-                    let d = c.get("anthropic", "claude-opus-5-5", "sk-2");
-                    let e = c.get("anthropic", "claude-opus-5-5", "sk-2");
+                    let d = c.get("anthropic", "claude-opus-5-5", "sk-2", "");
+                    let e = c.get("anthropic", "claude-opus-5-5", "sk-2", "");
                     same && Arc::ptr_eq(&d, &e) && d.id() == "anthropic"
                 })
                 .await
@@ -474,7 +522,8 @@ mod tests {
         assert!(same);
         // Release the cached client off the runtime too.
         std::thread::spawn(move || drop(cache)).join().unwrap();
-        assert_ne!(fingerprint("anthropic", "m", "a"), fingerprint("anthropic", "m", "b"));
+        assert_ne!(fingerprint("anthropic", "m", "a", ""), fingerprint("anthropic", "m", "b", ""));
+        assert_ne!(fingerprint("ollama", "m", "", "http://a"), fingerprint("ollama", "m", "", "http://b"));
         assert_eq!(effective_model("anthropic", " "), "claude-opus-5-5");
     }
 }

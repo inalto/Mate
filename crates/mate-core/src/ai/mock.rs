@@ -12,6 +12,7 @@ pub struct MockProvider {
     texts: Mutex<VecDeque<Result<String, AiError>>>,
     requests: Mutex<Vec<RecognizeRequest>>,
     text_requests: Mutex<Vec<TextRequest>>,
+    models: Mutex<Option<Result<Vec<String>, AiError>>>,
 }
 
 impl MockProvider {
@@ -25,6 +26,12 @@ impl MockProvider {
     /// Scripts the replies to `complete`, in order.
     pub fn with_text(self, scripted: Vec<Result<String, AiError>>) -> Self {
         *self.texts.lock().unwrap() = scripted.into();
+        self
+    }
+
+    /// Scripts the (single) reply to `list_models`.
+    pub fn with_models(self, scripted: Result<Vec<String>, AiError>) -> Self {
+        *self.models.lock().unwrap() = Some(scripted);
         self
     }
 
@@ -56,5 +63,9 @@ impl Provider for MockProvider {
     fn complete(&self, req: &TextRequest) -> Result<String, AiError> {
         self.text_requests.lock().unwrap().push(req.clone());
         self.texts.lock().unwrap().pop_front().unwrap_or_else(|| Err(exhausted()))
+    }
+
+    fn list_models(&self) -> Result<Vec<String>, AiError> {
+        self.models.lock().unwrap().take().unwrap_or_else(|| Err(exhausted()))
     }
 }

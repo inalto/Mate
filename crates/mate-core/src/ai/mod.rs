@@ -4,6 +4,7 @@
 //! a key for the selected provider.
 
 pub mod anthropic;
+pub mod catalog;
 pub mod keystore;
 pub mod mock;
 pub mod openai;
@@ -15,39 +16,41 @@ pub mod verdict;
 use provider::{AiError, Provider};
 use verdict::Verdict;
 
-/// Provider ids accepted from settings and the UI.
-pub const PROVIDERS: [&str; 2] = ["anthropic", "openai"];
-
 pub fn is_known_provider(id: &str) -> bool {
-    PROVIDERS.contains(&id)
+    catalog::spec(id).is_some()
 }
 
-/// The model used when `settings.aiModel` is empty.
+/// The model used when `settings.aiModel` is empty (may be empty: LM Studio and custom
+/// endpoints have no default).
 pub fn default_model(provider: &str) -> &'static str {
-    match provider {
-        "anthropic" => "claude-opus-5-5",
-        "openai" => "gpt-5",
-        _ => "",
-    }
+    catalog::spec(provider).map_or("", |s| s.default_model)
 }
 
-/// The provider for `settings_provider`. An empty `model` means the provider's default.
+/// The provider for `settings_provider`. An empty `model` means the provider's default;
+/// `base_url` overrides the catalog address where the provider allows it (local and custom).
 /// `"mock"` gives an empty [`mock::MockProvider`]; unknown ids fall back to Anthropic.
-pub fn provider_for(settings_provider: &str, model: &str, key: String) -> Box<dyn Provider> {
+pub fn provider_for(settings_provider: &str, model: &str, key: String, base_url: Option<&str>) -> Box<dyn Provider> {
+    if settings_provider == "mock" {
+        return Box::new(mock::MockProvider::new(Vec::new()));
+    }
+    let spec = catalog::spec_or_default(settings_provider);
     let model = match model.trim() {
-        "" => default_model(settings_provider).to_string(),
+        "" => spec.default_model.to_string(),
         m => m.to_string(),
     };
-    match settings_provider {
-        "mock" => Box::new(mock::MockProvider::new(Vec::new())),
-        "openai" => Box::new(openai::OpenAiProvider::new(key, model, openai::DEFAULT_BASE_URL.to_string())),
-        _ => Box::new(anthropic::AnthropicProvider::new(key, model, anthropic::DEFAULT_BASE_URL.to_string())),
+    let base = catalog::effective_base_url(spec.id, base_url.unwrap_or(""));
+    match spec.wire {
+        catalog::Wire::Anthropic => Box::new(anthropic::AnthropicProvider::new(key, model, base)),
+        catalog::Wire::OpenAiCompat => Box::new(
+            openai::OpenAiProvider::new(key, model, base).with_quirks(openai::Quirks::from_spec(spec)).with_id(spec.id),
+        ),
     }
 }
 
 /// Parses a provider's structured-output text into a validated [`Verdict`]. Enum strings are
 /// compared case-insensitively (models sometimes capitalise them).
 pub fn parse_verdict(text: &str) -> Result<Verdict, AiError> {
+    let text = openai::extract_json_object(text).unwrap_or(text);
     let mut v: serde_json::Value = serde_json::from_str(text.trim())
         .map_err(|_| AiError::InvalidResponse("the answer was not JSON".into()))?;
     if !v.is_object() {

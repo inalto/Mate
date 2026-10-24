@@ -1,6 +1,7 @@
-//! OpenAI Chat Completions provider (blocking; callers run it off the async runtime).
+//! OpenAI Chat Completions provider (blocking; callers run it off the async runtime). Also speaks
+//! to every OpenAI-compatible service in the catalog, with that service's [`Quirks`].
 //!
-//! The key is sent only in the `Authorization: Bearer` header. Neither the key nor request bodies are logged,
+//! The key is sent only in the `Authorization: Bearer` header (and not at all when empty). Neither the key nor request bodies are logged,
 //! and `Debug` redacts the key.
 
 use std::fmt;
@@ -10,6 +11,7 @@ use std::time::{Duration, Instant};
 use base64::Engine;
 use serde_json::{Value, json};
 
+use super::catalog::{ProviderSpec, Structured, TokenParam};
 use super::parse_verdict;
 use super::prompts::{RECOGNIZE_SYSTEM, recognize_user_text};
 use super::provider::{AiError, Provider, RecognizeRequest, TextRequest};
@@ -19,20 +21,73 @@ pub const DEFAULT_BASE_URL: &str = "https://api.openai.com";
 /// `max_completion_tokens` is the parameter gpt-5 / reasoning models accept (`max_tokens` is rejected).
 const MAX_TOKENS: u32 = 4096;
 const TIMEOUT: Duration = Duration::from_secs(30);
+/// Models on this computer can be slow, especially reading an image on a CPU.
+const LOCAL_TIMEOUT: Duration = Duration::from_secs(120);
+const LOCAL_DEADLINE: Duration = Duration::from_secs(180);
+const LIST_TIMEOUT: Duration = Duration::from_secs(15);
 /// Retries after the first attempt, on 429 / 5xx / network failures.
 const RETRIES: u32 = 2;
+
+/// How one OpenAI-compatible service differs from OpenAI itself.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Quirks {
+    pub chat_path: &'static str,
+    pub models_path: Option<&'static str>,
+    /// List only models whose `architecture.input_modalities` include `"image"` (OpenRouter).
+    pub models_vision_only: bool,
+    pub structured: Structured,
+    pub token_param: TokenParam,
+    /// Sent on every request (never secrets).
+    pub extra_headers: &'static [(&'static str, &'static str)],
+    /// A program on this computer: longer timeouts.
+    pub local: bool,
+}
+
+impl Default for Quirks {
+    /// OpenAI's own API.
+    fn default() -> Self {
+        Quirks {
+            chat_path: "/v1/chat/completions",
+            models_path: Some("/v1/models"),
+            models_vision_only: false,
+            structured: Structured::JsonSchema,
+            token_param: TokenParam::MaxCompletionTokens,
+            extra_headers: &[],
+            local: false,
+        }
+    }
+}
+
+impl Quirks {
+    pub fn from_spec(s: &ProviderSpec) -> Self {
+        Quirks {
+            chat_path: s.chat_path,
+            models_path: s.models_path,
+            models_vision_only: s.models_vision_only,
+            structured: s.structured,
+            token_param: s.token_param,
+            extra_headers: s.extra_headers,
+            local: s.local,
+        }
+    }
+}
 
 pub struct OpenAiProvider {
     api_key: String,
     model: String,
     base_url: String,
     backoff: Duration,
+    quirks: Quirks,
+    id: &'static str,
+    timeout: Duration,
+    deadline: Duration,
     client: reqwest::blocking::Client,
 }
 
 impl fmt::Debug for OpenAiProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("OpenAiProvider")
+            .field("id", &self.id)
             .field("model", &self.model)
             .field("base_url", &self.base_url)
             .field("api_key", &"<redacted>")
@@ -61,9 +116,76 @@ impl OpenAiProvider {
         OpenAiProvider {
             api_key,
             model,
-            base_url: base_url.trim_end_matches('/').to_string(),
+            base_url: base_url.trim().trim_end_matches('/').to_string(),
             backoff: Duration::from_millis(800),
+            quirks: Quirks::default(),
+            id: "openai",
+            timeout: TIMEOUT,
+            deadline: DEADLINE,
             client,
+        }
+    }
+
+    pub fn with_quirks(mut self, quirks: Quirks) -> Self {
+        self.quirks = quirks;
+        if quirks.local {
+            self.timeout = LOCAL_TIMEOUT;
+            self.deadline = LOCAL_DEADLINE;
+        }
+        self
+    }
+
+    /// The catalog id reported by [`Provider::id`] (default `"openai"`).
+    pub fn with_id(mut self, id: &'static str) -> Self {
+        self.id = id;
+        self
+    }
+
+    /// `base_url + path`, without doubling `/v1` when the user's address already ends with it.
+    fn url(&self, path: &str) -> String {
+        match path.strip_prefix("/v1/") {
+            Some(rest) if self.base_url.ends_with("/v1") => format!("{}/{rest}", self.base_url),
+            _ => format!("{}{path}", self.base_url),
+        }
+    }
+
+    /// Authorization (when a key is set) and the service's extra headers.
+    fn headers(&self, mut req: reqwest::blocking::RequestBuilder) -> reqwest::blocking::RequestBuilder {
+        if !self.api_key.trim().is_empty() {
+            req = req.header("authorization", format!("Bearer {}", self.api_key));
+        }
+        for (k, v) in self.quirks.extra_headers {
+            req = req.header(*k, *v);
+        }
+        req
+    }
+
+    fn set_limit(&self, body: &mut Value, max: u32) {
+        let field = match self.quirks.token_param {
+            TokenParam::MaxTokens => "max_tokens",
+            TokenParam::MaxCompletionTokens => "max_completion_tokens",
+        };
+        body[field] = json!(max);
+    }
+
+    /// The system prompt, with the schema appended when the service cannot enforce it itself.
+    fn system_prompt(&self, system: &str, schema: Option<&Value>) -> String {
+        match schema {
+            Some(schema) if self.quirks.structured != Structured::JsonSchema => {
+                let rule = format!(
+                    "Reply with only one JSON object and no other text. It must match this JSON Schema:\n{schema}"
+                );
+                if system.trim().is_empty() { rule } else { format!("{system}\n\n{rule}") }
+            }
+            _ => system.to_string(),
+        }
+    }
+
+    fn set_format(&self, body: &mut Value, schema: &Value, name: &str) {
+        match self.quirks.structured {
+            Structured::JsonSchema => body["response_format"] = response_format(schema, name),
+            Structured::JsonObject => body["response_format"] = json!({ "type": "json_object" }),
+            Structured::PromptOnly => {}
         }
     }
 
@@ -78,8 +200,8 @@ impl OpenAiProvider {
         let start = Instant::now();
         let mut attempt = 0;
         loop {
-            let left = DEADLINE.saturating_sub(start.elapsed());
-            match self.send_once(body, left.min(TIMEOUT)) {
+            let left = self.deadline.saturating_sub(start.elapsed());
+            match self.send_once(body, left.min(self.timeout)) {
                 Ok(text) => return Ok(text),
                 Err(Failure::Final(e)) => return Err(e),
                 Err(Failure::Transient(e, retry_after)) => {
@@ -89,7 +211,7 @@ impl OpenAiProvider {
                         None => self.backoff * 2u32.pow(attempt),
                     };
                     // Another try must fit in the deadline with at least a few seconds to run.
-                    if attempt >= RETRIES || start.elapsed() + wait + Duration::from_secs(5) > DEADLINE {
+                    if attempt >= RETRIES || start.elapsed() + wait + Duration::from_secs(5) > self.deadline {
                         return Err(e);
                     }
                     thread::sleep(wait);
@@ -101,10 +223,8 @@ impl OpenAiProvider {
 
     fn send_once(&self, body: &Value, timeout: Duration) -> Result<String, Failure> {
         let res = self
-            .client
-            .post(format!("{}/v1/chat/completions", self.base_url))
+            .headers(self.client.post(self.url(self.quirks.chat_path)))
             .timeout(timeout)
-            .header("authorization", format!("Bearer {}", self.api_key))
             .header("content-type", "application/json")
             .body(body.to_string())
             .send()
@@ -144,6 +264,78 @@ fn network_error(e: &reqwest::Error) -> AiError {
         "the request failed"
     };
     AiError::Network(what.to_string())
+}
+
+/// Maps a model-list reply. Never retried: the user pressed a button and sees the answer.
+pub(crate) fn model_list_reply(status: u16, body: &str, vision_only: bool) -> Result<Vec<String>, AiError> {
+    match status {
+        200..=299 => parse_model_list(body, vision_only),
+        401 | 403 => Err(AiError::Auth),
+        402 => Err(AiError::Billing),
+        429 => Err(AiError::RateLimited),
+        _ => Err(AiError::Network(format!("the service answered {status}"))),
+    }
+}
+
+/// Model ids from an OpenAI-style (`data[].id`) or Ollama (`models[].name`) list, sorted and
+/// deduplicated. With `vision_only`, only `data[]` entries whose
+/// `architecture.input_modalities` include `"image"` are kept (OpenRouter).
+pub fn parse_model_list(body: &str, vision_only: bool) -> Result<Vec<String>, AiError> {
+    let v: Value = serde_json::from_str(body).map_err(|_| AiError::InvalidResponse("not JSON".into()))?;
+    let reads_images = |m: &Value| {
+        m["architecture"]["input_modalities"].as_array().is_some_and(|a| a.iter().any(|x| x == "image"))
+    };
+    let mut ids: Vec<String> = if let Some(data) = v["data"].as_array() {
+        data.iter().filter(|m| !vision_only || reads_images(m)).filter_map(|m| m["id"].as_str()).map(str::to_string).collect()
+    } else if let Some(models) = v["models"].as_array() {
+        models.iter().filter_map(|m| m["name"].as_str().or(m["model"].as_str())).map(str::to_string).collect()
+    } else {
+        return Err(AiError::InvalidResponse("no model list in the reply".into()));
+    };
+    // Gemini lists `models/gemini-…`; its chat endpoint takes the bare id.
+    for id in &mut ids {
+        if let Some(bare) = id.strip_prefix("models/") {
+            *id = bare.to_string();
+        }
+    }
+    ids.retain(|id| !id.trim().is_empty());
+    ids.sort();
+    ids.dedup();
+    Ok(ids)
+}
+
+/// The first balanced `{…}` in a reply, skipping any `<think>…</think>` preamble, code fences and
+/// prose around it. Braces inside JSON strings are ignored.
+pub fn extract_json_object(text: &str) -> Option<&str> {
+    let hay = match text.rfind("</think>") {
+        Some(i) => &text[i + "</think>".len()..],
+        None => text,
+    };
+    let open = hay.find('{')?;
+    let (mut depth, mut in_str, mut escaped) = (0usize, false, false);
+    for (i, &b) in hay.as_bytes().iter().enumerate().skip(open) {
+        if in_str {
+            match b {
+                _ if escaped => escaped = false,
+                b'\\' => escaped = true,
+                b'"' => in_str = false,
+                _ => {}
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_str = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&hay[open..=i]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// A 429 whose `error.code` (or `error.type`) is `insufficient_quota`: out of credit, not busy.
@@ -217,17 +409,16 @@ fn response_format(schema: &Value, name: &str) -> Value {
 
 impl Provider for OpenAiProvider {
     fn id(&self) -> &'static str {
-        "openai"
+        self.id
     }
 
     fn recognize(&self, req: &RecognizeRequest) -> Result<Verdict, AiError> {
         let data = base64::engine::general_purpose::STANDARD.encode(&req.image_png);
-        let body = json!({
+        let schema = Verdict::json_schema();
+        let mut body = json!({
             "model": self.model,
-            "max_completion_tokens": MAX_TOKENS,
-            "response_format": response_format(&Verdict::json_schema(), "verdict"),
             "messages": [
-                { "role": "system", "content": RECOGNIZE_SYSTEM },
+                { "role": "system", "content": self.system_prompt(RECOGNIZE_SYSTEM, Some(&schema)) },
                 {
                     "role": "user",
                     "content": [
@@ -237,25 +428,40 @@ impl Provider for OpenAiProvider {
                 }
             ]
         });
+        self.set_limit(&mut body, MAX_TOKENS);
+        self.set_format(&mut body, &schema, "verdict");
         let text = self.send(&body)?;
         parse_verdict(&text)
     }
 
     fn complete(&self, req: &TextRequest) -> Result<String, AiError> {
         let mut messages = Vec::new();
+        let system = self.system_prompt(&req.system, req.json_schema.as_ref());
         // An empty system prompt is omitted.
-        if !req.system.trim().is_empty() {
-            messages.push(json!({ "role": "system", "content": req.system }));
+        if !system.trim().is_empty() {
+            messages.push(json!({ "role": "system", "content": system }));
         }
         messages.push(json!({ "role": "user", "content": req.user }));
-        let mut body = json!({
-            "model": self.model,
-            "max_completion_tokens": req.max_tokens.max(1),
-            "messages": messages
-        });
-        if let Some(schema) = &req.json_schema {
-            body["response_format"] = response_format(schema, "result");
-        }
-        self.send(&body)
+        let mut body = json!({ "model": self.model, "messages": messages });
+        self.set_limit(&mut body, req.max_tokens.max(1));
+        let Some(schema) = &req.json_schema else { return self.send(&body) };
+        self.set_format(&mut body, schema, "result");
+        let text = self.send(&body)?;
+        // Services without enforced schemas wrap the object in prose or code fences.
+        Ok(extract_json_object(&text).map_or(text.clone(), str::to_string))
+    }
+
+    fn list_models(&self) -> Result<Vec<String>, AiError> {
+        let Some(path) = self.quirks.models_path else {
+            return Err(AiError::Rejected("not supported".into()));
+        };
+        let res = self
+            .headers(self.client.get(self.url(path)))
+            .timeout(LIST_TIMEOUT)
+            .send()
+            .map_err(|e| network_error(&e))?;
+        let status = res.status().as_u16();
+        let text = res.text().map_err(|e| network_error(&e))?;
+        model_list_reply(status, &text, self.quirks.models_vision_only)
     }
 }

@@ -55,6 +55,7 @@
   "aiConsent": null,
   "aiProvider": "anthropic",
   "aiModel": "",
+  "aiBaseUrl": "",
   "trashRetentionDays": 30,
   "defaultExportFormat": "pdf",
   "recentColors": [],

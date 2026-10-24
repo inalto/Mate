@@ -97,6 +97,8 @@ pub fn run() {
       ai::clear_ai_key,
       ai::get_ai_status,
       ai::test_ai_key,
+      ai::list_ai_providers,
+      ai::list_ai_models,
       thumbnails::save_thumbnail,
       assets::save_asset,
       assets::save_asset_from_path,
