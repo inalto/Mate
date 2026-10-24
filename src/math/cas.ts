@@ -16,6 +16,10 @@ export type ComputeResult = { latex: string } | { error: string };
 export type LocalCheckResult =
   | { kind: "agree" }
   | { kind: "differ"; at: Record<string, number> }
+  /** True exactly for these real values (LaTeX `x=2` each). */
+  | { kind: "holds"; solutions: string[] }
+  /** True for no real value. */
+  | { kind: "never" }
   | { kind: "undecided"; reason: string }
   | { kind: "notApplicable" };
 
@@ -172,19 +176,82 @@ const draw = (rand: () => number): number => Math.round((rand() * 2 - 1) * SAMPL
 
 type PairResult = Exclude<LocalCheckResult, { kind: "notApplicable" }>;
 
-function checkPair(ce: ComputeEngine, a: Expr, b: Expr, rand: () => number): PairResult {
+/** The complex value of `e` at `v = root`, or null when it has none. */
+function complexAt(e: Expr, v: string, root: Expr): { re: number; im: number } | null {
+  try {
+    const n = e.subs({ [v]: root }).N();
+    return Number.isFinite(n.re) && Number.isFinite(n.im) ? { re: n.re, im: n.im } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Looser tolerance for checking a solution (the engine may round roots it found numerically). */
+const ROOT_TOLERANCE = 1e-7;
+const nearly = (a: number, b: number): boolean => Math.abs(a - b) <= ROOT_TOLERANCE * Math.max(1, Math.abs(a), Math.abs(b));
+
+/** LaTeX of a real root: exact when the engine found it exactly, else NUMERIC_DIGITS significant digits. */
+function rootLatex(r: Expr, re: number): string {
+  if (/\d\.\d|\\,/.test(r.latex)) return String(Number(re.toPrecision(NUMERIC_DIGITS)));
+  return r.latex;
+}
+
+/**
+ * Solve `a = b` for its single unknown `v`. `never` when there is no real solution, `holds` with
+ * the real solutions (each checked by substitution), null when the engine cannot tell (no answer,
+ * or only answers that do not satisfy the equation).
+ */
+function solvePair(eng: Engine, a: Expr, b: Expr, v: string): PairResult | null {
+  let roots: unknown;
+  try {
+    roots = eng.ce.box(["Equal", a, b]).solve(v);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(roots)) return null;
+  if (roots.length === 0) return { kind: "never" };
+  const name = eng.ce.box(v).latex;
+  const real: string[] = [];
+  let complex = 0;
+  for (const r of roots as ReadonlyArray<unknown>) {
+    if (!eng.mod.isExpression(r) || r.unknowns.length > 0 || hasError(r.json)) continue;
+    const va = complexAt(a, v, r);
+    const vb = complexAt(b, v, r);
+    if (!va || !vb || !nearly(va.re, vb.re) || !nearly(va.im, vb.im)) continue; // not a solution
+    const value = r.N();
+    if (!Number.isFinite(value.re) || !Number.isFinite(value.im)) continue;
+    if (Math.abs(value.im) > ROOT_TOLERANCE * Math.max(1, Math.abs(value.re))) {
+      complex++;
+      continue;
+    }
+    const latex = katexSafe(`${name}=${rootLatex(r, value.re)}`);
+    if (!real.includes(latex)) real.push(latex);
+  }
+  if (real.length > 0) return { kind: "holds", solutions: real };
+  return complex > 0 ? { kind: "never" } : null;
+}
+
+function checkPair(eng: Engine, a: Expr, b: Expr, rand: () => number): PairResult {
+  const ce = eng.ce;
   if (a.isSame(b)) return { kind: "agree" };
   const vars = [...new Set([...a.unknowns, ...b.unknowns])].sort();
   if (vars.length === 0) {
     const eq = a.isEqual(b);
     if (eq === true) return { kind: "agree" };
     if (eq === false) return { kind: "differ", at: {} };
-    return { kind: "undecided", reason: i18n.t("math.check.reasons.noNumeric") };
+    const va = realAt(a, {});
+    const vb = realAt(b, {});
+    if (Number.isNaN(va) || Number.isNaN(vb)) return { kind: "undecided", reason: i18n.t("math.check.reasons.noNumeric") };
+    return close(va, vb) ? { kind: "agree" } : { kind: "differ", at: {} };
   }
   try {
     if (ce.box(["Subtract", a, b]).simplify().isSame(0)) return { kind: "agree" };
   } catch {
-    /* fall back to sampling */
+    /* not an identity the engine recognises */
+  }
+  if (vars.length === 1) {
+    const solved = solvePair(eng, a, b, vars[0]);
+    if (solved) return solved;
   }
   let valid = 0;
   for (let i = 0; i < MAX_DRAWS && valid < SAMPLES; i++) {
@@ -201,9 +268,12 @@ function checkPair(ce: ComputeEngine, a: Expr, b: Expr, rand: () => number): Pai
 }
 
 /**
- * Equivalence test of the sides of an equation or equality chain (every adjacent pair): symbolic
- * first, else 12 random samples in [-5, 5] for every free variable (relative tolerance 1e-9).
- * Not an equation → `notApplicable`. `rand` is for tests.
+ * Check of the sides of an equation or equality chain (every adjacent pair). A pair the engine
+ * simplifies to the same thing agrees; otherwise, with one unknown, it is solved: `holds` for its
+ * real solutions, `never` when there is none. When that is not possible (several unknowns, no
+ * answer from the engine), 12 random samples in [-5, 5] for every free variable decide (relative
+ * tolerance 1e-9). Without unknowns the two sides are compared as numbers. The first pair that is
+ * not an identity gives the result. Not an equation → `notApplicable`. `rand` is for tests.
  */
 export async function localCheck(latex: string, rand: () => number = Math.random): Promise<LocalCheckResult> {
   if (!looksLikeEquation(latex)) return { kind: "notApplicable" };
@@ -221,9 +291,9 @@ export async function localCheck(latex: string, rand: () => number = Math.random
     if (!sides) return { kind: "notApplicable" };
     let undecided: PairResult | null = null;
     for (let i = 0; i + 1 < sides.length; i++) {
-      const r = checkPair(eng.ce, sides[i], sides[i + 1], rand);
-      if (r.kind === "differ") return r;
+      const r = checkPair(eng, sides[i], sides[i + 1], rand);
       if (r.kind === "undecided") undecided ??= r;
+      else if (r.kind !== "agree") return r;
     }
     return undecided ?? { kind: "agree" };
   } catch {
@@ -240,12 +310,46 @@ export function localCheckMessage(r: LocalCheckResult): string {
       const at = Object.entries(r.at).map(([v, n]) => `${v} = ${n}`);
       return at.length > 0 ? i18n.t("math.check.differAt", { at: at.join(", ") }) : i18n.t("math.check.differ");
     }
+    case "holds":
+      return i18n.t("math.check.holds", { solutions: orList(r.solutions.map(readableLatex)) });
+    case "never":
+      return i18n.t("math.check.never");
     case "undecided":
       return i18n.t("math.check.undecided", { reason: r.reason });
     case "notApplicable":
       return i18n.t("math.check.notEquation");
   }
 }
+
+/** "a or b or c" in the interface language. */
+function orList(items: string[]): string {
+  try {
+    return new Intl.ListFormat(i18n.language || "en", { type: "disjunction" }).format(items);
+  } catch {
+    return items.join(", ");
+  }
+}
+
+/** A short solution like `x=-\frac{3}{2}` as readable text (`x = −3/2`). */
+export function readableLatex(latex: string): string {
+  let s = latex;
+  for (let i = 0; i < 4; i++) s = s.replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, (_, n: string, d: string) => `${wrap(n)}/${wrap(d)}`);
+  for (let i = 0; i < 4; i++) s = s.replace(/\\sqrt\{([^{}]*)\}/g, (_, a: string) => `√${wrap(a)}`);
+  s = s
+    .replace(/\\mathrm\{([^{}]*)\}/g, "$1")
+    .replace(/\\pi\b/g, "π")
+    .replace(/\\(cdot|times)\b/g, "·")
+    .replace(/\\left|\\right/g, "")
+    .replace(/\\,/g, "")
+    .replace(/[{}]/g, "")
+    .replace(/\\/g, "")
+    .replace(/-/g, "−")
+    .replace(/\s*=\s*/g, " = ");
+  return s.trim();
+}
+
+/** Parentheses around a compound fraction part or root argument. */
+const wrap = (s: string): string => (/^[\w.√π]+$/.test(s) ? s : `(${s})`);
 
 /** Plain ASCII form of `latex` (e.g. `1/2 * x^2 + sqrt(3)`), for remote engines; the LaTeX itself when unreadable. */
 export async function latexToPlain(latex: string): Promise<string> {

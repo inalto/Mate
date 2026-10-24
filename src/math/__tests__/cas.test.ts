@@ -70,13 +70,35 @@ describe("localCheck", () => {
     expect(await localCheck("x^2-1=(x-1)(x+1)")).toEqual({ kind: "agree" });
   });
 
-  it("finds_a_point_where_the_sides_differ", async () => {
-    const r = await localCheck("2x=3x");
+  it("says_when_an_equation_holds_for_its_solutions", async () => {
+    expect(await localCheck("2x+3=7")).toEqual({ kind: "holds", solutions: ["x=2"] });
+    expect(await localCheck("2x=3x")).toEqual({ kind: "holds", solutions: ["x=0"] });
+    const two = await localCheck("x^2=4");
+    expect(two.kind).toBe("holds");
+    if (two.kind === "holds") expect([...two.solutions].sort()).toEqual(["x=-2", "x=2"]);
+    expect(await localCheck("x^2=2")).toEqual({ kind: "holds", solutions: ["x=\\sqrt{2}", "x=-\\sqrt{2}"] });
+  });
+
+  it("says_when_an_equation_is_never_true", async () => {
+    expect(await localCheck("x=x+1")).toEqual({ kind: "never" });
+    // Only complex solutions: never true for a real x.
+    expect(await localCheck("x^2+1=0")).toEqual({ kind: "never" });
+  });
+
+  it("drops_solutions_that_do_not_satisfy_the_equation", async () => {
+    expect(await localCheck("\\frac{1}{x}=0")).toEqual({ kind: "never" });
+    // The engine offers a root of √x = −1 that does not satisfy it.
+    expect((await localCheck("\\sqrt{x}=-1")).kind).not.toBe("holds");
+  });
+
+  it("keeps_only_real_solutions_rounded", async () => {
+    expect(await localCheck("x^3=x+1")).toEqual({ kind: "holds", solutions: ["x=1.32472"] });
+  });
+
+  it("finds_a_point_where_the_sides_differ_when_it_cannot_solve", async () => {
+    const r = await localCheck("\\sin(x)=x+1");
     expect(r.kind).toBe("differ");
-    if (r.kind === "differ") {
-      expect(Object.keys(r.at)).toEqual(["x"]);
-      expect(r.at.x).not.toBe(0);
-    }
+    if (r.kind === "differ") expect(Object.keys(r.at)).toEqual(["x"]);
   });
 
   it("is_not_applicable_to_an_expression", async () => {
@@ -86,7 +108,8 @@ describe("localCheck", () => {
 
   it("checks_every_adjacent_pair_of_a_chain", async () => {
     expect(await localCheck("(x+1)^2=x^2+2x+1=1+x(x+2)")).toEqual({ kind: "agree" });
-    expect((await localCheck("(x+1)^2=x^2+2x+1=x^2+1")).kind).toBe("differ");
+    expect(await localCheck("(x+1)^2=x^2+2x+1=x^2+1")).toEqual({ kind: "holds", solutions: ["x=0"] });
+    expect(await localCheck("x+1=x+1=x+2")).toEqual({ kind: "never" });
   });
 
   it("decides_constant_equations", async () => {
@@ -115,8 +138,10 @@ describe("looksLikeEquation", () => {
   it("spots_an_equals_sign", () => {
     expect(looksLikeEquation("2x+3=7")).toBe(true);
     expect(looksLikeEquation("x+1")).toBe(false);
-    expect(looksLikeEquation("x \\neq 2")).toBe(false);
-    expect(looksLikeEquation("x \\leq 2")).toBe(false);
+    expect(looksLikeEquation("a \\neq b")).toBe(false);
+    expect(looksLikeEquation("a = b \\neq c")).toBe(false);
+    expect(looksLikeEquation("x \\leq 2 = y")).toBe(false);
+    expect(looksLikeEquation("x \\geq 2 = y")).toBe(false);
   });
 });
 
@@ -132,6 +157,10 @@ describe("localCheckMessage", () => {
     expect(localCheckMessage({ kind: "agree" })).toBe("Both sides agree");
     expect(localCheckMessage({ kind: "differ", at: { x: 1.5, y: -2 } })).toBe("They differ at x = 1.5, y = -2");
     expect(localCheckMessage({ kind: "differ", at: {} })).toBe("They differ");
+    expect(localCheckMessage({ kind: "holds", solutions: ["x=2"] })).toBe("True when x = 2");
+    expect(localCheckMessage({ kind: "holds", solutions: ["x=2", "x=-2"] })).toBe("True when x = 2 or x = −2");
+    expect(localCheckMessage({ kind: "holds", solutions: ["x=\\frac{3}{2}", "x=-\\sqrt{2}"] })).toBe("True when x = 3/2 or x = −√2");
+    expect(localCheckMessage({ kind: "never" })).toBe("Never true");
     expect(localCheckMessage({ kind: "undecided", reason: "no real values" })).toBe("Could not decide: no real values");
     expect(localCheckMessage({ kind: "notApplicable" })).toBe("Could not decide: this is not an equation");
   });

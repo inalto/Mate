@@ -835,6 +835,8 @@
       "agree": "Both sides agree",
       "differ": "They differ",
       "differAt": "They differ at {{at}}",
+      "holds": "True when {{solutions}}",
+      "never": "Never true",
       "undecided": "Could not decide: {{reason}}",
       "notEquation": "Could not decide: this is not an equation",
       "reasons": {

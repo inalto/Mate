@@ -124,12 +124,44 @@ describe("TutorCard", () => {
     await waitFor(() => expect(screen.getByText("Both sides agree")).toBeTruthy());
   });
 
+  it("check_locally_solves_an_equation", async () => {
+    show(); // 2x+3=7
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
+    });
+    await waitFor(() => expect(screen.getByText("True when x = 2")).toBeTruthy());
+  });
+
+  it("check_locally_lists_every_solution", async () => {
+    show([recognition("g", { latex: "x^2=4" })]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
+    });
+    await waitFor(() => expect(screen.getByText(/^True when x = (2 or x = −2|−2 or x = 2)$/)).toBeTruthy());
+  });
+
+  it("check_locally_says_never_true", async () => {
+    show([recognition("g", { latex: "x=x+1" })]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
+    });
+    await waitFor(() => expect(screen.getByText("Never true")).toBeTruthy());
+  });
+
   it("check_locally_names_a_point_where_the_sides_differ", async () => {
-    show();
+    show([recognition("g", { latex: "\\sin(x)=x+1" })]);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
     });
     await waitFor(() => expect(screen.getByText(/^They differ at x = -?\d/)).toBeTruthy());
+  });
+
+  it("check_locally_says_a_false_sum_differs", async () => {
+    show([recognition("g", { latex: "2+2=5" })]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Check locally" }));
+    });
+    await waitFor(() => expect(screen.getByText("They differ")).toBeTruthy());
   });
 
   it("check_locally_says_when_it_cannot_decide", async () => {
