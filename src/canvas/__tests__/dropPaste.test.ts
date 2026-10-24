@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const saveAsset = vi.hoisted(() => vi.fn());
 vi.mock("../../ipc/assets", () => ({ saveAsset, saveAssetFromPath: vi.fn(), assetUrl: vi.fn() }));
 vi.mock("../../images/insert", () => ({
-  INSERT_FAILED: "x",
+  insertFailed: () => "x",
   insertAsset: vi.fn(async () => "id"),
   insertImageFromPath: vi.fn(),
   isImagePath: () => true,

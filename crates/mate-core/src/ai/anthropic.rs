@@ -215,4 +215,18 @@ impl Provider for AnthropicProvider {
         }
         self.send(&body)
     }
+
+    fn list_models(&self) -> Result<Vec<String>, AiError> {
+        let res = self
+            .client
+            .get(format!("{}/v1/models?limit=1000", self.base_url))
+            .timeout(Duration::from_secs(15))
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", API_VERSION)
+            .send()
+            .map_err(|e| network_error(&e))?;
+        let status = res.status().as_u16();
+        let text = res.text().map_err(|e| network_error(&e))?;
+        super::openai::model_list_reply(status, &text, false)
+    }
 }

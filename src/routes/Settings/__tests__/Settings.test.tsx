@@ -9,10 +9,19 @@ vi.mock("../../../ipc/ai", () => ({
   setAiKey: vi.fn(),
   clearAiKey: vi.fn(),
   testAiKey: vi.fn(),
+  listAiProviders: vi.fn(async () => [{ id: "anthropic", label: "Anthropic", group: "cloud", needsKey: true, editableBaseUrl: false, defaultBaseUrl: "", defaultModel: "claude-opus-5-5", vision: "yes", canListModels: false, keyUrl: "", cost: "paid", privacy: "sentTo" }]),
+  listAiModels: vi.fn(async () => []),
 }));
+vi.mock("../../../ipc/math", () => ({ wolframStatus: vi.fn(async () => ({ configured: false, consent: false })) }));
 vi.mock("../../../ipc/backup", () => ({
   exportBackup: vi.fn(async () => "C:/tmp/mate-backup-2026-10-23.zip"),
   resetLocalData: vi.fn(async () => {}),
+}));
+vi.mock("../../../ipc/share", () => ({
+  nextcloudStatus: vi.fn(async () => ({ signedIn: false, server: "", user: "" })),
+  nextcloudLoginStart: vi.fn(),
+  nextcloudLoginPoll: vi.fn(),
+  nextcloudLogout: vi.fn(),
 }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "9.9.9") }));
 
@@ -145,7 +154,7 @@ describe("Settings rows", () => {
   it("shows_the_ai_settings_off_by_default", async () => {
     vi.useRealTimers();
     renderPane();
-    expect((screen.getByLabelText(/Nothing is sent until you turn this on/) as HTMLInputElement).checked).toBe(false);
+    expect(((await screen.findByLabelText(/Nothing is sent until you turn this on/)) as HTMLInputElement).checked).toBe(false);
     expect(await screen.findByText("No key")).toBeTruthy();
   });
 });
@@ -242,9 +251,11 @@ describe("navigation and landmarks", () => {
       "Gestures & touch",
       "Tutor & recognition",
       "Tutor interactions",
+      "Maths engines",
       "Keyboard shortcuts",
       "Trash",
       "Backup",
+      "Sharing",
       "Updates",
       "About",
     ]) {
@@ -274,6 +285,20 @@ describe("navigation and landmarks", () => {
     fireEvent.click(screen.getByRole("button", { name: "Backup" }));
     expect(scroll).toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Backup" }).getAttribute("aria-current")).toBe("location");
+  });
+
+  it("opens_at_the_section_named_in_the_address", () => {
+    const scroll = vi.fn(function (this: Element) {
+      return this;
+    });
+    Element.prototype.scrollIntoView = scroll;
+    render(
+      <MemoryRouter initialEntries={["/settings#sharing"]}>
+        <Settings />
+      </MemoryRouter>,
+    );
+    expect(scroll.mock.contexts.some((el) => (el as Element).id === "set-sec-sharing")).toBe(true);
+    expect(screen.getByRole("button", { name: "Sharing" }).getAttribute("aria-current")).toBe("location");
   });
 });
 

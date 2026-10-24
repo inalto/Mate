@@ -34,7 +34,7 @@ function without(elements: ReadonlyMap<string, Element>, exclude: ReadonlySet<st
 
 export function createTutorInk(o: TutorInkOptions) {
   const st = o.store.getState;
-  const active = o.isActive ?? (() => tutorActive(o.getSettings(), useAiStatus.getState().configured));
+  const active = o.isActive ?? (() => tutorActive(o.getSettings(), useAiStatus.getState().configured, useAiStatus.getState().vision));
   const view = (): TutorView | null => {
     const v = useTutorViews.getState().views[o.pane];
     return v.pageId === o.pageId ? v : null;

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ACTION_GROUPS, ACTION_META, ACTIONS, type ShortcutAction } from "./actions";
+import { useTranslation } from "react-i18next";
+import { ACTION_GROUPS, ACTION_META, ACTIONS, actionLabel, groupLabel, type ShortcutAction } from "./actions";
 import { findCollision, formatKeys, isReservedCombo, parseKeyEvent, toOverrides, type KeyMap } from "./keybindings";
 import { isMacPlatform } from "./platform";
 import { saveOverrides, useKeyMap } from "./useKeyMap";
@@ -7,6 +8,7 @@ import "./keys.css";
 
 /** Settings section: view, rebind, unbind and reset keyboard shortcuts. */
 export default function KeybindingsSection() {
+  const { t } = useTranslation();
   const map = useKeyMap();
   const mac = isMacPlatform();
   const [capturing, setCapturing] = useState<ShortcutAction | null>(null);
@@ -30,18 +32,18 @@ export default function KeybindingsSection() {
       if (!keys) {
         // A bare modifier waits for the rest of the combo; Ctrl on macOS / Meta elsewhere is unsupported.
         if (!["Control", "Shift", "Alt", "Meta", "AltGraph", "CapsLock", "OS"].includes(e.key)) {
-          setWarning(mac ? "Use Cmd (not Ctrl) as the modifier." : "The Windows/Meta key cannot be used.");
+          setWarning(mac ? t("keys.useCmd") : t("keys.noMeta"));
         }
         return;
       }
       const shown = formatKeys(keys, mac);
       if (isReservedCombo(keys)) {
-        setWarning(`${shown} is reserved and cannot be used. Press another combination.`);
+        setWarning(t("keys.reserved", { keys: shown }));
         return;
       }
       const other = findCollision(map, keys, capturing);
       if (other) {
-        setWarning(`${shown} is already used by "${ACTION_META[other].label}". Press another combination.`);
+        setWarning(t("keys.taken", { keys: shown, action: actionLabel(other) }));
         return;
       }
       write({ ...map, [capturing]: [keys] });
@@ -55,27 +57,28 @@ export default function KeybindingsSection() {
   const overridden = new Set(toOverrides(map).map((o) => o.action));
 
   return (
-    <section className="keybindings" aria-label="Keyboard shortcuts">
+    <section className="keybindings" aria-label={t("keys.title")}>
       <div className="keybindings-toolbar">
         <button type="button" className="btn" onClick={() => void saveOverrides([]).catch(() => {})}>
-          Reset all
+          {t("keys.resetAll")}
         </button>
       </div>
       {ACTION_GROUPS.map((group) => (
         <div key={group}>
-          <h3>{group}</h3>
+          <h3>{groupLabel(group)}</h3>
           {ACTIONS.filter((a) => ACTION_META[a].group === group).map((a) => {
             const meta = ACTION_META[a];
+            const label = t(meta.labelKey);
             const listening = capturing === a;
             return (
               <div key={a} className="keybindings-row" data-action={a}>
-                <span>{meta.label}</span>
+                <span>{label}</span>
                 <span className="keybindings-keys">
                   {listening
-                    ? "Press a key combination…"
+                    ? t("keys.pressCombo")
                     : map[a].length > 0
                       ? map[a].map((k) => formatKeys(k, mac)).join(", ")
-                      : "Not set"}
+                      : t("keys.notSet")}
                 </span>
                 <span className="keybindings-actions">
                   {meta.rebindable !== false && (
@@ -83,31 +86,31 @@ export default function KeybindingsSection() {
                       <button
                         type="button"
                         className="btn"
-                        aria-label={`${listening ? "Cancel" : "Change"} ${meta.label}`}
+                        aria-label={listening ? t("keys.cancelAction", { action: label }) : t("keys.changeAction", { action: label })}
                         onClick={() => {
                           setCapturing(listening ? null : a);
                           setWarning(null);
                         }}
                       >
-                        {listening ? "Cancel" : "Change"}
+                        {listening ? t("common.cancel") : t("common.change")}
                       </button>
                       <button
                         type="button"
                         className="btn"
-                        aria-label={`Unbind ${meta.label}`}
+                        aria-label={t("keys.unbindAction", { action: label })}
                         disabled={map[a].length === 0}
                         onClick={() => write({ ...map, [a]: [] })}
                       >
-                        Unbind
+                        {t("keys.unbind")}
                       </button>
                       <button
                         type="button"
                         className="btn"
-                        aria-label={`Reset ${meta.label}`}
+                        aria-label={t("keys.resetAction", { action: label })}
                         disabled={!overridden.has(a)}
                         onClick={() => write({ ...map, [a]: ACTION_META[a].defaultKeys })}
                       >
-                        Reset
+                        {t("common.reset")}
                       </button>
                     </>
                   )}

@@ -1,0 +1,1101 @@
+{
+  "meta": {
+    "machineTranslated": true
+  },
+  "settings": {
+    "general": {
+      "language": {
+        "label": "语言",
+        "system": "跟随系统"
+      },
+      "handedness": {
+        "label": "惯用手",
+        "hint": "侧边栏和工具栏所在的一侧",
+        "right": "右手",
+        "left": "左手"
+      },
+      "libraryView": {
+        "label": "库视图",
+        "recent": "最近",
+        "shelves": "书架",
+        "az": "按字母顺序"
+      },
+      "sidebarLayout": {
+        "label": "侧边栏布局",
+        "split": "分栏（分区和页面）",
+        "stacked": "堆叠"
+      },
+      "shortcutHints": {
+        "label": "快捷键提示",
+        "always": "始终显示",
+        "adaptive": "学会之前显示",
+        "never": "从不显示"
+      },
+      "zoomIndicator": {
+        "label": "显示缩放级别",
+        "hint": "在编辑器中显示一个小的缩放百分比"
+      },
+      "exportFormat": {
+        "label": "默认导出格式",
+        "mate": "Mate 归档"
+      }
+    },
+    "title": "设置",
+    "sectionsLabel": "设置分区",
+    "search": "搜索设置",
+    "searchResults": "搜索结果",
+    "noMatches": "没有匹配的设置",
+    "nav": {
+      "groups": {
+        "general": "通用",
+        "appearance": "外观",
+        "writing": "书写",
+        "intelligence": "智能功能",
+        "system": "系统"
+      },
+      "sections": {
+        "general": "通用",
+        "theme": "主题",
+        "paper": "纸张与布局",
+        "pen": "笔与触控笔",
+        "penButtons": "笔按钮",
+        "gestures": "手势与触摸",
+        "tutor": "辅导与识别",
+        "tutorInteractions": "辅导互动",
+        "mathEngines": "数学引擎",
+        "shortcuts": "键盘快捷键",
+        "trash": "回收站",
+        "backup": "备份",
+        "sharing": "分享",
+        "updates": "更新",
+        "about": "关于"
+      }
+    },
+    "resetIncomplete": "本地数据无法完全重置。备份文件位于 {{path}}。",
+    "theme": {
+      "label": "主题",
+      "light": "浅色",
+      "dark": "深色",
+      "sepia": "复古棕",
+      "highContrast": "高对比度",
+      "invertImages": {
+        "label": "深色模式下反转图片",
+        "hint": "在深色主题中，黑白图片会被反转"
+      }
+    },
+    "paper": {
+      "pageMode": {
+        "label": "页面模式",
+        "canvas": "无限画布",
+        "page": "纸张"
+      },
+      "background": {
+        "label": "背景",
+        "blank": "空白",
+        "ruled": "横线",
+        "ruledNoMargin": "横线（无页边距）",
+        "grid": "方格",
+        "gridUniform": "均匀方格",
+        "dotGrid": "点阵"
+      },
+      "pageSize": {
+        "label": "纸张大小",
+        "letter": "信纸",
+        "square": "正方形"
+      },
+      "orientation": {
+        "label": "方向",
+        "portrait": "纵向",
+        "landscape": "横向"
+      },
+      "alignText": {
+        "label": "文字对齐到横线",
+        "hint": "将输入的文字对齐到横线上"
+      },
+      "snapToGrid": {
+        "label": "对齐到方格",
+        "hint": "将形状和笔画对齐到方格背景上"
+      }
+    },
+    "pen": {
+      "penColor": "笔颜色",
+      "penWidth": "笔宽",
+      "highlighterColor": "荧光笔颜色",
+      "highlighterWidth": "荧光笔宽度",
+      "stabilization": {
+        "label": "笔画防抖",
+        "hint": "减少抖动；数值越高，笔迹跟随会稍有延迟"
+      },
+      "nibFlatness": "钢笔笔尖扁平度",
+      "haptics": {
+        "label": "笔的触感反馈（Windows）",
+        "hint": "在支持的笔上，书写时震动，图形吸附时轻触反馈。"
+      },
+      "inkToShapeTitle": "墨迹转图形与涂鸦",
+      "inkToShape": {
+        "label": "墨迹转图形",
+        "hint": "笔画结束时保持笔静止，即可将其转换为图形"
+      },
+      "snapOnRelease": "抬笔时吸附",
+      "holdTime": "停留时间",
+      "milliseconds": "{{value}} 毫秒",
+      "scribbleToErase": {
+        "label": "涂鸦擦除",
+        "hint": "快速在笔迹上涂抹即可擦除"
+      },
+      "scribbleSensitivity": {
+        "label": "涂鸦灵敏度",
+        "less": "低",
+        "standard": "标准",
+        "more": "高"
+      },
+      "textTitle": "文字默认设置",
+      "textColor": "文字颜色",
+      "textSize": "文字大小",
+      "shapeTitle": "形状默认设置",
+      "shapeType": "形状类型",
+      "shapeStrokeColor": "形状线条颜色",
+      "shapeFillColor": "形状填充颜色",
+      "shapeWidth": "形状线宽",
+      "shapeFillOpacity": "填充不透明度",
+      "eraserTitle": "橡皮擦默认设置",
+      "eraserType": {
+        "label": "橡皮擦类型",
+        "stroke": "整笔",
+        "partial": "局部"
+      },
+      "eraserWidth": "橡皮擦大小",
+      "eraseShapes": "擦除形状",
+      "eraseImages": "擦除图片"
+    },
+    "penButtons": {
+      "barrel": {
+        "label": "侧边按钮",
+        "hint": "触控笔侧面的按钮"
+      },
+      "eraserEnd": {
+        "label": "橡皮端",
+        "hint": "触控笔的橡皮端或橡皮按钮"
+      },
+      "eraser": "橡皮擦",
+      "lasso": "套索",
+      "none": "无"
+    },
+    "gestures": {
+      "palmRejection": {
+        "label": "掌拒触",
+        "off": "关闭",
+        "standard": "标准",
+        "high": "高"
+      },
+      "drawWithFinger": {
+        "label": "用手指绘图",
+        "hint": "关闭时：手指用于平移和缩放，笔用于绘图"
+      },
+      "pinchToZoom": "双指缩放",
+      "mouseWheel": {
+        "label": "鼠标滚轮",
+        "pan": "平移页面",
+        "zoom": "缩放"
+      }
+    },
+    "tutor": {
+      "providerTitle": "AI 服务商",
+      "checkingTitle": "检查",
+      "enabled": {
+        "label": "辅导",
+        "hint": "读取手写数学内容并指出错误。需要先在上方设置 AI。"
+      },
+      "mode": {
+        "label": "检查时机",
+        "live": "书写时",
+        "onask": "仅在提问时"
+      },
+      "underline": "为错误添加下划线",
+      "tickCorrect": "为正确的解答添加对勾",
+      "showChecking": {
+        "label": "检查时显示",
+        "hint": "在正在检查的墨迹旁显示一个小的旋转圆环"
+      },
+      "doubleTapAsk": "双击墨迹进行提问",
+      "holdToAsk": "在墨迹上长按笔进行提问"
+    },
+    "mathEngines": {
+      "explainer": "Compute Engine 在本机运行，无需任何额外设置。Wolfram|Alpha 需要免费的 AppID（非商业用途每月 2000 次查询）。",
+      "appid": "Wolfram|Alpha AppID",
+      "savedHidden": "已保存（已隐藏）",
+      "pasteAppid": "粘贴 AppID",
+      "works": "AppID 可用。",
+      "saved": "AppID 已保存",
+      "none": "没有 AppID",
+      "consent": {
+        "label": "提问时将输入的数学内容发送至 Wolfram|Alpha",
+        "hint": "在开启此选项并选择“询问 Wolfram|Alpha”之前，不会发送任何内容。"
+      },
+      "getAppid": "获取免费 AppID"
+    },
+    "trash": {
+      "keepFor": "已删除项目保留",
+      "forever": "永久",
+      "days_other": "{{count}} 天"
+    },
+    "backup": {
+      "download": {
+        "label": "下载备份",
+        "hint": "一个压缩包，每个笔记本对应一个 .mate 文件。如需恢复，请解压后导入每个 .mate 文件。"
+      },
+      "saved": "备份已保存至 {{path}}",
+      "reset": {
+        "label": "重置本地数据",
+        "hint": "删除此设备上的所有内容，并从欢迎流程重新开始",
+        "confirmTitle": "重置本地数据？",
+        "confirm": "重置",
+        "confirmBody": "这将删除此设备上的所有笔记本、页面和设置。删除前会先生成一个备份压缩包。保存在系统钥匙串中的 API 密钥会被保留。"
+      }
+    },
+    "sharing": {
+      "nextcloud": {
+        "label": "Nextcloud",
+        "hint": "将笔记本上传到 Nextcloud，并获取可发送给他人的链接。",
+        "signedIn": "已以 {{user}} 身份登录 {{server}}",
+        "signOut": "退出登录",
+        "waiting": "正在等待在浏览器中完成授权…",
+        "server": "Nextcloud 服务器地址",
+        "signIn": "登录",
+        "expired": "登录链接已过期。请重新开始。"
+      }
+    },
+    "updates": {
+      "checkOnStartup": "启动时检查更新"
+    },
+    "about": {
+      "version": "版本",
+      "welcome": "欢迎",
+      "showWelcome": "再次显示欢迎页",
+      "unknownVersion": "未知"
+    }
+  },
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "remove": "移除",
+    "test": "测试",
+    "reset": "重置",
+    "change": "更改",
+    "close": "关闭",
+    "view": "查看",
+    "back": "返回",
+    "copy": "复制",
+    "copied": "已复制",
+    "untitled": "未命名",
+    "pageName": "第 {{n}} 页",
+    "sectionName": "分区 {{n}}",
+    "dismiss": "关闭",
+    "delete": "删除",
+    "untitledBook": "未命名笔记本",
+    "loading": "正在加载…",
+    "firstSection": "笔记"
+  },
+  "errors": {
+    "generic": "出了点问题。",
+    "clipboard": "无法复制到剪贴板",
+    "ai": {
+      "auth": "API 密钥未被接受。请在设置中检查。",
+      "rateLimited": "AI 服务当前繁忙。请稍后再试。",
+      "network": "无法连接 AI 服务（{{detail}}）。",
+      "invalidResponse": "AI 服务返回了无法读取的回复（{{detail}}）。",
+      "disabled": "AI 检查已关闭。请在设置中开启。",
+      "rejected": "AI 服务拒绝了此请求（{{detail}}）。",
+      "billing": "AI 账户存在账单问题。请与服务商核实。",
+      "unknownModel": "所选模型不可用。请在设置中检查模型。",
+      "refused": "AI 拒绝检查此笔记。",
+      "truncated": "AI 的回答在完成前被截断了。",
+      "noKey": "请先保存 API 密钥。",
+      "noAddress": "请先输入服务地址。",
+      "badAddress": "请使用 https:// 地址，或 http://localhost:11434 这样的本地地址。",
+      "cannotListModels": "{{detail}} 无法列出其模型。请输入模型名称。",
+      "unreachable": "无法连接到 {{detail}}。它在运行吗？"
+    }
+  },
+  "update": {
+    "label": "软件更新",
+    "appVersion": "Mate {{version}}",
+    "install": "安装 {{version}}",
+    "restart": "重启以更新",
+    "checkingShort": "正在检查...",
+    "check": "检查更新",
+    "checking": "正在检查更新...",
+    "upToDate": "已是最新版本。",
+    "notConfigured": "此版本未配置更新。",
+    "available": "版本 {{version}} 可用。",
+    "availableWithNotes": "版本 {{version}} 可用。{{notes}}",
+    "downloading": "正在下载 {{version}}：{{progress}}",
+    "ready": "版本 {{version}} 已安装。重启即可完成更新。",
+    "failed": "无法更新：{{message}}",
+    "savingWork": "正在保存您的工作…",
+    "megabytes": "{{value}} MB",
+    "progress": "{{done}} / {{total}}",
+    "toast": "Mate {{version}} 现已可用。"
+  },
+  "shapes": {
+    "rectangle": "矩形",
+    "circle": "圆形",
+    "ellipse": "椭圆",
+    "triangle": "三角形",
+    "line": "直线",
+    "arrow": "箭头",
+    "diamond": "菱形",
+    "pentagon": "五边形",
+    "hexagon": "六边形",
+    "star": "星形",
+    "polygon": "多边形"
+  },
+  "keys": {
+    "title": "键盘快捷键",
+    "resetAll": "全部重置",
+    "pressCombo": "按下组合键…",
+    "notSet": "未设置",
+    "changeAction": "更改{{action}}",
+    "cancelAction": "取消{{action}}",
+    "unbind": "取消绑定",
+    "unbindAction": "取消绑定{{action}}",
+    "resetAction": "重置{{action}}",
+    "useCmd": "修饰键使用 Cmd（而非 Ctrl）。",
+    "noMeta": "无法使用 Windows/Meta 键。",
+    "reserved": "{{keys}} 为保留快捷键，无法使用。请按下其他组合键。",
+    "taken": "{{keys}} 已被“{{action}}”使用。请按下其他组合键。",
+    "groups": {
+      "tools": "工具",
+      "edit": "编辑",
+      "selection": "选择",
+      "arrange": "排列",
+      "view": "视图",
+      "pages": "页面",
+      "tabs": "标签页与窗口",
+      "general": "通用"
+    },
+    "actions": {
+      "pen": "笔",
+      "highlighter": "荧光笔",
+      "eraser": "橡皮擦",
+      "cursor": "选择（光标）",
+      "lasso": "套索",
+      "shape": "形状",
+      "text": "文字",
+      "insertSpace": "插入空白",
+      "presetSlot": "预设 1 至 9",
+      "pan": "平移（按住）",
+      "undo": "撤销",
+      "redo": "重做",
+      "copy": "复制",
+      "cut": "剪切",
+      "paste": "粘贴",
+      "duplicate": "复制所选内容（或页面）",
+      "delete": "删除",
+      "save": "立即保存",
+      "escape": "清除选择",
+      "selectAll": "全选",
+      "deselect": "取消选择",
+      "group": "组合",
+      "ungroup": "取消组合",
+      "bringForward": "上移一层",
+      "sendBackward": "下移一层",
+      "bringToFront": "置于顶层",
+      "sendToBack": "置于底层",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "zoomReset": "重置缩放",
+      "toggleSidebar": "显示或隐藏侧边栏",
+      "prevPage": "上一页",
+      "nextPage": "下一页",
+      "duplicatePage": "复制页面",
+      "renamePage": "重命名页面",
+      "movePageUp": "上移页面",
+      "movePageDown": "下移页面",
+      "promotePage": "提升页面层级",
+      "demotePage": "降低页面层级",
+      "newTab": "新建标签页",
+      "closeTab": "关闭标签页",
+      "moveTabLeft": "标签页左移",
+      "moveTabRight": "标签页右移",
+      "openPageWindow": "在新窗口中打开页面",
+      "palette": "搜索与操作",
+      "shortcuts": "键盘快捷键"
+    }
+  },
+  "palette": {
+    "label": "命令面板",
+    "searchLabel": "搜索页面、手写内容和操作",
+    "searchPlaceholder": "搜索页面和手写内容，或执行操作",
+    "results": "结果",
+    "working": "正在处理…",
+    "similar": "相似度 {{percent}}%",
+    "noRelated": "尚无其他相似页面。随着辅导读取更多笔记，相关页面会显示在这里。",
+    "applyTitle": "应用标题",
+    "titleApplied": "标题已应用",
+    "noMatches": "没有匹配的页面或手写内容。",
+    "summarise": "总结此页面",
+    "suggestTitle": "建议标题",
+    "related": "有哪些相关内容？",
+    "openGraph": "打开关系图",
+    "panel": {
+      "summary": "本页摘要",
+      "title": "建议标题",
+      "related": "相关页面"
+    },
+    "sections": {
+      "pages": "页面",
+      "recent": "最近的页面",
+      "quick": "快捷操作",
+      "everything": "搜索全部",
+      "actions": "操作"
+    },
+    "switchTo": {
+      "pen": "切换到笔",
+      "highlighter": "切换到荧光笔",
+      "eraser": "切换到橡皮擦",
+      "cursor": "切换到选择（光标）",
+      "lasso": "切换到套索",
+      "shape": "切换到形状",
+      "text": "切换到文字",
+      "insertSpace": "切换到插入空白"
+    },
+    "insertText": "插入文本框",
+    "insertCode": "插入代码块",
+    "insertTable": "插入表格",
+    "insertGraph": "插入图形",
+    "insertImage": "插入图片",
+    "newPage": "新建页面",
+    "newSection": "新建分区",
+    "openSettings": "打开设置",
+    "openLibrary": "打开库",
+    "disabled": {
+      "editor": "请先在编辑器中打开一个页面",
+      "selection": "请先选择内容",
+      "page": "请先打开一个页面"
+    }
+  },
+  "nav": {
+    "home": "首页",
+    "main": "主页面",
+    "library": "库",
+    "graph": "关系图",
+    "trash": "回收站",
+    "settings": "设置"
+  },
+  "about": {
+    "version": "版本 {{version}}",
+    "tagline": "本地优先的手写与数学笔记。",
+    "nameNote": "Mate 是你的数学伙伴。在意大利语中，学生也把数学叫作“mate”。",
+    "starPitch": "如果 Mate 对您有帮助，在 GitHub 上点个星星，能帮助更多人发现它。",
+    "star": "在 GitHub 上点星",
+    "githubFailed": "无法打开 GitHub。",
+    "updates": "更新",
+    "latest": "您使用的是最新版本",
+    "available": "版本 {{version}} 可用",
+    "updateSettings": "更新设置"
+  },
+  "toolbar": {
+    "label": "编辑器工具",
+    "hintWithKeys": "{{label}}（{{keys}}）",
+    "presetRemoveHint": "{{title}} · 右键单击以移除",
+    "presetLabel": "{{ink}} {{color}}",
+    "ink": {
+      "pen": "笔",
+      "fountainPen": "钢笔",
+      "highlighter": "荧光笔"
+    },
+    "addPen": "添加笔",
+    "eraser": "橡皮擦",
+    "eraserOptions": "橡皮擦选项",
+    "eraserType": "橡皮擦类型",
+    "eraserWhole": "整笔",
+    "eraserPartial": "局部",
+    "eraserSizePx": "橡皮擦大小（像素）",
+    "eraserSize": "橡皮擦大小",
+    "shape": "形状",
+    "shapeHint": "形状：{{shape}}",
+    "shapeOptions": "形状选项",
+    "shapeType": "形状类型",
+    "stroke": "线条",
+    "strokeColor": "线条{{color}}",
+    "strokeWidth": "线宽",
+    "fill": "填充",
+    "fillColor": "填充{{color}}",
+    "noFill": "无填充",
+    "fillOpacity": "填充不透明度",
+    "insertSpace": "插入空白",
+    "insertSpaceOptions": "插入空白选项",
+    "insertSpaceMode": "插入空白模式",
+    "spaceInsert": "插入",
+    "spaceRemove": "删除",
+    "cutImages": "裁剪图片",
+    "text": "文字",
+    "insertImage": "插入图片…",
+    "insertTable": "插入表格",
+    "insertCode": "插入代码",
+    "insertEquation": "插入公式",
+    "insertGraph": "插入图形",
+    "select": "选择",
+    "lasso": "套索"
+  },
+  "topbar": {
+    "more": "更多操作",
+    "moreUpdate": "更多操作，有可用更新",
+    "updateAvailable": "有可用更新：{{version}}",
+    "exportPage": "导出页面…",
+    "importNotes": "导入笔记…",
+    "pageSettings": "页面设置",
+    "searchActions": "搜索与操作…",
+    "about": "关于 Mate",
+    "pageTitle": "页面标题"
+  },
+  "tabs": {
+    "label": "已打开的页面",
+    "close": "关闭{{title}}",
+    "split": "分屏视图",
+    "keepLeft": "仅保留左侧",
+    "keepRight": "仅保留右侧"
+  },
+  "editor": {
+    "zoomReset": "缩放 {{percent}}%，重置",
+    "pageFull": "此页面已满（{{max}} 个项目）。请新建页面。",
+    "tableLimit": "表格已达到大小上限（{{max}} 个单元格）",
+    "insertImageFailed": "无法插入该图片。",
+    "imagesFilter": "图片"
+  },
+  "whatsNew": {
+    "title": "新功能",
+    "gotIt": "知道了"
+  },
+  "sidebar": {
+    "label": "笔记本侧边栏",
+    "noPages": "还没有页面",
+    "pages": "页面",
+    "collapse": "收起侧边栏",
+    "newNotebook": "新建笔记本",
+    "notebook": "笔记本",
+    "noSections": "没有分区",
+    "sections": "分区",
+    "newPageIn": "在{{section}}中新建页面",
+    "resize": "调整侧边栏大小",
+    "windowFailed": "无法在新窗口中打开该页面。",
+    "icon": "图标 {{icon}}",
+    "noIcon": "无图标",
+    "collapsePage": "收起",
+    "expandPage": "展开",
+    "menu": {
+      "rename": "重命名",
+      "changeIcon": "更改图标",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "promote": "提升层级",
+      "demote": "降低层级",
+      "duplicate": "复制",
+      "split": "在分屏视图中打开",
+      "window": "在新窗口中打开"
+    }
+  },
+  "library": {
+    "openBook": "打开{{title}}",
+    "bookTitle": "笔记本标题",
+    "bookActions": "{{title}}的操作",
+    "changeColour": "更改颜色",
+    "favourite": "收藏",
+    "unfavourite": "取消收藏",
+    "moveToShelf": "移到书架",
+    "practice": "基于此笔记本练习…",
+    "exportBook": "导出笔记本…",
+    "share": "分享…",
+    "importInto": "导入到此笔记本…",
+    "colour": "颜色 {{color}}",
+    "noShelf": "无书架",
+    "shelfName": "书架名称",
+    "unshelved": "未归入书架",
+    "renameShelf": "重命名书架",
+    "deleteShelf": "删除书架",
+    "emptyShelf": "此书架上没有笔记本",
+    "imported": "已导入笔记本：{{pages}} 页，{{elements}} 个元素。",
+    "importedSkipped": "已导入笔记本：{{pages}} 页，{{elements}} 个元素，{{skipped}} 个因超出限制被跳过。",
+    "importFailed": "导入失败：{{message}}",
+    "search": "搜索笔记本",
+    "importBook": "导入笔记本…",
+    "sort": "排序笔记本",
+    "az": "A-Z",
+    "emptyHint": "创建第一个笔记本，开始整理您的笔记、公式和想法",
+    "noneFound": "未找到笔记本",
+    "clearSearch": "清除搜索",
+    "newShelf": "新建书架",
+    "newShelfName": "新书架名称"
+  },
+  "export": {
+    "failed": "导出失败：{{message}}",
+    "title": "导出",
+    "export": "导出",
+    "exporting": "正在导出…",
+    "notInBook": "此页面不属于任何笔记本",
+    "format": "格式",
+    "paper": "纸张",
+    "plain": "简洁",
+    "transparent": "透明",
+    "scale": "缩放比例",
+    "times": "{{n}}×",
+    "pages": "页面",
+    "allSheets": "所有工作表",
+    "currentSheet": "当前工作表",
+    "searchable": "可搜索文本",
+    "latexHint": "保存为 .tex 文件；图片将转换为占位符。",
+    "mateHint": "导出此页面所属的整个笔记本。",
+    "shareHint": "如需将此笔记本发送给他人，请使用笔记本菜单中的“分享…”。",
+    "shareInstead": "改为分享…",
+    "boxRender": "无法为导出渲染框 {{id}} 的内容。",
+    "boxMissing": "框 {{id}} 未能为导出而渲染。"
+  },
+  "selection": {
+    "label": "选择",
+    "arrange": "排列 ▸",
+    "align": "对齐 ▸",
+    "alignLeft": "左对齐",
+    "alignCenter": "居中对齐",
+    "alignRight": "右对齐",
+    "alignTop": "顶端对齐",
+    "alignMiddle": "垂直居中",
+    "alignBottom": "底端对齐",
+    "distributeH": "水平分布",
+    "distributeV": "垂直分布",
+    "fillColour": "填充颜色",
+    "duplicate": "复制",
+    "copyLatex": "复制为 LaTeX",
+    "graphFromEquation": "根据公式绘制图形",
+    "graph": "图形",
+    "widthPx": "宽度（像素）",
+    "width": "所选内容宽度"
+  },
+  "preset": {
+    "edit": "编辑预设",
+    "hue": "色相",
+    "hex": "十六进制颜色",
+    "recent": "最近使用的颜色",
+    "width": "宽度",
+    "moveLeft": "左移",
+    "moveRight": "右移"
+  },
+  "text": {
+    "bold": "粗体",
+    "italic": "斜体",
+    "underline": "下划线",
+    "strikethrough": "删除线",
+    "bulletList": "项目符号列表",
+    "numberedList": "编号列表",
+    "font": "字体",
+    "fonts": {
+      "sans": "无衬线",
+      "serif": "衬线",
+      "mono": "等宽",
+      "hand": "手写体",
+      "script": "草书"
+    },
+    "smaller": "缩小文字",
+    "size": "文字大小",
+    "larger": "放大文字",
+    "colour": "文字颜色 {{color}}",
+    "alignCentre": "居中对齐",
+    "formatting": "文字格式",
+    "box": "文本框"
+  },
+  "pageSettings": {
+    "mode": "模式",
+    "paperSize": "纸张大小",
+    "gridUniform": "方格（均匀）",
+    "spacing": "间距"
+  },
+  "import": {
+    "title": "导入笔记",
+    "filter": "笔记本文件和 Mate 归档",
+    "duplicates_other": "{{count}} 页已导入过，因此未再次添加。",
+    "tablesAndShapes": "表格和形状暂不支持导入。",
+    "kilobytes": "{{value}} KB",
+    "progress": {
+      "waiting": "等待中",
+      "reading": "正在读取文件",
+      "parsing": "正在读取页面",
+      "placing": "正在放置页面",
+      "placingCount": "正在放置页面（{{done}} / {{total}}）"
+    },
+    "fileOk": "{{source}} 文件，{{size}}",
+    "fileRejected": "无法导入。{{reason}}",
+    "removeFile": "移除{{name}}",
+    "importing": "正在导入",
+    "progressLabel": "进度",
+    "cancelling": "正在取消…将完成当前文件的处理。",
+    "queued_other": "此次导入完成后，还将提供 {{count}} 个文件。",
+    "cancel": "取消导入",
+    "finished": "导入完成",
+    "nothing": "未导入任何内容",
+    "summary": "{{pages}}、{{strokes}}、{{texts}}、{{images}}。",
+    "counts": {
+      "pages_other": "{{count}} 页",
+      "strokes_other": "{{count}} 笔",
+      "texts_other": "{{count}} 个文本框",
+      "images_other": "{{count}} 张图片"
+    },
+    "skipped": "已跳过",
+    "warnings": "警告",
+    "failedFiles": "失败的文件",
+    "importMore_other": "再导入 {{count}} 个文件…",
+    "openBook": "打开笔记本",
+    "checking": "正在检查文件…",
+    "noFiles": "尚未选择文件。",
+    "files": "文件",
+    "addFiles": "添加文件…",
+    "destination": "目标位置",
+    "putPagesIn": "将页面放入",
+    "newBook": "新笔记本",
+    "bookName": "笔记本名称",
+    "existingBook": "现有笔记本",
+    "book": "笔记本",
+    "chooseBook": "选择笔记本",
+    "import": "导入"
+  },
+  "share": {
+    "title": "分享{{title}}",
+    "folderTitle": "将副本保存到同步文件夹",
+    "noFolders": "在此计算机上未找到同步文件夹。",
+    "lookingForFolders": "正在查找同步文件夹…",
+    "chooseFolder": "选择其他文件夹…",
+    "savedTo": "已保存至 {{path}}",
+    "showInFolder": "在文件夹中显示",
+    "nextcloudHint": "通过您的 Nextcloud 发送此笔记本的链接。",
+    "setUpInSettings": "在设置中配置",
+    "publicLink": "拥有该链接的任何人都可以下载此笔记本。",
+    "expires": "链接有效期",
+    "expiry": {
+      "never": "永久",
+      "week": "7 天后",
+      "month": "30 天后"
+    },
+    "working": "处理中…",
+    "upload": "上传并获取链接",
+    "link": "分享链接"
+  },
+  "practice": {
+    "title": "基于此笔记本练习",
+    "pageTitle": "练习 — {{date}}",
+    "tooMany": "一个练习页面最多容纳 {{max}} 道题；其余的题目已省略。",
+    "noSection": "此笔记本没有可放置题目的分区。",
+    "count": "题目数量",
+    "types": {
+      "label": "题型",
+      "multipleChoice": "单选题",
+      "multiSelect": "多选题",
+      "trueFalse": "判断题",
+      "fillInBlank": "填空题",
+      "shortAnswer": "简答题"
+    },
+    "extra": "还有其他要求吗？（可选）",
+    "extraLabel": "补充说明",
+    "extraPlaceholder": "例如：重点练习分部积分",
+    "privacy": "题目基于辅导在此笔记本中读取的内容生成。文本将发送至您的 AI 服务商。",
+    "writing": "正在编写题目…",
+    "generate": "生成",
+    "generating": "正在生成…",
+    "ready_other": "已准备好 {{count}} 道题。",
+    "questions": "题目",
+    "add": "添加到新页面",
+    "adding": "正在添加…",
+    "pageFull": "此页面已满。"
+  },
+  "math": {
+    "compute": "计算",
+    "computeMenu": "计算 ▸",
+    "computing": "正在计算…",
+    "resultNotAdded": "无法将结果添加到此页面。",
+    "ops": {
+      "evaluate": "求值",
+      "simplify": "化简",
+      "expand": "展开",
+      "solve": "求解",
+      "numeric": "数值"
+    },
+    "wolfram": {
+      "ask": "询问 Wolfram|Alpha",
+      "needsAppid": "请先在设置中添加 Wolfram|Alpha AppID。",
+      "needsConsent": "Wolfram|Alpha 已关闭。请在设置中开启。"
+    },
+    "errors": {
+      "unreadable": "无法识别此数学内容",
+      "unreadableDetail": "无法识别此数学内容：{{detail}}",
+      "oneEquation": "请一次求解一个方程",
+      "inequality": "此处无法求解不等式",
+      "noUnknown": "没有可求解的未知数",
+      "severalUnknowns": "存在多个未知数（{{unknowns}}），且没有可求解的 x",
+      "unsolved": "无法求解此方程",
+      "noSolution": "未找到解",
+      "empty": "没有可计算的内容",
+      "engine": "无法加载数学引擎",
+      "failed": "无法计算此内容",
+      "engineGraph": "无法加载数学引擎"
+    },
+    "check": {
+      "agree": "两边相等",
+      "differ": "两边不相等",
+      "differAt": "在 {{at}} 处不相等",
+      "holds": "当{{solutions}}时成立",
+      "never": "从不成立",
+      "undecided": "无法判定：{{reason}}",
+      "notEquation": "无法判定：这不是方程",
+      "reasons": {
+        "noNumeric": "两边没有数值",
+        "noReal": "在所测试的点上两边没有实数值",
+        "engine": "无法加载数学引擎",
+        "failed": "检查失败"
+      }
+    },
+    "equation": "方程"
+  },
+  "tutor": {
+    "title": "辅导",
+    "tryAgain": "重试",
+    "hint": "提示",
+    "why": "原因",
+    "whyButton": "为什么？",
+    "nextStep": "下一步",
+    "markCorrect": "标记为正确",
+    "checkLocally": "在本机检查",
+    "checkingLocally": "正在本机检查…",
+    "saveFailed": "无法保存，请重试。",
+    "uncheckedTip": "无法检查——点击查看详情",
+    "status": {
+      "checking": "正在检查此笔记…",
+      "unchecked": "此笔记尚未检查。",
+      "illegible": "无法识别此笔记。",
+      "markedCorrect": "您已将此标记为正确。",
+      "correct": "看起来是对的。",
+      "wrong": "这里需要再检查一下。",
+      "unfinished": "看起来尚未完成。"
+    },
+    "errors": {
+      "couldNotCheck": "无法检查此笔记。",
+      "noInk": "此分组没有可检查的墨迹。",
+      "capture": "无法捕获此笔记。",
+      "busy": "等待检查的任务过多。此笔记将很快被检查。"
+    },
+    "ask": {
+      "button": "提问",
+      "asking": "正在提问…",
+      "label": "问题",
+      "placeholder": "关于这一行，您想了解什么？",
+      "tooLong": "问题请控制在 {{max}} 个字符以内。",
+      "empty": "请先输入问题。",
+      "failed": "无法获得回答，请重试。",
+      "checkingFirst": "正在先检查此笔记…",
+      "needsCheck": "需要先检查此笔记，才能就此提问。",
+      "answer": "回答"
+    }
+  },
+  "ai": {
+    "privacyRemote": "您的手写内容和文本将发送到上方地址。",
+    "addressInvalid": "请使用 https:// 地址，或 http://localhost:11434 这类本地地址。",
+    "addressMissing": "请输入服务地址。",
+    "typeModel": "输入模型名称",
+    "modelMissing": "请输入模型名称。",
+    "visionHint": "请选择能够读取图片的模型，否则辅导无法检查手写内容。",
+    "fetchModelsNote": "将您的密钥发送至 {{provider}} 以获取其模型列表；不会发送其他内容。",
+    "loadFailed": "无法加载 AI 服务列表。",
+    "noVision": "此服务商无法读取手写内容，因此检查已关闭。提问、摘要和练习功能仍可使用。",
+    "noModels": "未找到模型。",
+    "foundModels_other": "找到 {{count}} 个模型。",
+    "keySaved": "密钥已保存",
+    "noKey": "无密钥",
+    "noKeyOptional": "无密钥（可选）",
+    "noKeyNeeded": "无需密钥",
+    "connectionWorks": "连接正常。",
+    "keySavedUntested": "密钥已保存（未测试——请开启权限后再测试）",
+    "consent": {
+      "local": "允许 Mate 使用 {{provider}} 检查您的作业。所有处理均在本机完成，不会发送到互联网。",
+      "custom": "将手写图片和文本发送到上方地址的服务器，以检查您的作业。在开启此选项之前，不会发送任何内容。",
+      "cloud": "将手写图片和文本发送到 {{provider}}，以检查您的作业。在开启此选项之前，不会发送任何内容。",
+      "cloudText": "为提问、摘要和练习，将您笔记的文本发送至 {{provider}}。在开启此选项之前，不会发送任何内容。"
+    },
+    "model": "模型",
+    "fetchModels": "获取模型",
+    "address": "地址",
+    "apiKey": "API 密钥",
+    "apiKeyOptional": "API 密钥（可选）",
+    "pasteKey": "粘贴您的 {{provider}} 密钥",
+    "saveKey": "保存密钥",
+    "removeKey": "移除密钥",
+    "status": "状态",
+    "testConnection": "测试连接",
+    "permission": "权限",
+    "needs": {
+      "title": "Mate 需要 AI 提供什么？",
+      "feature": "功能",
+      "needs": "需要",
+      "fallback": "如果模型无法完成",
+      "tutor": "检查手写数学（辅导）",
+      "tutorNeeds": "图像输入（“视觉”）和 JSON 格式回答",
+      "tutorFallback": "辅导功能关闭；其他功能正常",
+      "text": "询问某一行、摘要、标题、练习题",
+      "textNeeds": "文本输入和输出"
+    },
+    "groups": {
+      "cloud": "云服务",
+      "local": "本机",
+      "custom": "自定义"
+    },
+    "vision": {
+      "yes": "手写：可以识别",
+      "dependsOnModel": "手写：取决于模型",
+      "no": "手写：仅支持文本，因此检查已关闭"
+    },
+    "needsLocal": "需要：在本机运行的程序，无需密钥",
+    "needsCustom": "需要：网址；如服务要求，还需密钥",
+    "needsCloud": "需要：该服务的 API 密钥",
+    "costLine": "费用：{{cost}}",
+    "cost": {
+      "paid": "付费",
+      "paidLow": "付费，价格低",
+      "paidSomeFree": "付费；部分模型免费",
+      "freeTier": "有免费额度，之后付费",
+      "freeLocal": "免费（在这台电脑上运行）",
+      "depends": "取决于服务"
+    },
+    "privacy": {
+      "sentTo": "要检查的笔记会发送到 {{service}}。",
+      "sentToAndMaker": "要检查的笔记会发送到 {{service}} 和模型的开发者。",
+      "textSentTo": "文本会发送到 {{service}}。",
+      "local": "任何内容都不会离开这台电脑。",
+      "custom": "要检查的笔记会发送到你输入的地址。"
+    },
+    "getKey": "获取密钥"
+  },
+  "home": {
+    "firstNotebook": "我的笔记本",
+    "recovery": "Mate 在此页面打开时重新启动了",
+    "notNow": "暂不",
+    "openPage": "打开页面",
+    "newBook": "新建笔记本",
+    "importPdf": "导入 PDF…",
+    "noRecentPages": "您编辑过的页面会显示在这里。",
+    "recentBooks": "最近的笔记本",
+    "noBooks": "还没有笔记本",
+    "favourites": "收藏的页面",
+    "noFavourites": "收藏页面后，它会固定显示在这里。"
+  },
+  "trash": {
+    "search": "搜索回收站",
+    "empty": "清空回收站",
+    "isEmpty": "回收站是空的",
+    "emptyHint": "已删除的页面、章节和笔记本会显示在这里，以便恢复。",
+    "deleted": "{{kind}}——删除于 {{date}}",
+    "kinds": {
+      "bookshelf": "书架",
+      "unit": "单元",
+      "section": "分区",
+      "page": "页面"
+    },
+    "restore": "恢复",
+    "deletePermanently": "永久删除",
+    "confirmTitle": "清空回收站？",
+    "confirmBody": "这将永久删除回收站中的所有项目。此操作无法撤销。"
+  },
+  "graph": {
+    "cutoff": "相似度阈值",
+    "empty": "暂无可连接的内容。辅导读取您的手写内容后，页面会显示在这里，相似的页面会被相互关联。",
+    "noEdges": "没有相似度达到此标准的页面。降低相似度阈值即可查看较弱的关联。",
+    "label": "页面关系图：{{pages}}，{{links}}",
+    "pages_other": "{{count}} 个页面",
+    "links_other": "{{count}} 个链接",
+    "errors": {
+      "tooExpensive": "表达式过于复杂，无法绘制",
+      "evalBlocked": "应用的安全策略阻止了绘图",
+      "missing": "缺少内容",
+      "missingClose": "缺少右括号",
+      "missingOpen": "缺少左括号",
+      "unexpectedClose": "多余的右括号",
+      "incompatible": "类型不兼容",
+      "unknownCommand": "未知命令",
+      "unexpectedSymbol": "意外的符号",
+      "notPlottable": "此表达式无法绘制",
+      "implicit": "不支持隐式方程",
+      "writeForm": "请写成 y = …、x = … 或 r = … 的形式",
+      "parametricParts": "参数曲线需要两部分：(x(t), y(t))",
+      "parametricT": "请用 t 写成 x = …、y = … 的形式",
+      "singleEquals": "请使用单个等号",
+      "parametricForm": "请将参数曲线写成 (x(t), y(t)) 的形式",
+      "empty": "表达式为空",
+      "invalid": "表达式无效",
+      "unreadable": "无法识别此表达式",
+      "unknownSymbols_other": "未知符号：{{symbols}}"
+    },
+    "editor": {
+      "settings": "图形设置",
+      "colourOf": "表达式 {{n}} 的颜色",
+      "expression": "表达式 {{n}}",
+      "hide": "隐藏表达式 {{n}}",
+      "show": "显示表达式 {{n}}",
+      "delete": "删除表达式 {{n}}",
+      "slow": "绘制完整图形耗时过长",
+      "add": "添加表达式",
+      "addShort": "+ 添加",
+      "xMin": "x 最小值",
+      "xMax": "x 最大值",
+      "yMin": "y 最小值",
+      "yMax": "y 最大值",
+      "grid": "网格",
+      "plot": "图形绘制"
+    }
+  },
+  "welcome": {
+    "steps": {
+      "welcome": "欢迎",
+      "ai": "AI 设置",
+      "playground": "试验场"
+    },
+    "stepLabel": "欢迎，第 {{step}} 步，共 {{total}} 步",
+    "playgroundFailed": "无法创建试验场页面。您可以在“设置 > 关于”中重试。",
+    "saveFailed": "无法保存您的设置，因此下次可能会再次显示欢迎页。",
+    "title": "欢迎使用 Mate",
+    "intro": "Mate 是一个用于手写、绘图和输入的笔记本，并提供可选的辅导功能来检查您的作业。",
+    "local": "您的笔记保存在此设备上。",
+    "aiTitle": "设置 AI（可选）",
+    "aiIntro": "辅导和练习题使用您自备 API 密钥的 AI 服务商。您可以稍后在设置中进行配置。",
+    "tryTitle": "试一试",
+    "tryIntro": "打开一个试验场页面，里面有几种工具可以尝试。这里的内容都不重要，尽情涂画吧。",
+    "skip": "跳过",
+    "skipForNow": "暂时跳过",
+    "next": "下一步",
+    "openPlayground": "打开试验场",
+    "playground": "试验场",
+    "playgroundHint": "试试笔（P）、荧光笔（H）、橡皮擦（E）……按 ? 查看快捷键。",
+    "playgroundCreateFailed": "无法创建试验场页面。"
+  },
+  "lifecycle": {
+    "safeClose": "无法安全关闭——您的笔记尚未完全保存。请保持 Mate 打开并重试。",
+    "safeCloseRecovery": "无法安全关闭——您的笔记尚未完全保存。请保持 Mate 打开并重试。已保存恢复文件：{{path}}",
+    "closeAnyway": "仍然关闭",
+    "stillSaving": "Mate 仍在保存——请稍后再次尝试关闭。",
+    "saveFailed": "部分笔画无法保存——Mate 将继续重试。"
+  },
+  "pdf": {
+    "tooManyPages": "此 PDF 共有 {{n}} 页；Mate 最多导入 {{max}} 页。",
+    "noPages": "此 PDF 没有页面。",
+    "imported": "已导入",
+    "tooLarge": "PDF 超过 50 MiB。",
+    "importFailed": "无法导入该 PDF。"
+  },
+  "table": {
+    "label": "表格",
+    "addRow": "添加行",
+    "addColumn": "添加列",
+    "deleteRow": "删除行",
+    "deleteColumn": "删除列",
+    "cell": "第 {{row}} 行，第 {{column}} 列"
+  },
+  "code": {
+    "label": "代码",
+    "language": "语言",
+    "plain": "纯文本"
+  }
+}

@@ -3,7 +3,9 @@
 import { useModal } from "./useModal";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router";
+import { errorMessage, type TKey } from "../i18n";
 import { getRecognitions, searchRecognition, snippetParts } from "../ipc/recognition";
 import { relatedPages, suggestTitle, summarizePage, type RelatedPage } from "../ipc/semantics";
 import type { Page, SearchHit } from "../model/types";
@@ -43,13 +45,22 @@ interface Panel {
   cached?: boolean;
 }
 
-const PANEL_TITLE: Record<PaletteAction, string> = {
-  summary: "Summary of this page",
-  title: "Suggested title",
-  related: "Related pages",
-};
+const PANEL_TITLE = {
+  summary: "palette.panel.summary",
+  title: "palette.panel.title",
+  related: "palette.panel.related",
+} as const satisfies Record<PaletteAction, TKey>;
 
-const message = (e: unknown): string => (e instanceof Error ? e.message : String(e));
+/** Headings of the result groups (the group ids stay English internally). */
+const SECTION_TITLE = {
+  Pages: "palette.sections.pages",
+  "Recent pages": "palette.sections.recent",
+  "Quick actions": "palette.sections.quick",
+  "Search everything": "palette.sections.everything",
+  Actions: "palette.sections.actions",
+} as const satisfies Record<Item["section"], TKey>;
+
+const message = (e: unknown): string => errorMessage(e);
 
 function Snippet({ snippet }: { snippet: string }): ReactNode {
   return snippetParts(snippet).map((p, i) =>
@@ -71,6 +82,7 @@ export default function CommandPalette() {
 
 function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
   const releaseModal = useModal();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const pages = useNotebookStore((s) => s.tree.pages);
   const currentPageId = useTabsStore((s) => focusedPageId(s));
@@ -112,7 +124,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     };
   }, []);
 
-  const titleOf = (id: string) => pages.find((p) => p.id === id)?.title || "Untitled";
+  const titleOf = (id: string) => pages.find((p) => p.id === id)?.title || t("common.untitled");
 
   // Debounced full-text search; a stale answer never replaces a newer one.
   useEffect(() => {
@@ -207,7 +219,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
       if (scored.length)
         blocks.push({
           score: scored[0].score,
-          items: scored.map(({ page }) => ({ key: `page:${page.id}`, section: "Pages", label: page.title || "Untitled", page })),
+          items: scored.map(({ page }) => ({ key: `page:${page.id}`, section: "Pages", label: page.title || t("common.untitled"), page })),
         });
       if (hits.length)
         blocks.push({
@@ -216,7 +228,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
             key: `hit:${hit.pageId}:${hit.strokeGroupId}`,
             section: "Search everything" as const,
             hit,
-            title: pages.find((p) => p.id === hit.pageId)?.title || "Untitled",
+            title: pages.find((p) => p.id === hit.pageId)?.title || t("common.untitled"),
           })),
         });
     } else {
@@ -232,7 +244,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
       if (recent.length)
         blocks.push({
           score: 1000,
-          items: recent.map((page) => ({ key: `recent:${page.id}`, section: "Recent pages", label: page.title || "Untitled", page, trail: trailOf(page) })),
+          items: recent.map((page) => ({ key: `recent:${page.id}`, section: "Recent pages", label: page.title || t("common.untitled"), page, trail: trailOf(page) })),
         });
     }
 
@@ -249,27 +261,27 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
           item: {
             key: `quick:${a.id}`,
             section: "Quick actions",
-            label: a.label,
+            label: t(a.labelKey),
             quick: a,
             keys: all.map((k) => formatKeys(k, isMacPlatform())).join(" / "),
             disabled: !ok,
-            hint: !ok && a.scope !== "global" ? DISABLED_HINT[a.scope] : undefined,
+            hint: !ok && a.scope !== "global" ? t(DISABLED_HINT[a.scope]) : undefined,
           },
         };
       });
     if (quick.length) blocks.push({ score: q ? quick[0].score : 500, items: quick.map((x) => x.item) });
 
     const needsPage = !currentPageId;
-    const actions: [string, () => void, boolean][] = [
-      ["Summarise this page", () => runAction("summary"), needsPage],
-      ["Suggest title", () => runAction("title"), needsPage],
-      ["What's related?", () => runAction("related"), needsPage],
-      ["Open graph", () => { close(); navigate("/graph"); }, false],
+    const actions: [string, string, () => void, boolean][] = [
+      ["summary", t("palette.summarise"), () => runAction("summary"), needsPage],
+      ["title", t("palette.suggestTitle"), () => runAction("title"), needsPage],
+      ["related", t("palette.related"), () => runAction("related"), needsPage],
+      ["graph", t("palette.openGraph"), () => { close(); navigate("/graph"); }, false],
     ];
     const acts: Item[] = [];
-    for (const [label, run, disabled] of actions) {
-      if (isPageWindow() && label === "Open graph") continue; // a page window shows one page
-      if (!q || label.toLowerCase().includes(q)) acts.push({ key: `action:${label}`, section: "Actions", label, run, disabled });
+    for (const [id, label, run, disabled] of actions) {
+      if (isPageWindow() && id === "graph") continue; // a page window shows one page
+      if (!q || label.toLowerCase().includes(q)) acts.push({ key: `action:${id}`, section: "Actions", label, run, disabled });
     }
     if (acts.length) blocks.push({ score: q ? 40 : 100, items: acts });
 
@@ -277,7 +289,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
     return blocks.sort((a, b) => b.score - a.score).flatMap((b) => b.items);
     // runAction and navigate are stable enough for a list rebuilt on every query/hit change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, pages, hits, currentPageId, inEditor, keyMap, selectionSize]);
+  }, [query, pages, hits, currentPageId, inEditor, keyMap, selectionSize, t]);
 
   // Keep the active row in view while arrowing through a long list.
   useEffect(() => {
@@ -324,15 +336,15 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
 
   const copy = (text: string) => {
     void navigator.clipboard?.writeText(text).then(
-      () => showToast("Copied"),
-      () => showToast("Could not copy to the clipboard"),
+      () => showToast(t("common.copied")),
+      () => showToast(t("errors.clipboard")),
     );
   };
 
   const applyTitle = async (pageId: string, title: string) => {
     try {
       await useNotebookStore.getState().rename("page", pageId, title);
-      showToast("Title applied");
+      showToast(t("palette.titleApplied"));
       close();
     } catch (e) {
       showToast(message(e));
@@ -346,7 +358,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
         className="card palette"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        aria-label={t("palette.label")}
         ref={dialogRef}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={onKeyDown}
@@ -359,8 +371,8 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
             aria-expanded={!panel}
             aria-controls="palette-list"
             aria-activedescendant={panel || !items[active] ? undefined : `palette-opt-${active}`}
-            aria-label="Search pages, handwriting and actions"
-            placeholder="Search pages and handwriting, or run an action"
+            aria-label={t("palette.searchLabel")}
+            placeholder={t("palette.searchPlaceholder")}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -371,9 +383,9 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
         </div>
 
         {panel ? (
-          <section className="palette-panel" aria-label={PANEL_TITLE[panel.kind]} aria-live="polite">
-            <h3>{PANEL_TITLE[panel.kind]}</h3>
-            {panel.status === "loading" && <p className="muted">Working on it…</p>}
+          <section className="palette-panel" aria-label={t(PANEL_TITLE[panel.kind])} aria-live="polite">
+            <h3>{t(PANEL_TITLE[panel.kind])}</h3>
+            {panel.status === "loading" && <p className="muted">{t("palette.working")}</p>}
             {panel.kind !== "related" && panel.text && <p className="palette-text">{panel.text}</p>}
             {panel.kind === "related" && panel.status === "done" && (
               panel.related?.length ? (
@@ -382,35 +394,35 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
                     <li key={r.pageId}>
                       <button type="button" className="palette-row" onClick={() => openPage(r.pageId)}>
                         <span>{titleOf(r.pageId)}</span>
-                        <span className="muted">{Math.round(r.score * 100)}% similar</span>
+                        <span className="muted">{t("palette.similar", { percent: Math.round(r.score * 100) })}</span>
                       </button>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="muted">No other page is similar yet. Related pages appear as the tutor reads more of your notes.</p>
+                <p className="muted">{t("palette.noRelated")}</p>
               )
             )}
             <div className="dialog-actions">
-              <button type="button" className="btn" onClick={clearPanel}>Back</button>
+              <button type="button" className="btn" onClick={clearPanel}>{t("common.back")}</button>
               {panel.text && (
-                <button type="button" className="btn" onClick={() => copy(panel.text ?? "")}>Copy</button>
+                <button type="button" className="btn" onClick={() => copy(panel.text ?? "")}>{t("common.copy")}</button>
               )}
               {panel.kind === "title" && panel.text && (
                 <button type="button" className="btn btn-primary" onClick={() => void applyTitle(panel.pageId, panel.text ?? "")}>
-                  Apply title
+                  {t("palette.applyTitle")}
                 </button>
               )}
             </div>
           </section>
         ) : (
-          <div id="palette-list" role="listbox" aria-label="Results" className="palette-list">
+          <div id="palette-list" role="listbox" aria-label={t("palette.results")} className="palette-list">
             {items.map((item, i) => {
               const heading = item.section !== lastSection ? item.section : null;
               lastSection = item.section;
               return (
                 <div key={item.key} role="presentation">
-                  {heading && <div className="palette-heading" role="presentation">{heading}</div>}
+                  {heading && <div className="palette-heading" role="presentation">{t(SECTION_TITLE[heading])}</div>}
                   <div
                     id={`palette-opt-${i}`}
                     role="option"
@@ -449,7 +461,7 @@ function Palette({ initialAction }: { initialAction: PaletteAction | null }) {
               );
             })}
             {query.trim() && items.every((i) => i.section === "Actions" || i.section === "Quick actions") && (
-              <p className="muted palette-empty">No page or handwriting matches.</p>
+              <p className="muted palette-empty">{t("palette.noMatches")}</p>
             )}
           </div>
         )}

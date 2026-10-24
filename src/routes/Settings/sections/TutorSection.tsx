@@ -1,24 +1,30 @@
+import { useTranslation } from "react-i18next";
 import AiSettings from "../../../components/AiSettings";
 import { SelectRow, SettingsSection, SubTitle, ToggleRow } from "../rows";
 
 export default function TutorSection() {
+  const { t } = useTranslation();
   return (
-    <SettingsSection id="tutor" title="Tutor & recognition">
-      <SubTitle>AI provider</SubTitle>
+    <SettingsSection id="tutor" title={t("settings.nav.sections.tutor")}>
+      <SubTitle>{t("settings.tutor.providerTitle")}</SubTitle>
       <AiSettings />
-      <SubTitle>Checking</SubTitle>
-      <ToggleRow k="tutorEnabled" label="Tutor" hint="Read handwritten maths and point out mistakes. Needs AI set up above." />
+      <SubTitle>{t("settings.tutor.checkingTitle")}</SubTitle>
+      <ToggleRow k="tutorEnabled" label={t("settings.tutor.enabled.label")} hint={t("settings.tutor.enabled.hint")} />
       <SelectRow
         k="tutorMode"
-        label="When to check"
+        label={t("settings.tutor.mode.label")}
         options={[
-          { value: "live", label: "As I write" },
-          { value: "onask", label: "Only when I ask" },
+          { value: "live", label: t("settings.tutor.mode.live") },
+          { value: "onask", label: t("settings.tutor.mode.onask") },
         ]}
       />
-      <ToggleRow k="tutorUnderlineErrors" label="Underline mistakes" />
-      <ToggleRow k="correctnessMode" label="Tick correct work" />
-      <ToggleRow k="tutorShowChecking" label="Show when checking" hint="A small turning ring next to ink being checked" />
+      <ToggleRow k="tutorUnderlineErrors" label={t("settings.tutor.underline")} />
+      <ToggleRow k="correctnessMode" label={t("settings.tutor.tickCorrect")} />
+      <ToggleRow
+        k="tutorShowChecking"
+        label={t("settings.tutor.showChecking.label")}
+        hint={t("settings.tutor.showChecking.hint")}
+      />
     </SettingsSection>
   );
 }

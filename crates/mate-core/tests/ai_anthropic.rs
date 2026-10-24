@@ -254,3 +254,19 @@ fn anthropic_retries_408() {
     assert!(provider(&base).recognize(&request()).is_ok());
     assert_eq!(seen.lock().unwrap().len(), 2);
 }
+
+#[test]
+fn anthropic_lists_models_with_version_header() {
+    let body = r#"{"data":[{"id":"claude-opus-5-5","type":"model"},{"id":"claude-haiku-5"}],"has_more":false}"#;
+    let (base, seen) = stub(vec![(200, body.into())]);
+    let p = AnthropicProvider::new("sk-ant-secret".into(), "m".into(), base);
+    assert_eq!(p.list_models().unwrap(), ["claude-haiku-5", "claude-opus-5-5"]);
+    let r = &seen.lock().unwrap()[0];
+    assert!(r.path.starts_with("/v1/models"), "{}", r.path);
+    assert_eq!(r.header("x-api-key"), Some("sk-ant-secret"));
+    assert_eq!(r.header("anthropic-version"), Some("2023-06-01"));
+
+    let (base, _) = stub(vec![(401, r#"{"error":{"message":"invalid x-api-key"}}"#.into())]);
+    let e = AnthropicProvider::new("bad".into(), "m".into(), base).list_models().unwrap_err();
+    assert!(matches!(e, AiError::Auth), "{e:?}");
+}

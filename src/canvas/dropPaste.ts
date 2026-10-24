@@ -4,7 +4,7 @@
 // imported as a new page in the pane's section (pdf/import) and opened.
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { showToast } from "../components/Toast";
-import { INSERT_FAILED, insertAsset, insertImageFromPath, isImagePath } from "../images/insert";
+import { insertAsset, insertFailed, insertImageFromPath, isImagePath } from "../images/insert";
 import { saveAsset } from "../ipc/assets";
 import { importPdfFromPath, isPdfPath } from "../pdf/import";
 import { navigateTo } from "../stores/navigation";
@@ -34,7 +34,7 @@ export async function pasteImageFile(store: EditorStore, file: File): Promise<vo
     const info = await saveAsset(new Uint8Array(await file.arrayBuffer()), file.type);
     await insertAsset(store, info);
   } catch {
-    showToast(INSERT_FAILED);
+    showToast(insertFailed());
   }
 }
 

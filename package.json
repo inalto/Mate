@@ -1,7 +1,7 @@
 {
   "name": "mate",
   "private": true,
-  "version": "0.5.2",
+  "version": "0.6.0",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-pdfjs-assets.mjs",
@@ -26,6 +26,7 @@
     "@cortex-js/compute-engine": "^0.161.0",
     "@phosphor-icons/react": "^2.1.10",
     "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
     "@tauri-apps/plugin-dialog": "^2.8.3",
     "@tauri-apps/plugin-opener": "^2.7.2",
     "@tauri-apps/plugin-window-state": "^2.5.0",
@@ -38,6 +39,7 @@
     "@types/d3-force": "^3.0.10",
     "codemirror": "^6.0.2",
     "d3-force": "^3.0.0",
+    "i18next": "^26.5.10",
     "jspdf": "^4.2.1",
     "katex": "^0.19.0",
     "mathlive": "^0.111.1",
@@ -46,6 +48,7 @@
     "perfect-freehand": "^1.2.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-i18next": "^17.1.8",
     "react-router": "^8.5.0",
     "zustand": "^5.0.16"
   },

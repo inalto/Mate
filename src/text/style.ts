@@ -12,14 +12,6 @@ export const FONT_STACKS: Record<FontKey, string> = {
   script: 'Caveat, "Segoe Script", cursive',
 };
 
-export const FONT_LABELS: Record<FontKey, string> = {
-  sans: "Sans",
-  serif: "Serif",
-  mono: "Mono",
-  hand: "Hand",
-  script: "Script",
-};
-
 export const FONT_KEYS = Object.keys(FONT_STACKS) as FontKey[];
 
 /** Line height as a multiple of the font size. */

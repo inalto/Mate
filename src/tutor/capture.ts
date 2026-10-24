@@ -1,6 +1,7 @@
 // Stroke-group capture: renders one group's ink, alone, on white, to a PNG for the AI check.
 // The image is always light (dark-theme colours map back to the light palette) and sized so its
 // area is about 72 000 px², whatever the zoom or the size of the writing.
+import i18n from "../i18n";
 import { renderStroke } from "../ink/render";
 import { toLightInk } from "../ink/theme";
 import type { Element, GroupBounds } from "../model/types";
@@ -124,7 +125,7 @@ export async function captureGroupImage(
 ): Promise<CapturedImage> {
   const strokes = groupStrokes(elements, region);
   const ink = inkBounds(strokes);
-  if (!ink) throw new Error("This group has no ink to check.");
+  if (!ink) throw new Error(i18n.t("tutor.errors.noInk"));
   const g = captureGeometry(region.bounds.width > 0 && region.bounds.height > 0 ? region.bounds : ink, opts);
   const canvas = (opts.createCanvas ?? defaultCanvas)(g.width, g.height);
   const ctx = canvas.getContext("2d");

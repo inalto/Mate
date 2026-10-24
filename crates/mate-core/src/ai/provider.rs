@@ -57,10 +57,17 @@ pub enum AiError {
     Refused,
     #[error("The AI's answer was cut off before it finished.")]
     Truncated,
+    /// The address setting is neither `https://` nor a local `http://` one; nothing was sent.
+    #[error("{}", super::catalog::BAD_ADDRESS)]
+    BadAddress,
 }
 
 pub trait Provider: Send + Sync {
     fn id(&self) -> &'static str;
     fn recognize(&self, req: &RecognizeRequest) -> Result<Verdict, AiError>;
     fn complete(&self, req: &TextRequest) -> Result<String, AiError>;
+    /// The model ids the service offers, sorted. No user content is sent.
+    fn list_models(&self) -> Result<Vec<String>, AiError> {
+        Err(AiError::Rejected("not supported".into()))
+    }
 }

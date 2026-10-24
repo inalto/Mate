@@ -3,6 +3,7 @@
 import { screenToWorld } from "../canvas/camera";
 import { pickAndInsertImage } from "../images/insert";
 import { runEditorShortcut } from "../keys/editorCommands";
+import i18n, { type TKey } from "../i18n";
 import { ACTION_META, type ShortcutAction } from "../keys/actions";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
@@ -13,7 +14,8 @@ export type QuickScope = "editor" | "selection" | "page" | "global";
 
 export interface QuickAction {
   id: string;
-  label: string;
+  /** Catalogue key of the label, resolved when shown. */
+  labelKey: TKey;
   synonyms: string[];
   scope: QuickScope;
   /** The shortcut whose binding is shown, if any. */
@@ -30,13 +32,37 @@ function insert(f: (s: ReturnType<typeof editor>) => unknown) {
   };
 }
 
-function switchTo(a: ShortcutAction, synonyms: string[] = []): QuickAction {
-  const name = ACTION_META[a].label.toLowerCase();
-  return { id: a, label: `Switch to ${name}`, synonyms: [name, "tool", ...synonyms], scope: "editor", shortcut: a, run: viaKeys(a) };
+type ToolAction = "tool.pen" | "tool.highlighter" | "tool.eraser" | "tool.cursor" | "tool.lasso" | "tool.shape" | "tool.text" | "tool.insertSpace";
+
+const SWITCH_TO_KEY = {
+  "tool.pen": "palette.switchTo.pen",
+  "tool.highlighter": "palette.switchTo.highlighter",
+  "tool.eraser": "palette.switchTo.eraser",
+  "tool.cursor": "palette.switchTo.cursor",
+  "tool.lasso": "palette.switchTo.lasso",
+  "tool.shape": "palette.switchTo.shape",
+  "tool.text": "palette.switchTo.text",
+  "tool.insertSpace": "palette.switchTo.insertSpace",
+} as const satisfies Record<ToolAction, TKey>;
+
+/** English tool names stay searchable whatever the interface language. */
+const TOOL_NAME: Record<ToolAction, string> = {
+  "tool.pen": "pen",
+  "tool.highlighter": "highlighter",
+  "tool.eraser": "eraser",
+  "tool.cursor": "select (cursor)",
+  "tool.lasso": "lasso",
+  "tool.shape": "shape",
+  "tool.text": "text",
+  "tool.insertSpace": "insert space",
+};
+
+function switchTo(a: ToolAction, synonyms: string[] = []): QuickAction {
+  return { id: a, labelKey: SWITCH_TO_KEY[a], synonyms: [TOOL_NAME[a], "tool", ...synonyms], scope: "editor", shortcut: a, run: viaKeys(a) };
 }
 
 function plain(a: ShortcutAction, scope: QuickScope, synonyms: string[] = []): QuickAction {
-  return { id: a, label: ACTION_META[a].label, synonyms, scope, shortcut: a, run: viaKeys(a) };
+  return { id: a, labelKey: ACTION_META[a].labelKey, synonyms, scope, shortcut: a, run: viaKeys(a) };
 }
 
 function currentSection(): { sectionId: string; unitId: string } | null {
@@ -65,28 +91,28 @@ export const QUICK_ACTIONS: QuickAction[] = [
   plain("save", "editor", ["flush"]),
   {
     id: "insert.text",
-    label: "Insert text box",
+    labelKey: "palette.insertText",
     synonyms: ["add", "text"],
     scope: "editor",
     run: insert((s) => s.addTextBox(screenToWorld(s.camera, { x: s.viewport.width / 2, y: s.viewport.height / 2 }))),
   },
-  { id: "insert.code", label: "Insert code block", synonyms: ["add", "codespace"], scope: "editor", run: insert((s) => s.addCodespace()) },
-  { id: "insert.table", label: "Insert table", synonyms: ["add", "grid"], scope: "editor", run: insert((s) => s.addTable()) },
-  { id: "insert.graph", label: "Insert graph", synonyms: ["add", "plot", "chart"], scope: "editor", run: insert((s) => s.addGraph()) },
-  { id: "insert.image", label: "Insert image", synonyms: ["add", "picture", "photo"], scope: "editor", run: () => void pickAndInsertImage() },
+  { id: "insert.code", labelKey: "palette.insertCode", synonyms: ["add", "codespace"], scope: "editor", run: insert((s) => s.addCodespace()) },
+  { id: "insert.table", labelKey: "palette.insertTable", synonyms: ["add", "grid"], scope: "editor", run: insert((s) => s.addTable()) },
+  { id: "insert.graph", labelKey: "palette.insertGraph", synonyms: ["add", "plot", "chart"], scope: "editor", run: insert((s) => s.addGraph()) },
+  { id: "insert.image", labelKey: "palette.insertImage", synonyms: ["add", "picture", "photo"], scope: "editor", run: () => void pickAndInsertImage() },
   {
     id: "page.new",
-    label: "New page",
+    labelKey: "palette.newPage",
     synonyms: ["create", "add page"],
     scope: "page",
     run: (navigate) => {
       const cur = currentSection();
-      if (cur) void useNotebookStore.getState().createPage(cur.sectionId, `Page ${useNotebookStore.getState().tree.pages.filter((p) => p.sectionId === cur.sectionId).length + 1}`).then((p) => navigate(`/edit/${p.id}`));
+      if (cur) void useNotebookStore.getState().createPage(cur.sectionId, i18n.t("common.pageName", { n: useNotebookStore.getState().tree.pages.filter((p) => p.sectionId === cur.sectionId).length + 1 })).then((p) => navigate(`/edit/${p.id}`));
     },
   },
   {
     id: "section.new",
-    label: "New section",
+    labelKey: "palette.newSection",
     synonyms: ["create", "add section"],
     scope: "page",
     run: (navigate) => {
@@ -94,15 +120,15 @@ export const QUICK_ACTIONS: QuickAction[] = [
       if (!cur) return;
       const nb = useNotebookStore.getState();
       void nb
-        .createSection(cur.unitId, `Section ${useNotebookStore.getState().tree.sections.filter((x) => x.unitId === cur.unitId).length + 1}`)
-        .then((sec) => nb.createPage(sec.id, "Page 1"))
+        .createSection(cur.unitId, i18n.t("common.sectionName", { n: useNotebookStore.getState().tree.sections.filter((x) => x.unitId === cur.unitId).length + 1 }))
+        .then((sec) => nb.createPage(sec.id, i18n.t("common.pageName", { n: 1 })))
         .then((p) => navigate(`/edit/${p.id}`));
     },
   },
   plain("window.openPage", "page", ["window", "detach"]),
   plain("help.shortcuts", "global", ["keys", "keyboard", "help"]),
-  { id: "go.settings", label: "Open settings", synonyms: ["preferences", "options"], scope: "global", run: (n) => n("/settings") },
-  { id: "go.library", label: "Open library", synonyms: ["books", "notebooks"], scope: "global", run: (n) => n("/library") },
+  { id: "go.settings", labelKey: "palette.openSettings", synonyms: ["preferences", "options"], scope: "global", run: (n) => n("/settings") },
+  { id: "go.library", labelKey: "palette.openLibrary", synonyms: ["books", "notebooks"], scope: "global", run: (n) => n("/library") },
 ];
 
 /**
@@ -112,12 +138,12 @@ export const QUICK_ACTIONS: QuickAction[] = [
 const NOT_IN_PAGE_WINDOW = new Set(["page.new", "section.new", "window.openPage", "go.settings", "go.library"]);
 export const availableInPageWindow = (a: QuickAction): boolean => !NOT_IN_PAGE_WINDOW.has(a.id);
 
-/** Hint shown on a disabled action. */
-export const DISABLED_HINT: Record<Exclude<QuickScope, "global">, string> = {
-  editor: "Open a page in the editor first",
-  selection: "Select something first",
-  page: "Open a page first",
-};
+/** Catalogue key of the hint shown on a disabled action. */
+export const DISABLED_HINT = {
+  editor: "palette.disabled.editor",
+  selection: "palette.disabled.selection",
+  page: "palette.disabled.page",
+} as const satisfies Record<Exclude<QuickScope, "global">, TKey>;
 
 /** Fuzzy score of `q` against `text` (higher is better, 0 = no match): prefix > word start > substring > subsequence. */
 export function fuzzyScore(q: string, text: string): number {
@@ -133,6 +159,7 @@ export function fuzzyScore(q: string, text: string): number {
 
 /** Best score over the label (full weight) and synonyms (slightly less). */
 export function actionScore(q: string, a: QuickAction): number {
-  const best = Math.max(fuzzyScore(q, a.label), ...a.synonyms.map((s) => fuzzyScore(q, s) * 0.8));
+  const label = i18n.t(a.labelKey).toLowerCase();
+  const best = Math.max(fuzzyScore(q, label), ...a.synonyms.map((s) => fuzzyScore(q, s) * 0.8));
   return best;
 }

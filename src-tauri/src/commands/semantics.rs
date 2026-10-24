@@ -6,14 +6,14 @@
 
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::{AiError, Provider};
-use mate_core::ai::{is_known_provider, provider_for};
+use mate_core::ai::provider_for;
 use mate_core::semantics::related::{self, PageGraph, RelatedPage};
 use mate_core::semantics::summary::{self, SummaryError, Task};
 use mate_core::settings::Settings;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
-use super::recognize::RecognizeError;
+use super::recognize::{RecognizeError, connection};
 use crate::state::AppState;
 
 type Res<T> = Result<T, String>;
@@ -46,18 +46,14 @@ pub struct TitleResult {
     pub cached: bool,
 }
 
-/// The provider for the current settings, or [`AiError::Disabled`] without consent or a key.
+/// The provider for the current settings, or [`AiError::Disabled`] without consent or a needed
+/// key or address.
 pub fn gated_provider(settings: &Settings, keys: &dyn KeyStore) -> Result<Box<dyn Provider>, AiError> {
     if settings.ai_consent != Some(true) {
         return Err(AiError::Disabled);
     }
-    let provider = if is_known_provider(&settings.ai_provider) { settings.ai_provider.as_str() } else { "anthropic" };
-    let key = keys
-        .get(provider)
-        .map_err(|_| AiError::Disabled)?
-        .filter(|k| !k.trim().is_empty())
-        .ok_or(AiError::Disabled)?;
-    Ok(provider_for(provider, &settings.ai_model, key))
+    let c = connection(settings, keys)?;
+    Ok(provider_for(&c.provider, &c.model, c.key, Some(&c.base_url)))
 }
 
 async fn generate(app: AppHandle, page_id: String, task: Task) -> AiRes<summary::Generated> {

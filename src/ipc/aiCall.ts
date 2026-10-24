@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { sessionAttempts, type BlockKind } from "../tutor/attempts";
-import { isRecognizeError } from "./recognize";
+import { isRecognizeError, recognizeErrorText } from "./recognize";
 
 const BLOCKING: ReadonlySet<string> = new Set(["auth", "billing", "unknownModel"]);
 
@@ -14,8 +14,9 @@ export async function invokeAi<T>(cmd: string, args: Record<string, unknown>): P
     return await invoke<T>(cmd, args);
   } catch (e) {
     if (isRecognizeError(e)) {
-      if (BLOCKING.has(e.kind) && !sessionAttempts.block) sessionAttempts.setBlock(e.kind as BlockKind, e.message);
-      throw new Error(e.message);
+      const text = recognizeErrorText(e);
+      if (BLOCKING.has(e.kind) && !sessionAttempts.block) sessionAttempts.setBlock(e.kind as BlockKind, text);
+      throw new Error(text);
     }
     throw e;
   }

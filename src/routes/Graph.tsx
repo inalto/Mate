@@ -11,8 +11,10 @@ import {
   type SimulationNodeDatum,
 } from "d3-force";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { showToast } from "../components/Toast";
+import { errorMessage } from "../i18n";
 import { pageGraph, type GraphNode, type PageGraph } from "../ipc/semantics";
 
 const WIDTH = 1000;
@@ -25,6 +27,7 @@ type SimNode = GraphNode & SimulationNodeDatum;
 type SimLink = SimulationLinkDatum<SimNode> & { score: number };
 
 export default function Graph() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [graph, setGraph] = useState<PageGraph | null>(null);
   const [cutoff, setCutoff] = useState(DEFAULT_CUTOFF);
@@ -39,7 +42,7 @@ export default function Graph() {
       })
       .catch((e) => {
         if (live) setGraph({ nodes: [], edges: [] });
-        showToast(e instanceof Error ? e.message : String(e));
+        showToast(errorMessage(e));
       });
     return () => {
       live = false;
@@ -101,9 +104,9 @@ export default function Graph() {
   return (
     <div className="graph-page">
       <header className="graph-header">
-        <h1>Graph</h1>
+        <h1>{t("nav.graph")}</h1>
         <label className="graph-cutoff">
-          Similarity cutoff
+          {t("graph.cutoff")}
           <input
             type="range"
             min={0.05}
@@ -116,23 +119,25 @@ export default function Graph() {
           <output>{Math.round(cutoff * 100)}%</output>
         </label>
       </header>
-      {graph === null && <p className="muted">Loading…</p>}
+      {graph === null && <p className="muted">{t("common.loading")}</p>}
       {empty && (
         <p className="graph-empty">
-          Nothing to connect yet. Pages appear here once the tutor has read your handwriting, and similar pages are
-          linked.
+          {t("graph.empty")}
         </p>
       )}
       {graph && !empty && (
         <>
           {edges.length === 0 && (
-            <p className="muted">No pages are this similar. Lower the similarity cutoff to see weaker links.</p>
+            <p className="muted">{t("graph.noEdges")}</p>
           )}
           <svg
             className="graph-svg"
             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
             role="group"
-            aria-label={`Page graph, ${graph.nodes.length} pages and ${edges.length} links`}
+            aria-label={t("graph.label", {
+              pages: t("graph.pages", { count: graph.nodes.length }),
+              links: t("graph.links", { count: edges.length }),
+            })}
           >
             <g>
               {edges.map((e) => (
@@ -158,14 +163,14 @@ export default function Graph() {
                   className="graph-node"
                   tabIndex={0}
                   role="link"
-                  aria-label={n.title || "Untitled"}
+                  aria-label={n.title || t("common.untitled")}
                   transform={`translate(${WIDTH / 2} ${HEIGHT / 2})`}
                   onClick={() => navigate(`/edit/${n.pageId}`)}
                   onKeyDown={(e) => e.key === "Enter" && navigate(`/edit/${n.pageId}`)}
                 >
                   <circle r={9} />
                   <text x={14} y={4}>
-                    {n.title || "Untitled"}
+                    {n.title || t("common.untitled")}
                   </text>
                 </g>
               ))}

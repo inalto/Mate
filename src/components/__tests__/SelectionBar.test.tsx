@@ -119,4 +119,20 @@ describe("SelectionBar align and math", () => {
     fireEvent.click(screen.getByRole("button", { name: /Align/ }));
     expect(screen.getByRole("menuitem", { name: "Distribute vertically" })).toBeTruthy();
   });
+
+  it("offers_compute_for_exactly_one_math_box", async () => {
+    const s = await setup();
+    const a = s().addMathBox()!;
+    s().endEdit();
+    const b = s().addMathBox()!;
+    s().endEdit();
+    s().select([a]);
+    const { unmount } = render(<SelectionBar />);
+    fireEvent.click(screen.getByRole("button", { name: /Compute/ }));
+    expect(screen.getByRole("menuitem", { name: "Solve" })).toBeTruthy();
+    unmount();
+    s().select([a, b]);
+    render(<SelectionBar />);
+    expect(screen.queryByRole("button", { name: /Compute/ })).toBeNull();
+  });
 });

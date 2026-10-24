@@ -112,7 +112,7 @@ describe("ImportDialog", () => {
     vi.mocked(open).mockResolvedValueOnce([good.path] as never);
     await act(async () => useImportStore.getState().openDialog());
     expect(open).toHaveBeenCalledWith(
-      expect.objectContaining({ multiple: true, filters: [{ name: "Notebook files", extensions: expect.arrayContaining(["goodnotes", "sdocx"]) }] }),
+      expect.objectContaining({ multiple: true, filters: [{ name: "Notebook files and Mate archives", extensions: expect.arrayContaining(["goodnotes", "sdocx"]) }] }),
     );
     expect(useImportStore.getState().files).toHaveLength(2);
   });

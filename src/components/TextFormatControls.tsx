@@ -17,8 +17,9 @@ import {
 } from "@phosphor-icons/react";
 import type { Editor } from "@tiptap/react";
 import type { MouseEvent, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import type { TextAttributes } from "../model/content";
-import { FONT_KEYS, FONT_LABELS, FONT_STACKS, stepFontSize, type FontKey } from "../text/style";
+import { FONT_KEYS, FONT_STACKS, stepFontSize, type FontKey } from "../text/style";
 import { PEN_PALETTE } from "./inkColors";
 
 /** Keep the editor's focus and selection when a bar button is pressed. */
@@ -39,6 +40,7 @@ export default function TextFormatControls({
   onAttrs(patch: Partial<TextAttributes>): void;
   editor?: Editor | null;
 }) {
+  const { t } = useTranslation();
   const mark = (label: string, icon: ReactNode, active: boolean, run: (e: Editor) => void) => (
     <button
       type="button"
@@ -90,35 +92,35 @@ export default function TextFormatControls({
     <>
       {editor && (
         <>
-          {mark("Bold", <TextB size={16} />, editor.isActive("bold"), (e) => e.chain().focus().toggleBold().run())}
-          {mark("Italic", <TextItalic size={16} />, editor.isActive("italic"), (e) => e.chain().focus().toggleItalic().run())}
-          {mark("Underline", <TextUnderline size={16} />, editor.isActive("underline"), (e) => e.chain().focus().toggleUnderline().run())}
-          {mark("Strikethrough", <TextStrikethrough size={16} />, editor.isActive("strike"), (e) => e.chain().focus().toggleStrike().run())}
-          {mark("Bulleted list", <ListBullets size={16} />, editor.isActive("bulletList"), (e) => e.chain().focus().toggleBulletList().run())}
-          {mark("Numbered list", <ListNumbers size={16} />, editor.isActive("orderedList"), (e) => e.chain().focus().toggleOrderedList().run())}
+          {mark(t("text.bold"), <TextB size={16} />, editor.isActive("bold"), (e) => e.chain().focus().toggleBold().run())}
+          {mark(t("text.italic"), <TextItalic size={16} />, editor.isActive("italic"), (e) => e.chain().focus().toggleItalic().run())}
+          {mark(t("text.underline"), <TextUnderline size={16} />, editor.isActive("underline"), (e) => e.chain().focus().toggleUnderline().run())}
+          {mark(t("text.strikethrough"), <TextStrikethrough size={16} />, editor.isActive("strike"), (e) => e.chain().focus().toggleStrike().run())}
+          {mark(t("text.bulletList"), <ListBullets size={16} />, editor.isActive("bulletList"), (e) => e.chain().focus().toggleBulletList().run())}
+          {mark(t("text.numberedList"), <ListNumbers size={16} />, editor.isActive("orderedList"), (e) => e.chain().focus().toggleOrderedList().run())}
           <span className="tb-sep" />
         </>
       )}
       <select
         className="tb-select"
-        aria-label="Font"
-        title="Font"
+        aria-label={t("text.font")}
+        title={t("text.font")}
         value={family}
         onChange={(e) => setFamily(e.target.value as FontKey)}
       >
         {FONT_KEYS.map((k) => (
           <option key={k} value={k} style={{ fontFamily: FONT_STACKS[k] }}>
-            {FONT_LABELS[k]}
+            {t(`text.fonts.${k}`)}
           </option>
         ))}
       </select>
-      <button type="button" className="tb-btn" aria-label="Smaller text" title="Smaller text" onMouseDown={keepFocus} onClick={() => setSize(-1)}>
+      <button type="button" className="tb-btn" aria-label={t("text.smaller")} title={t("text.smaller")} onMouseDown={keepFocus} onClick={() => setSize(-1)}>
         <Minus size={14} />
       </button>
-      <span className="tb-size" aria-label="Text size">
+      <span className="tb-size" aria-label={t("text.size")}>
         {Math.round(size)}
       </span>
-      <button type="button" className="tb-btn" aria-label="Larger text" title="Larger text" onMouseDown={keepFocus} onClick={() => setSize(1)}>
+      <button type="button" className="tb-btn" aria-label={t("text.larger")} title={t("text.larger")} onMouseDown={keepFocus} onClick={() => setSize(1)}>
         <Plus size={14} />
       </button>
       <span className="tb-sep" />
@@ -128,15 +130,15 @@ export default function TextFormatControls({
           type="button"
           className={attrs.color.toUpperCase() === c ? "tb-swatch active" : "tb-swatch"}
           style={{ background: c }}
-          aria-label={`Text colour ${c}`}
+          aria-label={t("text.colour", { color: c })}
           onMouseDown={keepFocus}
           onClick={() => setColor(c)}
         />
       ))}
       <span className="tb-sep" />
-      {align("left", "Align left", <TextAlignLeft size={16} />)}
-      {align("center", "Align centre", <TextAlignCenter size={16} />)}
-      {align("right", "Align right", <TextAlignRight size={16} />)}
+      {align("left", t("selection.alignLeft"), <TextAlignLeft size={16} />)}
+      {align("center", t("text.alignCentre"), <TextAlignCenter size={16} />)}
+      {align("right", t("selection.alignRight"), <TextAlignRight size={16} />)}
     </>
   );
 }

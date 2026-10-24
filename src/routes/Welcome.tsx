@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TKey } from "../i18n";
 import { useNavigate } from "react-router";
 import AiSettings from "../components/AiSettings";
 import { showToast } from "../components/Toast";
@@ -6,9 +8,10 @@ import { ensurePlayground } from "../onboarding/playground";
 import { useSettingsStore } from "../stores/settings";
 import "../onboarding/welcome.css";
 
-const STEPS = ["Welcome", "AI setup", "Playground"] as const;
+const STEPS: readonly TKey[] = ["welcome.steps.welcome", "welcome.steps.ai", "welcome.steps.playground"];
 
 export default function Welcome() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -27,13 +30,13 @@ export default function Welcome() {
       try {
         pageId = await ensurePlayground();
       } catch {
-        showToast("Could not create the Playground page. You can try again from Settings > About.");
+        showToast(t("welcome.playgroundFailed"));
       }
     }
     try {
       await useSettingsStore.getState().update({ onboardingDone: true });
     } catch {
-      showToast("Could not save your settings, so the welcome may show again next time.");
+      showToast(t("welcome.saveFailed"));
     }
     setBusy(false);
     navigate(pageId ? `/edit/${pageId}` : "/");
@@ -42,42 +45,45 @@ export default function Welcome() {
 
   return (
     <main className="welcome">
-      <section className="card welcome-card" aria-label={`Welcome, step ${step + 1} of ${STEPS.length}`}>
-        <div className="welcome-dots" role="list" aria-label="Progress">
+      <section className="card welcome-card" aria-label={t("welcome.stepLabel", { step: step + 1, total: STEPS.length })}>
+        <div className="welcome-dots" role="list" aria-label={t("import.progressLabel")}>
           {STEPS.map((name, i) => (
-            <span key={name} role="listitem" aria-label={name} className="welcome-dot" aria-current={i === step ? "step" : undefined} />
+            <span key={name} role="listitem" aria-label={t(name)} className="welcome-dot" aria-current={i === step ? "step" : undefined} />
           ))}
         </div>
 
         {step === 0 && (
           <>
-            <h1 ref={heading} tabIndex={-1}>Welcome to Mate</h1>
-            <p>Mate is a notebook for handwriting, drawing and typing, with an optional tutor that checks your work.</p>
-            <p>Your notes stay on this device.</p>
+            <img className="welcome-logo" src="/logo.svg" alt="" width={140} height={99} />
+            <h1 ref={heading} tabIndex={-1}>{t("welcome.title")}</h1>
+            <p>{t("welcome.intro")}</p>
+            <p>{t("welcome.local")}</p>
           </>
         )}
         {step === 1 && (
           <>
-            <h1 ref={heading} tabIndex={-1}>Set up AI (optional)</h1>
-            <p>The tutor and practice questions use an AI provider with your own API key. You can do this later in Settings.</p>
+            <h1 ref={heading} tabIndex={-1}>{t("welcome.aiTitle")}</h1>
+            <p>{t("welcome.aiIntro")}</p>
             <AiSettings />
           </>
         )}
         {step === 2 && (
           <>
-            <h1 ref={heading} tabIndex={-1}>Try it out</h1>
-            <p>Open a Playground page with a few tools to try. Nothing here is precious, so scribble freely.</p>
+            <h1 ref={heading} tabIndex={-1}>{t("welcome.tryTitle")}</h1>
+            <p>{t("welcome.tryIntro")}</p>
           </>
         )}
 
         <div className="welcome-actions">
           <button type="button" className="btn" disabled={busy} onClick={() => (step === STEPS.length - 1 ? void finish(false) : next())}>
-            {step === 1 ? "Skip for now" : "Skip"}
+            {step === 1 ? t("welcome.skipForNow") : t("welcome.skip")}
           </button>
           {step < STEPS.length - 1 ? (
-            <button type="button" className="btn btn-primary" onClick={next}>Next</button>
+            <button type="button" className="btn btn-primary" onClick={next}>{t("welcome.next")}</button>
           ) : (
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void finish(true)}>Open the Playground</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void finish(true)}>
+              {t("welcome.openPlayground")}
+            </button>
           )}
         </div>
       </section>

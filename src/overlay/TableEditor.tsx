@@ -4,6 +4,7 @@
 // Cells are uncontrolled while typing; the session commits once (see useEditSession). Registered
 // lazily for "table" by ./boxEditors.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { mapInkColor } from "../ink/theme";
 import { contentOf, type TableContent } from "../model/content";
 import type { Element } from "../model/types";
@@ -17,6 +18,7 @@ import { useEditSession } from "./useEditSession";
 const copy = (rows: Rows): Rows => rows.map((r) => [...r]);
 
 export default function TableEditor({ el, store }: BoxEditorProps) {
+  const { t } = useTranslation();
   const theme = useSettingsStore((s) => s.settings.theme);
   const rootRef = useRef<HTMLDivElement>(null);
   // `shown` feeds the cells' initial text; it only changes with the structure (`gen` remounts).
@@ -89,11 +91,11 @@ export default function TableEditor({ el, store }: BoxEditorProps) {
   );
   return (
     <div ref={rootRef} className="table-editor" style={{ color }}>
-      <div className="text-format-bar" role="toolbar" aria-label="Table">
-        {bar("Add row", () => restructure((x) => addRow(x, r + 1), { r: r + 1, c }), !canAddRow(rows))}
-        {bar("Add column", () => restructure((x) => addColumn(x, c + 1), { r, c: c + 1 }), !canAddColumn(rows))}
-        {bar("Delete row", () => restructure((x) => deleteRow(x, r), { r: Math.max(0, r - 1), c }), rows.length <= 1)}
-        {bar("Delete column", () => restructure((x) => deleteColumn(x, c), { r, c: Math.max(0, c - 1) }), rows[0].length <= 1)}
+      <div className="text-format-bar" role="toolbar" aria-label={t("table.label")}>
+        {bar(t("table.addRow"), () => restructure((x) => addRow(x, r + 1), { r: r + 1, c }), !canAddRow(rows))}
+        {bar(t("table.addColumn"), () => restructure((x) => addColumn(x, c + 1), { r, c: c + 1 }), !canAddColumn(rows))}
+        {bar(t("table.deleteRow"), () => restructure((x) => deleteRow(x, r), { r: Math.max(0, r - 1), c }), rows.length <= 1)}
+        {bar(t("table.deleteColumn"), () => restructure((x) => deleteColumn(x, c), { r, c: Math.max(0, c - 1) }), rows[0].length <= 1)}
       </div>
       <table className="table-editor-grid" style={{ fontFamily: FONT_STACKS.sans, fontSize: `${TABLE_FONT_SIZE}px`, lineHeight: LINE_HEIGHT }}>
         <tbody>
@@ -107,7 +109,7 @@ export default function TableEditor({ el, store }: BoxEditorProps) {
                   contentEditable
                   suppressContentEditableWarning
                   tabIndex={0}
-                  aria-label={`Row ${ri + 1}, column ${ci + 1}`}
+                  aria-label={t("table.cell", { row: ri + 1, column: ci + 1 })}
                   style={{ borderColor: color }}
                   onFocus={() => {
                     active.current = { r: ri, c: ci };

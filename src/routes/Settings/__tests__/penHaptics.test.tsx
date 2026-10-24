@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../../ipc/ai", () => ({
   getAiStatus: vi.fn(async () => ({ configured: false, provider: "anthropic", model: "m", consent: false })),
+  listAiProviders: vi.fn(async () => []),
 }));
 vi.mock("../../../ipc/backup", () => ({ exportBackup: vi.fn(), resetLocalData: vi.fn() }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "1.0.0") }));

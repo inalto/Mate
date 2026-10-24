@@ -12,7 +12,7 @@ import { useTutorUi } from "../../stores/tutor";
 import { el } from "../../tools/__tests__/fixtures";
 import { createAttemptLedger, RETRY_DELAY_MS, revisionOf, type PipelineDeps } from "../pipeline";
 import { SETTLE_DELAY_MS } from "../groupManager";
-import { drawTutorTip, UNCHECKED_TIP, type TutorMarker } from "../overlay";
+import { drawTutorTip, uncheckedTip, type TutorMarker } from "../overlay";
 import { segmentPage } from "../segmentation";
 import { createTutorSession, EMPTY_TUTOR_VIEW, RESEGMENT_BATCH_MS, useTutorViews, type TutorView } from "../useTutor";
 import type { ElementsChange } from "../types";
@@ -184,9 +184,9 @@ describe("couldn't-check hover label", () => {
     const cam = { x: 0, y: 0, z: 1 };
     const unchecked: TutorMarker = { groupId: "g", kind: "unchecked", bounds };
     expect(drawTutorTip(ctx, unchecked, cam, 1)).not.toBeNull();
-    expect(texts).toEqual([UNCHECKED_TIP]);
+    expect(texts).toEqual([uncheckedTip()]);
     // The card it opens offers "Try again", so the tip promises details, not a retry.
-    expect(UNCHECKED_TIP).toBe("Couldn't check — tap for details");
+    expect(uncheckedTip()).toBe("Couldn't check — tap for details");
     expect(drawTutorTip(ctx, { groupId: "g", kind: "tick", bounds }, cam, 1)).toBeNull();
     expect(texts).toHaveLength(1);
   });

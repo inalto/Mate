@@ -8,6 +8,7 @@
 // lazily for "graph" by ./boxEditors.
 import { Eye, EyeSlash, X } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useTranslation } from "react-i18next";
 import { graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphData, type GraphDomain, type GraphExpression, type GraphKind } from "../graph/data";
 import { loadEngine, engineSync } from "../graph/engine";
 import { expressionError, parseExpressionSync } from "../graph/expressions";
@@ -58,6 +59,7 @@ function DomainInput({ label, value, onValue }: { label: string; value: number; 
 }
 
 export default function GraphEditor({ el, store }: BoxEditorProps) {
+  const { t } = useTranslation();
   const theme = useSettingsStore((s) => s.settings.theme);
   const zoom = store((s) => s.camera.z);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -200,7 +202,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
 
   return (
     <div ref={rootRef} className="graph-editor" onKeyDown={onKeyDown}>
-      <div className="graph-panel" role="group" aria-label="Graph settings">
+      <div className="graph-panel" role="group" aria-label={t("graph.editor.settings")}>
         <ul className="graph-exprs">
           {data.expressions.map((ex, i) => {
             const n = i + 1;
@@ -212,14 +214,14 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
                   <button
                     type="button"
                     className="graph-color"
-                    aria-label={`Colour of expression ${n}`}
-                    title="Change colour"
+                    aria-label={t("graph.editor.colourOf", { n })}
+                    title={t("library.changeColour")}
                     style={{ background: mapInkColor(ex.color, theme) }}
                     onClick={() => setExpr(ex.id, { color: nextPaletteColor(ex.color) })}
                   />
                   <input
                     className="graph-expr-input"
-                    aria-label={`Expression ${n}`}
+                    aria-label={t("graph.editor.expression", { n })}
                     aria-invalid={err ? true : undefined}
                     spellCheck={false}
                     placeholder="y = x^2"
@@ -229,7 +231,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
                   <button
                     type="button"
                     className="tb-btn graph-icon-btn"
-                    aria-label={`${ex.visible ? "Hide" : "Show"} expression ${n}`}
+                    aria-label={ex.visible ? t("graph.editor.hide", { n }) : t("graph.editor.show", { n })}
                     aria-pressed={!ex.visible}
                     onClick={() => setExpr(ex.id, { visible: !ex.visible })}
                   >
@@ -238,14 +240,14 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
                   <button
                     type="button"
                     className="tb-btn graph-icon-btn"
-                    aria-label={`Delete expression ${n}`}
+                    aria-label={t("graph.editor.delete", { n })}
                     onClick={() => update((d) => ({ ...d, expressions: d.expressions.filter((e) => e.id !== ex.id) }))}
                   >
                     <X size={16} />
                   </button>
                 </div>
                 {err && <div className="graph-expr-error">{err}</div>}
-                {!err && slow && <div className="graph-expr-error graph-expr-warning">Too slow to plot fully</div>}
+                {!err && slow && <div className="graph-expr-error graph-expr-warning">{t("graph.editor.slow")}</div>}
               </li>
             );
           })}
@@ -253,20 +255,20 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
         <button
           type="button"
           className="graph-add"
-          aria-label="Add expression"
+          aria-label={t("graph.editor.add")}
           onClick={() => update((d) => ({ ...d, expressions: [...d.expressions, newExpression(d.expressions.length)] }))}
         >
-          + Add
+          {t("graph.editor.addShort")}
         </button>
         <div className="graph-domain">
-          <DomainInput label="x min" value={data.domain.xMin} onValue={(v) => setDomain("xMin", v)} />
-          <DomainInput label="x max" value={data.domain.xMax} onValue={(v) => setDomain("xMax", v)} />
-          <DomainInput label="y min" value={data.domain.yMin} onValue={(v) => setDomain("yMin", v)} />
-          <DomainInput label="y max" value={data.domain.yMax} onValue={(v) => setDomain("yMax", v)} />
+          <DomainInput label={t("graph.editor.xMin")} value={data.domain.xMin} onValue={(v) => setDomain("xMin", v)} />
+          <DomainInput label={t("graph.editor.xMax")} value={data.domain.xMax} onValue={(v) => setDomain("xMax", v)} />
+          <DomainInput label={t("graph.editor.yMin")} value={data.domain.yMin} onValue={(v) => setDomain("yMin", v)} />
+          <DomainInput label={t("graph.editor.yMax")} value={data.domain.yMax} onValue={(v) => setDomain("yMax", v)} />
         </div>
         <label className="graph-grid-toggle">
-          <input type="checkbox" aria-label="Grid" checked={data.grid} onChange={(e) => update((d) => ({ ...d, grid: e.target.checked }))} />
-          Grid
+          <input type="checkbox" aria-label={t("graph.editor.grid")} checked={data.grid} onChange={(e) => update((d) => ({ ...d, grid: e.target.checked }))} />
+          {t("graph.editor.grid")}
         </label>
       </div>
       <div
@@ -278,7 +280,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
-        <canvas ref={canvasRef} className="graph-canvas" aria-label="Graph plot" />
+        <canvas ref={canvasRef} className="graph-canvas" aria-label={t("graph.editor.plot")} />
       </div>
     </div>
   );

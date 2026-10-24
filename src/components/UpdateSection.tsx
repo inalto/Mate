@@ -1,15 +1,18 @@
 import { getAppVersion } from "../ipc/app";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { checkForUpdate } from "../ipc/updater";
 import { navigateTo } from "../stores/navigation";
 import { useChromeStore } from "../stores/chrome";
 import { useSettingsStore } from "../stores/settings";
 import { Row } from "../routes/Settings/rows";
 import { showToast } from "./Toast";
-import { NOT_CONFIGURED_COPY, formatProgress, useUpdater } from "./useUpdater";
+import { formatProgress, useUpdater } from "./useUpdater";
 
 /** Version, "Check for updates", download progress and "Restart to update". */
 export default function UpdateSection() {
+  const { t } = useTranslation();
   const { state, busy, check, install, restart } = useUpdater();
   const [version, setVersion] = useState<string | null>(null);
 
@@ -28,31 +31,36 @@ export default function UpdateSection() {
 
   return (
     <>
-      <Row id="updates-check" label="Software update" hint={version ? `Mate ${version}` : undefined}>
+      <Row id="updates-check" label={t("update.label")} hint={version ? t("update.appVersion", { version }) : undefined}>
         {state.kind === "available" ? (
           <button type="button" className="btn" onClick={() => void install(state.version)}>
-            Install {state.version}
+            {t("update.install", { version: state.version })}
           </button>
         ) : state.kind === "ready" ? (
           <button type="button" className="btn" onClick={restart}>
-            Restart to update
+            {t("update.restart")}
           </button>
         ) : (
           <button type="button" className="btn" disabled={busy} onClick={() => void check()}>
-            {state.kind === "checking" ? "Checking..." : "Check for updates"}
+            {state.kind === "checking" ? t("update.checkingShort") : t("update.check")}
           </button>
         )}
       </Row>
       <div className="srow" role="status" aria-live="polite">
         <span className="muted">
-          {state.kind === "checking" && "Checking for updates..."}
-          {state.kind === "upToDate" && "You are up to date."}
-          {state.kind === "notConfigured" && NOT_CONFIGURED_COPY}
-          {state.kind === "available" && `Version ${state.version} is available.${state.notes ? ` ${state.notes}` : ""}`}
+          {state.kind === "checking" && t("update.checking")}
+          {state.kind === "upToDate" && t("update.upToDate")}
+          {state.kind === "notConfigured" && t("update.notConfigured")}
+          {state.kind === "available" &&
+            (state.notes
+              ? t("update.availableWithNotes", { version: state.version, notes: state.notes })
+              : t("update.available", { version: state.version }))}
           {state.kind === "downloading" &&
-            (state.progress ? `Downloading ${state.version}: ${formatProgress(state.progress)}` : formatProgress(null))}
-          {state.kind === "ready" && `Version ${state.version} is installed. Restart to finish updating.`}
-          {state.kind === "error" && `Could not update: ${state.message}`}
+            (state.progress
+              ? t("update.downloading", { version: state.version, progress: formatProgress(state.progress) })
+              : formatProgress(null))}
+          {state.kind === "ready" && t("update.ready", { version: state.version })}
+          {state.kind === "error" && t("update.failed", { message: state.message })}
         </span>
       </div>
     </>
@@ -80,7 +88,10 @@ export function StartupUpdateCheck() {
         const r = await checkForUpdate();
         if (r.configured && r.available && r.version) {
           useChromeStore.getState().setUpdateAvailable(r.version);
-          showToast(`Mate ${r.version} is available.`, { label: "View", onClick: () => navigateTo("/settings#updates") });
+          showToast(i18n.t("update.toast", { version: r.version }), {
+            label: i18n.t("common.view"),
+            onClick: () => navigateTo("/settings#updates"),
+          });
         }
       } catch {
         // Offline or a transient failure: stay quiet, the user can check from Settings.

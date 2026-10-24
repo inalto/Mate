@@ -6,6 +6,8 @@
 // Registered lazily for the "math" subtype of "text-box" by ./boxEditors.
 import { MathfieldElement } from "mathlive";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import i18n from "../i18n";
+import { currentLanguage } from "../i18n/language";
 import { mapInkColor } from "../ink/theme";
 import { contentOf, type TextBoxContent } from "../model/content";
 import type { Element } from "../model/types";
@@ -53,10 +55,11 @@ export default function MathEditor({ el, store }: BoxEditorProps) {
     if (!host) return;
     MathfieldElement.fontsDirectory = MATHLIVE_FONTS_DIR;
     MathfieldElement.soundsDirectory = null;
+    MathfieldElement.locale = currentLanguage(); // later changes are applied by applyLanguage
     const mf = document.createElement("math-field") as MathfieldElement;
     mf.mathVirtualKeyboardPolicy = "manual"; // no on-screen keyboard unless asked for
     mf.smartMode = true;
-    mf.setAttribute("aria-label", "Equation");
+    mf.setAttribute("aria-label", i18n.t("math.equation"));
     mf.value = initial.latex;
     const onInput = () => {
       latest.current = mf.value;

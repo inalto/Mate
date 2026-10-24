@@ -1,4 +1,5 @@
 // The shape types offered by the shape tool, in menu order, with their display names.
+import type { TKey } from "../i18n";
 import type { ShapeType } from "../model/types";
 
 export const SHAPE_TYPES: readonly ShapeType[] = [
@@ -15,16 +16,17 @@ export const SHAPE_TYPES: readonly ShapeType[] = [
   "arrow",
 ];
 
-export const SHAPE_LABEL: Record<ShapeType, string> = {
-  rectangle: "Rectangle",
-  circle: "Circle",
-  ellipse: "Ellipse",
-  triangle: "Triangle",
-  line: "Line",
-  arrow: "Arrow",
-  diamond: "Diamond",
-  pentagon: "Pentagon",
-  hexagon: "Hexagon",
-  star: "Star",
-  polygon: "Polygon",
-};
+/** Catalogue key of each shape's display name. */
+export const SHAPE_LABEL_KEY = {
+  rectangle: "shapes.rectangle",
+  circle: "shapes.circle",
+  ellipse: "shapes.ellipse",
+  triangle: "shapes.triangle",
+  line: "shapes.line",
+  arrow: "shapes.arrow",
+  diamond: "shapes.diamond",
+  pentagon: "shapes.pentagon",
+  hexagon: "shapes.hexagon",
+  star: "shapes.star",
+  polygon: "shapes.polygon",
+} as const satisfies Record<ShapeType, TKey>;

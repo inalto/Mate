@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { loadEngine } from "../engine";
-import { parseExpression, parseExpressionSync, TOO_EXPENSIVE, type ParsedExpr, type ParseResult } from "../expressions";
+import { parseExpression, parseExpressionSync, tooExpensiveMessage, type ParsedExpr, type ParseResult } from "../expressions";
 
 const parse = (latex: string): ParseResult => {
   const p = parseExpressionSync(latex);
@@ -73,7 +73,7 @@ describe("parseExpression", () => {
       "\\sum_{n=1}^{5}\\sum_{m=1}^{5} x",
       "\\int_0^{\\infty} e^{-t x}\\,dt",
     ]) {
-      expect(parse(src)).toEqual({ error: TOO_EXPENSIVE });
+      expect(parse(src)).toEqual({ error: tooExpensiveMessage() });
     }
     // Short finite sums and finite integrals still plot.
     const s10 = ok("\\sum_{n=1}^{10} n x");

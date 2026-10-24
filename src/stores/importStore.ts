@@ -18,6 +18,7 @@ import {
   type SniffResult,
 } from "../ipc/import";
 import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { useNotebookStore } from "./notebook";
 
 export type ImportStage = "review" | "importing" | "done";
@@ -73,10 +74,9 @@ const TABLES_OR_SHAPES = /^\d+ (tables|shapes) were not imported\.$/;
 export function reportNotes(total: NoteImportReport): { notes: string[]; warnings: string[] } {
   const notes: string[] = [];
   if (total.pagesSkippedDuplicate > 0) {
-    const n = total.pagesSkippedDuplicate;
-    notes.push(`${n} ${n === 1 ? "page" : "pages"} already imported, so not added again.`);
+    notes.push(i18n.t("import.duplicates", { count: total.pagesSkippedDuplicate }));
   }
-  if (total.tablesSkipped > 0 || total.shapesSkipped > 0) notes.push("Tables and shapes are not imported yet.");
+  if (total.tablesSkipped > 0 || total.shapesSkipped > 0) notes.push(i18n.t("import.tablesAndShapes"));
   const warnings = [...new Set(total.warnings)].filter((w) => !TABLES_OR_SHAPES.test(w));
   return { notes, warnings };
 }
@@ -162,7 +162,7 @@ export const useImportStore = create<ImportState>((set, get) => ({
       picked = await open({
         multiple: true,
         directory: false,
-        filters: [{ name: "Notebook files", extensions: [...IMPORT_EXTENSIONS] }],
+        filters: [{ name: i18n.t("import.filter"), extensions: [...IMPORT_EXTENSIONS] }],
       });
     } catch (err) {
       set({ error: fail(err) });

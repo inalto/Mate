@@ -1,8 +1,10 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
 // (when shapes are selected), width; a single text box gets box-wide text formatting instead of
-// colour and width. Hidden while a text box is being edited (its editor has its own bar).
+// colour and width; a single math box also gets Graph and Compute. Hidden while a text box is
+// being edited (its editor has its own bar).
 import { AlignLeft, ChartLine, Copy, CopySimple, Function as FunctionIcon, Stack, Trash } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
@@ -10,6 +12,8 @@ import { hasFill } from "../shapes/geometry";
 import { isMathBox, latexOf } from "../math/mathBox";
 import { textAttrsOf } from "../text/textBox";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
+import { useWolframItem } from "../math/useWolframItem";
+import ComputeMenu, { type ComputeMenuProps } from "./ComputeMenu";
 import TextFormatControls from "./TextFormatControls";
 import { useDismiss } from "./useDismiss";
 
@@ -27,7 +31,13 @@ const BAR_HEIGHT = 44;
 /** Keep clear of the top toolbar. */
 const TOP_RESERVED = 64;
 
+/** The Compute menu with its remote-engine entries (read only when a math box is selected). */
+function MathCompute(props: Omit<ComputeMenuProps, "extraItems">) {
+  return <ComputeMenu {...props} extraItems={useWolframItem()} />;
+}
+
 function ArrangeMenu() {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -49,14 +59,14 @@ function ArrangeMenu() {
   return (
     <div ref={ref} className="tb-anchor">
       <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <Stack size={16} /> Arrange ▸
+        <Stack size={16} /> {t("selection.arrange")}
       </button>
       {open && (
         <div className="tb-popover tb-menu" role="menu">
-          {item("Bring to front", () => s().toFront())}
-          {item("Bring forward", () => s().bringForward())}
-          {item("Send backward", () => s().sendBackward())}
-          {item("Send to back", () => s().toBack())}
+          {item(t("keys.actions.bringToFront"), () => s().toFront())}
+          {item(t("keys.actions.bringForward"), () => s().bringForward())}
+          {item(t("keys.actions.sendBackward"), () => s().sendBackward())}
+          {item(t("keys.actions.sendToBack"), () => s().toBack())}
         </div>
       )}
     </div>
@@ -65,6 +75,7 @@ function ArrangeMenu() {
 
 /** Align (>= 2 selected) and distribute (>= 3 selected) menu. */
 function AlignMenu({ count }: { count: number }) {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -87,18 +98,18 @@ function AlignMenu({ count }: { count: number }) {
   return (
     <div ref={ref} className="tb-anchor">
       <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <AlignLeft size={16} /> Align ▸
+        <AlignLeft size={16} /> {t("selection.align")}
       </button>
       {open && (
         <div className="tb-popover tb-menu" role="menu">
-          {item("Align left", () => s().alignSelection("left"))}
-          {item("Align center", () => s().alignSelection("center"))}
-          {item("Align right", () => s().alignSelection("right"))}
-          {item("Align top", () => s().alignSelection("top"))}
-          {item("Align middle", () => s().alignSelection("middle"))}
-          {item("Align bottom", () => s().alignSelection("bottom"))}
-          {count >= 3 && item("Distribute horizontally", () => s().distributeSelection("horizontal"))}
-          {count >= 3 && item("Distribute vertically", () => s().distributeSelection("vertical"))}
+          {item(t("selection.alignLeft"), () => s().alignSelection("left"))}
+          {item(t("selection.alignCenter"), () => s().alignSelection("center"))}
+          {item(t("selection.alignRight"), () => s().alignSelection("right"))}
+          {item(t("selection.alignTop"), () => s().alignSelection("top"))}
+          {item(t("selection.alignMiddle"), () => s().alignSelection("middle"))}
+          {item(t("selection.alignBottom"), () => s().alignSelection("bottom"))}
+          {count >= 3 && item(t("selection.distributeH"), () => s().distributeSelection("horizontal"))}
+          {count >= 3 && item(t("selection.distributeV"), () => s().distributeSelection("vertical"))}
         </div>
       )}
     </div>
@@ -107,6 +118,7 @@ function AlignMenu({ count }: { count: number }) {
 
 /** Fill colour picker for the selected shapes. */
 function FillMenu({ current }: { current: string | undefined }) {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -124,21 +136,21 @@ function FillMenu({ current }: { current: string | undefined }) {
         style={filled ? { background: current } : undefined}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-label="Fill colour"
-        title="Fill colour"
+        aria-label={t("selection.fillColour")}
+        title={t("selection.fillColour")}
         onClick={() => setOpen((o) => !o)}
       />
       {open && (
-        <div className="tb-popover fill-menu" role="dialog" aria-label="Fill">
+        <div className="tb-popover fill-menu" role="dialog" aria-label={t("toolbar.fill")}>
           <div className="tb-row">
-            <button type="button" className="tb-swatch no-fill" aria-label="No fill" title="No fill" onClick={() => apply("transparent")} />
+            <button type="button" className="tb-swatch no-fill" aria-label={t("toolbar.noFill")} title={t("toolbar.noFill")} onClick={() => apply("transparent")} />
             {FILL_PALETTE.map((c) => (
               <button
                 key={c}
                 type="button"
                 className={current?.toUpperCase() === c ? "tb-swatch active" : "tb-swatch"}
                 style={{ background: c }}
-                aria-label={`Fill ${c}`}
+                aria-label={t("toolbar.fillColor", { color: c })}
                 onClick={() => apply(c)}
               />
             ))}
@@ -150,6 +162,7 @@ function FillMenu({ current }: { current: string | undefined }) {
 }
 
 export default function SelectionBar() {
+  const { t } = useTranslation();
   const ed = useFocusedEditor();
   const selection = ed((s) => s.selection);
   const elements = ed((s) => s.elements);
@@ -177,27 +190,28 @@ export default function SelectionBar() {
   const textBox = selected.length === 1 && selected[0]?.type === "text-box" ? selected[0] : undefined;
 
   return (
-    <div className="selection-bar" role="toolbar" aria-label="Selection" style={{ left, top }}>
-      <button type="button" className="tb-btn" aria-label="Copy" title="Copy" onClick={() => s().copySelection()}>
+    <div className="selection-bar" role="toolbar" aria-label={t("selection.label")} style={{ left, top }}>
+      <button type="button" className="tb-btn" aria-label={t("common.copy")} title={t("common.copy")} onClick={() => s().copySelection()}>
         <CopySimple size={16} />
       </button>
-      <button type="button" className="tb-btn" aria-label="Duplicate" title="Duplicate" onClick={() => s().duplicateSelection()}>
+      <button type="button" className="tb-btn" aria-label={t("selection.duplicate")} title={t("selection.duplicate")} onClick={() => s().duplicateSelection()}>
         <Copy size={16} />
       </button>
-      <button type="button" className="tb-btn" aria-label="Delete" title="Delete" onClick={() => s().deleteSelection()}>
+      <button type="button" className="tb-btn" aria-label={t("common.delete")} title={t("common.delete")} onClick={() => s().deleteSelection()}>
         <Trash size={16} />
       </button>
       <ArrangeMenu />
       {math && (
-        <button type="button" className="tb-btn" aria-label="Copy as LaTeX" title="Copy as LaTeX" onClick={() => copyText(math.map(latexOf).join("\n"))}>
+        <button type="button" className="tb-btn" aria-label={t("selection.copyLatex")} title={t("selection.copyLatex")} onClick={() => copyText(math.map(latexOf).join("\n"))}>
           <FunctionIcon size={16} /> LaTeX
         </button>
       )}
       {math && math.length === 1 && (
-        <button type="button" className="tb-btn" aria-label="Graph from equation" title="Graph from equation" onClick={() => s().graphFromSelectedEquation()}>
-          <ChartLine size={16} /> Graph
+        <button type="button" className="tb-btn" aria-label={t("selection.graphFromEquation")} title={t("selection.graphFromEquation")} onClick={() => s().graphFromSelectedEquation()}>
+          <ChartLine size={16} /> {t("selection.graph")}
         </button>
       )}
+      {math && math.length === 1 && <MathCompute store={ed} source={math[0]} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} />}
       <span className="tb-sep" />
       {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
@@ -207,7 +221,7 @@ export default function SelectionBar() {
           type="button"
           className={color === c ? "tb-swatch active" : "tb-swatch"}
           style={{ background: c }}
-          aria-label={`Colour ${c}`}
+          aria-label={t("library.colour", { color: c })}
           onClick={() => s().restyleSelection({ color: c })}
         />
       ))}
@@ -220,14 +234,14 @@ export default function SelectionBar() {
       {first && (
         <>
           <span className="tb-sep" />
-          <label className="tb-width" title="Width (px)">
+          <label className="tb-width" title={t("selection.widthPx")}>
             <input
               type="range"
               min={1}
               max={60}
               step={0.5}
               value={widthPx(first.width)}
-              aria-label="Selection width"
+              aria-label={t("selection.width")}
               onChange={(e) => s().restyleSelection({ width: Number(e.target.value) / PX_PER_UNIT })}
             />
           </label>

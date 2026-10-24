@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { useToastStore } from "../../components/Toast";
 import type { ElementsQueue, QueueStatus } from "../../ipc/elementsQueue";
-import { SAVE_FAILED_TOAST, watchSaveFailures } from "../saveStatus";
+import { saveFailedToast, watchSaveFailures } from "../saveStatus";
+
+const SAVE_FAILED_TOAST = saveFailedToast();
 
 function fakeQueue() {
   let cb: ((s: QueueStatus) => void) | null = null;

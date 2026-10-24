@@ -5,6 +5,7 @@
 // first PDF page (width PAGE_WIDTH); a page of another aspect is fitted inside its sheet.
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { deleteAsset } from "../ipc/assets";
 import { upsertElements } from "../ipc/elements";
 import { readSharedPdf } from "../ipc/pdf";
@@ -17,9 +18,9 @@ import { getPdfSource } from "./source";
 export const MAX_PDF_IMPORT_BYTES = 50 * 1024 * 1024;
 export const MAX_PDF_IMPORT_PAGES = 200;
 
+/** The sentence Rust rejects an oversized PDF with (recognised to show `pdf.tooLarge`). */
 export const TOO_LARGE_MESSAGE = "PDF is larger than 50 MiB.";
-export const IMPORT_FAILED = "Could not import that PDF.";
-export const tooManyPagesMessage = (n: number): string => `This PDF has ${n} pages; Mate imports up to ${MAX_PDF_IMPORT_PAGES}.`;
+export const tooManyPagesMessage = (n: number): string => i18n.t("pdf.tooManyPages", { n, max: MAX_PDF_IMPORT_PAGES });
 
 /** An import refused for a reason the user should read (shown as the toast text). */
 export class PdfImportError extends Error {
@@ -80,7 +81,7 @@ export async function importPdfAsPage(assetId: string, sectionId: string, title 
   const source = await getPdfSource(assetId);
   const n = source.pageCount;
   if (n > MAX_PDF_IMPORT_PAGES) throw new PdfImportError(tooManyPagesMessage(n));
-  if (n < 1) throw new PdfImportError("This PDF has no pages.");
+  if (n < 1) throw new PdfImportError(i18n.t("pdf.noPages"));
   const sizes: Size[] = [];
   for (let i = 1; i <= n; i++) sizes.push(await source.pageSize(i));
   const { sheet, boxes } = layoutPdfPages(sizes);
@@ -110,15 +111,15 @@ export async function defaultImportSection(): Promise<string> {
   const { sections, units } = useNotebookStore.getState().tree;
   const latest = [...sections].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0))[0];
   if (latest) return latest.id;
-  const unit = [...units].sort((a, b) => a.orderIndex - b.orderIndex)[0] ?? (await store.createUnit("Imported"));
+  const unit = [...units].sort((a, b) => a.orderIndex - b.orderIndex)[0] ?? (await store.createUnit(i18n.t("pdf.imported")));
   const existing = useNotebookStore.getState().tree.sections.find((s) => s.unitId === unit.id);
-  return existing?.id ?? (await store.createSection(unit.id, "Imported")).id;
+  return existing?.id ?? (await store.createSection(unit.id, i18n.t("pdf.imported"))).id;
 }
 
 const messageOf = (err: unknown): string => {
   if (err instanceof PdfImportError) return err.message;
   const text = typeof err === "string" ? err : err instanceof Error ? err.message : "";
-  return text === TOO_LARGE_MESSAGE ? TOO_LARGE_MESSAGE : IMPORT_FAILED;
+  return text === TOO_LARGE_MESSAGE ? i18n.t("pdf.tooLarge") : i18n.t("pdf.importFailed");
 };
 
 /**

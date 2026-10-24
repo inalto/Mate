@@ -18,7 +18,9 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.f
 
 import { useToastStore } from "../../components/Toast";
 import { useEditorStore } from "../editor";
-import { PAGE_FULL_TOAST, watchPageLimit } from "../pageLimit";
+import { pageFullToast, watchPageLimit } from "../pageLimit";
+
+const PAGE_FULL_TOAST = pageFullToast();
 import { useNotebookStore } from "../notebook";
 import { useSettingsStore } from "../settings";
 

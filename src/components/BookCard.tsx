@@ -1,5 +1,6 @@
 import { DotsThree } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { exportUnitArchive } from "../ipc/archive";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
@@ -7,6 +8,7 @@ import type { Unit } from "../model/types";
 import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import PracticeDialog from "./PracticeDialog";
+import ShareDialog from "./ShareDialog";
 import { useDismiss } from "./useDismiss";
 
 export const COVER_PALETTE = [
@@ -30,6 +32,7 @@ export function coverColor(unit: Unit): string {
 type MenuMode = "closed" | "main" | "colour" | "shelf";
 
 export default function BookCard({ unit }: { unit: Unit }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const tree = useNotebookStore((s) => s.tree);
   const { rename, setColor, toggleFavourite, moveUnitToBookshelf, trash } = useNotebookStore.getState();
@@ -37,6 +40,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
   const [menu, setMenu] = useState<MenuMode>("closed");
   const [renaming, setRenaming] = useState(false);
   const [practising, setPractising] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [draft, setDraft] = useState(unit.title);
 
   // The cover shows the thumbnail of the book's first page that has one.
@@ -72,7 +76,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
     try {
       await exportUnitArchive(unit.id);
     } catch (err) {
-      alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+      alert(t("export.failed", { message: err instanceof Error ? err.message : String(err) }));
     }
   };
 
@@ -90,7 +94,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
         type="button"
         className="book-cover"
         style={{ background: coverColor(unit) }}
-        aria-label={`Open ${unit.title}`}
+        aria-label={t("library.openBook", { title: unit.title })}
         onClick={open}
       >
         {thumbsReady && cover && (
@@ -100,7 +104,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
       {renaming ? (
         <input
           className="input book-title"
-          aria-label="Book title"
+          aria-label={t("library.bookTitle")}
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -116,7 +120,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
       <button
         type="button"
         className="book-menu-btn"
-        aria-label={`Actions for ${unit.title}`}
+        aria-label={t("library.bookActions", { title: unit.title })}
         onClick={() => setMenu(menu === "closed" ? "main" : "closed")}
       >
         <DotsThree size={18} weight="bold" />
@@ -125,16 +129,19 @@ export default function BookCard({ unit }: { unit: Unit }) {
         <div className="menu" role="menu">
           {menu === "main" && (
             <>
-              <button role="menuitem" onClick={() => { setMenu("closed"); setRenaming(true); }}>Rename</button>
-              <button role="menuitem" onClick={() => setMenu("colour")}>Change colour</button>
+              <button role="menuitem" onClick={() => { setMenu("closed"); setRenaming(true); }}>{t("sidebar.menu.rename")}</button>
+              <button role="menuitem" onClick={() => setMenu("colour")}>{t("library.changeColour")}</button>
               <button role="menuitem" onClick={act(() => toggleFavourite("unit", unit.id))}>
-                {unit.isFavourite ? "Unfavourite" : "Favourite"}
+                {unit.isFavourite ? t("library.unfavourite") : t("library.favourite")}
               </button>
-              <button role="menuitem" onClick={() => setMenu("shelf")}>Move to shelf</button>
-              <button role="menuitem" onClick={act(async () => setPractising(true))}>Practice from this book…</button>
-              <button role="menuitem" onClick={act(exportBook)}>Export book…</button>
-              <button role="menuitem" onClick={act(() => useImportStore.getState().openDialog({ unitId: unit.id }))}>Import into this book…</button>
-              <button role="menuitem" onClick={act(() => trash("unit", unit.id))}>Delete</button>
+              <button role="menuitem" onClick={() => setMenu("shelf")}>{t("library.moveToShelf")}</button>
+              <button role="menuitem" onClick={act(async () => setPractising(true))}>{t("library.practice")}</button>
+              <button role="menuitem" onClick={act(exportBook)}>{t("library.exportBook")}</button>
+              <button role="menuitem" onClick={act(async () => setSharing(true))}>{t("library.share")}</button>
+              <button role="menuitem" onClick={act(() => useImportStore.getState().openDialog({ unitId: unit.id }))}>
+                {t("library.importInto")}
+              </button>
+              <button role="menuitem" onClick={act(() => trash("unit", unit.id))}>{t("common.delete")}</button>
             </>
           )}
           {menu === "colour" && (
@@ -145,7 +152,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
                   type="button"
                   className="swatch"
                   style={{ background: c }}
-                  aria-label={`Colour ${c}`}
+                  aria-label={t("library.colour", { color: c })}
                   onClick={act(() => setColor("unit", unit.id, c))}
                 />
               ))}
@@ -153,7 +160,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
           )}
           {menu === "shelf" && (
             <>
-              <button role="menuitem" onClick={act(() => moveUnitToBookshelf(unit.id, null))}>No shelf</button>
+              <button role="menuitem" onClick={act(() => moveUnitToBookshelf(unit.id, null))}>{t("library.noShelf")}</button>
               {tree.bookshelves.map((b) => (
                 <button key={b.id} role="menuitem" onClick={act(() => moveUnitToBookshelf(unit.id, b.id))}>
                   {b.title}
@@ -164,6 +171,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
         </div>
       )}
       {practising && <PracticeDialog unit={unit} onClose={() => setPractising(false)} />}
+      {sharing && <ShareDialog unit={unit} onClose={() => setSharing(false)} />}
     </div>
   );
 }

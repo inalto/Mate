@@ -5,6 +5,7 @@
 // a bitmap when it has none at the needed scale, PNG export and thumbnails wait for theirs, and the
 // editor renders drafts while typing. Bitmaps are also kept per element by appearance (HTML,
 // attributes, size, colour), so a box that only moved — a new revision — is drawn at once.
+import i18n from "../i18n";
 import type { ThemeName } from "../ink/types";
 import type { Element } from "../model/types";
 import { boxSnapshots, type BoxBitmap } from "../renderers/boxSnapshot";
@@ -162,7 +163,7 @@ export async function prepareTextSnapshots(
   if (timeoutMs === undefined) {
     for (const el of boxes) {
       if (!out.has(memoKey(el.id, theme)) && (el.boxWidth ?? 0) > 0 && (el.boxHeight ?? 0) > 0) {
-        throw new Error(`Could not render the content of box ${el.id} for export.`);
+        throw new Error(i18n.t("export.boxRender", { id: el.id }));
       }
     }
   }

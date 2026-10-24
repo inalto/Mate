@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Bookshelf, Unit } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
 import BookCard from "./BookCard";
 
 export default function ShelfSection({ shelf, units }: { shelf: Bookshelf | null; units: Unit[] }) {
+  const { t } = useTranslation();
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(shelf?.title ?? "");
 
@@ -23,7 +25,7 @@ export default function ShelfSection({ shelf, units }: { shelf: Bookshelf | null
         {renaming ? (
           <input
             className="input"
-            aria-label="Shelf name"
+            aria-label={t("library.shelfName")}
             autoFocus
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -34,25 +36,25 @@ export default function ShelfSection({ shelf, units }: { shelf: Bookshelf | null
             }}
           />
         ) : (
-          <h2 className="section-title">{shelf?.title ?? "Unshelved"}</h2>
+          <h2 className="section-title">{shelf?.title ?? t("library.unshelved")}</h2>
         )}
         {shelf && !renaming && (
           <>
             <button type="button" className="btn" onClick={() => setRenaming(true)}>
-              Rename shelf
+              {t("library.renameShelf")}
             </button>
             <button
               type="button"
               className="btn btn-danger"
               onClick={() => void useNotebookStore.getState().trash("bookshelf", shelf.id)}
             >
-              Delete shelf
+              {t("library.deleteShelf")}
             </button>
           </>
         )}
       </div>
       {units.length === 0 ? (
-        <p className="muted">No books on this shelf</p>
+        <p className="muted">{t("library.emptyShelf")}</p>
       ) : (
         <div className="grid">
           {units.map((u) => <BookCard key={u.id} unit={u} />)}

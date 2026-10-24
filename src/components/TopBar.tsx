@@ -1,6 +1,7 @@
 // Editor top bar: navigation, undo/redo, page title (inline rename) and the "more actions" menu.
 import { ArrowArcLeft, ArrowArcRight, DotsThree, House, Plus, SidebarSimple } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { isPageWindow } from "../ipc/windows";
 import { startNewTab } from "../keys/editorCommands";
@@ -14,6 +15,7 @@ import ExportDialog from "./ExportDialog";
 import { useDismiss } from "./useDismiss";
 
 function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): void }) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -28,20 +30,20 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
   };
   return (
     <div ref={ref} className="menu-anchor">
-      <button ref={trigger} className="icon-btn" aria-label={updateAvailable ? "More actions, update available" : "More actions"} title={updateAvailable ? `Update available: ${updateAvailable}` : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button ref={trigger} className="icon-btn" aria-label={updateAvailable ? t("topbar.moreUpdate") : t("topbar.more")} title={updateAvailable ? t("topbar.updateAvailable", { version: updateAvailable }) : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <DotsThree size={20} weight="bold" />
         {updateAvailable && <span className="update-dot" aria-hidden="true" />}
       </button>
       {open && (
         <div className="menu menu-right" role="menu">
-          <button role="menuitem" disabled={!pageId} onClick={pick(onExport)}>Export page…</button>
-          <button role="menuitem" onClick={pick(() => void useImportStore.getState().openDialog())}>Import notes…</button>
-          <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPageSettings(pageId))}>Page settings</button>
-          <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPalette("title"))}>Suggest title</button>
-          <button role="menuitem" onClick={pick(() => chrome().openPalette())}>Search and actions…</button>
-          {!isPageWindow() && <button role="menuitem" onClick={pick(() => navigate("/settings"))}>Settings</button>}
-          <button role="menuitem" onClick={pick(() => chrome().setShortcutsOpen(true))}>Keyboard shortcuts</button>
-          <button role="menuitem" onClick={pick(() => chrome().setAboutOpen(true))}>About Mate</button>
+          <button role="menuitem" disabled={!pageId} onClick={pick(onExport)}>{t("topbar.exportPage")}</button>
+          <button role="menuitem" onClick={pick(() => void useImportStore.getState().openDialog())}>{t("topbar.importNotes")}</button>
+          <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPageSettings(pageId))}>{t("topbar.pageSettings")}</button>
+          <button role="menuitem" disabled={!pageId} onClick={pick(() => chrome().openPalette("title"))}>{t("palette.suggestTitle")}</button>
+          <button role="menuitem" onClick={pick(() => chrome().openPalette())}>{t("topbar.searchActions")}</button>
+          {!isPageWindow() && <button role="menuitem" onClick={pick(() => navigate("/settings"))}>{t("nav.settings")}</button>}
+          <button role="menuitem" onClick={pick(() => chrome().setShortcutsOpen(true))}>{t("keys.title")}</button>
+          <button role="menuitem" onClick={pick(() => chrome().setAboutOpen(true))}>{t("topbar.about")}</button>
         </div>
       )}
       {aboutOpen && <AboutDialog onClose={() => {
@@ -54,7 +56,9 @@ function MoreMenu({ pageId, onExport }: { pageId: string | null; onExport(): voi
 }
 
 export default function TopBar() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const withKeys = (label: string, keys: string) => t("toolbar.hintWithKeys", { label, keys });
   const ed = useFocusedEditor();
   const canUndo = ed((s) => s.canUndo);
   const canRedo = ed((s) => s.canRedo);
@@ -75,14 +79,14 @@ export default function TopBar() {
   const pageWindow = isPageWindow();
   return (
     <header className="topbar">
-      {!pageWindow && <button className="icon-btn" aria-label="Home" title="Home" onClick={() => navigate("/")}><House size={18} /></button>}
-      {!pageWindow && <button className="icon-btn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+\)" onClick={() => useChromeStore.getState().toggleSidebar()}><SidebarSimple size={18} /></button>}
-      <button className="icon-btn" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={() => ed.getState().undo()}><ArrowArcLeft size={18} /></button>
-      <button className="icon-btn" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={() => ed.getState().redo()}><ArrowArcRight size={18} /></button>
-      {!pageWindow && <button className="icon-btn" aria-label="New tab" title="New tab (Ctrl+T)" onClick={() => startNewTab(navigate)}><Plus size={18} /></button>}
+      {!pageWindow && <button className="icon-btn" aria-label={t("nav.home")} title={t("nav.home")} onClick={() => navigate("/")}><House size={18} /></button>}
+      {!pageWindow && <button className="icon-btn" aria-label={t("keys.actions.toggleSidebar")} title={withKeys(t("keys.actions.toggleSidebar"), "Ctrl+\\")} onClick={() => useChromeStore.getState().toggleSidebar()}><SidebarSimple size={18} /></button>}
+      <button className="icon-btn" aria-label={t("keys.actions.undo")} title={withKeys(t("keys.actions.undo"), "Ctrl+Z")} disabled={!canUndo} onClick={() => ed.getState().undo()}><ArrowArcLeft size={18} /></button>
+      <button className="icon-btn" aria-label={t("keys.actions.redo")} title={withKeys(t("keys.actions.redo"), "Ctrl+Shift+Z")} disabled={!canRedo} onClick={() => ed.getState().redo()}><ArrowArcRight size={18} /></button>
+      {!pageWindow && <button className="icon-btn" aria-label={t("keys.actions.newTab")} title={withKeys(t("keys.actions.newTab"), "Ctrl+T")} onClick={() => startNewTab(navigate)}><Plus size={18} /></button>}
       <input
         className="input topbar-title"
-        aria-label="Page title"
+        aria-label={t("topbar.pageTitle")}
         value={draft ?? title}
         disabled={!pageId}
         onChange={(e) => setDraft(e.target.value)}

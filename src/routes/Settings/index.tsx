@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router";
 import { NAV_GROUPS } from "./nav";
 import { collectEntries, jumpToRow, searchEntries, type SearchEntry } from "./search";
 import AboutSection from "./sections/AboutSection";
 import BackupSection from "./sections/BackupSection";
+import SharingSection from "./sections/SharingSection";
 import GeneralSection from "./sections/GeneralSection";
 import GesturesSection from "./sections/GesturesSection";
 import KeyboardShortcutsSection from "./sections/KeyboardShortcutsSection";
@@ -11,17 +14,31 @@ import PenButtonsSection from "./sections/PenButtonsSection";
 import PenSection from "./sections/PenSection";
 import ThemeSection from "./sections/ThemeSection";
 import TrashSection from "./sections/TrashSection";
+import MathEnginesSection from "./sections/MathEnginesSection";
 import TutorInteractionsSection from "./sections/TutorInteractionsSection";
 import TutorSection from "./sections/TutorSection";
 import UpdatesSection from "./sections/UpdatesSection";
 import "./settings.css";
 
+/** The settings section a location hash (`#sharing`) names, or null. */
+const sectionOf = (hash: string): string | null => {
+  const id = hash.replace(/^#/, "");
+  return NAV_GROUPS.some((g) => g.sections.some((s) => s.id === id)) ? id : null;
+};
+
 export default function Settings() {
+  const { t } = useTranslation();
   const contentRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<SearchEntry[]>([]);
-  const [active, setActive] = useState(NAV_GROUPS[0].sections[0].id);
+  // `/settings#sharing` opens at that section (links from dialogs elsewhere in the app).
+  const { hash } = useLocation();
+  const linked = sectionOf(hash);
+  const [active, setActive] = useState(linked ?? NAV_GROUPS[0].sections[0].id);
+  useEffect(() => {
+    if (linked) document.getElementById(`set-sec-${linked}`)?.scrollIntoView?.({ block: "start" });
+  }, [linked]);
 
   // Rows are read from the rendered pane so the index can never drift from what is shown.
   // They are re-read whenever the pane's DOM changes (sections that load late or swap in).
@@ -85,16 +102,16 @@ export default function Settings() {
   return (
     <div className="screen settings-screen">
       <div className="screen-header">
-        <h1>Settings</h1>
+        <h1>{t("settings.title")}</h1>
       </div>
       <div className="settings-layout">
-        <nav className="settings-nav" aria-label="Settings sections" ref={navRef} onKeyDown={onNavKey}>
+        <nav className="settings-nav" aria-label={t("settings.sectionsLabel")} ref={navRef} onKeyDown={onNavKey}>
           <div role="search" className="settings-search">
             <input
               type="search"
               className="input"
-              aria-label="Search settings"
-              placeholder="Search settings"
+              aria-label={t("settings.search")}
+              placeholder={t("settings.search")}
               value={query}
               data-nav-item
               onChange={(e) => setQuery(e.target.value)}
@@ -108,8 +125,8 @@ export default function Settings() {
               }}
             />
             {query.trim() !== "" && (
-              <ul className="settings-hits" aria-label="Search results">
-                {hits.length === 0 && <li className="muted">No matching settings</li>}
+              <ul className="settings-hits" aria-label={t("settings.searchResults")}>
+                {hits.length === 0 && <li className="muted">{t("settings.noMatches")}</li>}
                 {hits.map((h) => (
                   <li key={h.id}>
                     <button type="button" data-nav-item onClick={() => pick(h)}>
@@ -124,7 +141,7 @@ export default function Settings() {
           {NAV_GROUPS.map((g) => (
             <div key={g.id} className="settings-nav-group" role="group" aria-labelledby={`set-nav-${g.id}`}>
               <span id={`set-nav-${g.id}`} className="settings-nav-title">
-                {g.title}
+                {t(g.titleKey)}
               </span>
               <ul>
                 {g.sections.map((s) => (
@@ -135,7 +152,7 @@ export default function Settings() {
                       aria-current={active === s.id ? "location" : undefined}
                       onClick={() => goToSection(s.id)}
                     >
-                      {s.title}
+                      {t(s.titleKey)}
                     </button>
                   </li>
                 ))}
@@ -143,7 +160,7 @@ export default function Settings() {
             </div>
           ))}
         </nav>
-        <div className="settings-content" ref={contentRef} role="region" aria-label="Settings">
+        <div className="settings-content" ref={contentRef} role="region" aria-label={t("settings.title")}>
           <GeneralSection />
           <ThemeSection />
           <PaperSection />
@@ -152,9 +169,11 @@ export default function Settings() {
           <GesturesSection />
           <TutorSection />
           <TutorInteractionsSection />
+          <MathEnginesSection />
           <KeyboardShortcutsSection />
           <TrashSection />
           <BackupSection />
+          <SharingSection />
           <UpdatesSection />
           <AboutSection />
         </div>

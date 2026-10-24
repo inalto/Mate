@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 /** File extensions (lower case, no dot) the import dialog reads. */
-export const IMPORT_EXTENSIONS = ["goodnotes", "note", "one", "onepkg", "freenotes", "freenotesv2", "freebackup", "sdocx"] as const;
+export const IMPORT_EXTENSIONS = ["goodnotes", "note", "one", "onepkg", "freenotes", "freenotesv2", "freebackup", "sdocx", "mate"] as const;
 
 /** True when `path` ends in one of the {@link IMPORT_EXTENSIONS} (case-insensitive). */
 export function isImportPath(path: string): boolean {

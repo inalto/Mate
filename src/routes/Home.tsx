@@ -1,5 +1,6 @@
 import { FilePdf, FilePlus, Notebook } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
@@ -22,6 +23,7 @@ function PageRow({ page }: { page: Page }) {
 }
 
 export default function Home() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const tree = useNotebookStore((s) => s.tree);
   const store = useNotebookStore.getState();
@@ -33,21 +35,21 @@ export default function Home() {
   };
 
   const newBook = () => {
-    void store.createUnit("Untitled book");
+    void store.createUnit(t("common.untitledBook"));
   };
 
   const newPage = async () => {
     const latest = [...tree.sections].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0];
     const sectionId = latest?.id;
     if (!sectionId) {
-      const unit = await store.createUnit("My Notebook");
+      const unit = await store.createUnit(t("home.firstNotebook"));
       const created = useNotebookStore.getState().tree.sections.find((s) => s.unitId === unit.id);
       const first = useNotebookStore.getState().tree.pages.find((p) => p.sectionId === created?.id);
       if (first) navigate(`/edit/${first.id}`);
       return;
     }
     const count = tree.pages.filter((p) => p.sectionId === sectionId).length;
-    const page = await store.createPage(sectionId, `Page ${count + 1}`);
+    const page = await store.createPage(sectionId, t("common.pageName", { n: count + 1 }));
     navigate(`/edit/${page.id}`);
   };
 
@@ -63,15 +65,15 @@ export default function Home() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <h1>Home</h1>
+        <h1>{t("nav.home")}</h1>
       </div>
 
       {recoveryPage && (
         <div className="card row" role="status">
           <span className="grow">
-            Mate restarted while this page was open <span className="muted">({recoveryPage.title})</span>
+            {t("home.recovery")} <span className="muted">({recoveryPage.title})</span>
           </span>
-          <button type="button" className="btn" onClick={closeRecovery}>Not now</button>
+          <button type="button" className="btn" onClick={closeRecovery}>{t("home.notNow")}</button>
           <button
             type="button"
             className="btn btn-primary"
@@ -80,7 +82,7 @@ export default function Home() {
               navigate(`/edit/${recoveryPage.id}`);
             }}
           >
-            Open page
+            {t("home.openPage")}
           </button>
         </div>
       )}
@@ -88,22 +90,22 @@ export default function Home() {
       <div className="action-cards">
         <button type="button" className="card" onClick={newBook}>
           <Notebook size={24} />
-          New book
+          {t("home.newBook")}
         </button>
         <button type="button" className="card" onClick={() => void newPage()}>
           <FilePlus size={24} />
-          New page
+          {t("palette.newPage")}
         </button>
         <button type="button" className="card" onClick={() => void importPdf()}>
           <FilePdf size={24} />
-          Import PDF…
+          {t("home.importPdf")}
         </button>
       </div>
 
       <section>
-        <h2 className="section-title">Recent pages</h2>
+        <h2 className="section-title">{t("palette.sections.recent")}</h2>
         {recentPages.length === 0 ? (
-          <p className="muted">Pages you edit will show up here.</p>
+          <p className="muted">{t("home.noRecentPages")}</p>
         ) : (
           <div className="row-list">
             {recentPages.map((p) => <PageRow key={p.id} page={p} />)}
@@ -112,9 +114,9 @@ export default function Home() {
       </section>
 
       <section>
-        <h2 className="section-title">Recent books</h2>
+        <h2 className="section-title">{t("home.recentBooks")}</h2>
         {recentBooks.length === 0 ? (
-          <p className="muted">No books yet</p>
+          <p className="muted">{t("home.noBooks")}</p>
         ) : (
           <div className="grid">
             {recentBooks.map((u) => <BookCard key={u.id} unit={u} />)}
@@ -123,9 +125,9 @@ export default function Home() {
       </section>
 
       <section>
-        <h2 className="section-title">Favourite pages</h2>
+        <h2 className="section-title">{t("home.favourites")}</h2>
         {favourites.length === 0 ? (
-          <p className="muted">Favourite a page to pin it here.</p>
+          <p className="muted">{t("home.noFavourites")}</p>
         ) : (
           <div className="row-list">
             {favourites.map((p) => <PageRow key={p.id} page={p} />)}

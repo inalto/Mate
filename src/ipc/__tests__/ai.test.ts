@@ -26,3 +26,15 @@ describe("ai ipc", () => {
     sessionAttempts.clearAuthBlock();
   });
 });
+
+describe("ai provider ipc", () => {
+  it("lists providers and models through the matching commands", async () => {
+    const { listAiModels, listAiProviders } = await import("../ai");
+    invoke.mockResolvedValueOnce([{ id: "ollama" }] as never);
+    expect(await listAiProviders()).toEqual([{ id: "ollama" }]);
+    expect(invoke).toHaveBeenLastCalledWith("list_ai_providers");
+    invoke.mockResolvedValueOnce(["a"] as never);
+    expect(await listAiModels()).toEqual(["a"]);
+    expect(invoke).toHaveBeenLastCalledWith("list_ai_models");
+  });
+});

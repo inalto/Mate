@@ -1,6 +1,7 @@
 // Safe close handshake. Rust intercepts the window close, calls `__mateFlushAndClose(id)`, and
 // destroys the window only when we confirm via `complete_close_attempt`.
 import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { isPageWindow } from "../ipc/windows";
 import * as lifecycle from "../ipc/lifecycle";
@@ -9,10 +10,9 @@ import { flushSettings } from "../stores/settings";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 
 export const CLEAN_EXIT_KEY = "mate_clean_exit_v1";
-export const SAFE_CLOSE_TOAST =
-  "Could not close safely — Your notes are not fully saved. Keep Mate open and try again.";
+export const safeCloseToast = (): string => i18n.t("lifecycle.safeClose");
 
-export const STILL_SAVING_TOAST = "Mate is still saving — try closing again in a moment.";
+export const stillSavingToast = (): string => i18n.t("lifecycle.stillSaving");
 
 declare global {
   interface Window {
@@ -97,10 +97,10 @@ export function installCloseHandler(): void {
           // Rust's watchdog clears the attempt anyway.
         }
         if (recoveryPath === null) {
-          showToast(SAFE_CLOSE_TOAST);
+          showToast(safeCloseToast());
         } else {
-          showToast(`${SAFE_CLOSE_TOAST} Saved a recovery file: ${recoveryPath}`, {
-            label: "Close anyway",
+          showToast(i18n.t("lifecycle.safeCloseRecovery", { path: recoveryPath }), {
+            label: i18n.t("lifecycle.closeAnyway"),
             onClick: () => {
               safeSet(CLEAN_EXIT_KEY, "0"); // not a clean exit: the recovery card shows next launch
               void lifecycle.completeCloseAttempt(id, true).catch((err) => console.error("close anyway failed", err));
@@ -134,12 +134,12 @@ export function installCloseHandler(): void {
   window.__mateCloseAttemptCancelled = (id) => {
     if (current !== id) return;
     current = null;
-    showToast(STILL_SAVING_TOAST);
+    showToast(stillSavingToast());
   };
 
   // Closing the main window first closes every page window; one could not save, so Mate stays open
   // (that window says why).
-  window.__mateCloseRefused = () => showToast(SAFE_CLOSE_TOAST);
+  window.__mateCloseRefused = () => showToast(safeCloseToast());
 
   // Best-effort flush on reload / navigation away (e.g. dev reloads).
   const bestEffort = () => {

@@ -1,11 +1,14 @@
 // The tutor card for one stroke group, shown next to the ink (never over it as a replacement):
 // what was read (LaTeX via KaTeX, or the transcribed text), then the reveal ladder hint → "Why?"
-// (explanation) → "Next step", plus "Mark as correct" and "Ask" (a free question). A group that
+// (explanation) → "Next step", plus "Mark as correct", "Ask" (a free question) and, for an
+// equation, "Check locally" (an offline second opinion from the Compute Engine). A group that
 // couldn't be checked shows the reason and "Try again". Rendered in screen space inside the pane's
 // overlay clip, positioned from the group's page-unit bounds and clamped to the viewport.
 import { useModal } from "../components/useModal";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
+import { localCheck, localCheckMessage, looksLikeEquation } from "../math/cas";
 import { renderLatex } from "../math/katex";
 import type { EditorStore } from "../stores/editor";
 import { groupState, noteDismissDown, useTutorUi, type PaneIndex } from "../stores/tutor";
@@ -27,6 +30,7 @@ function Latex({ latex }: { latex: string }) {
 }
 
 export default function TutorCard({ store, pane }: { store: EditorStore; pane: PaneIndex }) {
+  const { t } = useTranslation();
   const card = useTutorUi((s) => (s.card?.pane === pane ? s.card : null));
   const view = useTutorViews((s) => s.views[pane]);
   const camera = store((s) => s.camera);
@@ -35,6 +39,8 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const [height, setHeight] = useState(0);
+  /** The local check's message, for the card opening (`key`) and LaTeX it was run on. */
+  const [local, setLocal] = useState<{ key: string; text: string | null } | null>(null);
   const open = card !== null && view.pageId === card.pageId;
   useModal(open);
   const g = open ? groupState(view, card.groupId) : null;
@@ -76,11 +82,11 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
       ui().closeCard();
       return;
     }
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       const c = ui().card;
       if (c?.seq === card.seq && !groupState(useTutorViews.getState().views[pane], c.groupId).bounds) ui().closeCard();
     }, left);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [card, view.pageId, missing, ui, pane]);
 
   // Focus moves into the card when it opens and returns where it was when it closes.
@@ -108,7 +114,7 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
   const inFlight = g?.inFlight;
   useLayoutEffect(() => {
     if (ref.current) setHeight(ref.current.offsetHeight);
-  }, [card, rec, unchecked, inFlight]);
+  }, [card, rec, unchecked, inFlight, local]);
 
   if (!open || !card || !g || !bounds) return null;
   const b = bounds;
@@ -124,21 +130,33 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
 
   const transcription = rec?.transcription?.text?.trim();
   const status = g.inFlight
-    ? "Checking this note…"
+    ? t("tutor.status.checking")
     : g.unchecked
       ? g.unchecked.reason
       : !rec
-        ? "This note hasn't been checked yet."
+        ? t("tutor.status.unchecked")
         : rec.illegible
-          ? "This note couldn't be read."
+          ? t("tutor.status.illegible")
           : rec.correct === true
             ? rec.userOverride
-              ? "You marked this as correct."
-              : "This looks right."
+              ? t("tutor.status.markedCorrect")
+              : t("tutor.status.correct")
             : rec.correct === false
-              ? "Something here needs another look."
-              : "This looks unfinished.";
+              ? t("tutor.status.wrong")
+              : t("tutor.status.unfinished");
   const canAsk = !!rec && !g.inFlight;
+  const checkable = !!rec && !rec.illegible && looksLikeEquation(rec.latex);
+  const localKey = `${card.seq}:${rec?.latex ?? ""}`;
+  const localShown = local?.key === localKey ? local : null;
+  const runLocalCheck = () => {
+    if (!rec) return;
+    const key = localKey;
+    setLocal({ key, text: null });
+    void localCheck(rec.latex).then(
+      (r) => setLocal((cur) => (cur?.key === key ? { key, text: localCheckMessage(r) } : cur)),
+      () => setLocal((cur) => (cur?.key === key ? { key, text: t("math.check.undecided", { reason: t("math.check.reasons.failed") }) } : cur)),
+    );
+  };
   const tooLong = [...card.question].length > MAX_QUESTION_CHARS;
   const canSubmit = canAsk && !card.busy && !tooLong && card.question.trim() !== "";
 
@@ -155,9 +173,9 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
     >
       <div className="tutor-card-head">
         <h2 id={titleId} className="tutor-card-title">
-          Tutor
+          {t("tutor.title")}
         </h2>
-        <button type="button" className="btn btn-ghost tutor-card-close" aria-label="Close" onClick={() => ui().closeCard()}>
+        <button type="button" className="btn btn-ghost tutor-card-close" aria-label={t("common.close")} onClick={() => ui().closeCard()}>
           ×
         </button>
       </div>
@@ -173,22 +191,22 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
 
       {g.unchecked && !g.inFlight ? (
         <button type="button" className="btn" onClick={() => ui().retry()}>
-          Try again
+          {t("tutor.tryAgain")}
         </button>
       ) : null}
 
       {showHint ? (
-        <section aria-label="Hint">
+        <section aria-label={t("tutor.hint")}>
           <p className="tutor-card-hint">{rec!.hint}</p>
         </section>
       ) : null}
       {rec?.explanation && card.step >= 1 ? (
-        <section aria-label="Why">
+        <section aria-label={t("tutor.why")}>
           <p>{rec.explanation}</p>
         </section>
       ) : null}
       {rec?.nextSteps && card.step >= 2 ? (
-        <section aria-label="Next step">
+        <section aria-label={t("tutor.nextStep")}>
           <p>{rec.nextSteps}</p>
         </section>
       ) : null}
@@ -196,25 +214,36 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
       <div className="tutor-card-actions">
         {rec?.explanation && card.step < 1 ? (
           <button type="button" className="btn" onClick={() => ui().revealWhy()}>
-            Why?
+            {t("tutor.whyButton")}
           </button>
         ) : null}
         {rec?.nextSteps && card.step >= (rec.explanation ? 1 : 0) && card.step < 2 ? (
           <button type="button" className="btn" onClick={() => ui().revealNext()}>
-            Next step
+            {t("tutor.nextStep")}
           </button>
         ) : null}
         {rec && rec.correct !== true && !rec.illegible ? (
           <button type="button" className="btn" onClick={() => void ui().markCorrect()}>
-            Mark as correct
+            {t("tutor.markCorrect")}
           </button>
         ) : null}
         {!card.asking ? (
           <button type="button" className="btn" onClick={() => ui().openAsk()}>
-            Ask
+            {t("tutor.ask.button")}
+          </button>
+        ) : null}
+        {checkable ? (
+          <button type="button" className="btn" disabled={localShown?.text === null} onClick={runLocalCheck}>
+            {t("tutor.checkLocally")}
           </button>
         ) : null}
       </div>
+
+      {localShown ? (
+        <p className="tutor-card-local muted" role="status" aria-live="polite">
+          {localShown.text ?? t("tutor.checkingLocally")}
+        </p>
+      ) : null}
 
       {card.asking ? (
         <form
@@ -224,14 +253,14 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
             if (canSubmit) void ui().submitAsk();
           }}
         >
-          <label htmlFor={`${titleId}-q`}>Your question</label>
+          <label htmlFor={`${titleId}-q`}>{t("tutor.ask.label")}</label>
           <textarea
             id={`${titleId}-q`}
             className="input"
             rows={3}
             autoFocus
             value={card.question}
-            placeholder="What would you like to know about this line?"
+            placeholder={t("tutor.ask.placeholder")}
             onChange={(e) => ui().setQuestion(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -240,16 +269,16 @@ export default function TutorCard({ store, pane }: { store: EditorStore; pane: P
               }
             }}
           />
-          {tooLong ? <p className="tutor-card-error">Keep the question under {MAX_QUESTION_CHARS} characters.</p> : null}
-          {!canAsk ? <p className="muted">{g.inFlight ? "Checking this note first…" : "This note needs to be checked before you can ask about it."}</p> : null}
+          {tooLong ? <p className="tutor-card-error">{t("tutor.ask.tooLong", { max: MAX_QUESTION_CHARS })}</p> : null}
+          {!canAsk ? <p className="muted">{g.inFlight ? t("tutor.ask.checkingFirst") : t("tutor.ask.needsCheck")}</p> : null}
           <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
-            {card.busy ? "Asking…" : "Ask"}
+            {card.busy ? t("tutor.ask.asking") : t("tutor.ask.button")}
           </button>
         </form>
       ) : null}
 
       {card.answer ? (
-        <section aria-label="Answer" className="tutor-card-answer" aria-live="polite">
+        <section aria-label={t("tutor.ask.answer")} className="tutor-card-answer" aria-live="polite">
           <p>{card.answer}</p>
         </section>
       ) : null}

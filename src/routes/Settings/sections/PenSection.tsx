@@ -1,82 +1,91 @@
+import { useTranslation } from "react-i18next";
 import { isWindowsPlatform } from "../../../canvas/haptics";
-import { SHAPE_LABEL, SHAPE_TYPES } from "../../../shapes/catalog";
+import { SHAPE_LABEL_KEY, SHAPE_TYPES } from "../../../shapes/catalog";
 import { ColorRow, SelectRow, SettingsSection, SliderRow, SubTitle, ToggleRow } from "../rows";
 
 const one = (v: number) => v.toFixed(1);
 
 export default function PenSection() {
+  const { t } = useTranslation();
   return (
-    <SettingsSection id="pen" title="Pen & stylus">
-      <ColorRow k="defaultPenColor" label="Pen colour" />
-      <SliderRow k="defaultPenWidth" label="Pen width" min={0.5} max={15.4} step={0.1} format={one} />
-      <ColorRow k="defaultHighlighterColor" label="Highlighter colour" />
-      <SliderRow k="defaultHighlighterWidth" label="Highlighter width" min={5} max={40} step={0.1} format={one} />
+    <SettingsSection id="pen" title={t("settings.nav.sections.pen")}>
+      <ColorRow k="defaultPenColor" label={t("settings.pen.penColor")} />
+      <SliderRow k="defaultPenWidth" label={t("settings.pen.penWidth")} min={0.5} max={15.4} step={0.1} format={one} />
+      <ColorRow k="defaultHighlighterColor" label={t("settings.pen.highlighterColor")} />
+      <SliderRow k="defaultHighlighterWidth" label={t("settings.pen.highlighterWidth")} min={5} max={40} step={0.1} format={one} />
       <SliderRow
         k="strokeStabilization"
-        label="Stroke stabilisation"
-        hint="Smooths wobble; higher lags the pen slightly"
+        label={t("settings.pen.stabilization.label")}
+        hint={t("settings.pen.stabilization.hint")}
         min={0}
         max={100}
         step={1}
       />
-      <SliderRow k="fountainPenNibFlatness" label="Fountain pen nib flatness" min={0} max={100} step={1} />
+      <SliderRow k="fountainPenNibFlatness" label={t("settings.pen.nibFlatness")} min={0} max={100} step={1} />
       {isWindowsPlatform() && (
-        <ToggleRow
-          k="penHaptics"
-          label="Pen haptics (Windows)"
-          hint="Buzz while inking and a click when a shape snaps, on pens that support it."
-        />
+        <ToggleRow k="penHaptics" label={t("settings.pen.haptics.label")} hint={t("settings.pen.haptics.hint")} />
       )}
 
-      <SubTitle>Ink to shape and scribble</SubTitle>
-      <ToggleRow k="inkToShape" label="Ink to shape" hint="Hold the pen still at the end of a stroke to turn it into a shape" />
-      <ToggleRow k="inkToShapeSnapsOnRelease" label="Snap when lifting the pen" />
-      <SliderRow k="inkToShapeDwellMs" label="Hold time" min={300} max={2000} step={50} format={(v) => `${v} ms`} />
-      <ToggleRow k="scribbleToErase" label="Scribble to erase" hint="Scribble quickly over pen ink to erase it" />
+      <SubTitle>{t("settings.pen.inkToShapeTitle")}</SubTitle>
+      <ToggleRow k="inkToShape" label={t("settings.pen.inkToShape.label")} hint={t("settings.pen.inkToShape.hint")} />
+      <ToggleRow k="inkToShapeSnapsOnRelease" label={t("settings.pen.snapOnRelease")} />
+      <SliderRow
+        k="inkToShapeDwellMs"
+        label={t("settings.pen.holdTime")}
+        min={300}
+        max={2000}
+        step={50}
+        format={(v) => t("settings.pen.milliseconds", { value: v })}
+      />
+      <ToggleRow
+        k="scribbleToErase"
+        label={t("settings.pen.scribbleToErase.label")}
+        hint={t("settings.pen.scribbleToErase.hint")}
+      />
       <SelectRow
         k="scribbleEraseSensitivity"
-        label="Scribble sensitivity"
+        label={t("settings.pen.scribbleSensitivity.label")}
         options={[
-          { value: "less", label: "Less" },
-          { value: "standard", label: "Standard" },
-          { value: "more", label: "More" },
+          { value: "less", label: t("settings.pen.scribbleSensitivity.less") },
+          { value: "standard", label: t("settings.pen.scribbleSensitivity.standard") },
+          { value: "more", label: t("settings.pen.scribbleSensitivity.more") },
         ]}
       />
 
-      <SubTitle>Text defaults</SubTitle>
-      <ColorRow k="defaultTextColor" label="Text colour" />
-      <SliderRow k="defaultTextSize" label="Text size" min={8} max={72} step={0.5} format={one} />
+      <SubTitle>{t("settings.pen.textTitle")}</SubTitle>
+      <ColorRow k="defaultTextColor" label={t("settings.pen.textColor")} />
+      <SliderRow k="defaultTextSize" label={t("settings.pen.textSize")} min={8} max={72} step={0.5} format={one} />
 
-      <SubTitle>Shape defaults</SubTitle>
+      <SubTitle>{t("settings.pen.shapeTitle")}</SubTitle>
       <SelectRow
         k="defaultShapeType"
-        label="Shape type"
-        options={SHAPE_TYPES.map((t) => ({ value: t as string, label: SHAPE_LABEL[t] }))}
+        label={t("settings.pen.shapeType")}
+        options={SHAPE_TYPES.map((s) => ({ value: s as string, label: t(SHAPE_LABEL_KEY[s]) }))}
       />
-      <ColorRow k="defaultShapeStrokeColor" label="Shape stroke colour" />
-      <ColorRow k="defaultShapeFillColor" label="Shape fill colour" />
-      <SliderRow k="defaultShapeStrokeWidth" label="Shape width" min={0.5} max={20} step={0.5} format={one} />
+      <ColorRow k="defaultShapeStrokeColor" label={t("settings.pen.shapeStrokeColor")} />
+      <ColorRow k="defaultShapeFillColor" label={t("settings.pen.shapeFillColor")} />
+      <SliderRow k="defaultShapeStrokeWidth" label={t("settings.pen.shapeWidth")} min={0.5} max={20} step={0.5} format={one} />
       <SliderRow
         k="defaultShapeFillOpacity"
-        label="Shape fill opacity"
+        label={t("settings.pen.shapeFillOpacity")}
         min={0}
         max={1}
         step={0.05}
         format={(v) => `${Math.round(v * 100)}%`}
       />
 
-      <SubTitle>Eraser defaults</SubTitle>
+      <SubTitle>{t("settings.pen.eraserTitle")}</SubTitle>
       <SelectRow
         k="defaultEraserType"
-        label="Eraser type"
+        label={t("settings.pen.eraserType.label")}
         options={[
-          { value: "stroke", label: "Whole stroke" },
-          { value: "partial", label: "Partial" },
+          { value: "stroke", label: t("settings.pen.eraserType.stroke") },
+          { value: "partial", label: t("settings.pen.eraserType.partial") },
         ]}
       />
-      <SliderRow k="defaultEraserWidth" label="Eraser width" min={4} max={100} step={1} />
-      <ToggleRow k="eraserEraseShapes" label="Erase shapes" />
-      <ToggleRow k="eraserEraseImages" label="Erase images" />
+      <SliderRow k="defaultEraserWidth" label={t("settings.pen.eraserWidth")} min={4} max={100} step={1} />
+      <ToggleRow k="eraserEraseShapes" label={t("settings.pen.eraseShapes")} />
+      <ToggleRow k="eraserEraseImages" label={t("settings.pen.eraseImages")} />
     </SettingsSection>
   );
 }

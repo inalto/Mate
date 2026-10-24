@@ -153,10 +153,10 @@ pub async fn tutor_ask(app: AppHandle, page_id: String, group_id: String, questi
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let settings = state.settings.lock().map_err(internal)?.clone();
-        let (provider_id, model, key) = resolve(&settings, state.keys.as_ref())?;
+        let conn = resolve(&settings, state.keys.as_ref())?;
         let recs = state.storage.lock().map_err(internal)?.get_recognitions(&page_id).map_err(internal)?;
-        let model = effective_model(&provider_id, &model);
-        let provider = state.providers.get(&provider_id, &model, &key);
+        let model = effective_model(&conn.provider, &conn.model);
+        let provider = state.providers.get(&conn.provider, &model, &conn.key, &conn.base_url);
         let answer = ask_with(provider.as_ref(), &recs, &group_id, &question)?;
         // Telemetry keeps the question, never the answer.
         let ev = LearningEvent {

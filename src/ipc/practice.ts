@@ -1,15 +1,17 @@
+import type { TKey } from "../i18n";
 import { invokeAi } from "./aiCall";
 
 export const QUESTION_TYPES = ["multiple-choice", "multi-select", "true-false", "fill-in-blank", "short-answer"] as const;
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
-export const QUESTION_TYPE_LABEL: Record<QuestionType, string> = {
-  "multiple-choice": "Multiple choice",
-  "multi-select": "Multi-select",
-  "true-false": "True / false",
-  "fill-in-blank": "Fill in the blank",
-  "short-answer": "Short answer",
-};
+/** Catalogue key of each question type's name. */
+export const QUESTION_TYPE_LABEL_KEY = {
+  "multiple-choice": "practice.types.multipleChoice",
+  "multi-select": "practice.types.multiSelect",
+  "true-false": "practice.types.trueFalse",
+  "fill-in-blank": "practice.types.fillInBlank",
+  "short-answer": "practice.types.shortAnswer",
+} as const satisfies Record<QuestionType, TKey>;
 
 /** Most questions one request (and one practice page) may hold. */
 export const MAX_PRACTICE_QUESTIONS = 20;

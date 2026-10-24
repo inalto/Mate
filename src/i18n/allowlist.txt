@@ -1,0 +1,1 @@
+# Exact "path:line-text" entries (as the guard prints them) allowed to stay literal. Keep it short.

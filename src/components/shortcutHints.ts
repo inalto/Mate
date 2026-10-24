@@ -10,6 +10,7 @@
 //   `dismissedHints` is emptied (settings reset); a counter already at its limit for an action that
 //   is not dismissed (stale after a reset done outside the app) starts over.
 import { useCallback } from "react";
+import i18n from "../i18n";
 import type { ShortcutAction } from "../keys/actions";
 import { formatKeys } from "../keys/keybindings";
 import { isMacPlatform } from "../keys/platform";
@@ -119,11 +120,15 @@ export function ariaKeys(keys: string, mac: boolean = isMacPlatform()): string {
 /** Tooltip text: `label (keys)` when the hint is visible and the action has a key, else `label`. */
 export function hintTitle(label: string, keys: readonly string[] | undefined, visible: boolean, mac: boolean = isMacPlatform()): string {
   const k = keys?.[0];
-  return visible && k ? `${label} (${formatKeys(k, mac)})` : label;
+  return visible && k ? i18n.t("toolbar.hintWithKeys", { label, keys: formatKeys(k, mac) }) : label;
 }
 
 /** Props for a toolbar button with a shortcut hint: tooltip, aria-keyshortcuts and impression tracking. */
-export function useShortcutHint(action: ShortcutAction, label: string, opts: { suffix?: string; keyIndex?: number } = {}) {
+export function useShortcutHint(
+  action: ShortcutAction,
+  label: string,
+  opts: { decorate?: (title: string) => string; keyIndex?: number } = {},
+) {
   const map = useKeyMap();
   const mode = useSettingsStore((s) => s.settings.shortcutHintMode);
   const dismissed = useSettingsStore((s) => s.settings.dismissedHints);
@@ -134,7 +139,7 @@ export function useShortcutHint(action: ShortcutAction, label: string, opts: { s
     if (visible) noteHintImpression(action);
   }, [visible, action]);
   return {
-    title: hintTitle(label, keys, visible) + (opts.suffix ?? ""),
+    title: opts.decorate ? opts.decorate(hintTitle(label, keys, visible)) : hintTitle(label, keys, visible),
     "aria-keyshortcuts": keys?.[0] ? ariaKeys(keys[0]) : undefined,
     onPointerEnter: onSeen,
     onFocus: onSeen,

@@ -1,5 +1,6 @@
 import { useModal } from "./useModal";
 import { useEffect, useRef, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 type Block = { kind: "h"; text: string } | { kind: "p"; text: string } | { kind: "ul"; items: string[] };
 
@@ -42,6 +43,7 @@ function renderBlock(b: Block, i: number): ReactNode {
 
 export default function WhatsNew({ notes, onClose }: { notes: string; onClose: () => void }) {
   useModal();
+  const { t } = useTranslation();
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     ref.current?.focus();
@@ -56,10 +58,12 @@ export default function WhatsNew({ notes, onClose }: { notes: string; onClose: (
   }, [onClose]);
   return (
     <div className="backdrop">
-      <div className="card dialog" role="dialog" aria-modal="true" aria-label="What's new">
+      <div className="card dialog" role="dialog" aria-modal="true" aria-label={t("whatsNew.title")}>
         <div style={{ maxHeight: "60vh", overflowY: "auto" }}>{parseNotes(notes).map(renderBlock)}</div>
         <div className="dialog-actions">
-          <button ref={ref} type="button" className="btn btn-primary" onClick={onClose}>Got it</button>
+          <button ref={ref} type="button" className="btn btn-primary" onClick={onClose}>
+            {t("whatsNew.gotIt")}
+          </button>
         </div>
       </div>
     </div>

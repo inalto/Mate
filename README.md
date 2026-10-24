@@ -1,4 +1,8 @@
+<p align="center"><img src="logo/mate-logo.svg" width="160" alt="Mate logo"></p>
+
 # Mate
+
+Your maths mate. (In Italian, *mate* is what students call *matematica*.)
 
 **A local-first handwriting & math notes app for Windows, macOS and Linux.**
 
@@ -6,7 +10,7 @@ Write with a pen on an endless canvas or on paged sheets, organise pages into bo
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **Phase 5 complete (v0.5.0)** — the foundation, ink editor, rich content (v0.2.0), an optional bring-your-own-key AI tutor (off by default), importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, and the polish release: a full settings pane, rebindable shortcuts, multi-window pages, a welcome flow, an in-app updater and Windows pen haptics. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.5.0.md).
+> Status: **v0.6.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.6.0.md).
 
 ## Features
 
@@ -15,7 +19,7 @@ Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core c
 - **Editing** — whole/partial eraser, lasso select, move, scale, arrange, duplicate, undo/redo (100 entries / 50 MiB), keyboard shortcuts
 - **Organisation** — shelves → books → sections → nestable pages; favourites; recent; trash with retention; thumbnails
 - **Workspace** — sidebar (tree or split layout, left- or right-handed), tabs, split view, page settings
-- **Export / import** — PNG, SVG, and `.mate` archives (a whole book, round-trippable)
+- **Export / import** — PNG, SVG, and `.mate` archives (a whole book, round-trippable); `.mate` files open with a double-click
 - **Never lose ink** — strokes are written to SQLite 150 ms after you lift the pen; closing the window waits for pending writes and writes a recovery file if it can't; a restart-recovery card reopens the page you were on
 - **Themes** — light, dark, sepia, high-contrast
 
@@ -25,8 +29,9 @@ Open **Settings** from the More menu in the top bar. The pane has a list of sect
 
 - **Appearance:** theme, invert images in dark mode, paper and layout defaults (page mode, background, page size, orientation, snap to grid).
 - **Writing:** pen, highlighter, text, shape and eraser defaults; ink to shape and scribble to erase; pen barrel and eraser-end buttons; palm rejection, drawing with a finger, pinch and wheel behaviour; Pen haptics (Windows only; not yet verified on haptic pen hardware).
-- **Intelligence:** the AI provider, key and tutor options (see below).
-- **System:** keyboard shortcuts, trash retention, **Download backup** (one zip holding a `.mate` archive per book; to restore, unzip it and import each `.mate` file) and **Reset local data**, which writes a recovery zip first and then restarts. API keys in the system keychain are kept. Updates and About (version, Show welcome again) are here too.
+- **Language:** the interface language, first row of General (see Languages below).
+- **Intelligence:** the AI provider, key and tutor options, and the maths engines (see below).
+- **System:** keyboard shortcuts, trash retention, Sharing (Nextcloud sign-in), **Download backup** (one zip holding a `.mate` archive per book; to restore, unzip it and import each `.mate` file) and **Reset local data**, which writes a recovery zip first and then restarts. API keys in the system keychain are kept. Updates and About (version, Show welcome again) are here too.
 
 ## Keyboard shortcuts
 
@@ -46,16 +51,58 @@ On first launch Mate shows a short welcome (AI setup is optional and can be skip
 
 ## AI tutor (optional)
 
-The AI tutor reads your handwritten maths, checks it and points out mistakes. It is **off by default** and needs a key from your own AI provider.
+The AI tutor reads your handwritten maths, checks it and points out mistakes. It is **off by default** and needs an AI provider that you set up yourself: a key from a cloud service, or a model running on your own computer.
 
 - **What it does:** underlines mistakes (and optionally ticks correct work) in each checked group of ink (ink is never changed), offers a hint, then an explanation and next steps on request, and answers questions about a line. It also summarises a page, suggests a title, finds related pages and can generate practice questions from a book.
-- **Nothing is sent until you turn it on.** Mate makes no AI call until you tick the permission under Settings → Intelligence *and* save a key. Turning the permission off stops all AI calls straight away.
-- **Providers:** Anthropic (default model `claude-opus-5-5`) and OpenAI (default model `gpt-5`; enter any model name you have access to). Choose one under Settings → Intelligence.
+- **Nothing is sent until you turn it on.** Mate makes no AI call until you tick the permission under Settings → Intelligence *and* set up a provider (save a key, or start the local program). Turning the permission off stops all AI calls straight away.
+- **Providers:** cloud services, local programs or any compatible server, chosen under Settings → Intelligence (see [AI providers](#ai-providers) below).
 - **Keys** are stored in the OS keychain (Windows Credential Manager, macOS Keychain or Linux Secret Service). They are not written to `settings.json`, not logged and never shown again after saving.
 - **What is sent:** when a group of ink is checked, a PNG of that group only, plus the recognised text of up to 11 nearby lines. A question about a line sends that line's recognised text, its verdict and your question, and up to 11 nearby recognised lines, without the image. Summaries and titles send recognised page text only. Search, related pages and the graph run on your machine.
 - **Turn it off:** untick the permission, switch the Tutor off under Settings → Tutor, or remove the key under Settings → Intelligence.
 
 Details are in the wiki: [AI tutor](https://github.com/inalto/Mate/wiki/AI-Tutor).
+
+## AI providers
+
+Settings → Intelligence starts with a short table of what Mate needs from an AI: checking handwriting needs a model that reads images; everything else (ask, summaries, titles, practice) needs only text. Then you choose a provider:
+
+- **Cloud services** (need an API key): Anthropic, OpenAI, OpenRouter, Google Gemini, Groq, Mistral, DeepSeek, Z.ai (GLM), Moonshot Kimi, xAI Grok and Together. Each card says whether it can read handwriting, what it costs and where to get a key. DeepSeek is text only, so choosing it turns checking off with a note.
+- **On this computer** (no key): Ollama (`http://localhost:11434`) and LM Studio (`http://localhost:1234`). Your handwriting is processed on this computer and nothing is sent to the internet.
+- **Custom:** any OpenAI-compatible server, by address and an optional key.
+
+**Fetch models** lists what a provider offers, and **Test connection** checks the setup. Details, defaults and troubleshooting are in the wiki: [AI providers](https://github.com/inalto/Mate/wiki/AI-Providers).
+
+## Languages
+
+The interface comes in English, Italian, Spanish, French, German, Portuguese (Brazil), Japanese and Chinese (Simplified). English and Italian are complete and reviewed. The other six are machine-translated first passes and are marked as such in the picker; review by native speakers is welcome. Change it under Settings → General → Language (System follows your computer). How to fix or add a translation: [Languages](https://github.com/inalto/Mate/wiki/Languages).
+
+## Sharing
+
+Book menu → **Share…**. Mate can save a `.mate` copy into a Dropbox, Google Drive, OneDrive, iCloud Drive or Nextcloud folder that it finds on your computer (`<Folder>/Mate/<title>.mate`), so your sync app sends it. If you have a Nextcloud, sign in once under Settings → Sharing, and Mate can upload the book and give you a link, with an optional expiry. The password for that stays in the system keychain. Double-clicking a `.mate` file imports it. Direct Google Drive, Dropbox and OneDrive APIs and OS share sheets are not built yet. See [Sharing](https://github.com/inalto/Mate/wiki/Sharing).
+
+## Maths engines
+
+- **Compute menu** (select a typed-maths box): Evaluate, Simplify, Expand, Solve and Numeric value, offline, using the bundled Compute Engine. The result is added as a new box under the original.
+- **Check locally** on the tutor card tests whether both sides of a handwritten equation agree, with no network.
+- **Wolfram|Alpha** is optional: add your own free AppID under Settings → Intelligence → Maths engines and turn the permission on, then choose Ask Wolfram|Alpha. Only that one box is sent, only when you ask.
+
+See [Maths engines](https://github.com/inalto/Mate/wiki/Maths-Engines).
+
+## Mobile
+
+Android tablets and iPads are studied but not built. The conclusion is that Tauri 2 mobile is the way, at roughly 4 to 6 person-weeks. Read the study: [Mobile](https://github.com/inalto/Mate/wiki/Mobile).
+
+## Screenshots
+
+<!-- screenshots:start -->
+| | |
+|---|---|
+| ![Welcome](screenshots/welcome.png) | ![Library](screenshots/library.png) |
+| ![Handwritten maths with the tutor](screenshots/tutor-card.png) | ![AI providers](screenshots/ai-providers.png) |
+| ![Share a book](screenshots/share-dialog.png) | ![Compute menu](screenshots/compute-menu.png) |
+
+The images live in [`screenshots/`](screenshots/README.md), which also says how to capture them.
+<!-- screenshots:end -->
 
 ## Import
 
@@ -149,17 +196,21 @@ CI (`.github/workflows/build.yml`) runs all of the above and builds installers o
 ## Repository layout
 
 ```
-crates/mate-core/       pure Rust: model, geometry, settings, SQLite storage, .mate archive
+crates/mate-core/       pure Rust: model, geometry, settings, SQLite storage, .mate archive,
+                        AI provider catalog, share (folders, Nextcloud), maths (Wolfram|Alpha)
 src-tauri/              Tauri shell: commands, app state, safe-close gate, config, icons
 src/                    React + TypeScript frontend
   canvas/  ink/  tools/ camera & input · stroke geometry & rendering · eraser, lasso, history
   stores/  ipc/  export/ zustand stores · typed invoke wrappers + write-behind queue · PNG/SVG
+  i18n/  locales/        language setting and catalogues (one translation.json per language)
+  components/ai/  math/  provider setup UI · Compute Engine operations and local check
+logo/                   the Mate logo and the source for the app icons
 .github/workflows/      CI build matrix
 ```
 
 ## Documentation
 
-The [project wiki](https://github.com/inalto/Mate/wiki) covers the [architecture](https://github.com/inalto/Mate/wiki/Architecture), [data model](https://github.com/inalto/Mate/wiki/Data-Model), [ink engine](https://github.com/inalto/Mate/wiki/Ink-Engine), [building and testing](https://github.com/inalto/Mate/wiki/Building-and-Testing), the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and [contributing](https://github.com/inalto/Mate/wiki/Contributing).
+The [project wiki](https://github.com/inalto/Mate/wiki) covers the [AI providers](https://github.com/inalto/Mate/wiki/AI-Providers), [sharing](https://github.com/inalto/Mate/wiki/Sharing), [maths engines](https://github.com/inalto/Mate/wiki/Maths-Engines), [languages](https://github.com/inalto/Mate/wiki/Languages), [mobile study](https://github.com/inalto/Mate/wiki/Mobile), the [architecture](https://github.com/inalto/Mate/wiki/Architecture), [data model](https://github.com/inalto/Mate/wiki/Data-Model), [ink engine](https://github.com/inalto/Mate/wiki/Ink-Engine), [building and testing](https://github.com/inalto/Mate/wiki/Building-and-Testing), the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and [contributing](https://github.com/inalto/Mate/wiki/Contributing).
 
 ## Acknowledgements
 

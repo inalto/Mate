@@ -8,6 +8,7 @@ import type {
   TrashItem,
   Unit,
 } from "../model/types";
+import i18n from "../i18n";
 import * as ipc from "../ipc/notebook";
 import { loadElements, upsertElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
@@ -197,8 +198,8 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
         version: 0,
       };
       await saveUnit(unit);
-      const section = await get().createSection(unit.id, "Notes");
-      await get().createPage(section.id, "Page 1");
+      const section = await get().createSection(unit.id, i18n.t("common.firstSection"));
+      await get().createPage(section.id, i18n.t("common.pageName", { n: 1 }));
       return unit;
     },
 

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { create } from "zustand";
 
 export interface ToastAction {
@@ -48,6 +49,7 @@ export const dismissToast = (message: string): void => {
 };
 
 export function ToastHost() {
+  const { t } = useTranslation();
   const message = useToastStore((s) => s.message);
   const action = useToastStore((s) => s.action);
   const persistent = useToastStore((s) => s.persistent);
@@ -58,8 +60,8 @@ export function ToastHost() {
     // An action or persistent toast stays until the user chooses / the condition clears,
     // unless it asked to expire.
     if ((action || persistent) && expiresAfterMs === null) return;
-    const t = setTimeout(dismiss, expiresAfterMs ?? 12000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(dismiss, expiresAfterMs ?? 12000);
+    return () => clearTimeout(timer);
   }, [message, action, persistent, expiresAfterMs, dismiss]);
   if (!message) return null;
   return (
@@ -77,7 +79,7 @@ export function ToastHost() {
           {action.label}
         </button>
       )}
-      <button type="button" className="btn" onClick={dismiss}>Dismiss</button>
+      <button type="button" className="btn" onClick={dismiss}>{t("common.dismiss")}</button>
     </div>
   );
 }

@@ -2,7 +2,8 @@
 // in Rust (`tutor_ask`). Failures show a toast with the same sentences as checking errors.
 import { showToast } from "../components/Toast";
 import { MAX_QUESTION_CHARS, tutorAsk } from "../ipc/ask";
-import { isRecognizeError } from "../ipc/recognize";
+import i18n from "../i18n";
+import { isRecognizeError, recognizeErrorText } from "../ipc/recognize";
 
 export { MAX_QUESTION_CHARS };
 
@@ -23,13 +24,13 @@ export function cleanQuestion(q: string): string | null {
 export async function askAboutGroup(pageId: string, groupId: string, question: string, deps: AskDeps = defaultDeps): Promise<string | null> {
   const q = cleanQuestion(question);
   if (q === null) {
-    deps.toast(question.trim() ? `Keep the question under ${MAX_QUESTION_CHARS} characters.` : "Type a question first.");
+    deps.toast(question.trim() ? i18n.t("tutor.ask.tooLong", { max: MAX_QUESTION_CHARS }) : i18n.t("tutor.ask.empty"));
     return null;
   }
   try {
     return await deps.ask(pageId, groupId, q);
   } catch (e) {
-    deps.toast(isRecognizeError(e) ? e.message : "Couldn't get an answer. Try again.");
+    deps.toast(isRecognizeError(e) ? recognizeErrorText(e) : i18n.t("tutor.ask.failed"));
     return null;
   }
 }

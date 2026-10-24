@@ -1,0 +1,1111 @@
+{
+  "settings": {
+    "general": {
+      "language": {
+        "label": "Language",
+        "system": "System"
+      },
+      "handedness": {
+        "label": "Handedness",
+        "hint": "Which side the sidebar and tool strips sit on",
+        "right": "Right-handed",
+        "left": "Left-handed"
+      },
+      "libraryView": {
+        "label": "Library view",
+        "recent": "Recent",
+        "shelves": "Shelves",
+        "az": "A to Z"
+      },
+      "sidebarLayout": {
+        "label": "Sidebar layout",
+        "split": "Split (sections and pages)",
+        "stacked": "Stacked"
+      },
+      "shortcutHints": {
+        "label": "Shortcut hints",
+        "always": "Always",
+        "adaptive": "Until learned",
+        "never": "Never"
+      },
+      "zoomIndicator": {
+        "label": "Show zoom level",
+        "hint": "A small zoom percentage in the editor"
+      },
+      "exportFormat": {
+        "label": "Default export format",
+        "mate": "Mate archive"
+      }
+    },
+    "title": "Settings",
+    "sectionsLabel": "Settings sections",
+    "search": "Search settings",
+    "searchResults": "Search results",
+    "noMatches": "No matching settings",
+    "nav": {
+      "groups": {
+        "general": "General",
+        "appearance": "Appearance",
+        "writing": "Writing",
+        "intelligence": "Intelligence",
+        "system": "System"
+      },
+      "sections": {
+        "general": "General",
+        "theme": "Theme",
+        "paper": "Paper & layout",
+        "pen": "Pen & stylus",
+        "penButtons": "Pen buttons",
+        "gestures": "Gestures & touch",
+        "tutor": "Tutor & recognition",
+        "tutorInteractions": "Tutor interactions",
+        "mathEngines": "Maths engines",
+        "shortcuts": "Keyboard shortcuts",
+        "trash": "Trash",
+        "backup": "Backup",
+        "sharing": "Sharing",
+        "updates": "Updates",
+        "about": "About"
+      }
+    },
+    "resetIncomplete": "Local data could not be fully reset. Your backup is at {{path}}.",
+    "theme": {
+      "label": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "sepia": "Sepia",
+      "highContrast": "High contrast",
+      "invertImages": {
+        "label": "Invert images in dark mode",
+        "hint": "Black-and-white images are inverted on dark themes"
+      }
+    },
+    "paper": {
+      "pageMode": {
+        "label": "Page mode",
+        "canvas": "Infinite",
+        "page": "Paper"
+      },
+      "background": {
+        "label": "Background",
+        "blank": "Blank",
+        "ruled": "Ruled",
+        "ruledNoMargin": "Ruled (no margin)",
+        "grid": "Grid",
+        "gridUniform": "Uniform grid",
+        "dotGrid": "Dot grid"
+      },
+      "pageSize": {
+        "label": "Page size",
+        "letter": "Letter",
+        "square": "Square"
+      },
+      "orientation": {
+        "label": "Orientation",
+        "portrait": "Portrait",
+        "landscape": "Landscape"
+      },
+      "alignText": {
+        "label": "Align text to lines",
+        "hint": "Snap typed text to the ruled lines"
+      },
+      "snapToGrid": {
+        "label": "Snap to grid",
+        "hint": "Snap shapes and strokes to the grid background"
+      }
+    },
+    "pen": {
+      "penColor": "Pen colour",
+      "penWidth": "Pen width",
+      "highlighterColor": "Highlighter colour",
+      "highlighterWidth": "Highlighter width",
+      "stabilization": {
+        "label": "Stroke stabilisation",
+        "hint": "Smooths wobble; higher lags the pen slightly"
+      },
+      "nibFlatness": "Fountain pen nib flatness",
+      "haptics": {
+        "label": "Pen haptics (Windows)",
+        "hint": "Buzz while inking and a click when a shape snaps, on pens that support it."
+      },
+      "inkToShapeTitle": "Ink to shape and scribble",
+      "inkToShape": {
+        "label": "Ink to shape",
+        "hint": "Hold the pen still at the end of a stroke to turn it into a shape"
+      },
+      "snapOnRelease": "Snap when lifting the pen",
+      "holdTime": "Hold time",
+      "milliseconds": "{{value}} ms",
+      "scribbleToErase": {
+        "label": "Scribble to erase",
+        "hint": "Scribble quickly over pen ink to erase it"
+      },
+      "scribbleSensitivity": {
+        "label": "Scribble sensitivity",
+        "less": "Less",
+        "standard": "Standard",
+        "more": "More"
+      },
+      "textTitle": "Text defaults",
+      "textColor": "Text colour",
+      "textSize": "Text size",
+      "shapeTitle": "Shape defaults",
+      "shapeType": "Shape type",
+      "shapeStrokeColor": "Shape stroke colour",
+      "shapeFillColor": "Shape fill colour",
+      "shapeWidth": "Shape width",
+      "shapeFillOpacity": "Shape fill opacity",
+      "eraserTitle": "Eraser defaults",
+      "eraserType": {
+        "label": "Eraser type",
+        "stroke": "Whole stroke",
+        "partial": "Partial"
+      },
+      "eraserWidth": "Eraser width",
+      "eraseShapes": "Erase shapes",
+      "eraseImages": "Erase images"
+    },
+    "penButtons": {
+      "barrel": {
+        "label": "Barrel button",
+        "hint": "The button on the side of the stylus"
+      },
+      "eraserEnd": {
+        "label": "Eraser end",
+        "hint": "The eraser end or eraser button of the stylus"
+      },
+      "eraser": "Eraser",
+      "lasso": "Lasso",
+      "none": "Nothing"
+    },
+    "gestures": {
+      "palmRejection": {
+        "label": "Palm rejection",
+        "off": "Off",
+        "standard": "Standard",
+        "high": "High"
+      },
+      "drawWithFinger": {
+        "label": "Draw with finger",
+        "hint": "Off: fingers pan and zoom, the pen draws"
+      },
+      "pinchToZoom": "Pinch to zoom",
+      "mouseWheel": {
+        "label": "Mouse wheel",
+        "pan": "Pans the page",
+        "zoom": "Zooms"
+      }
+    },
+    "tutor": {
+      "providerTitle": "AI provider",
+      "checkingTitle": "Checking",
+      "enabled": {
+        "label": "Tutor",
+        "hint": "Read handwritten maths and point out mistakes. Needs AI set up above."
+      },
+      "mode": {
+        "label": "When to check",
+        "live": "As I write",
+        "onask": "Only when I ask"
+      },
+      "underline": "Underline mistakes",
+      "tickCorrect": "Tick correct work",
+      "showChecking": {
+        "label": "Show when checking",
+        "hint": "A small turning ring next to ink being checked"
+      },
+      "doubleTapAsk": "Double-tap ink to ask",
+      "holdToAsk": "Hold the pen on ink to ask"
+    },
+    "mathEngines": {
+      "explainer": "Compute Engine runs on this computer and needs nothing. Wolfram|Alpha needs a free AppID (2 000 queries a month for non-commercial use).",
+      "appid": "Wolfram|Alpha AppID",
+      "savedHidden": "Saved (hidden)",
+      "pasteAppid": "Paste your AppID",
+      "works": "The AppID works.",
+      "saved": "AppID saved",
+      "none": "No AppID",
+      "consent": {
+        "label": "Send typed maths to Wolfram|Alpha when I ask",
+        "hint": "Nothing is sent until you turn this on and choose Ask Wolfram|Alpha."
+      },
+      "getAppid": "Get a free AppID"
+    },
+    "trash": {
+      "keepFor": "Keep deleted items for",
+      "forever": "Forever",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days"
+    },
+    "backup": {
+      "download": {
+        "label": "Download backup",
+        "hint": "One zip holding a .mate file per book. To restore, unzip it and import each .mate file."
+      },
+      "saved": "Backup saved to {{path}}",
+      "reset": {
+        "label": "Reset local data",
+        "hint": "Deletes everything on this device and starts again from the welcome flow",
+        "confirmTitle": "Reset local data?",
+        "confirm": "Reset",
+        "confirmBody": "This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept."
+      }
+    },
+    "sharing": {
+      "nextcloud": {
+        "label": "Nextcloud",
+        "hint": "Upload a book to your Nextcloud and get a link to send to someone.",
+        "signedIn": "Signed in as {{user}} on {{server}}",
+        "signOut": "Sign out",
+        "waiting": "Waiting for you to approve in your browser…",
+        "server": "Nextcloud server address",
+        "signIn": "Sign in",
+        "expired": "The sign-in link has expired. Start again."
+      }
+    },
+    "updates": {
+      "checkOnStartup": "Check for updates on startup"
+    },
+    "about": {
+      "version": "Version",
+      "welcome": "Welcome",
+      "showWelcome": "Show welcome again",
+      "unknownVersion": "unknown"
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "remove": "Remove",
+    "test": "Test",
+    "reset": "Reset",
+    "change": "Change",
+    "close": "Close",
+    "view": "View",
+    "back": "Back",
+    "copy": "Copy",
+    "copied": "Copied",
+    "untitled": "Untitled",
+    "pageName": "Page {{n}}",
+    "sectionName": "Section {{n}}",
+    "dismiss": "Dismiss",
+    "delete": "Delete",
+    "untitledBook": "Untitled book",
+    "loading": "Loading…",
+    "firstSection": "Notes"
+  },
+  "errors": {
+    "generic": "Something went wrong.",
+    "clipboard": "Could not copy to the clipboard",
+    "ai": {
+      "auth": "The API key was not accepted. Check it in Settings.",
+      "rateLimited": "The AI service is busy right now. Try again in a moment.",
+      "network": "Could not reach the AI service ({{detail}}).",
+      "invalidResponse": "The AI service sent a reply that could not be read ({{detail}}).",
+      "disabled": "AI checking is off. Turn it on in Settings.",
+      "rejected": "The AI service refused this request ({{detail}}).",
+      "billing": "The AI account has a billing problem. Check it with the provider.",
+      "unknownModel": "The selected model is not available. Check the model in Settings.",
+      "refused": "The AI declined to check this note.",
+      "truncated": "The AI's answer was cut off before it finished.",
+      "noKey": "Save an API key first.",
+      "noAddress": "Enter the service address first.",
+      "badAddress": "Use an https:// address, or a local address such as http://localhost:11434.",
+      "cannotListModels": "{{detail}} cannot list its models. Type the model name.",
+      "unreachable": "Could not reach {{detail}}. Is it running?"
+    }
+  },
+  "update": {
+    "label": "Software update",
+    "appVersion": "Mate {{version}}",
+    "install": "Install {{version}}",
+    "restart": "Restart to update",
+    "checkingShort": "Checking...",
+    "check": "Check for updates",
+    "checking": "Checking for updates...",
+    "upToDate": "You are up to date.",
+    "notConfigured": "Updates are not configured for this build.",
+    "available": "Version {{version}} is available.",
+    "availableWithNotes": "Version {{version}} is available. {{notes}}",
+    "downloading": "Downloading {{version}}: {{progress}}",
+    "ready": "Version {{version}} is installed. Restart to finish updating.",
+    "failed": "Could not update: {{message}}",
+    "savingWork": "Saving your work…",
+    "megabytes": "{{value}} MB",
+    "progress": "{{done}} of {{total}}",
+    "toast": "Mate {{version}} is available."
+  },
+  "shapes": {
+    "rectangle": "Rectangle",
+    "circle": "Circle",
+    "ellipse": "Ellipse",
+    "triangle": "Triangle",
+    "line": "Line",
+    "arrow": "Arrow",
+    "diamond": "Diamond",
+    "pentagon": "Pentagon",
+    "hexagon": "Hexagon",
+    "star": "Star",
+    "polygon": "Polygon"
+  },
+  "keys": {
+    "title": "Keyboard shortcuts",
+    "resetAll": "Reset all",
+    "pressCombo": "Press a key combination…",
+    "notSet": "Not set",
+    "changeAction": "Change {{action}}",
+    "cancelAction": "Cancel {{action}}",
+    "unbind": "Unbind",
+    "unbindAction": "Unbind {{action}}",
+    "resetAction": "Reset {{action}}",
+    "useCmd": "Use Cmd (not Ctrl) as the modifier.",
+    "noMeta": "The Windows/Meta key cannot be used.",
+    "reserved": "{{keys}} is reserved and cannot be used. Press another combination.",
+    "taken": "{{keys}} is already used by \"{{action}}\". Press another combination.",
+    "groups": {
+      "tools": "Tools",
+      "edit": "Edit",
+      "selection": "Selection",
+      "arrange": "Arrange",
+      "view": "View",
+      "pages": "Pages",
+      "tabs": "Tabs and windows",
+      "general": "General"
+    },
+    "actions": {
+      "pen": "Pen",
+      "highlighter": "Highlighter",
+      "eraser": "Eraser",
+      "cursor": "Select (cursor)",
+      "lasso": "Lasso",
+      "shape": "Shape",
+      "text": "Text",
+      "insertSpace": "Insert space",
+      "presetSlot": "Preset 1 to 9",
+      "pan": "Pan (hold)",
+      "undo": "Undo",
+      "redo": "Redo",
+      "copy": "Copy",
+      "cut": "Cut",
+      "paste": "Paste",
+      "duplicate": "Duplicate selection (or page)",
+      "delete": "Delete",
+      "save": "Save now",
+      "escape": "Clear selection",
+      "selectAll": "Select all",
+      "deselect": "Deselect",
+      "group": "Group",
+      "ungroup": "Ungroup",
+      "bringForward": "Bring forward",
+      "sendBackward": "Send backward",
+      "bringToFront": "Bring to front",
+      "sendToBack": "Send to back",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Reset zoom",
+      "toggleSidebar": "Toggle sidebar",
+      "prevPage": "Previous page",
+      "nextPage": "Next page",
+      "duplicatePage": "Duplicate page",
+      "renamePage": "Rename page",
+      "movePageUp": "Move page up",
+      "movePageDown": "Move page down",
+      "promotePage": "Promote page",
+      "demotePage": "Demote page",
+      "newTab": "New tab",
+      "closeTab": "Close tab",
+      "moveTabLeft": "Move tab left",
+      "moveTabRight": "Move tab right",
+      "openPageWindow": "Open page in new window",
+      "palette": "Search and actions",
+      "shortcuts": "Keyboard shortcuts"
+    }
+  },
+  "palette": {
+    "label": "Command palette",
+    "searchLabel": "Search pages, handwriting and actions",
+    "searchPlaceholder": "Search pages and handwriting, or run an action",
+    "results": "Results",
+    "working": "Working on it…",
+    "similar": "{{percent}}% similar",
+    "noRelated": "No other page is similar yet. Related pages appear as the tutor reads more of your notes.",
+    "applyTitle": "Apply title",
+    "titleApplied": "Title applied",
+    "noMatches": "No page or handwriting matches.",
+    "summarise": "Summarise this page",
+    "suggestTitle": "Suggest title",
+    "related": "What's related?",
+    "openGraph": "Open graph",
+    "panel": {
+      "summary": "Summary of this page",
+      "title": "Suggested title",
+      "related": "Related pages"
+    },
+    "sections": {
+      "pages": "Pages",
+      "recent": "Recent pages",
+      "quick": "Quick actions",
+      "everything": "Search everything",
+      "actions": "Actions"
+    },
+    "switchTo": {
+      "pen": "Switch to pen",
+      "highlighter": "Switch to highlighter",
+      "eraser": "Switch to eraser",
+      "cursor": "Switch to select (cursor)",
+      "lasso": "Switch to lasso",
+      "shape": "Switch to shape",
+      "text": "Switch to text",
+      "insertSpace": "Switch to insert space"
+    },
+    "insertText": "Insert text box",
+    "insertCode": "Insert code block",
+    "insertTable": "Insert table",
+    "insertGraph": "Insert graph",
+    "insertImage": "Insert image",
+    "newPage": "New page",
+    "newSection": "New section",
+    "openSettings": "Open settings",
+    "openLibrary": "Open library",
+    "disabled": {
+      "editor": "Open a page in the editor first",
+      "selection": "Select something first",
+      "page": "Open a page first"
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "main": "Main",
+    "library": "Library",
+    "graph": "Graph",
+    "trash": "Trash",
+    "settings": "Settings"
+  },
+  "about": {
+    "version": "Version {{version}}",
+    "tagline": "Local-first handwriting and math notes.",
+    "nameNote": "Mate is your maths mate. In Italian, \"mate\" is also what students call matematica.",
+    "starPitch": "If Mate is useful to you, a star on GitHub helps others find it.",
+    "star": "Star on GitHub",
+    "githubFailed": "Could not open GitHub.",
+    "updates": "Updates",
+    "latest": "You have the latest version",
+    "available": "Version {{version}} is available",
+    "updateSettings": "Update settings"
+  },
+  "toolbar": {
+    "label": "Editor tools",
+    "hintWithKeys": "{{label}} ({{keys}})",
+    "presetRemoveHint": "{{title}} · right-click to remove",
+    "presetLabel": "{{ink}} {{color}}",
+    "ink": {
+      "pen": "Pen",
+      "fountainPen": "Fountain pen",
+      "highlighter": "Highlighter"
+    },
+    "addPen": "Add pen",
+    "eraser": "Eraser",
+    "eraserOptions": "Eraser options",
+    "eraserType": "Eraser type",
+    "eraserWhole": "Whole",
+    "eraserPartial": "Partial",
+    "eraserSizePx": "Eraser size (px)",
+    "eraserSize": "Eraser size",
+    "shape": "Shape",
+    "shapeHint": "Shape: {{shape}}",
+    "shapeOptions": "Shape options",
+    "shapeType": "Shape type",
+    "stroke": "Stroke",
+    "strokeColor": "Stroke {{color}}",
+    "strokeWidth": "Stroke width",
+    "fill": "Fill",
+    "fillColor": "Fill {{color}}",
+    "noFill": "No fill",
+    "fillOpacity": "Fill opacity",
+    "insertSpace": "Insert space",
+    "insertSpaceOptions": "Insert space options",
+    "insertSpaceMode": "Insert space mode",
+    "spaceInsert": "Insert",
+    "spaceRemove": "Remove",
+    "cutImages": "Cut images",
+    "text": "Text",
+    "insertImage": "Insert image…",
+    "insertTable": "Insert table",
+    "insertCode": "Insert code",
+    "insertEquation": "Insert equation",
+    "insertGraph": "Insert graph",
+    "select": "Select",
+    "lasso": "Lasso"
+  },
+  "topbar": {
+    "more": "More actions",
+    "moreUpdate": "More actions, update available",
+    "updateAvailable": "Update available: {{version}}",
+    "exportPage": "Export page…",
+    "importNotes": "Import notes…",
+    "pageSettings": "Page settings",
+    "searchActions": "Search and actions…",
+    "about": "About Mate",
+    "pageTitle": "Page title"
+  },
+  "tabs": {
+    "label": "Open pages",
+    "close": "Close {{title}}",
+    "split": "Split view",
+    "keepLeft": "Keep left only",
+    "keepRight": "Keep right only"
+  },
+  "editor": {
+    "zoomReset": "Zoom {{percent}}%, reset",
+    "pageFull": "This page is full ({{max}} items) — start a new page.",
+    "tableLimit": "Table is at its size limit ({{max}} cells)",
+    "insertImageFailed": "Could not insert that image.",
+    "imagesFilter": "Images"
+  },
+  "whatsNew": {
+    "title": "What's new",
+    "gotIt": "Got it"
+  },
+  "sidebar": {
+    "label": "Notebook sidebar",
+    "noPages": "No pages yet",
+    "pages": "Pages",
+    "collapse": "Collapse sidebar",
+    "newNotebook": "New notebook",
+    "notebook": "Notebook",
+    "noSections": "No sections",
+    "sections": "Sections",
+    "newPageIn": "New page in {{section}}",
+    "resize": "Resize sidebar",
+    "windowFailed": "Could not open the page in a new window.",
+    "icon": "Icon {{icon}}",
+    "noIcon": "No icon",
+    "collapsePage": "Collapse",
+    "expandPage": "Expand",
+    "menu": {
+      "rename": "Rename",
+      "changeIcon": "Change icon",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "promote": "Promote",
+      "demote": "Demote",
+      "duplicate": "Duplicate",
+      "split": "Open in split view",
+      "window": "Open in new window"
+    }
+  },
+  "library": {
+    "openBook": "Open {{title}}",
+    "bookTitle": "Book title",
+    "bookActions": "Actions for {{title}}",
+    "changeColour": "Change colour",
+    "favourite": "Favourite",
+    "unfavourite": "Unfavourite",
+    "moveToShelf": "Move to shelf",
+    "practice": "Practice from this book…",
+    "exportBook": "Export book…",
+    "share": "Share…",
+    "importInto": "Import into this book…",
+    "colour": "Colour {{color}}",
+    "noShelf": "No shelf",
+    "shelfName": "Shelf name",
+    "unshelved": "Unshelved",
+    "renameShelf": "Rename shelf",
+    "deleteShelf": "Delete shelf",
+    "emptyShelf": "No books on this shelf",
+    "imported": "Imported book: {{pages}} pages, {{elements}} elements.",
+    "importedSkipped": "Imported book: {{pages}} pages, {{elements}} elements, {{skipped}} skipped (over limits).",
+    "importFailed": "Import failed: {{message}}",
+    "search": "Search books",
+    "importBook": "Import book…",
+    "sort": "Sort books",
+    "az": "A-Z",
+    "emptyHint": "Create your first book to start organizing your notes, equations, and ideas",
+    "noneFound": "No books found",
+    "clearSearch": "Clear search",
+    "newShelf": "New shelf",
+    "newShelfName": "New shelf name"
+  },
+  "export": {
+    "failed": "Export failed: {{message}}",
+    "title": "Export",
+    "export": "Export",
+    "exporting": "Exporting…",
+    "notInBook": "This page is not in a book",
+    "format": "Format",
+    "paper": "Paper",
+    "plain": "Plain",
+    "transparent": "Transparent",
+    "scale": "Scale",
+    "times": "{{n}}×",
+    "pages": "Pages",
+    "allSheets": "All sheets",
+    "currentSheet": "Current sheet",
+    "searchable": "Searchable text",
+    "latexHint": "Saves a .tex file; pictures become image placeholders.",
+    "mateHint": "Exports the whole book this page belongs to.",
+    "shareHint": "To send this book to someone, use Share… from the book menu.",
+    "shareInstead": "Share instead…",
+    "boxRender": "Could not render the content of box {{id}} for export.",
+    "boxMissing": "Box {{id}} was not rendered for export."
+  },
+  "selection": {
+    "label": "Selection",
+    "arrange": "Arrange ▸",
+    "align": "Align ▸",
+    "alignLeft": "Align left",
+    "alignCenter": "Align center",
+    "alignRight": "Align right",
+    "alignTop": "Align top",
+    "alignMiddle": "Align middle",
+    "alignBottom": "Align bottom",
+    "distributeH": "Distribute horizontally",
+    "distributeV": "Distribute vertically",
+    "fillColour": "Fill colour",
+    "duplicate": "Duplicate",
+    "copyLatex": "Copy as LaTeX",
+    "graphFromEquation": "Graph from equation",
+    "graph": "Graph",
+    "widthPx": "Width (px)",
+    "width": "Selection width"
+  },
+  "preset": {
+    "edit": "Edit preset",
+    "hue": "Hue",
+    "hex": "Hex colour",
+    "recent": "Recent colours",
+    "width": "Width",
+    "moveLeft": "Move left",
+    "moveRight": "Move right"
+  },
+  "text": {
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "bulletList": "Bulleted list",
+    "numberedList": "Numbered list",
+    "font": "Font",
+    "fonts": {
+      "sans": "Sans",
+      "serif": "Serif",
+      "mono": "Mono",
+      "hand": "Hand",
+      "script": "Script"
+    },
+    "smaller": "Smaller text",
+    "size": "Text size",
+    "larger": "Larger text",
+    "colour": "Text colour {{color}}",
+    "alignCentre": "Align centre",
+    "formatting": "Text formatting",
+    "box": "Text box"
+  },
+  "pageSettings": {
+    "mode": "Mode",
+    "paperSize": "Paper size",
+    "gridUniform": "Grid (uniform)",
+    "spacing": "Spacing"
+  },
+  "import": {
+    "title": "Import notes",
+    "filter": "Notebook files and Mate archives",
+    "duplicates_one": "{{count}} page already imported, so not added again.",
+    "duplicates_other": "{{count}} pages already imported, so not added again.",
+    "tablesAndShapes": "Tables and shapes are not imported yet.",
+    "kilobytes": "{{value}} KB",
+    "progress": {
+      "waiting": "Waiting",
+      "reading": "Reading the file",
+      "parsing": "Reading pages",
+      "placing": "Placing pages",
+      "placingCount": "Placing pages ({{done}} of {{total}})"
+    },
+    "fileOk": "{{source}} file, {{size}}",
+    "fileRejected": "Cannot be imported. {{reason}}",
+    "removeFile": "Remove {{name}}",
+    "importing": "Importing",
+    "progressLabel": "Progress",
+    "cancelling": "Cancelling… finishing the current file.",
+    "queued_one": "{{count}} more file will be offered when this import finishes.",
+    "queued_other": "{{count}} more files will be offered when this import finishes.",
+    "cancel": "Cancel import",
+    "finished": "Import finished",
+    "nothing": "Nothing was imported",
+    "summary": "{{pages}}, {{strokes}}, {{texts}}, {{images}}.",
+    "counts": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "strokes_one": "{{count}} stroke",
+      "strokes_other": "{{count}} strokes",
+      "texts_one": "{{count}} text box",
+      "texts_other": "{{count}} text boxes",
+      "images_one": "{{count}} image",
+      "images_other": "{{count}} images"
+    },
+    "skipped": "Skipped",
+    "warnings": "Warnings",
+    "failedFiles": "Failed files",
+    "importMore_one": "Import {{count}} more file…",
+    "importMore_other": "Import {{count}} more files…",
+    "openBook": "Open book",
+    "checking": "Checking files…",
+    "noFiles": "No files chosen yet.",
+    "files": "Files",
+    "addFiles": "Add files…",
+    "destination": "Destination",
+    "putPagesIn": "Put the pages in",
+    "newBook": "A new book",
+    "bookName": "Book name",
+    "existingBook": "An existing book",
+    "book": "Book",
+    "chooseBook": "Choose a book",
+    "import": "Import"
+  },
+  "share": {
+    "title": "Share {{title}}",
+    "folderTitle": "Save a copy to a synced folder",
+    "noFolders": "No synced folders found on this computer.",
+    "lookingForFolders": "Looking for synced folders…",
+    "chooseFolder": "Choose another folder…",
+    "savedTo": "Saved to {{path}}",
+    "showInFolder": "Show in folder",
+    "nextcloudHint": "Send a link to this book from your Nextcloud.",
+    "setUpInSettings": "Set up in Settings",
+    "publicLink": "Anyone with the link can download this book.",
+    "expires": "Link expires",
+    "expiry": {
+      "never": "Never",
+      "week": "After 7 days",
+      "month": "After 30 days"
+    },
+    "working": "Working…",
+    "upload": "Upload and get link",
+    "link": "Share link"
+  },
+  "practice": {
+    "title": "Practice from this book",
+    "pageTitle": "Practice — {{date}}",
+    "tooMany": "A practice page holds up to {{max}} questions; the rest were left out.",
+    "noSection": "This book has no section to put the questions in.",
+    "count": "Number of questions",
+    "types": {
+      "label": "Question types",
+      "multipleChoice": "Multiple choice",
+      "multiSelect": "Multi-select",
+      "trueFalse": "True / false",
+      "fillInBlank": "Fill in the blank",
+      "shortAnswer": "Short answer"
+    },
+    "extra": "Anything else? (optional)",
+    "extraLabel": "Extra instructions",
+    "extraPlaceholder": "For example: focus on integration by parts",
+    "privacy": "Questions come from what the tutor has read in this book. The text is sent to your AI provider.",
+    "writing": "Writing questions…",
+    "generate": "Generate",
+    "generating": "Generating…",
+    "ready_one": "{{count}} question ready.",
+    "ready_other": "{{count}} questions ready.",
+    "questions": "Questions",
+    "add": "Add to a new page",
+    "adding": "Adding…",
+    "pageFull": "This page is full."
+  },
+  "math": {
+    "compute": "Compute",
+    "computeMenu": "Compute ▸",
+    "computing": "Computing…",
+    "resultNotAdded": "The result could not be added to this page.",
+    "ops": {
+      "evaluate": "Evaluate",
+      "simplify": "Simplify",
+      "expand": "Expand",
+      "solve": "Solve",
+      "numeric": "Numeric value"
+    },
+    "wolfram": {
+      "ask": "Ask Wolfram|Alpha",
+      "needsAppid": "Add a Wolfram|Alpha AppID in Settings first.",
+      "needsConsent": "Wolfram|Alpha is off. Turn it on in Settings."
+    },
+    "errors": {
+      "unreadable": "This maths could not be read",
+      "unreadableDetail": "This maths could not be read: {{detail}}",
+      "oneEquation": "Solve one equation at a time",
+      "inequality": "Inequalities cannot be solved here",
+      "noUnknown": "Nothing to solve for",
+      "severalUnknowns": "Several unknowns ({{unknowns}}) and no x to solve for",
+      "unsolved": "Could not solve this equation",
+      "noSolution": "No solution found",
+      "empty": "Nothing to compute",
+      "engine": "The maths engine could not be loaded",
+      "failed": "Could not compute this",
+      "engineGraph": "The math engine could not be loaded"
+    },
+    "check": {
+      "agree": "Both sides agree",
+      "differ": "They differ",
+      "differAt": "They differ at {{at}}",
+      "holds": "True when {{solutions}}",
+      "never": "Never true",
+      "undecided": "Could not decide: {{reason}}",
+      "notEquation": "Could not decide: this is not an equation",
+      "reasons": {
+        "noNumeric": "the two sides have no numeric value",
+        "noReal": "the sides have no real value at the points tried",
+        "engine": "the maths engine could not be loaded",
+        "failed": "the check failed"
+      }
+    },
+    "equation": "Equation"
+  },
+  "tutor": {
+    "title": "Tutor",
+    "tryAgain": "Try again",
+    "hint": "Hint",
+    "why": "Why",
+    "whyButton": "Why?",
+    "nextStep": "Next step",
+    "markCorrect": "Mark as correct",
+    "checkLocally": "Check locally",
+    "checkingLocally": "Checking on this computer…",
+    "saveFailed": "Couldn't save that. Try again.",
+    "uncheckedTip": "Couldn't check — tap for details",
+    "status": {
+      "checking": "Checking this note…",
+      "unchecked": "This note hasn't been checked yet.",
+      "illegible": "This note couldn't be read.",
+      "markedCorrect": "You marked this as correct.",
+      "correct": "This looks right.",
+      "wrong": "Something here needs another look.",
+      "unfinished": "This looks unfinished."
+    },
+    "errors": {
+      "couldNotCheck": "Couldn't check this note.",
+      "noInk": "This group has no ink to check.",
+      "capture": "Couldn't capture this note.",
+      "busy": "Too many checks are waiting. This note will be checked shortly."
+    },
+    "ask": {
+      "button": "Ask",
+      "asking": "Asking…",
+      "label": "Your question",
+      "placeholder": "What would you like to know about this line?",
+      "tooLong": "Keep the question under {{max}} characters.",
+      "empty": "Type a question first.",
+      "failed": "Couldn't get an answer. Try again.",
+      "checkingFirst": "Checking this note first…",
+      "needsCheck": "This note needs to be checked before you can ask about it.",
+      "answer": "Answer"
+    }
+  },
+  "ai": {
+    "privacyRemote": "Your handwriting and text are sent to the address above.",
+    "addressInvalid": "Use an https:// address, or a local address such as http://localhost:11434.",
+    "addressMissing": "Enter the address of the service.",
+    "typeModel": "Type the model name",
+    "modelMissing": "Enter a model name.",
+    "visionHint": "Pick a model that can read images, or the tutor cannot check handwriting.",
+    "fetchModelsNote": "Sends your key to {{provider}} to list its models; nothing else is sent.",
+    "loadFailed": "Could not load the list of AI services.",
+    "noVision": "This provider cannot read handwriting, so checking is off. Ask, summaries and practice still work.",
+    "noModels": "No models found.",
+    "foundModels_one": "Found {{count}} model.",
+    "foundModels_other": "Found {{count}} models.",
+    "keySaved": "Key saved",
+    "noKey": "No key",
+    "noKeyOptional": "No key (optional)",
+    "noKeyNeeded": "No key needed",
+    "connectionWorks": "Connection works.",
+    "keySavedUntested": "Key saved (not tested — turn on permission to test)",
+    "consent": {
+      "local": "Let Mate use {{provider}} to check your work. Everything is processed on this computer; nothing is sent to the internet.",
+      "custom": "Send handwriting images and text to the server at the address above to check your work. Nothing is sent until you turn this on.",
+      "cloud": "Send handwriting images and text to {{provider}} to check your work. Nothing is sent until you turn this on.",
+      "cloudText": "Send the text of your notes to {{provider}} for questions, summaries and practice. Nothing is sent until you turn this on."
+    },
+    "model": "Model",
+    "fetchModels": "Fetch models",
+    "address": "Address",
+    "apiKey": "API key",
+    "apiKeyOptional": "API key (optional)",
+    "pasteKey": "Paste your {{provider}} key",
+    "saveKey": "Save key",
+    "removeKey": "Remove key",
+    "status": "Status",
+    "testConnection": "Test connection",
+    "permission": "Permission",
+    "needs": {
+      "title": "What does Mate need from an AI?",
+      "feature": "Feature",
+      "needs": "Needs",
+      "fallback": "If the model cannot do it",
+      "tutor": "Checking handwritten maths (the tutor)",
+      "tutorNeeds": "Image input (\"vision\") and a JSON answer",
+      "tutorFallback": "The tutor is off; everything else works",
+      "text": "Ask about a line, summaries, titles, practice questions",
+      "textNeeds": "Text input and output"
+    },
+    "groups": {
+      "cloud": "Cloud services",
+      "local": "On this computer",
+      "custom": "Custom"
+    },
+    "vision": {
+      "yes": "Handwriting: can read it",
+      "dependsOnModel": "Handwriting: depends on the model",
+      "no": "Handwriting: text only, so checking is off"
+    },
+    "needsLocal": "Needs: the program running on this computer, no key",
+    "needsCustom": "Needs: a web address, and a key if the service wants one",
+    "needsCloud": "Needs: an API key from the service",
+    "costLine": "Cost: {{cost}}",
+    "cost": {
+      "paid": "Paid",
+      "paidLow": "Paid, low cost",
+      "paidSomeFree": "Paid; some models are free",
+      "freeTier": "Free tier, then paid",
+      "freeLocal": "Free (runs on this computer)",
+      "depends": "Depends on the service"
+    },
+    "privacy": {
+      "sentTo": "Checked notes are sent to {{service}}.",
+      "sentToAndMaker": "Checked notes are sent to {{service}} and the model's maker.",
+      "textSentTo": "Text is sent to {{service}}.",
+      "local": "Nothing leaves this computer.",
+      "custom": "Checked notes are sent to the address you enter."
+    },
+    "getKey": "Get a key"
+  },
+  "home": {
+    "firstNotebook": "My Notebook",
+    "recovery": "Mate restarted while this page was open",
+    "notNow": "Not now",
+    "openPage": "Open page",
+    "newBook": "New book",
+    "importPdf": "Import PDF…",
+    "noRecentPages": "Pages you edit will show up here.",
+    "recentBooks": "Recent books",
+    "noBooks": "No books yet",
+    "favourites": "Favourite pages",
+    "noFavourites": "Favourite a page to pin it here."
+  },
+  "trash": {
+    "search": "Search trash",
+    "empty": "Empty trash",
+    "isEmpty": "Trash is empty",
+    "emptyHint": "Deleted pages, chapters, and notebooks will appear here for recovery.",
+    "deleted": "{{kind}} - deleted {{date}}",
+    "kinds": {
+      "bookshelf": "bookshelf",
+      "unit": "unit",
+      "section": "section",
+      "page": "page"
+    },
+    "restore": "Restore",
+    "deletePermanently": "Delete permanently",
+    "confirmTitle": "Empty trash?",
+    "confirmBody": "This will permanently delete all items in the trash. This action cannot be undone."
+  },
+  "graph": {
+    "cutoff": "Similarity cutoff",
+    "empty": "Nothing to connect yet. Pages appear here once the tutor has read your handwriting, and similar pages are linked.",
+    "noEdges": "No pages are this similar. Lower the similarity cutoff to see weaker links.",
+    "label": "Page graph, {{pages}} and {{links}}",
+    "pages_one": "{{count}} page",
+    "pages_other": "{{count}} pages",
+    "links_one": "{{count}} link",
+    "links_other": "{{count}} links",
+    "errors": {
+      "tooExpensive": "Expression too expensive to plot",
+      "evalBlocked": "Plotting is blocked by the app's security policy",
+      "missing": "Something is missing",
+      "missingClose": "Missing closing bracket",
+      "missingOpen": "Missing opening bracket",
+      "unexpectedClose": "Unexpected closing bracket",
+      "incompatible": "Incompatible types",
+      "unknownCommand": "Unknown command",
+      "unexpectedSymbol": "Unexpected symbol",
+      "notPlottable": "This expression cannot be plotted",
+      "implicit": "Implicit equations are not supported",
+      "writeForm": "Write y = …, x = … or r = …",
+      "parametricParts": "A parametric curve needs two parts: (x(t), y(t))",
+      "parametricT": "Write x = …, y = … in terms of t",
+      "singleEquals": "Use a single equals sign",
+      "parametricForm": "Write a parametric curve as (x(t), y(t))",
+      "empty": "Empty expression",
+      "invalid": "Invalid expression",
+      "unreadable": "Could not read this expression",
+      "unknownSymbols_one": "Unknown symbol: {{symbols}}",
+      "unknownSymbols_other": "Unknown symbols: {{symbols}}"
+    },
+    "editor": {
+      "settings": "Graph settings",
+      "colourOf": "Colour of expression {{n}}",
+      "expression": "Expression {{n}}",
+      "hide": "Hide expression {{n}}",
+      "show": "Show expression {{n}}",
+      "delete": "Delete expression {{n}}",
+      "slow": "Too slow to plot fully",
+      "add": "Add expression",
+      "addShort": "+ Add",
+      "xMin": "x min",
+      "xMax": "x max",
+      "yMin": "y min",
+      "yMax": "y max",
+      "grid": "Grid",
+      "plot": "Graph plot"
+    }
+  },
+  "welcome": {
+    "steps": {
+      "welcome": "Welcome",
+      "ai": "AI setup",
+      "playground": "Playground"
+    },
+    "stepLabel": "Welcome, step {{step}} of {{total}}",
+    "playgroundFailed": "Could not create the Playground page. You can try again from Settings > About.",
+    "saveFailed": "Could not save your settings, so the welcome may show again next time.",
+    "title": "Welcome to Mate",
+    "intro": "Mate is a notebook for handwriting, drawing and typing, with an optional tutor that checks your work.",
+    "local": "Your notes stay on this device.",
+    "aiTitle": "Set up AI (optional)",
+    "aiIntro": "The tutor and practice questions use an AI provider with your own API key. You can do this later in Settings.",
+    "tryTitle": "Try it out",
+    "tryIntro": "Open a Playground page with a few tools to try. Nothing here is precious, so scribble freely.",
+    "skip": "Skip",
+    "skipForNow": "Skip for now",
+    "next": "Next",
+    "openPlayground": "Open the Playground",
+    "playground": "Playground",
+    "playgroundHint": "Try the pen (P), highlighter (H), eraser (E)… Press ? for shortcuts.",
+    "playgroundCreateFailed": "Could not create the Playground page."
+  },
+  "lifecycle": {
+    "safeClose": "Could not close safely — Your notes are not fully saved. Keep Mate open and try again.",
+    "safeCloseRecovery": "Could not close safely — Your notes are not fully saved. Keep Mate open and try again. Saved a recovery file: {{path}}",
+    "closeAnyway": "Close anyway",
+    "stillSaving": "Mate is still saving — try closing again in a moment.",
+    "saveFailed": "Some strokes could not be saved — Mate will keep retrying."
+  },
+  "pdf": {
+    "tooManyPages": "This PDF has {{n}} pages; Mate imports up to {{max}}.",
+    "noPages": "This PDF has no pages.",
+    "imported": "Imported",
+    "tooLarge": "PDF is larger than 50 MiB.",
+    "importFailed": "Could not import that PDF."
+  },
+  "table": {
+    "label": "Table",
+    "addRow": "Add row",
+    "addColumn": "Add column",
+    "deleteRow": "Delete row",
+    "deleteColumn": "Delete column",
+    "cell": "Row {{row}}, column {{column}}"
+  },
+  "code": {
+    "label": "Code",
+    "language": "Language",
+    "plain": "Plain text"
+  }
+}

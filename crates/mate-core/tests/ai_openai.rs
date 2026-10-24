@@ -7,7 +7,8 @@ use std::thread;
 use std::time::Duration;
 
 use base64::Engine;
-use mate_core::ai::openai::{OpenAiProvider, strict_schema};
+use mate_core::ai::catalog::{Structured, TokenParam};
+use mate_core::ai::openai::{OpenAiProvider, Quirks, parse_model_list, strict_schema};
 use mate_core::ai::provider_for;
 use mate_core::ai::provider::{AiError, ContextLine, Provider, RecognizeRequest, TextRequest};
 use mate_core::ai::verdict::{Verdict, VerdictCode, VerdictKind};
@@ -147,11 +148,11 @@ fn openai_parses_verdict() {
 
 #[test]
 fn factory_picks_provider_from_settings() {
-    assert_eq!(provider_for("openai", "", "k".into()).id(), "openai");
-    assert_eq!(provider_for("anthropic", "", "k".into()).id(), "anthropic");
-    assert_eq!(provider_for("mock", "", String::new()).id(), "mock");
+    assert_eq!(provider_for("openai", "", "k".into(), None).id(), "openai");
+    assert_eq!(provider_for("anthropic", "", "k".into(), None).id(), "anthropic");
+    assert_eq!(provider_for("mock", "", String::new(), None).id(), "mock");
     // Unknown ids fall back to the default provider.
-    assert_eq!(provider_for("other", "", "k".into()).id(), "anthropic");
+    assert_eq!(provider_for("other", "", "k".into(), None).id(), "anthropic");
     // The default model for OpenAI is gpt-5 and reaches the wire.
     let (base, seen) = stub(vec![ok_reply(&verdict_json())]);
     let p = OpenAiProvider::new("k".into(), mate_core::ai::default_model("openai").into(), base);
@@ -299,4 +300,211 @@ fn openai_schema_is_strict_compatible() {
     assert_eq!(s["properties"]["transcription"]["properties"]["kind"]["enum"], json!(["text", "code"]));
     // The shared (Anthropic) schema is untouched.
     assert!(Verdict::json_schema()["properties"]["correct"].get("anyOf").is_some());
+}
+
+fn quirky(base: &str, structured: Structured, token_param: TokenParam) -> OpenAiProvider {
+    let q = Quirks { structured, token_param, ..Quirks::default() };
+    provider(base).with_quirks(q)
+}
+
+fn text_req(schema: Option<Value>) -> TextRequest {
+    TextRequest { system: "sys".into(), user: "u".into(), max_tokens: 50, json_schema: schema }
+}
+
+fn tiny_schema() -> Value {
+    json!({ "type": "object", "additionalProperties": false, "required": ["a"], "properties": { "a": { "type": "integer" } } })
+}
+
+#[test]
+fn json_object_mode_puts_the_schema_in_the_prompt() {
+    let (base, seen) = stub(vec![reply_with(json!({ "content": "```json\n{\"a\": 1}\n```" }), "stop")]);
+    let out =
+        quirky(&base, Structured::JsonObject, TokenParam::MaxTokens).complete(&text_req(Some(tiny_schema()))).unwrap();
+    assert_eq!(out, "{\"a\": 1}");
+    let b = &seen.lock().unwrap()[0].body;
+    assert_eq!(b["response_format"], json!({ "type": "json_object" }));
+    assert_eq!(b["max_tokens"], 50);
+    assert!(b.get("max_completion_tokens").is_none());
+    let system = b["messages"][0]["content"].as_str().unwrap();
+    assert!(system.starts_with("sys"));
+    assert!(system.contains("JSON") && system.contains("\"required\""), "{system}");
+}
+
+#[test]
+fn prompt_only_mode_sends_no_response_format_and_parses_loosely() {
+    let wrapped = format!("Here you go:\n```\n{}\n```\nHope that helps.", verdict_json());
+    let (base, seen) = stub(vec![reply_with(json!({ "content": wrapped }), "stop")]);
+    let v = quirky(&base, Structured::PromptOnly, TokenParam::MaxTokens).recognize(&request()).unwrap();
+    assert_eq!(v.latex, "x=2");
+    let b = &seen.lock().unwrap()[0].body;
+    assert!(b.get("response_format").is_none());
+    assert_eq!(b["max_tokens"], 4096);
+    assert!(b["messages"][0]["content"].as_str().unwrap().contains("\"latex\""));
+    // Text without a schema is returned as is.
+    let (base, seen) = stub(vec![reply_with(json!({ "content": "Plain {text}" }), "stop")]);
+    let out = quirky(&base, Structured::PromptOnly, TokenParam::MaxTokens).complete(&text_req(None)).unwrap();
+    assert_eq!(out, "Plain {text}");
+    assert_eq!(seen.lock().unwrap()[0].body["messages"][0]["content"], "sys");
+}
+
+#[test]
+fn json_schema_mode_with_max_tokens() {
+    let (base, seen) = stub(vec![reply_with(json!({ "content": "{\"a\":1}" }), "stop")]);
+    quirky(&base, Structured::JsonSchema, TokenParam::MaxTokens).complete(&text_req(Some(tiny_schema()))).unwrap();
+    let b = &seen.lock().unwrap()[0].body;
+    assert_eq!(b["response_format"]["type"], "json_schema");
+    assert_eq!(b["max_tokens"], 50);
+    assert!(b.get("max_completion_tokens").is_none());
+    assert_eq!(b["messages"][0]["content"], "sys");
+}
+
+#[test]
+fn chat_path_extra_headers_and_id() {
+    let (base, seen) = stub(vec![reply_with(json!({ "content": "ok" }), "stop")]);
+    let q = Quirks {
+        chat_path: "/api/paas/v4/chat/completions",
+        extra_headers: &[("X-Title", "Mate"), ("HTTP-Referer", "https://github.com/inalto/Mate")],
+        ..Quirks::default()
+    };
+    let p = provider(&base).with_quirks(q).with_id("zai");
+    assert_eq!(p.id(), "zai");
+    p.complete(&text_req(None)).unwrap();
+    let r = &seen.lock().unwrap()[0];
+    assert_eq!(r.path, "/api/paas/v4/chat/completions");
+    assert_eq!(r.header("x-title"), Some("Mate"));
+    assert_eq!(r.header("http-referer"), Some("https://github.com/inalto/Mate"));
+}
+
+#[test]
+fn no_authorization_header_without_a_key_and_no_double_v1() {
+    let (base, seen) = stub(vec![reply_with(json!({ "content": "ok" }), "stop")]);
+    OpenAiProvider::new(String::new(), "m".into(), format!("{base}/v1/")).complete(&text_req(None)).unwrap();
+    let r = &seen.lock().unwrap()[0];
+    assert_eq!(r.path, "/v1/chat/completions");
+    assert_eq!(r.header("authorization"), None);
+}
+
+#[test]
+fn model_list_parsers() {
+    let openai = r#"{"object":"list","data":[{"id":"gpt-5","object":"model"},{"id":"gpt-5-mini"},{"id":"gpt-5"}]}"#;
+    assert_eq!(parse_model_list(openai, false).unwrap(), ["gpt-5", "gpt-5-mini"]);
+    let openrouter = r#"{"data":[
+        {"id":"z/vision","architecture":{"input_modalities":["text","image"]}},
+        {"id":"a/text","architecture":{"input_modalities":["text"]}},
+        {"id":"b/unknown"},
+        {"id":"a/vision","architecture":{"input_modalities":["image","text","file"]}}]}"#;
+    assert_eq!(parse_model_list(openrouter, true).unwrap(), ["a/vision", "z/vision"]);
+    assert_eq!(parse_model_list(openrouter, false).unwrap().len(), 4);
+    let ollama = r#"{"models":[{"name":"qwen3-vl:8b","model":"qwen3-vl:8b"},{"name":"llama3.2:3b"}]}"#;
+    assert_eq!(parse_model_list(ollama, false).unwrap(), ["llama3.2:3b", "qwen3-vl:8b"]);
+    assert!(matches!(parse_model_list("<html>", false), Err(AiError::InvalidResponse(_))));
+    assert!(matches!(parse_model_list(r#"{"error":"x"}"#, false), Err(AiError::InvalidResponse(_))));
+}
+
+#[test]
+fn list_models_hits_the_models_path_with_headers() {
+    let body = r#"{"data":[{"id":"b"},{"id":"a"}]}"#;
+    let (base, seen) = stub(vec![(200, body.into())]);
+    let q = Quirks { extra_headers: &[("X-Title", "Mate")], ..Quirks::default() };
+    assert_eq!(provider(&base).with_quirks(q).list_models().unwrap(), ["a", "b"]);
+    let r = &seen.lock().unwrap()[0];
+    assert_eq!(r.path, "/v1/models");
+    assert_eq!(r.header("authorization"), Some("Bearer sk-test-secret"));
+    assert_eq!(r.header("x-title"), Some("Mate"));
+
+    let tags = r#"{"models":[{"name":"qwen3-vl:8b"}]}"#;
+    let (base, seen) = stub(vec![(200, tags.into())]);
+    let q = Quirks { models_path: Some("/api/tags"), ..Quirks::default() };
+    let p = OpenAiProvider::new(String::new(), "m".into(), base).with_quirks(q);
+    assert_eq!(p.list_models().unwrap(), ["qwen3-vl:8b"]);
+    assert_eq!(seen.lock().unwrap()[0].path, "/api/tags");
+
+    let (base, _) = stub(vec![(401, r#"{"error":{"message":"bad key sk-test-secret"}}"#.into())]);
+    let e = provider(&base).list_models().unwrap_err();
+    assert!(matches!(e, AiError::Auth), "{e:?}");
+
+    let q = Quirks { models_path: None, ..Quirks::default() };
+    assert!(matches!(provider("http://127.0.0.1:1").with_quirks(q).list_models(), Err(AiError::Rejected(_))));
+}
+
+#[test]
+fn factory_builds_quirky_providers_against_the_base_url() {
+    let (base, seen) = stub(vec![reply_with(json!({ "content": "{\"a\":1}" }), "stop")]);
+    let p = provider_for("ollama", "", String::new(), Some(&base));
+    assert_eq!(p.id(), "ollama");
+    assert_eq!(p.complete(&text_req(Some(tiny_schema()))).unwrap(), "{\"a\":1}");
+    let r = &seen.lock().unwrap()[0];
+    assert_eq!(r.path, "/v1/chat/completions");
+    assert_eq!(r.body["model"], "qwen3-vl:8b");
+    assert_eq!(r.body["response_format"]["type"], "json_schema");
+    assert_eq!(r.header("authorization"), None);
+}
+
+#[test]
+fn base_urls_ending_in_v1_work_for_chat_and_other_paths() {
+    for suffix in ["", "/v1", "/v1/"] {
+        let (base, seen) = stub(vec![reply_with(json!({ "content": "ok" }), "stop"), (200, r#"{"models":[]}"#.into())]);
+        let q = Quirks { models_path: Some("/api/tags"), ..Quirks::default() };
+        let p = OpenAiProvider::new(String::new(), "m".into(), format!("{base}{suffix}")).with_quirks(q);
+        p.complete(&text_req(None)).unwrap();
+        p.list_models().unwrap();
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen[0].path, "/v1/chat/completions", "{suffix:?}");
+        assert_eq!(seen[1].path, "/api/tags", "{suffix:?}");
+    }
+}
+
+fn format_rejection() -> (u16, String) {
+    (400, json!({ "error": { "message": "Invalid parameter: 'response_format' of type 'json_schema' is not supported with this model." } }).to_string())
+}
+
+#[test]
+fn json_schema_rejection_downgrades_to_json_object_and_remembers() {
+    let (base, seen) = stub(vec![
+        format_rejection(),
+        reply_with(json!({ "content": "{\"a\":1}" }), "stop"),
+        reply_with(json!({ "content": "{\"a\":2}" }), "stop"),
+    ]);
+    let p = quirky(&base, Structured::JsonSchema, TokenParam::MaxTokens);
+    assert_eq!(p.complete(&text_req(Some(tiny_schema()))).unwrap(), "{\"a\":1}");
+    assert_eq!(p.complete(&text_req(Some(tiny_schema()))).unwrap(), "{\"a\":2}");
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 3);
+    assert_eq!(seen[0].body["response_format"]["type"], "json_schema");
+    assert_eq!(seen[1].body["response_format"], json!({ "type": "json_object" }));
+    assert!(seen[1].body["messages"][0]["content"].as_str().unwrap().contains("\"required\""));
+    // The next call starts in the mode that worked.
+    assert_eq!(seen[2].body["response_format"], json!({ "type": "json_object" }));
+}
+
+#[test]
+fn json_object_rejection_downgrades_to_prompt_only() {
+    let (base, seen) = stub(vec![
+        format_rejection(),
+        (400, json!({ "error": { "message": "response_format is not supported" } }).to_string()),
+        ok_reply(&verdict_json()),
+        ok_reply(&verdict_json()),
+    ]);
+    let p = quirky(&base, Structured::JsonSchema, TokenParam::MaxTokens);
+    assert_eq!(p.recognize(&request()).unwrap().latex, "x=2");
+    assert_eq!(p.recognize(&request()).unwrap().latex, "x=2");
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 4);
+    assert_eq!(seen[1].body["response_format"]["type"], "json_object");
+    assert!(seen[2].body.get("response_format").is_none());
+    assert!(seen[2].body["messages"][0]["content"].as_str().unwrap().contains("\"latex\""));
+    assert!(seen[3].body.get("response_format").is_none());
+}
+
+#[test]
+fn other_400s_are_not_retried_in_another_mode() {
+    let (base, seen) = stub(vec![(400, json!({ "error": { "message": "messages: too long" } }).to_string())]);
+    let e = quirky(&base, Structured::JsonSchema, TokenParam::MaxTokens).complete(&text_req(Some(tiny_schema()))).unwrap_err();
+    assert!(matches!(e, AiError::Rejected(_)), "{e:?}");
+    assert_eq!(seen.lock().unwrap().len(), 1);
+    // In prompt-only mode there is nothing to downgrade.
+    let (base, seen) = stub(vec![format_rejection()]);
+    let e = quirky(&base, Structured::PromptOnly, TokenParam::MaxTokens).complete(&text_req(Some(tiny_schema()))).unwrap_err();
+    assert!(matches!(e, AiError::Rejected(_)), "{e:?}");
+    assert_eq!(seen.lock().unwrap().len(), 1);
 }

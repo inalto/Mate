@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { checkForUpdate, installUpdate, onUpdateProgress, relaunch, type UpdateProgress } from "../ipc/updater";
+import i18n, { errorMessage } from "../i18n";
 import { useChromeStore } from "../stores/chrome";
-
-export const NOT_CONFIGURED_COPY = "Updates are not configured for this build.";
 
 export type UpdaterState =
   | { kind: "idle" }
@@ -14,14 +13,14 @@ export type UpdaterState =
   | { kind: "ready"; version: string }
   | { kind: "error"; message: string };
 
-const mb = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+const mb = (bytes: number) => i18n.t("update.megabytes", { value: (bytes / (1024 * 1024)).toFixed(1) });
 
 export function formatProgress(p: UpdateProgress | null): string {
-  if (!p) return "Saving your work…";
-  return p.total ? `${mb(p.downloaded)} of ${mb(p.total)}` : mb(p.downloaded);
+  if (!p) return i18n.t("update.savingWork");
+  return p.total ? i18n.t("update.progress", { done: mb(p.downloaded), total: mb(p.total) }) : mb(p.downloaded);
 }
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : typeof e === "string" ? e : "Something went wrong.");
+const errorText = errorMessage;
 
 /** The check / install / restart state machine shared by Settings and the About dialog. */
 export function useUpdater() {

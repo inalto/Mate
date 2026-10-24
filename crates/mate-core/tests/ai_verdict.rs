@@ -151,9 +151,9 @@ fn provider_factory_builds_known_providers() {
     assert_eq!(default_model("anthropic"), "claude-opus-5-5");
     assert_eq!(default_model("openai"), "gpt-5");
     // Construction only: no request is sent here.
-    assert_eq!(provider_for("anthropic", "", "k".into()).id(), "anthropic");
-    assert_eq!(provider_for("openai", "", "k".into()).id(), "openai");
-    assert_eq!(provider_for("mock", "", String::new()).id(), "mock");
+    assert_eq!(provider_for("anthropic", "", "k".into(), None).id(), "anthropic");
+    assert_eq!(provider_for("openai", "", "k".into(), None).id(), "openai");
+    assert_eq!(provider_for("mock", "", String::new(), None).id(), "mock");
 }
 
 #[test]

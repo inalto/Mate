@@ -3,8 +3,9 @@
 // (recognitions, in-flight groups, groups that couldn't be checked) needs to draw.
 import { useEffect } from "react";
 import { create } from "zustand";
+import i18n from "../i18n";
 import { getRecognitions } from "../ipc/recognition";
-import type { Recognition, Settings } from "../model/types";
+import type { AiVision, Recognition, Settings } from "../model/types";
 import type { EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import { tutorActive, useAiStatus } from "./aiStatus";
@@ -57,6 +58,7 @@ export interface TutorSessionDeps {
   settings?: () => Settings;
   /** A key is stored for the provider (`get_ai_status`); defaults to the cached status. */
   aiConfigured?: () => boolean | null;
+  aiVision?: () => AiVision | null;
   loadRecognitions?: (pageId: string) => Promise<Recognition[]>;
   /** Pen events source; defaults to window pointer events on a canvas. Returns an unsubscribe. */
   watchPen?: (down: () => void, up: () => void) => () => void;
@@ -111,7 +113,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
   const load = deps.loadRecognitions ?? getRecognitions;
   const aiConfigured = deps.aiConfigured ?? (() => useAiStatus.getState().configured);
   /** Nothing is segmented, shown or sent unless consent, the tutor switch and a key all hold. */
-  const isActive = () => tutorActive(settings(), aiConfigured());
+  const isActive = () => tutorActive(settings(), aiConfigured(), deps.aiVision ? deps.aiVision() : useAiStatus.getState().vision);
   let active = false;
   const segment = deps.segment ?? segmentPage;
   const setTimer = deps.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
@@ -248,7 +250,7 @@ export function createTutorSession(store: EditorStore, deps: TutorSessionDeps = 
     if (s.tutorMode === "onask" && !asked) return;
     if (view.inFlight.has(region.regionId)) return;
     if (view.inFlight.size >= MAX_PENDING_PER_PAGE) {
-      emit({ unchecked: withMap(view.unchecked, (m) => m.set(region.regionId, { kind: "busy", reason: "Too many checks are waiting. This note will be checked shortly." })) });
+      emit({ unchecked: withMap(view.unchecked, (m) => m.set(region.regionId, { kind: "busy", reason: i18n.t("tutor.errors.busy") })) });
       scheduleRetry(token, region.regionId, BUSY_RETRY_MS, asked);
       return;
     }

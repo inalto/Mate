@@ -1,0 +1,1111 @@
+{
+  "settings": {
+    "general": {
+      "language": {
+        "label": "Lingua",
+        "system": "Sistema"
+      },
+      "handedness": {
+        "label": "Mano dominante",
+        "hint": "Il lato in cui stanno la barra laterale e le barre degli strumenti",
+        "right": "Destrimano",
+        "left": "Mancino"
+      },
+      "libraryView": {
+        "label": "Vista della libreria",
+        "recent": "Recenti",
+        "shelves": "Scaffali",
+        "az": "Dalla A alla Z"
+      },
+      "sidebarLayout": {
+        "label": "Layout della barra laterale",
+        "split": "Divisa (sezioni e pagine)",
+        "stacked": "Impilata"
+      },
+      "shortcutHints": {
+        "label": "Suggerimenti sulle scorciatoie",
+        "always": "Sempre",
+        "adaptive": "Finché non le impari",
+        "never": "Mai"
+      },
+      "zoomIndicator": {
+        "label": "Mostra il livello di zoom",
+        "hint": "Una piccola percentuale di zoom nell'editor"
+      },
+      "exportFormat": {
+        "label": "Formato di esportazione predefinito",
+        "mate": "Archivio Mate"
+      }
+    },
+    "title": "Impostazioni",
+    "sectionsLabel": "Sezioni delle impostazioni",
+    "search": "Cerca nelle impostazioni",
+    "searchResults": "Risultati della ricerca",
+    "noMatches": "Nessuna impostazione trovata",
+    "nav": {
+      "groups": {
+        "general": "Generali",
+        "appearance": "Aspetto",
+        "writing": "Scrittura",
+        "intelligence": "Intelligenza",
+        "system": "Sistema"
+      },
+      "sections": {
+        "general": "Generali",
+        "theme": "Tema",
+        "paper": "Carta e layout",
+        "pen": "Penna e stilo",
+        "penButtons": "Pulsanti della penna",
+        "gestures": "Gesti e tocco",
+        "tutor": "Tutor e riconoscimento",
+        "tutorInteractions": "Interazioni con il tutor",
+        "mathEngines": "Motori matematici",
+        "shortcuts": "Scorciatoie da tastiera",
+        "trash": "Cestino",
+        "backup": "Backup",
+        "sharing": "Condivisione",
+        "updates": "Aggiornamenti",
+        "about": "Informazioni"
+      }
+    },
+    "resetIncomplete": "Non è stato possibile reimpostare del tutto i dati locali. Il tuo backup è in {{path}}.",
+    "theme": {
+      "label": "Tema",
+      "light": "Chiaro",
+      "dark": "Scuro",
+      "sepia": "Seppia",
+      "highContrast": "Alto contrasto",
+      "invertImages": {
+        "label": "Inverti le immagini in modalità scura",
+        "hint": "Le immagini in bianco e nero vengono invertite nei temi scuri"
+      }
+    },
+    "paper": {
+      "pageMode": {
+        "label": "Modalità pagina",
+        "canvas": "Infinita",
+        "page": "Carta"
+      },
+      "background": {
+        "label": "Sfondo",
+        "blank": "Bianco",
+        "ruled": "A righe",
+        "ruledNoMargin": "A righe (senza margine)",
+        "grid": "Quadretti",
+        "gridUniform": "Quadretti uniformi",
+        "dotGrid": "Puntini"
+      },
+      "pageSize": {
+        "label": "Dimensione della pagina",
+        "letter": "Letter",
+        "square": "Quadrata"
+      },
+      "orientation": {
+        "label": "Orientamento",
+        "portrait": "Verticale",
+        "landscape": "Orizzontale"
+      },
+      "alignText": {
+        "label": "Allinea il testo alle righe",
+        "hint": "Aggancia il testo digitato alle righe"
+      },
+      "snapToGrid": {
+        "label": "Aggancia alla griglia",
+        "hint": "Aggancia forme e tratti alla griglia di sfondo"
+      }
+    },
+    "pen": {
+      "penColor": "Colore della penna",
+      "penWidth": "Spessore della penna",
+      "highlighterColor": "Colore dell'evidenziatore",
+      "highlighterWidth": "Spessore dell'evidenziatore",
+      "stabilization": {
+        "label": "Stabilizzazione del tratto",
+        "hint": "Attenua le oscillazioni; con valori alti la penna resta un po' indietro"
+      },
+      "nibFlatness": "Piattezza del pennino della stilografica",
+      "haptics": {
+        "label": "Feedback tattile della penna (Windows)",
+        "hint": "Vibra mentre scrivi e fa un clic quando una forma si aggancia, sulle penne che lo supportano."
+      },
+      "inkToShapeTitle": "Da tratto a forma e scarabocchio",
+      "inkToShape": {
+        "label": "Da tratto a forma",
+        "hint": "Tieni ferma la penna a fine tratto per trasformarlo in una forma"
+      },
+      "snapOnRelease": "Aggancia quando sollevi la penna",
+      "holdTime": "Tempo di pressione",
+      "milliseconds": "{{value}} ms",
+      "scribbleToErase": {
+        "label": "Scarabocchia per cancellare",
+        "hint": "Scarabocchia in fretta sul tratto della penna per cancellarlo"
+      },
+      "scribbleSensitivity": {
+        "label": "Sensibilità dello scarabocchio",
+        "less": "Minore",
+        "standard": "Standard",
+        "more": "Maggiore"
+      },
+      "textTitle": "Testo predefinito",
+      "textColor": "Colore del testo",
+      "textSize": "Dimensione del testo",
+      "shapeTitle": "Forme predefinite",
+      "shapeType": "Tipo di forma",
+      "shapeStrokeColor": "Colore del contorno",
+      "shapeFillColor": "Colore del riempimento",
+      "shapeWidth": "Spessore della forma",
+      "shapeFillOpacity": "Opacità del riempimento",
+      "eraserTitle": "Gomma predefinita",
+      "eraserType": {
+        "label": "Tipo di gomma",
+        "stroke": "Tratto intero",
+        "partial": "Parziale"
+      },
+      "eraserWidth": "Spessore della gomma",
+      "eraseShapes": "Cancella le forme",
+      "eraseImages": "Cancella le immagini"
+    },
+    "penButtons": {
+      "barrel": {
+        "label": "Pulsante laterale",
+        "hint": "Il pulsante sul fianco dello stilo"
+      },
+      "eraserEnd": {
+        "label": "Estremità gomma",
+        "hint": "L'estremità o il pulsante gomma dello stilo"
+      },
+      "eraser": "Gomma",
+      "lasso": "Lazo",
+      "none": "Nessuna azione"
+    },
+    "gestures": {
+      "palmRejection": {
+        "label": "Rifiuto del palmo",
+        "off": "No",
+        "standard": "Standard",
+        "high": "Alto"
+      },
+      "drawWithFinger": {
+        "label": "Disegna con il dito",
+        "hint": "Disattivato: le dita spostano e ingrandiscono, la penna disegna"
+      },
+      "pinchToZoom": "Pizzica per ingrandire",
+      "mouseWheel": {
+        "label": "Rotellina del mouse",
+        "pan": "Sposta la pagina",
+        "zoom": "Ingrandisce"
+      }
+    },
+    "tutor": {
+      "providerTitle": "Provider AI",
+      "checkingTitle": "Verifica",
+      "enabled": {
+        "label": "Tutor",
+        "hint": "Legge la matematica scritta a mano e segnala gli errori. Richiede l'AI configurata qui sopra."
+      },
+      "mode": {
+        "label": "Quando controllare",
+        "live": "Mentre scrivo",
+        "onask": "Solo se lo chiedo"
+      },
+      "underline": "Sottolinea gli errori",
+      "tickCorrect": "Spunta ciò che è corretto",
+      "showChecking": {
+        "label": "Mostra quando controlla",
+        "hint": "Un piccolo anello che gira accanto al tratto in verifica"
+      },
+      "doubleTapAsk": "Tocca due volte un tratto per chiedere",
+      "holdToAsk": "Tieni la penna su un tratto per chiedere"
+    },
+    "mathEngines": {
+      "explainer": "Compute Engine funziona su questo computer e non richiede nulla. Wolfram|Alpha richiede un AppID gratuito (2 000 richieste al mese per uso non commerciale).",
+      "appid": "AppID di Wolfram|Alpha",
+      "savedHidden": "Salvato (nascosto)",
+      "pasteAppid": "Incolla il tuo AppID",
+      "works": "L'AppID funziona.",
+      "saved": "AppID salvato",
+      "none": "Nessun AppID",
+      "consent": {
+        "label": "Invia la matematica digitata a Wolfram|Alpha quando lo chiedo",
+        "hint": "Non viene inviato nulla finché non lo attivi e scegli Chiedi a Wolfram|Alpha."
+      },
+      "getAppid": "Ottieni un AppID gratuito"
+    },
+    "trash": {
+      "keepFor": "Conserva gli elementi eliminati per",
+      "forever": "Per sempre",
+      "days_one": "{{count}} giorno",
+      "days_other": "{{count}} giorni"
+    },
+    "backup": {
+      "download": {
+        "label": "Scarica il backup",
+        "hint": "Uno zip con un file .mate per ogni quaderno. Per ripristinare, decomprimilo e importa ogni file .mate."
+      },
+      "saved": "Backup salvato in {{path}}",
+      "reset": {
+        "label": "Reimposta i dati locali",
+        "hint": "Elimina tutto su questo dispositivo e riparte dalla schermata di benvenuto",
+        "confirmTitle": "Reimpostare i dati locali?",
+        "confirm": "Reimposta",
+        "confirmBody": "Questo elimina tutti i quaderni, le pagine e le impostazioni su questo dispositivo. Prima viene creato uno zip di backup. Le chiavi API nel portachiavi di sistema vengono conservate."
+      }
+    },
+    "sharing": {
+      "nextcloud": {
+        "label": "Nextcloud",
+        "hint": "Carica un quaderno sul tuo Nextcloud e ottieni un link da inviare a qualcuno.",
+        "signedIn": "Accesso come {{user}} su {{server}}",
+        "signOut": "Esci",
+        "waiting": "In attesa della tua approvazione nel browser…",
+        "server": "Indirizzo del server Nextcloud",
+        "signIn": "Accedi",
+        "expired": "Il link di accesso è scaduto. Ricomincia."
+      }
+    },
+    "updates": {
+      "checkOnStartup": "Cerca aggiornamenti all'avvio"
+    },
+    "about": {
+      "version": "Versione",
+      "welcome": "Benvenuto",
+      "showWelcome": "Mostra di nuovo il benvenuto",
+      "unknownVersion": "sconosciuta"
+    }
+  },
+  "common": {
+    "cancel": "Annulla",
+    "save": "Salva",
+    "remove": "Rimuovi",
+    "test": "Prova",
+    "reset": "Reimposta",
+    "change": "Cambia",
+    "close": "Chiudi",
+    "view": "Mostra",
+    "back": "Indietro",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "untitled": "Senza titolo",
+    "pageName": "Pagina {{n}}",
+    "sectionName": "Sezione {{n}}",
+    "dismiss": "Ignora",
+    "delete": "Elimina",
+    "untitledBook": "Quaderno senza titolo",
+    "loading": "Caricamento…",
+    "firstSection": "Appunti"
+  },
+  "errors": {
+    "generic": "Qualcosa è andato storto.",
+    "clipboard": "Impossibile copiare negli appunti",
+    "ai": {
+      "auth": "La chiave API non è stata accettata. Controllala nelle Impostazioni.",
+      "rateLimited": "Il servizio AI è occupato. Riprova tra un attimo.",
+      "network": "Impossibile raggiungere il servizio AI ({{detail}}).",
+      "invalidResponse": "Il servizio AI ha inviato una risposta illeggibile ({{detail}}).",
+      "disabled": "Il controllo AI è disattivato. Attivalo nelle Impostazioni.",
+      "rejected": "Il servizio AI ha rifiutato questa richiesta ({{detail}}).",
+      "billing": "L'account AI ha un problema di fatturazione. Verificalo con il provider.",
+      "unknownModel": "Il modello selezionato non è disponibile. Controlla il modello nelle Impostazioni.",
+      "refused": "L'AI ha rifiutato di controllare questa nota.",
+      "truncated": "La risposta dell'AI si è interrotta prima della fine.",
+      "noKey": "Prima salva una chiave API.",
+      "noAddress": "Prima inserisci l'indirizzo del servizio.",
+      "badAddress": "Usa un indirizzo https://, oppure un indirizzo locale come http://localhost:11434.",
+      "cannotListModels": "{{detail}} non può elencare i suoi modelli. Scrivi il nome del modello.",
+      "unreachable": "Non riesco a raggiungere {{detail}}. È avviato?"
+    }
+  },
+  "update": {
+    "label": "Aggiornamento del software",
+    "appVersion": "Mate {{version}}",
+    "install": "Installa {{version}}",
+    "restart": "Riavvia per aggiornare",
+    "checkingShort": "Controllo...",
+    "check": "Cerca aggiornamenti",
+    "checking": "Ricerca di aggiornamenti...",
+    "upToDate": "Sei aggiornato.",
+    "notConfigured": "Gli aggiornamenti non sono configurati in questa versione.",
+    "available": "La versione {{version}} è disponibile.",
+    "availableWithNotes": "La versione {{version}} è disponibile. {{notes}}",
+    "downloading": "Download di {{version}}: {{progress}}",
+    "ready": "La versione {{version}} è installata. Riavvia per completare l'aggiornamento.",
+    "failed": "Aggiornamento non riuscito: {{message}}",
+    "savingWork": "Salvataggio del tuo lavoro…",
+    "megabytes": "{{value}} MB",
+    "progress": "{{done}} di {{total}}",
+    "toast": "Mate {{version}} è disponibile."
+  },
+  "shapes": {
+    "rectangle": "Rettangolo",
+    "circle": "Cerchio",
+    "ellipse": "Ellisse",
+    "triangle": "Triangolo",
+    "line": "Linea",
+    "arrow": "Freccia",
+    "diamond": "Rombo",
+    "pentagon": "Pentagono",
+    "hexagon": "Esagono",
+    "star": "Stella",
+    "polygon": "Poligono"
+  },
+  "keys": {
+    "title": "Scorciatoie da tastiera",
+    "resetAll": "Reimposta tutte",
+    "pressCombo": "Premi una combinazione di tasti…",
+    "notSet": "Non impostata",
+    "changeAction": "Cambia {{action}}",
+    "cancelAction": "Annulla {{action}}",
+    "unbind": "Rimuovi",
+    "unbindAction": "Rimuovi {{action}}",
+    "resetAction": "Reimposta {{action}}",
+    "useCmd": "Usa Cmd (non Ctrl) come modificatore.",
+    "noMeta": "Il tasto Windows/Meta non può essere usato.",
+    "reserved": "{{keys}} è riservata e non può essere usata. Premi un'altra combinazione.",
+    "taken": "{{keys}} è già usata da \"{{action}}\". Premi un'altra combinazione.",
+    "groups": {
+      "tools": "Strumenti",
+      "edit": "Modifica",
+      "selection": "Selezione",
+      "arrange": "Disponi",
+      "view": "Vista",
+      "pages": "Pagine",
+      "tabs": "Schede e finestre",
+      "general": "Generali"
+    },
+    "actions": {
+      "pen": "Penna",
+      "highlighter": "Evidenziatore",
+      "eraser": "Gomma",
+      "cursor": "Seleziona (cursore)",
+      "lasso": "Lazo",
+      "shape": "Forma",
+      "text": "Testo",
+      "insertSpace": "Inserisci spazio",
+      "presetSlot": "Preimpostazione da 1 a 9",
+      "pan": "Sposta (tieni premuto)",
+      "undo": "Annulla",
+      "redo": "Ripeti",
+      "copy": "Copia",
+      "cut": "Taglia",
+      "paste": "Incolla",
+      "duplicate": "Duplica la selezione (o la pagina)",
+      "delete": "Elimina",
+      "save": "Salva ora",
+      "escape": "Annulla la selezione",
+      "selectAll": "Seleziona tutto",
+      "deselect": "Deseleziona",
+      "group": "Raggruppa",
+      "ungroup": "Separa",
+      "bringForward": "Porta avanti",
+      "sendBackward": "Porta indietro",
+      "bringToFront": "Porta in primo piano",
+      "sendToBack": "Porta in secondo piano",
+      "zoomIn": "Ingrandisci",
+      "zoomOut": "Riduci",
+      "zoomReset": "Reimposta lo zoom",
+      "toggleSidebar": "Mostra/nascondi la barra laterale",
+      "prevPage": "Pagina precedente",
+      "nextPage": "Pagina successiva",
+      "duplicatePage": "Duplica la pagina",
+      "renamePage": "Rinomina la pagina",
+      "movePageUp": "Sposta la pagina su",
+      "movePageDown": "Sposta la pagina giù",
+      "promotePage": "Alza di livello la pagina",
+      "demotePage": "Abbassa di livello la pagina",
+      "newTab": "Nuova scheda",
+      "closeTab": "Chiudi la scheda",
+      "moveTabLeft": "Sposta la scheda a sinistra",
+      "moveTabRight": "Sposta la scheda a destra",
+      "openPageWindow": "Apri la pagina in una nuova finestra",
+      "palette": "Cerca e azioni",
+      "shortcuts": "Scorciatoie da tastiera"
+    }
+  },
+  "palette": {
+    "label": "Riquadro comandi",
+    "searchLabel": "Cerca pagine, scrittura a mano e azioni",
+    "searchPlaceholder": "Cerca pagine e scrittura a mano, o esegui un'azione",
+    "results": "Risultati",
+    "working": "Elaborazione…",
+    "similar": "{{percent}}% simile",
+    "noRelated": "Nessun'altra pagina è ancora simile. Le pagine correlate compaiono man mano che il tutor legge più appunti.",
+    "applyTitle": "Applica il titolo",
+    "titleApplied": "Titolo applicato",
+    "noMatches": "Nessuna pagina o scrittura a mano trovata.",
+    "summarise": "Riassumi questa pagina",
+    "suggestTitle": "Suggerisci un titolo",
+    "related": "Cosa c'entra?",
+    "openGraph": "Apri il grafo",
+    "panel": {
+      "summary": "Riassunto di questa pagina",
+      "title": "Titolo suggerito",
+      "related": "Pagine correlate"
+    },
+    "sections": {
+      "pages": "Pagine",
+      "recent": "Pagine recenti",
+      "quick": "Azioni rapide",
+      "everything": "Cerca ovunque",
+      "actions": "Azioni"
+    },
+    "switchTo": {
+      "pen": "Passa alla penna",
+      "highlighter": "Passa all'evidenziatore",
+      "eraser": "Passa alla gomma",
+      "cursor": "Passa alla selezione (cursore)",
+      "lasso": "Passa al lazo",
+      "shape": "Passa alle forme",
+      "text": "Passa al testo",
+      "insertSpace": "Passa a inserisci spazio"
+    },
+    "insertText": "Inserisci una casella di testo",
+    "insertCode": "Inserisci un blocco di codice",
+    "insertTable": "Inserisci una tabella",
+    "insertGraph": "Inserisci un grafico",
+    "insertImage": "Inserisci un'immagine",
+    "newPage": "Nuova pagina",
+    "newSection": "Nuova sezione",
+    "openSettings": "Apri le impostazioni",
+    "openLibrary": "Apri la libreria",
+    "disabled": {
+      "editor": "Apri prima una pagina nell'editor",
+      "selection": "Seleziona prima qualcosa",
+      "page": "Apri prima una pagina"
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "main": "Principale",
+    "library": "Libreria",
+    "graph": "Grafo",
+    "trash": "Cestino",
+    "settings": "Impostazioni"
+  },
+  "about": {
+    "version": "Versione {{version}}",
+    "tagline": "Appunti a mano e di matematica, prima di tutto in locale.",
+    "nameNote": "Mate è il tuo compagno di matematica. E \"mate\" è come gli studenti chiamano la matematica.",
+    "starPitch": "Se Mate ti è utile, una stella su GitHub aiuta altri a trovarlo.",
+    "star": "Metti una stella su GitHub",
+    "githubFailed": "Impossibile aprire GitHub.",
+    "updates": "Aggiornamenti",
+    "latest": "Hai l'ultima versione",
+    "available": "La versione {{version}} è disponibile",
+    "updateSettings": "Impostazioni di aggiornamento"
+  },
+  "toolbar": {
+    "label": "Strumenti dell'editor",
+    "hintWithKeys": "{{label}} ({{keys}})",
+    "presetRemoveHint": "{{title}} · clic destro per rimuovere",
+    "presetLabel": "{{ink}} {{color}}",
+    "ink": {
+      "pen": "Penna",
+      "fountainPen": "Stilografica",
+      "highlighter": "Evidenziatore"
+    },
+    "addPen": "Aggiungi penna",
+    "eraser": "Gomma",
+    "eraserOptions": "Opzioni della gomma",
+    "eraserType": "Tipo di gomma",
+    "eraserWhole": "Intera",
+    "eraserPartial": "Parziale",
+    "eraserSizePx": "Dimensione della gomma (px)",
+    "eraserSize": "Dimensione della gomma",
+    "shape": "Forma",
+    "shapeHint": "Forma: {{shape}}",
+    "shapeOptions": "Opzioni delle forme",
+    "shapeType": "Tipo di forma",
+    "stroke": "Contorno",
+    "strokeColor": "Contorno {{color}}",
+    "strokeWidth": "Spessore del contorno",
+    "fill": "Riempimento",
+    "fillColor": "Riempimento {{color}}",
+    "noFill": "Nessun riempimento",
+    "fillOpacity": "Opacità del riempimento",
+    "insertSpace": "Inserisci spazio",
+    "insertSpaceOptions": "Opzioni di inserimento spazio",
+    "insertSpaceMode": "Modalità di inserimento spazio",
+    "spaceInsert": "Inserisci",
+    "spaceRemove": "Rimuovi",
+    "cutImages": "Taglia le immagini",
+    "text": "Testo",
+    "insertImage": "Inserisci un'immagine…",
+    "insertTable": "Inserisci una tabella",
+    "insertCode": "Inserisci codice",
+    "insertEquation": "Inserisci un'equazione",
+    "insertGraph": "Inserisci un grafico",
+    "select": "Seleziona",
+    "lasso": "Lazo"
+  },
+  "topbar": {
+    "more": "Altre azioni",
+    "moreUpdate": "Altre azioni, aggiornamento disponibile",
+    "updateAvailable": "Aggiornamento disponibile: {{version}}",
+    "exportPage": "Esporta la pagina…",
+    "importNotes": "Importa appunti…",
+    "pageSettings": "Impostazioni della pagina",
+    "searchActions": "Cerca e azioni…",
+    "about": "Informazioni su Mate",
+    "pageTitle": "Titolo della pagina"
+  },
+  "tabs": {
+    "label": "Pagine aperte",
+    "close": "Chiudi {{title}}",
+    "split": "Vista divisa",
+    "keepLeft": "Tieni solo a sinistra",
+    "keepRight": "Tieni solo a destra"
+  },
+  "editor": {
+    "zoomReset": "Zoom {{percent}}%, reimposta",
+    "pageFull": "Questa pagina è piena ({{max}} elementi) — inizia una nuova pagina.",
+    "tableLimit": "La tabella ha raggiunto il limite di dimensione ({{max}} celle)",
+    "insertImageFailed": "Impossibile inserire quell'immagine.",
+    "imagesFilter": "Immagini"
+  },
+  "whatsNew": {
+    "title": "Novità",
+    "gotIt": "Ho capito"
+  },
+  "sidebar": {
+    "label": "Barra laterale del quaderno",
+    "noPages": "Ancora nessuna pagina",
+    "pages": "Pagine",
+    "collapse": "Comprimi la barra laterale",
+    "newNotebook": "Nuovo quaderno",
+    "notebook": "Quaderno",
+    "noSections": "Nessuna sezione",
+    "sections": "Sezioni",
+    "newPageIn": "Nuova pagina in {{section}}",
+    "resize": "Ridimensiona la barra laterale",
+    "windowFailed": "Impossibile aprire la pagina in una nuova finestra.",
+    "icon": "Icona {{icon}}",
+    "noIcon": "Nessuna icona",
+    "collapsePage": "Comprimi",
+    "expandPage": "Espandi",
+    "menu": {
+      "rename": "Rinomina",
+      "changeIcon": "Cambia icona",
+      "moveUp": "Sposta su",
+      "moveDown": "Sposta giù",
+      "promote": "Alza di livello",
+      "demote": "Abbassa di livello",
+      "duplicate": "Duplica",
+      "split": "Apri in vista divisa",
+      "window": "Apri in una nuova finestra"
+    }
+  },
+  "library": {
+    "openBook": "Apri {{title}}",
+    "bookTitle": "Titolo del quaderno",
+    "bookActions": "Azioni per {{title}}",
+    "changeColour": "Cambia colore",
+    "favourite": "Aggiungi ai preferiti",
+    "unfavourite": "Rimuovi dai preferiti",
+    "moveToShelf": "Sposta nello scaffale",
+    "practice": "Esercitati da questo quaderno…",
+    "exportBook": "Esporta il quaderno…",
+    "share": "Condividi…",
+    "importInto": "Importa in questo quaderno…",
+    "colour": "Colore {{color}}",
+    "noShelf": "Nessuno scaffale",
+    "shelfName": "Nome dello scaffale",
+    "unshelved": "Fuori scaffale",
+    "renameShelf": "Rinomina lo scaffale",
+    "deleteShelf": "Elimina lo scaffale",
+    "emptyShelf": "Nessun quaderno in questo scaffale",
+    "imported": "Quaderno importato: {{pages}} pagine, {{elements}} elementi.",
+    "importedSkipped": "Quaderno importato: {{pages}} pagine, {{elements}} elementi, {{skipped}} saltati (oltre i limiti).",
+    "importFailed": "Importazione non riuscita: {{message}}",
+    "search": "Cerca quaderni",
+    "importBook": "Importa un quaderno…",
+    "sort": "Ordina i quaderni",
+    "az": "A-Z",
+    "emptyHint": "Crea il tuo primo quaderno per iniziare a organizzare appunti, equazioni e idee",
+    "noneFound": "Nessun quaderno trovato",
+    "clearSearch": "Cancella la ricerca",
+    "newShelf": "Nuovo scaffale",
+    "newShelfName": "Nome del nuovo scaffale"
+  },
+  "export": {
+    "failed": "Esportazione non riuscita: {{message}}",
+    "title": "Esporta",
+    "export": "Esporta",
+    "exporting": "Esportazione…",
+    "notInBook": "Questa pagina non è in un quaderno",
+    "format": "Formato",
+    "paper": "Carta",
+    "plain": "Semplice",
+    "transparent": "Trasparente",
+    "scale": "Scala",
+    "times": "{{n}}×",
+    "pages": "Pagine",
+    "allSheets": "Tutti i fogli",
+    "currentSheet": "Foglio corrente",
+    "searchable": "Testo ricercabile",
+    "latexHint": "Salva un file .tex; le immagini diventano segnaposto.",
+    "mateHint": "Esporta l'intero quaderno a cui appartiene questa pagina.",
+    "shareHint": "Per inviare questo quaderno a qualcuno, usa Condividi… dal menu del quaderno.",
+    "shareInstead": "Condividi invece…",
+    "boxRender": "Impossibile renderizzare il contenuto della casella {{id}} per l'esportazione.",
+    "boxMissing": "La casella {{id}} non è stata renderizzata per l'esportazione."
+  },
+  "selection": {
+    "label": "Selezione",
+    "arrange": "Disponi ▸",
+    "align": "Allinea ▸",
+    "alignLeft": "Allinea a sinistra",
+    "alignCenter": "Allinea al centro",
+    "alignRight": "Allinea a destra",
+    "alignTop": "Allinea in alto",
+    "alignMiddle": "Allinea al centro in verticale",
+    "alignBottom": "Allinea in basso",
+    "distributeH": "Distribuisci in orizzontale",
+    "distributeV": "Distribuisci in verticale",
+    "fillColour": "Colore di riempimento",
+    "duplicate": "Duplica",
+    "copyLatex": "Copia come LaTeX",
+    "graphFromEquation": "Grafico dall'equazione",
+    "graph": "Grafico",
+    "widthPx": "Larghezza (px)",
+    "width": "Larghezza della selezione"
+  },
+  "preset": {
+    "edit": "Modifica preimpostazione",
+    "hue": "Tonalità",
+    "hex": "Colore esadecimale",
+    "recent": "Colori recenti",
+    "width": "Spessore",
+    "moveLeft": "Sposta a sinistra",
+    "moveRight": "Sposta a destra"
+  },
+  "text": {
+    "bold": "Grassetto",
+    "italic": "Corsivo",
+    "underline": "Sottolineato",
+    "strikethrough": "Barrato",
+    "bulletList": "Elenco puntato",
+    "numberedList": "Elenco numerato",
+    "font": "Carattere",
+    "fonts": {
+      "sans": "Sans",
+      "serif": "Serif",
+      "mono": "Mono",
+      "hand": "A mano",
+      "script": "Corsivo calligrafico"
+    },
+    "smaller": "Testo più piccolo",
+    "size": "Dimensione del testo",
+    "larger": "Testo più grande",
+    "colour": "Colore del testo {{color}}",
+    "alignCentre": "Allinea al centro",
+    "formatting": "Formattazione del testo",
+    "box": "Casella di testo"
+  },
+  "pageSettings": {
+    "mode": "Modalità",
+    "paperSize": "Formato della carta",
+    "gridUniform": "Quadretti (uniformi)",
+    "spacing": "Spaziatura"
+  },
+  "import": {
+    "title": "Importa appunti",
+    "filter": "File di quaderni e archivi Mate",
+    "duplicates_one": "{{count}} pagina già importata, quindi non aggiunta di nuovo.",
+    "duplicates_other": "{{count}} pagine già importate, quindi non aggiunte di nuovo.",
+    "tablesAndShapes": "Tabelle e forme non sono ancora importate.",
+    "kilobytes": "{{value}} KB",
+    "progress": {
+      "waiting": "In attesa",
+      "reading": "Lettura del file",
+      "parsing": "Lettura delle pagine",
+      "placing": "Inserimento delle pagine",
+      "placingCount": "Inserimento delle pagine ({{done}} di {{total}})"
+    },
+    "fileOk": "File {{source}}, {{size}}",
+    "fileRejected": "Impossibile importare. {{reason}}",
+    "removeFile": "Rimuovi {{name}}",
+    "importing": "Importazione",
+    "progressLabel": "Avanzamento",
+    "cancelling": "Annullamento… termino il file in corso.",
+    "queued_one": "{{count}} altro file verrà proposto al termine di questa importazione.",
+    "queued_other": "{{count}} altri file verranno proposti al termine di questa importazione.",
+    "cancel": "Annulla l'importazione",
+    "finished": "Importazione completata",
+    "nothing": "Non è stato importato nulla",
+    "summary": "{{pages}}, {{strokes}}, {{texts}}, {{images}}.",
+    "counts": {
+      "pages_one": "{{count}} pagina",
+      "pages_other": "{{count}} pagine",
+      "strokes_one": "{{count}} tratto",
+      "strokes_other": "{{count}} tratti",
+      "texts_one": "{{count}} casella di testo",
+      "texts_other": "{{count}} caselle di testo",
+      "images_one": "{{count}} immagine",
+      "images_other": "{{count}} immagini"
+    },
+    "skipped": "Saltati",
+    "warnings": "Avvisi",
+    "failedFiles": "File non riusciti",
+    "importMore_one": "Importa {{count}} altro file…",
+    "importMore_other": "Importa altri {{count}} file…",
+    "openBook": "Apri il quaderno",
+    "checking": "Controllo dei file…",
+    "noFiles": "Nessun file scelto.",
+    "files": "File",
+    "addFiles": "Aggiungi file…",
+    "destination": "Destinazione",
+    "putPagesIn": "Metti le pagine in",
+    "newBook": "Un nuovo quaderno",
+    "bookName": "Nome del quaderno",
+    "existingBook": "Un quaderno esistente",
+    "book": "Quaderno",
+    "chooseBook": "Scegli un quaderno",
+    "import": "Importa"
+  },
+  "share": {
+    "title": "Condividi {{title}}",
+    "folderTitle": "Salva una copia in una cartella sincronizzata",
+    "noFolders": "Nessuna cartella sincronizzata trovata su questo computer.",
+    "lookingForFolders": "Cerco le cartelle sincronizzate…",
+    "chooseFolder": "Scegli un'altra cartella…",
+    "savedTo": "Salvato in {{path}}",
+    "showInFolder": "Mostra nella cartella",
+    "nextcloudHint": "Invia un link a questo quaderno dal tuo Nextcloud.",
+    "setUpInSettings": "Si configura in Impostazioni",
+    "publicLink": "Chiunque abbia il link può scaricare questo quaderno.",
+    "expires": "Scadenza del link",
+    "expiry": {
+      "never": "Mai",
+      "week": "Dopo 7 giorni",
+      "month": "Dopo 30 giorni"
+    },
+    "working": "Elaborazione…",
+    "upload": "Carica e ottieni il link",
+    "link": "Link di condivisione"
+  },
+  "practice": {
+    "title": "Esercitati da questo quaderno",
+    "pageTitle": "Esercizi — {{date}}",
+    "tooMany": "Una pagina di esercizi contiene al massimo {{max}} domande; le altre sono state escluse.",
+    "noSection": "Questo quaderno non ha una sezione in cui mettere le domande.",
+    "count": "Numero di domande",
+    "types": {
+      "label": "Tipi di domanda",
+      "multipleChoice": "Scelta multipla",
+      "multiSelect": "Selezione multipla",
+      "trueFalse": "Vero / falso",
+      "fillInBlank": "Completa gli spazi",
+      "shortAnswer": "Risposta breve"
+    },
+    "extra": "Altro? (facoltativo)",
+    "extraLabel": "Istruzioni aggiuntive",
+    "extraPlaceholder": "Per esempio: concentrati sull'integrazione per parti",
+    "privacy": "Le domande nascono da ciò che il tutor ha letto in questo quaderno. Il testo viene inviato al tuo provider AI.",
+    "writing": "Scrittura delle domande…",
+    "generate": "Genera",
+    "generating": "Generazione…",
+    "ready_one": "{{count}} domanda pronta.",
+    "ready_other": "{{count}} domande pronte.",
+    "questions": "Domande",
+    "add": "Aggiungi a una nuova pagina",
+    "adding": "Aggiunta…",
+    "pageFull": "Questa pagina è piena."
+  },
+  "math": {
+    "compute": "Calcola",
+    "computeMenu": "Calcola ▸",
+    "computing": "Calcolo…",
+    "resultNotAdded": "Non è stato possibile aggiungere il risultato a questa pagina.",
+    "ops": {
+      "evaluate": "Valuta",
+      "simplify": "Semplifica",
+      "expand": "Sviluppa",
+      "solve": "Risolvi",
+      "numeric": "Valore numerico"
+    },
+    "wolfram": {
+      "ask": "Chiedi a Wolfram|Alpha",
+      "needsAppid": "Aggiungi prima un AppID di Wolfram|Alpha nelle Impostazioni.",
+      "needsConsent": "Wolfram|Alpha è disattivato. Attivalo nelle Impostazioni."
+    },
+    "errors": {
+      "unreadable": "Impossibile leggere questa espressione",
+      "unreadableDetail": "Impossibile leggere questa espressione: {{detail}}",
+      "oneEquation": "Risolvi un'equazione alla volta",
+      "inequality": "Le disequazioni non si possono risolvere qui",
+      "noUnknown": "Niente da risolvere",
+      "severalUnknowns": "Più incognite ({{unknowns}}) e nessuna x da risolvere",
+      "unsolved": "Impossibile risolvere questa equazione",
+      "noSolution": "Nessuna soluzione trovata",
+      "empty": "Niente da calcolare",
+      "engine": "Impossibile caricare il motore matematico",
+      "failed": "Impossibile calcolarlo",
+      "engineGraph": "Impossibile caricare il motore matematico"
+    },
+    "check": {
+      "agree": "I due membri coincidono",
+      "differ": "Sono diversi",
+      "differAt": "Sono diversi in {{at}}",
+      "holds": "Vero quando {{solutions}}",
+      "never": "Mai vero",
+      "undecided": "Impossibile stabilirlo: {{reason}}",
+      "notEquation": "Impossibile stabilirlo: non è un'equazione",
+      "reasons": {
+        "noNumeric": "i due membri non hanno un valore numerico",
+        "noReal": "i membri non hanno un valore reale nei punti provati",
+        "engine": "impossibile caricare il motore matematico",
+        "failed": "la verifica non è riuscita"
+      }
+    },
+    "equation": "Equazione"
+  },
+  "tutor": {
+    "title": "Tutor",
+    "tryAgain": "Riprova",
+    "hint": "Suggerimento",
+    "why": "Perché",
+    "whyButton": "Perché?",
+    "nextStep": "Passaggio successivo",
+    "markCorrect": "Segna come corretto",
+    "checkLocally": "Controlla in locale",
+    "checkingLocally": "Controllo su questo computer…",
+    "saveFailed": "Impossibile salvare. Riprova.",
+    "uncheckedTip": "Impossibile controllare — tocca per i dettagli",
+    "status": {
+      "checking": "Controllo di questa nota…",
+      "unchecked": "Questa nota non è ancora stata controllata.",
+      "illegible": "Impossibile leggere questa nota.",
+      "markedCorrect": "Hai segnato questa nota come corretta.",
+      "correct": "Sembra giusto.",
+      "wrong": "Qui c'è qualcosa da ricontrollare.",
+      "unfinished": "Sembra incompleto."
+    },
+    "errors": {
+      "couldNotCheck": "Impossibile controllare questa nota.",
+      "noInk": "Questo gruppo non ha tratti da controllare.",
+      "capture": "Impossibile acquisire questa nota.",
+      "busy": "Ci sono troppi controlli in attesa. Questa nota verrà controllata a breve."
+    },
+    "ask": {
+      "button": "Chiedi",
+      "asking": "Richiesta in corso…",
+      "label": "La tua domanda",
+      "placeholder": "Cosa vorresti sapere su questa riga?",
+      "tooLong": "Mantieni la domanda sotto i {{max}} caratteri.",
+      "empty": "Scrivi prima una domanda.",
+      "failed": "Impossibile ottenere una risposta. Riprova.",
+      "checkingFirst": "Prima controllo questa nota…",
+      "needsCheck": "Questa nota va controllata prima di poter fare domande.",
+      "answer": "Risposta"
+    }
+  },
+  "ai": {
+    "privacyRemote": "La tua scrittura a mano e il tuo testo vengono inviati all'indirizzo qui sopra.",
+    "addressInvalid": "Usa un indirizzo https://, oppure un indirizzo locale come http://localhost:11434.",
+    "addressMissing": "Scrivi l'indirizzo del servizio.",
+    "typeModel": "Scrivi il nome del modello",
+    "modelMissing": "Scrivi il nome di un modello.",
+    "visionHint": "Scegli un modello che sappia leggere le immagini, altrimenti il tutor non può controllare la scrittura a mano.",
+    "fetchModelsNote": "Invia la tua chiave a {{provider}} per elencare i suoi modelli; non viene inviato nient'altro.",
+    "loadFailed": "Impossibile caricare l'elenco dei servizi AI.",
+    "noVision": "Questo provider non sa leggere la scrittura a mano, quindi il controllo è disattivato. Domande, riassunti ed esercizi funzionano comunque.",
+    "noModels": "Nessun modello trovato.",
+    "foundModels_one": "Trovato {{count}} modello.",
+    "foundModels_other": "Trovati {{count}} modelli.",
+    "keySaved": "Chiave salvata",
+    "noKey": "Nessuna chiave",
+    "noKeyOptional": "Nessuna chiave (facoltativa)",
+    "noKeyNeeded": "Nessuna chiave necessaria",
+    "connectionWorks": "La connessione funziona.",
+    "keySavedUntested": "Chiave salvata (non provata — attiva il permesso per provarla)",
+    "consent": {
+      "local": "Permetti a Mate di usare {{provider}} per controllare il tuo lavoro. Tutto viene elaborato su questo computer; nulla viene inviato a internet.",
+      "custom": "Invia immagini e testo della scrittura a mano al server all'indirizzo indicato sopra per controllare il tuo lavoro. Non viene inviato nulla finché non lo attivi.",
+      "cloud": "Invia immagini e testo della scrittura a mano a {{provider}} per controllare il tuo lavoro. Non viene inviato nulla finché non lo attivi.",
+      "cloudText": "Invia il testo dei tuoi appunti a {{provider}} per domande, riassunti ed esercizi. Non viene inviato nulla finché non lo attivi."
+    },
+    "model": "Modello",
+    "fetchModels": "Scarica i modelli",
+    "address": "Indirizzo",
+    "apiKey": "Chiave API",
+    "apiKeyOptional": "Chiave API (facoltativa)",
+    "pasteKey": "Incolla la tua chiave {{provider}}",
+    "saveKey": "Salva la chiave",
+    "removeKey": "Rimuovi la chiave",
+    "status": "Stato",
+    "testConnection": "Prova la connessione",
+    "permission": "Permesso",
+    "needs": {
+      "title": "Di cosa ha bisogno Mate da un'AI?",
+      "feature": "Funzione",
+      "needs": "Richiede",
+      "fallback": "Se il modello non ci riesce",
+      "tutor": "Controllo della matematica scritta a mano (il tutor)",
+      "tutorNeeds": "Input di immagini (\"vision\") e una risposta JSON",
+      "tutorFallback": "Il tutor è disattivato; tutto il resto funziona",
+      "text": "Domande su una riga, riassunti, titoli, esercizi",
+      "textNeeds": "Input e output di testo"
+    },
+    "groups": {
+      "cloud": "Servizi cloud",
+      "local": "Su questo computer",
+      "custom": "Personalizzato"
+    },
+    "vision": {
+      "yes": "Scrittura a mano: la sa leggere",
+      "dependsOnModel": "Scrittura a mano: dipende dal modello",
+      "no": "Scrittura a mano: solo testo, quindi il controllo è disattivato"
+    },
+    "needsLocal": "Richiede: il programma in esecuzione su questo computer, nessuna chiave",
+    "needsCustom": "Richiede: un indirizzo web e una chiave, se il servizio la vuole",
+    "needsCloud": "Richiede: una chiave API del servizio",
+    "costLine": "Costo: {{cost}}",
+    "cost": {
+      "paid": "A pagamento",
+      "paidLow": "A pagamento, costo basso",
+      "paidSomeFree": "A pagamento; alcuni modelli sono gratuiti",
+      "freeTier": "Gratis entro un limite, poi a pagamento",
+      "freeLocal": "Gratis (gira su questo computer)",
+      "depends": "Dipende dal servizio"
+    },
+    "privacy": {
+      "sentTo": "Gli appunti da controllare vengono inviati al servizio {{service}}.",
+      "sentToAndMaker": "Gli appunti da controllare vengono inviati al servizio {{service}} e a chi ha creato il modello.",
+      "textSentTo": "Il testo viene inviato al servizio {{service}}.",
+      "local": "Niente esce da questo computer.",
+      "custom": "Gli appunti da controllare vengono inviati all'indirizzo che inserisci."
+    },
+    "getKey": "Ottieni una chiave"
+  },
+  "home": {
+    "firstNotebook": "Il mio quaderno",
+    "recovery": "Mate si è riavviato mentre questa pagina era aperta",
+    "notNow": "Non ora",
+    "openPage": "Apri la pagina",
+    "newBook": "Nuovo quaderno",
+    "importPdf": "Importa PDF…",
+    "noRecentPages": "Le pagine che modifichi compariranno qui.",
+    "recentBooks": "Quaderni recenti",
+    "noBooks": "Ancora nessun quaderno",
+    "favourites": "Pagine preferite",
+    "noFavourites": "Aggiungi una pagina ai preferiti per fissarla qui."
+  },
+  "trash": {
+    "search": "Cerca nel cestino",
+    "empty": "Svuota il cestino",
+    "isEmpty": "Il cestino è vuoto",
+    "emptyHint": "Pagine, capitoli e quaderni eliminati compariranno qui per il recupero.",
+    "deleted": "{{kind}} - eliminazione: {{date}}",
+    "kinds": {
+      "bookshelf": "scaffale",
+      "unit": "unità",
+      "section": "sezione",
+      "page": "pagina"
+    },
+    "restore": "Ripristina",
+    "deletePermanently": "Elimina definitivamente",
+    "confirmTitle": "Svuotare il cestino?",
+    "confirmBody": "Tutti gli elementi nel cestino verranno eliminati definitivamente. Questa azione non può essere annullata."
+  },
+  "graph": {
+    "cutoff": "Soglia di somiglianza",
+    "empty": "Ancora niente da collegare. Le pagine compaiono qui dopo che il tutor ha letto la tua scrittura a mano, e le pagine simili vengono collegate.",
+    "noEdges": "Nessuna pagina è così simile. Abbassa la soglia di somiglianza per vedere i collegamenti più deboli.",
+    "label": "Grafo delle pagine, {{pages}} e {{links}}",
+    "pages_one": "{{count}} pagina",
+    "pages_other": "{{count}} pagine",
+    "links_one": "{{count}} collegamento",
+    "links_other": "{{count}} collegamenti",
+    "errors": {
+      "tooExpensive": "Espressione troppo onerosa da tracciare",
+      "evalBlocked": "Il tracciamento è bloccato dalla politica di sicurezza dell'app",
+      "missing": "Manca qualcosa",
+      "missingClose": "Manca la parentesi di chiusura",
+      "missingOpen": "Manca la parentesi di apertura",
+      "unexpectedClose": "Parentesi di chiusura inattesa",
+      "incompatible": "Tipi incompatibili",
+      "unknownCommand": "Comando sconosciuto",
+      "unexpectedSymbol": "Simbolo inatteso",
+      "notPlottable": "Questa espressione non si può tracciare",
+      "implicit": "Le equazioni implicite non sono supportate",
+      "writeForm": "Scrivi y = …, x = … oppure r = …",
+      "parametricParts": "Una curva parametrica ha bisogno di due parti: (x(t), y(t))",
+      "parametricT": "Scrivi x = …, y = … in funzione di t",
+      "singleEquals": "Usa un solo segno di uguale",
+      "parametricForm": "Scrivi una curva parametrica come (x(t), y(t))",
+      "empty": "Espressione vuota",
+      "invalid": "Espressione non valida",
+      "unreadable": "Impossibile leggere questa espressione",
+      "unknownSymbols_one": "Simbolo sconosciuto: {{symbols}}",
+      "unknownSymbols_other": "Simboli sconosciuti: {{symbols}}"
+    },
+    "editor": {
+      "settings": "Impostazioni del grafico",
+      "colourOf": "Colore dell'espressione {{n}}",
+      "expression": "Espressione {{n}}",
+      "hide": "Nascondi l'espressione {{n}}",
+      "show": "Mostra l'espressione {{n}}",
+      "delete": "Elimina l'espressione {{n}}",
+      "slow": "Troppo lento per tracciarlo per intero",
+      "add": "Aggiungi espressione",
+      "addShort": "+ Aggiungi",
+      "xMin": "x min",
+      "xMax": "x max",
+      "yMin": "y min",
+      "yMax": "y max",
+      "grid": "Griglia",
+      "plot": "Grafico della funzione"
+    }
+  },
+  "welcome": {
+    "steps": {
+      "welcome": "Benvenuto",
+      "ai": "Configurazione AI",
+      "playground": "Area di prova"
+    },
+    "stepLabel": "Benvenuto, passo {{step}} di {{total}}",
+    "playgroundFailed": "Impossibile creare la pagina dell'area di prova. Puoi riprovare da Impostazioni > Informazioni.",
+    "saveFailed": "Impossibile salvare le impostazioni, quindi il benvenuto potrebbe comparire di nuovo la prossima volta.",
+    "title": "Benvenuto in Mate",
+    "intro": "Mate è un quaderno per scrivere a mano, disegnare e digitare, con un tutor facoltativo che controlla il tuo lavoro.",
+    "local": "I tuoi appunti restano su questo dispositivo.",
+    "aiTitle": "Configura l'AI (facoltativo)",
+    "aiIntro": "Il tutor e le domande di esercizio usano un provider AI con la tua chiave API. Puoi farlo più tardi nelle Impostazioni.",
+    "tryTitle": "Provalo",
+    "tryIntro": "Apri una pagina dell'area di prova con alcuni strumenti da provare. Qui nulla è prezioso, quindi scarabocchia pure.",
+    "skip": "Salta",
+    "skipForNow": "Salta per ora",
+    "next": "Avanti",
+    "openPlayground": "Apri l'area di prova",
+    "playground": "Area di prova",
+    "playgroundHint": "Prova la penna (P), l'evidenziatore (H), la gomma (E)… Premi ? per le scorciatoie.",
+    "playgroundCreateFailed": "Impossibile creare la pagina dell'area di prova."
+  },
+  "lifecycle": {
+    "safeClose": "Impossibile chiudere in sicurezza — I tuoi appunti non sono stati salvati del tutto. Lascia Mate aperto e riprova.",
+    "safeCloseRecovery": "Impossibile chiudere in sicurezza — I tuoi appunti non sono stati salvati del tutto. Lascia Mate aperto e riprova. File di ripristino salvato: {{path}}",
+    "closeAnyway": "Chiudi comunque",
+    "stillSaving": "Mate sta ancora salvando — riprova a chiudere tra un attimo.",
+    "saveFailed": "Alcuni tratti non sono stati salvati — Mate continuerà a riprovare."
+  },
+  "pdf": {
+    "tooManyPages": "Questo PDF ha {{n}} pagine; Mate ne importa al massimo {{max}}.",
+    "noPages": "Questo PDF non ha pagine.",
+    "imported": "Importato",
+    "tooLarge": "Il PDF supera i 50 MiB.",
+    "importFailed": "Impossibile importare quel PDF."
+  },
+  "table": {
+    "label": "Tabella",
+    "addRow": "Aggiungi riga",
+    "addColumn": "Aggiungi colonna",
+    "deleteRow": "Elimina riga",
+    "deleteColumn": "Elimina colonna",
+    "cell": "Riga {{row}}, colonna {{column}}"
+  },
+  "code": {
+    "label": "Codice",
+    "language": "Linguaggio",
+    "plain": "Testo semplice"
+  }
+}

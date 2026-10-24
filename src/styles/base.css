@@ -1520,6 +1520,27 @@ button.card:hover {
   margin: 0;
 }
 
+.about-head {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.about-logo,
+.welcome-logo {
+  display: block;
+  height: auto;
+}
+
+.welcome-logo {
+  margin: 0 auto var(--space-3);
+}
+
+/* The heading takes focus programmatically on each step; no ring is needed for that. */
+.welcome h1:focus {
+  outline: none;
+}
+
 .icon-btn {
   position: relative;
 }
@@ -1539,4 +1560,30 @@ button.card:hover {
   background: none;
   padding-inline: 0;
   color: var(--color-primary);
+}
+
+/* Share dialog */
+.share-dialog {
+  width: min(520px, 92vw);
+}
+
+.share-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.share-folders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.share-dialog .btn {
+  white-space: nowrap;
+}
+
+.share-dialog .field .input {
+  flex: 1;
+  min-width: 0;
 }
