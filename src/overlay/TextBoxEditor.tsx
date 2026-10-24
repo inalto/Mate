@@ -10,7 +10,9 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useTranslation } from "react-i18next";
 import TextFormatControls from "../components/TextFormatControls";
+import i18n from "../i18n";
 import { mapInkColor } from "../ink/theme";
 import { contentOf, type TextAttributes, type TextBoxContent } from "../model/content";
 import type { Element } from "../model/types";
@@ -60,6 +62,7 @@ const styleOf = (decls: Record<string, string>): CSSProperties =>
   Object.fromEntries(Object.entries(decls).map(([k, v]) => [k.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase()), v]));
 
 export default function TextBoxEditor({ el, store }: BoxEditorProps) {
+  const { t } = useTranslation();
   useContentCss();
   // The session starts from the stored content (sanitised); later store changes do not reset it.
   const [initial] = useState(() => textContentOf(el));
@@ -117,7 +120,7 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
     autofocus: "end",
     immediatelyRender: true,
     editorProps: {
-      attributes: { class: CONTENT_CLASS, "aria-label": "Text box", spellcheck: "true" },
+      attributes: { class: CONTENT_CLASS, "aria-label": i18n.t("text.box"), spellcheck: "true" },
       handleKeyDown(_view, e) {
         if (e.key !== "Escape") return false;
         store.getState().endEdit();
@@ -184,7 +187,7 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
   const css = boxCss(attrs, mapInkColor(attrs.color, theme));
   return (
     <div ref={rootRef} className="text-box-editor" style={{ ...styleOf(css), minHeight: `${attrs.fontSize * 1.5}px` }}>
-      <div className="text-format-bar" role="toolbar" aria-label="Text formatting">
+      <div className="text-format-bar" role="toolbar" aria-label={t("text.formatting")}>
         <TextFormatControls attrs={attrs} onAttrs={(patch) => setAttrs((a) => ({ ...a, ...patch }))} editor={editor} />
       </div>
       <EditorContent editor={editor} />

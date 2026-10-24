@@ -6,6 +6,7 @@
 // nested ones) are refused. Never throws: problems come back as `{ error }` strings for the editor.
 // The engine is lazy (./engine): `parseExpressionSync` answers `{ pending: true }` until it loaded.
 import type { ComputeEngine } from "@cortex-js/compute-engine";
+import i18n, { type TKey } from "../i18n";
 import { engineSync, loadEngine, type Engine } from "./engine";
 
 export type Evaluator = (v: number) => number;
@@ -22,9 +23,9 @@ export type Pending = { pending: true };
 type Expr = NonNullable<ReturnType<ComputeEngine["parse"]>>;
 
 const THETA = "theta";
-export const TOO_EXPENSIVE = "Expression too expensive to plot";
+export const tooExpensiveMessage = (): string => i18n.t("graph.errors.tooExpensive");
 /** Compiling threw an EvalError: the webview's CSP lacks 'unsafe-eval' (see src-tauri/tauri.conf.json). */
-export const EVAL_BLOCKED = "Plotting is blocked by the app's security policy";
+export const evalBlockedMessage = (): string => i18n.t("graph.errors.evalBlocked");
 /** Most iterations a plotted sum or product may run per evaluation. */
 export const MAX_ITERATIONS = 1000;
 
@@ -36,16 +37,17 @@ export function firstError(json: unknown): string | null {
   if (json[0] === "Error") {
     const code = Array.isArray(json[1]) ? json[1][1] : json[1];
     const raw = typeof code === "string" ? code.replace(/^'|'$/g, "") : "invalid";
-    const messages: Record<string, string> = {
-      missing: "Something is missing",
-      "expected-closing-delimiter": "Missing closing bracket",
-      "expected-open-delimiter": "Missing opening bracket",
-      "unexpected-closing-delimiter": "Unexpected closing bracket",
-      "incompatible-type": "Incompatible types",
-      "unexpected-command": "Unknown command",
-      "unexpected-token": "Unexpected symbol",
+    const messages: Record<string, TKey> = {
+      missing: "graph.errors.missing",
+      "expected-closing-delimiter": "graph.errors.missingClose",
+      "expected-open-delimiter": "graph.errors.missingOpen",
+      "unexpected-closing-delimiter": "graph.errors.unexpectedClose",
+      "incompatible-type": "graph.errors.incompatible",
+      "unexpected-command": "graph.errors.unknownCommand",
+      "unexpected-token": "graph.errors.unexpectedSymbol",
     };
-    return messages[raw] ?? raw.replace(/-/g, " ");
+    const key = Object.prototype.hasOwnProperty.call(messages, raw) ? messages[raw] : undefined;
+    return key ? i18n.t(key) : raw.replace(/-/g, " ");
   }
   for (const part of json) {
     const e = firstError(part);
@@ -102,10 +104,10 @@ function evaluator(eng: Engine, e: Expr, variable: string): Evaluator {
     if (compiled.success && typeof compiled.run === "function") run = compiled.run as (vars: Record<string, number>) => unknown;
   } catch (err) {
     // Compiled code is built with `new Function`: a CSP without 'unsafe-eval' refuses it.
-    if (err instanceof EvalError) throw new ExprError(EVAL_BLOCKED);
+    if (err instanceof EvalError) throw new ExprError(evalBlockedMessage());
     run = null;
   }
-  if (!run) throw new ExprError("This expression cannot be plotted");
+  if (!run) throw new ExprError(i18n.t("graph.errors.notPlottable"));
   const fn = run;
   const vars: Record<string, number> = {};
   return (v) => {
@@ -140,20 +142,20 @@ function classify(eng: Engine, e: Expr): ParsedExpr {
     if (name === "x" && onlyUses(body, ["y"])) return { kind: "of-y", f: ev(body, "y") };
     if (name === "r" && onlyUses(body, [THETA])) return { kind: "polar", r: ev(body, THETA) };
     if (name === "y" || name === "x" || name === "r") {
-      if (body.unknowns.includes(name)) throw new ExprError("Implicit equations are not supported");
+      if (body.unknowns.includes(name)) throw new ExprError(i18n.t("graph.errors.implicit"));
       return { kind: "of-x", f: ev(body, name === "y" ? "x" : name === "x" ? "y" : THETA) }; // reports the unknown symbols
     }
-    throw new ExprError("Write y = …, x = … or r = …");
+    throw new ExprError(i18n.t("graph.errors.writeForm"));
   };
 
   const tuple = (ops: readonly Expr[]): ParsedExpr => {
-    if (ops.length !== 2) throw new ExprError("A parametric curve needs two parts: (x(t), y(t))");
+    if (ops.length !== 2) throw new ExprError(i18n.t("graph.errors.parametricParts"));
     const [a, b] = ops;
     if (a.operator === "Equal" && b.operator === "Equal") {
       const pairs = [a, b].map((eq) => ({ name: symbolOf(opsOf(eq)[0]), body: opsOf(eq)[1] }));
       const xs = pairs.find((p) => p.name === "x");
       const ys = pairs.find((p) => p.name === "y");
-      if (!xs || !ys) throw new ExprError("Write x = …, y = … in terms of t");
+      if (!xs || !ys) throw new ExprError(i18n.t("graph.errors.parametricT"));
       return { kind: "parametric", x: ev(xs.body, "t"), y: ev(ys.body, "t") };
     }
     return { kind: "parametric", x: ev(a, "t"), y: ev(b, "t") };
@@ -162,7 +164,7 @@ function classify(eng: Engine, e: Expr): ParsedExpr {
   const go = (x: Expr): ParsedExpr => {
     if (x.operator === "Equal") {
       const ops = opsOf(x);
-      if (ops.length !== 2) throw new ExprError("Use a single equals sign");
+      if (ops.length !== 2) throw new ExprError(i18n.t("graph.errors.singleEquals"));
       return equation(ops[0], ops[1]);
     }
     if (x.operator === "Tuple" || x.operator === "Pair" || x.operator === "Delimiter" || x.operator === "Sequence") {
@@ -171,7 +173,7 @@ function classify(eng: Engine, e: Expr): ParsedExpr {
     }
     if (onlyUses(x, ["x"])) return { kind: "of-x", f: ev(x, "x") };
     if (onlyUses(x, [THETA])) return { kind: "polar", r: ev(x, THETA) };
-    if (onlyUses(x, ["t"])) throw new ExprError("Write a parametric curve as (x(t), y(t))");
+    if (onlyUses(x, ["t"])) throw new ExprError(i18n.t("graph.errors.parametricForm"));
     return { kind: "of-x", f: ev(x, "x") }; // reports the unknown symbols
   };
   return go(e);
@@ -180,16 +182,16 @@ function classify(eng: Engine, e: Expr): ParsedExpr {
 function parseUncached(eng: Engine, latex: string): ParseResult {
   try {
     const e = eng.ce.parse(latex);
-    if (!e) return { error: "Empty expression" };
+    if (!e) return { error: i18n.t("graph.errors.empty") };
     const json = e.json;
     const err = firstError(json);
     if (err) return { error: err };
-    if (!e.isValid) return { error: "Invalid expression" };
-    if (eng.mod.isSymbol(e, "Nothing")) return { error: "Empty expression" };
-    if (tooExpensive(json)) return { error: TOO_EXPENSIVE };
+    if (!e.isValid) return { error: i18n.t("graph.errors.invalid") };
+    if (eng.mod.isSymbol(e, "Nothing")) return { error: i18n.t("graph.errors.empty") };
+    if (tooExpensive(json)) return { error: tooExpensiveMessage() };
     return classify(eng, e);
   } catch (err) {
-    return { error: err instanceof ExprError ? err.message : "Could not read this expression" };
+    return { error: err instanceof ExprError ? err.message : i18n.t("graph.errors.unreadable") };
   }
 }
 
@@ -201,7 +203,7 @@ const cache = new Map<string, ParseResult>();
  * loaded (the call starts loading it). Never throws.
  */
 export function parseExpressionSync(latex: string): ParseResult | Pending {
-  if (latex.trim() === "") return { error: "Empty expression" };
+  if (latex.trim() === "") return { error: i18n.t("graph.errors.empty") };
   const hit = cache.get(latex);
   if (hit) return hit;
   const eng = engineSync();
@@ -220,10 +222,10 @@ export async function parseExpression(latex: string): Promise<ParseResult> {
   try {
     await loadEngine();
   } catch {
-    return { error: "The math engine could not be loaded" };
+    return { error: i18n.t("math.errors.engineGraph") };
   }
   const r = parseExpressionSync(latex);
-  return "pending" in r ? { error: "The math engine could not be loaded" } : r;
+  return "pending" in r ? { error: i18n.t("math.errors.engineGraph") } : r;
 }
 
 /** The error message of `latex`, or null when it parses, is blank or the engine is still loading. */

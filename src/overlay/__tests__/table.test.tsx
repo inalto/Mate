@@ -18,7 +18,7 @@ import { DEFAULT_SETTINGS } from "../../model/constants";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
-import { TABLE_LIMIT_TOAST } from "../../stores/pageLimit";
+import { tableLimitToast } from "../../stores/pageLimit";
 import { addColumn, addRow, canAddColumn, canAddRow, deleteRow, MAX_TABLE_CELLS, tableElement, tableRowsOf } from "../../text/tableCode";
 import { isTypingTarget } from "../../keys/shortcuts";
 import { hasEditor, registerEditor } from "../editorRegistry";
@@ -159,6 +159,6 @@ describe("TableEditor", () => {
     expect(got[249][0]).toBe("249");
     expect(s().limitReached).toBe(true);
     expect(s().limitKind).toBe("table");
-    expect(TABLE_LIMIT_TOAST).toBe("Table is at its size limit (50 000 cells)");
+    expect(tableLimitToast()).toBe("Table is at its size limit (50 000 cells)");
   });
 });

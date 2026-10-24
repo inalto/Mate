@@ -3,6 +3,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Vec2 } from "../canvas/camera";
 import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { saveAssetFromPath, type AssetInfo } from "../ipc/assets";
 import type { EditorStore } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
@@ -15,14 +16,14 @@ export const isImagePath = (path: string): boolean => {
   return (IMAGE_EXTENSIONS as readonly string[]).includes(ext);
 };
 
-export const INSERT_FAILED = "Could not insert that image.";
+export const insertFailed = (): string => i18n.t("editor.insertImageFailed");
 
 /** Add stored asset `info` to `store`'s page (one history entry); the new element's id, or null. */
 export async function insertAsset(store: EditorStore, info: AssetInfo, at?: Vec2): Promise<string | null> {
   if (!info.mime.startsWith("image/")) return null;
   const img = await loadImage(info.id);
   if (!img) {
-    showToast(INSERT_FAILED);
+    showToast(insertFailed());
     return null;
   }
   return store.getState().addImage(info.id, naturalSize(img), at);
@@ -33,7 +34,7 @@ export async function insertImageFromPath(store: EditorStore, path: string, at?:
   try {
     return await insertAsset(store, await saveAssetFromPath(path), at);
   } catch {
-    showToast(INSERT_FAILED);
+    showToast(insertFailed());
     return null;
   }
 }
@@ -42,7 +43,7 @@ export async function insertImageFromPath(store: EditorStore, path: string, at?:
 export async function pickAndInsertImage(): Promise<void> {
   const picked = await open({
     multiple: false,
-    filters: [{ name: "Images", extensions: [...IMAGE_EXTENSIONS] }],
+    filters: [{ name: i18n.t("editor.imagesFilter"), extensions: [...IMAGE_EXTENSIONS] }],
   });
   if (typeof picked !== "string") return;
   await insertImageFromPath(getFocusedEditor(), picked);

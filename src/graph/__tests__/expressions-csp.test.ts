@@ -13,7 +13,7 @@ vi.mock("@cortex-js/compute-engine", async (importOriginal) => {
 });
 
 import { loadEngine } from "../engine";
-import { EVAL_BLOCKED, parseExpressionSync } from "../expressions";
+import { evalBlockedMessage, parseExpressionSync } from "../expressions";
 
 describe("parseExpression when eval is blocked", () => {
   beforeAll(async () => {
@@ -22,6 +22,6 @@ describe("parseExpression when eval is blocked", () => {
 
   it("names_the_security_policy", () => {
     const p = parseExpressionSync("y = x^2");
-    expect(p).toEqual({ error: EVAL_BLOCKED });
+    expect(p).toEqual({ error: evalBlockedMessage() });
   });
 });

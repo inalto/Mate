@@ -43,7 +43,10 @@ const win = vi.hoisted(() => ({ page: false }));
 vi.mock("../../ipc/windows", () => ({ isPageWindow: () => win.page }));
 
 import * as ipc from "../../ipc/lifecycle";
-import { CLEAN_EXIT_KEY, SAFE_CLOSE_TOAST, STILL_SAVING_TOAST, installCloseHandler } from "../close";
+import { CLEAN_EXIT_KEY, installCloseHandler, safeCloseToast, stillSavingToast } from "../close";
+
+const SAFE_CLOSE_TOAST = safeCloseToast();
+const STILL_SAVING_TOAST = stillSavingToast();
 
 type W = {
   __mateFlushAndClose?: (id: number) => Promise<void>;

@@ -1,5 +1,6 @@
 import { Plus } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
 import { importUnitArchive } from "../ipc/archive";
@@ -13,6 +14,7 @@ import { useSettingsStore } from "../stores/settings";
 type View = "recent" | "az" | "shelves";
 
 export default function Library() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const tree = useNotebookStore((s) => s.tree);
   const libraryView = useSettingsStore((s) => s.settings.libraryView);
@@ -27,17 +29,17 @@ export default function Library() {
   const empty = tree.units.length === 0;
 
   const newBook = () => {
-    void store.createUnit("Untitled book");
+    void store.createUnit(t("common.untitledBook"));
   };
   const importBook = async () => {
     try {
       const report = await importUnitArchive();
       if (!report) return;
       await store.load();
-      const skipped = report.skipped > 0 ? `, ${report.skipped} skipped (over limits)` : "";
-      alert(`Imported book: ${report.pages} pages, ${report.elements} elements${skipped}.`);
+      const counts = { pages: report.pages, elements: report.elements, skipped: report.skipped };
+      alert(report.skipped > 0 ? t("library.importedSkipped", counts) : t("library.imported", counts));
     } catch (err) {
-      alert(`Import failed: ${err instanceof Error ? err.message : String(err)}`);
+      alert(t("library.importFailed", { message: err instanceof Error ? err.message : String(err) }));
     }
   };
   const importPdf = async () => {
@@ -47,7 +49,7 @@ export default function Library() {
   const tile = (
     <button type="button" className="new-tile" onClick={newBook}>
       <Plus size={28} />
-      <span>New book</span>
+      <span>{t("home.newBook")}</span>
     </button>
   );
 
@@ -63,35 +65,39 @@ export default function Library() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <h1>Library</h1>
+        <h1>{t("nav.library")}</h1>
         <input
           className="input"
           type="search"
-          placeholder="Search books"
-          aria-label="Search books"
+          placeholder={t("library.search")}
+          aria-label={t("library.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <button type="button" className="btn" onClick={() => void importBook()}>Import book…</button>
-        <button type="button" className="btn" onClick={() => void importPdf()}>Import PDF…</button>
-        <button type="button" className="btn" onClick={() => void useImportStore.getState().openDialog()}>Import notes…</button>
-        <div className="segmented" role="group" aria-label="Sort books">
-          <button aria-pressed={view === "recent"} onClick={() => setView("recent")}>Recent</button>
-          <button aria-pressed={view === "az"} onClick={() => setView("az")}>A-Z</button>
-          <button aria-pressed={view === "shelves"} onClick={() => setView("shelves")}>Shelves</button>
+        <button type="button" className="btn" onClick={() => void importBook()}>{t("library.importBook")}</button>
+        <button type="button" className="btn" onClick={() => void importPdf()}>{t("home.importPdf")}</button>
+        <button type="button" className="btn" onClick={() => void useImportStore.getState().openDialog()}>
+          {t("topbar.importNotes")}
+        </button>
+        <div className="segmented" role="group" aria-label={t("library.sort")}>
+          <button aria-pressed={view === "recent"} onClick={() => setView("recent")}>{t("settings.general.libraryView.recent")}</button>
+          <button aria-pressed={view === "az"} onClick={() => setView("az")}>{t("library.az")}</button>
+          <button aria-pressed={view === "shelves"} onClick={() => setView("shelves")}>{t("settings.general.libraryView.shelves")}</button>
         </div>
       </div>
 
       {empty && (
         <div className="empty-state">
-          <h2>No books yet</h2>
-          <p>Create your first book to start organizing your notes, equations, and ideas</p>
+          <h2>{t("home.noBooks")}</h2>
+          <p>{t("library.emptyHint")}</p>
         </div>
       )}
       {!empty && query.trim() !== "" && tree.units.filter(match).length === 0 && (
         <div className="empty-state">
-          <h2>No books found</h2>
-          <button type="button" className="btn" onClick={() => setQuery("")}>Clear search</button>
+          <h2>{t("library.noneFound")}</h2>
+          <button type="button" className="btn" onClick={() => setQuery("")}>
+            {t("library.clearSearch")}
+          </button>
         </div>
       )}
 
@@ -104,13 +110,15 @@ export default function Library() {
           ))}
           {newShelf === null ? (
             <div>
-              <button type="button" className="btn" onClick={() => setNewShelf("")}>New shelf</button>
+              <button type="button" className="btn" onClick={() => setNewShelf("")}>
+                {t("library.newShelf")}
+              </button>
             </div>
           ) : (
             <input
               className="input"
-              aria-label="New shelf name"
-              placeholder="Shelf name"
+              aria-label={t("library.newShelfName")}
+              placeholder={t("library.shelfName")}
               autoFocus
               value={newShelf}
               onChange={(e) => setNewShelf(e.target.value)}

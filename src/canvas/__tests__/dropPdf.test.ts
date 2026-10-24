@@ -16,7 +16,7 @@ const fire = (x: number, paths: string[]) => {
 vi.mock("../../ipc/assets", () => ({ saveAsset: vi.fn(), saveAssetFromPath: vi.fn(), assetUrl: vi.fn() }));
 const insertImageFromPath = vi.hoisted(() => vi.fn());
 vi.mock("../../images/insert", () => ({
-  INSERT_FAILED: "x",
+  insertFailed: () => "x",
   insertAsset: vi.fn(),
   insertImageFromPath,
   isImagePath: (p: string) => p.endsWith(".png"),

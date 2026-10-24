@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
+import i18n from "../i18n";
 import { closeThisWindow, isPageWindow, setThisWindowTitle } from "../ipc/windows";
 import CanvasView from "../canvas/CanvasView";
 import PageSettingsDialog from "../components/PageSettingsDialog";
@@ -57,7 +58,7 @@ export default function Editor() {
 
   // A page window is titled after its page (kept in step with renames).
   useEffect(() => {
-    if (pageWindow && pageTitle !== undefined) setThisWindowTitle(pageTitle.trim() || "Untitled");
+    if (pageWindow && pageTitle !== undefined) setThisWindowTitle(pageTitle.trim() || i18n.t("common.untitled"));
   }, [pageWindow, pageTitle]);
 
   // Drop tabs for pages that were deleted; keep open panes' page records (mode, background) fresh.

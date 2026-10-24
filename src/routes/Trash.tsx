@@ -1,20 +1,15 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { purgeTrashOlderThan } from "../ipc/notebook";
 import { collectAssets, useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 
 /** `0` means keep forever. */
-const RETENTION: Array<{ days: number; label: string }> = [
-  { days: 7, label: "7 days" },
-  { days: 14, label: "14 days" },
-  { days: 30, label: "30 days" },
-  { days: 60, label: "60 days" },
-  { days: 90, label: "90 days" },
-  { days: 0, label: "Forever" },
-];
+const RETENTION_DAYS = [7, 14, 30, 60, 90, 0];
 
 export default function Trash() {
+  const { t } = useTranslation();
   const items = useNotebookStore((s) => s.trashItems);
   const retention = useSettingsStore((s) => s.settings.trashRetentionDays);
   const update = useSettingsStore((s) => s.update);
@@ -45,24 +40,26 @@ export default function Trash() {
   return (
     <div className="screen">
       <div className="screen-header">
-        <h1>Trash</h1>
+        <h1>{t("nav.trash")}</h1>
         <input
           className="input"
           type="search"
-          placeholder="Search trash"
-          aria-label="Search trash"
+          placeholder={t("trash.search")}
+          aria-label={t("trash.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <label>
-          Keep deleted items for{" "}
+          {t("settings.trash.keepFor")}{" "}
           <select
             className="input"
             value={retention}
             onChange={(e) => void update({ trashRetentionDays: Number(e.target.value) })}
           >
-            {RETENTION.map((r) => (
-              <option key={r.days} value={r.days}>{r.label}</option>
+            {RETENTION_DAYS.map((d) => (
+              <option key={d} value={d}>
+                {d === 0 ? t("settings.trash.forever") : t("settings.trash.days", { count: d })}
+              </option>
             ))}
           </select>
         </label>
@@ -72,14 +69,14 @@ export default function Trash() {
           disabled={items.length === 0}
           onClick={() => setConfirming(true)}
         >
-          Empty trash
+          {t("trash.empty")}
         </button>
       </div>
 
       {items.length === 0 ? (
         <div className="empty-state">
-          <h2>Trash is empty</h2>
-          <p>Deleted pages, chapters, and notebooks will appear here for recovery.</p>
+          <h2>{t("trash.isEmpty")}</h2>
+          <p>{t("trash.emptyHint")}</p>
         </div>
       ) : (
         <div className="row-list">
@@ -88,18 +85,18 @@ export default function Trash() {
               <div className="grow">
                 <div>{item.title}</div>
                 <div className="muted">
-                  {item.kind} - deleted {new Date(item.deletedAt).toLocaleString()}
+                  {t("trash.deleted", { kind: t(`trash.kinds.${item.kind}`), date: new Date(item.deletedAt).toLocaleString() })}
                 </div>
               </div>
               <button type="button" className="btn" onClick={() => void store.restore(item.kind, item.id)}>
-                Restore
+                {t("trash.restore")}
               </button>
               <button
                 type="button"
                 className="btn btn-danger"
                 onClick={() => void store.purge(item.kind, item.id)}
               >
-                Delete permanently
+                {t("trash.deletePermanently")}
               </button>
             </div>
           ))}
@@ -108,12 +105,12 @@ export default function Trash() {
 
       {confirming && (
         <ConfirmDialog
-          title="Empty trash?"
-          confirmLabel="Delete permanently"
+          title={t("trash.confirmTitle")}
+          confirmLabel={t("trash.deletePermanently")}
           onConfirm={() => void emptyTrash()}
           onCancel={() => setConfirming(false)}
         >
-          This will permanently delete all items in the trash. This action cannot be undone.
+          {t("trash.confirmBody")}
         </ConfirmDialog>
       )}
     </div>

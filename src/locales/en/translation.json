@@ -289,7 +289,9 @@
     "sectionName": "Section {{n}}",
     "dismiss": "Dismiss",
     "delete": "Delete",
-    "untitledBook": "Untitled book"
+    "untitledBook": "Untitled book",
+    "loading": "Loading…",
+    "firstSection": "Notes"
   },
   "errors": {
     "generic": "Something went wrong.",
@@ -547,7 +549,11 @@
     "keepRight": "Keep right only"
   },
   "editor": {
-    "zoomReset": "Zoom {{percent}}%, reset"
+    "zoomReset": "Zoom {{percent}}%, reset",
+    "pageFull": "This page is full ({{max}} items) — start a new page.",
+    "tableLimit": "Table is at its size limit ({{max}} cells)",
+    "insertImageFailed": "Could not insert that image.",
+    "imagesFilter": "Images"
   },
   "whatsNew": {
     "title": "What's new",
@@ -599,7 +605,19 @@
     "unshelved": "Unshelved",
     "renameShelf": "Rename shelf",
     "deleteShelf": "Delete shelf",
-    "emptyShelf": "No books on this shelf"
+    "emptyShelf": "No books on this shelf",
+    "imported": "Imported book: {{pages}} pages, {{elements}} elements.",
+    "importedSkipped": "Imported book: {{pages}} pages, {{elements}} elements, {{skipped}} skipped (over limits).",
+    "importFailed": "Import failed: {{message}}",
+    "search": "Search books",
+    "importBook": "Import book…",
+    "sort": "Sort books",
+    "az": "A-Z",
+    "emptyHint": "Create your first book to start organizing your notes, equations, and ideas",
+    "noneFound": "No books found",
+    "clearSearch": "Clear search",
+    "newShelf": "New shelf",
+    "newShelfName": "New shelf name"
   },
   "export": {
     "failed": "Export failed: {{message}}",
@@ -619,7 +637,8 @@
     "searchable": "Searchable text",
     "latexHint": "Saves a .tex file; pictures become image placeholders.",
     "mateHint": "Exports the whole book this page belongs to.",
-    "shareHint": "To send this book to someone, use Share… from the book menu."
+    "shareHint": "To send this book to someone, use Share… from the book menu.",
+    "boxRender": "Could not render the content of box {{id}} for export."
   },
   "selection": {
     "label": "Selection",
@@ -669,7 +688,9 @@
     "size": "Text size",
     "larger": "Larger text",
     "colour": "Text colour {{color}}",
-    "alignCentre": "Align centre"
+    "alignCentre": "Align centre",
+    "formatting": "Text formatting",
+    "box": "Text box"
   },
   "pageSettings": {
     "mode": "Mode",
@@ -805,7 +826,8 @@
       "noSolution": "No solution found",
       "empty": "Nothing to compute",
       "engine": "The maths engine could not be loaded",
-      "failed": "Could not compute this"
+      "failed": "Could not compute this",
+      "engineGraph": "The math engine could not be loaded"
     },
     "check": {
       "agree": "Both sides agree",
@@ -819,7 +841,8 @@
         "engine": "the maths engine could not be loaded",
         "failed": "the check failed"
       }
-    }
+    },
+    "equation": "Equation"
   },
   "tutor": {
     "title": "Tutor",
@@ -915,5 +938,133 @@
     "needsCloud": "Needs: an API key from the service",
     "cost": "Cost: {{cost}}",
     "getKey": "Get a key"
+  },
+  "home": {
+    "firstNotebook": "My Notebook",
+    "recovery": "Mate restarted while this page was open",
+    "notNow": "Not now",
+    "openPage": "Open page",
+    "newBook": "New book",
+    "importPdf": "Import PDF…",
+    "noRecentPages": "Pages you edit will show up here.",
+    "recentBooks": "Recent books",
+    "noBooks": "No books yet",
+    "favourites": "Favourite pages",
+    "noFavourites": "Favourite a page to pin it here."
+  },
+  "trash": {
+    "search": "Search trash",
+    "empty": "Empty trash",
+    "isEmpty": "Trash is empty",
+    "emptyHint": "Deleted pages, chapters, and notebooks will appear here for recovery.",
+    "deleted": "{{kind}} - deleted {{date}}",
+    "kinds": {
+      "bookshelf": "bookshelf",
+      "unit": "unit",
+      "section": "section",
+      "page": "page"
+    },
+    "restore": "Restore",
+    "deletePermanently": "Delete permanently",
+    "confirmTitle": "Empty trash?",
+    "confirmBody": "This will permanently delete all items in the trash. This action cannot be undone."
+  },
+  "graph": {
+    "cutoff": "Similarity cutoff",
+    "empty": "Nothing to connect yet. Pages appear here once the tutor has read your handwriting, and similar pages are linked.",
+    "noEdges": "No pages are this similar. Lower the similarity cutoff to see weaker links.",
+    "label": "Page graph, {{pages}} and {{links}}",
+    "pages_one": "{{count}} page",
+    "pages_other": "{{count}} pages",
+    "links_one": "{{count}} link",
+    "links_other": "{{count}} links",
+    "errors": {
+      "tooExpensive": "Expression too expensive to plot",
+      "evalBlocked": "Plotting is blocked by the app's security policy",
+      "missing": "Something is missing",
+      "missingClose": "Missing closing bracket",
+      "missingOpen": "Missing opening bracket",
+      "unexpectedClose": "Unexpected closing bracket",
+      "incompatible": "Incompatible types",
+      "unknownCommand": "Unknown command",
+      "unexpectedSymbol": "Unexpected symbol",
+      "notPlottable": "This expression cannot be plotted",
+      "implicit": "Implicit equations are not supported",
+      "writeForm": "Write y = …, x = … or r = …",
+      "parametricParts": "A parametric curve needs two parts: (x(t), y(t))",
+      "parametricT": "Write x = …, y = … in terms of t",
+      "singleEquals": "Use a single equals sign",
+      "parametricForm": "Write a parametric curve as (x(t), y(t))",
+      "empty": "Empty expression",
+      "invalid": "Invalid expression",
+      "unreadable": "Could not read this expression"
+    },
+    "editor": {
+      "settings": "Graph settings",
+      "colourOf": "Colour of expression {{n}}",
+      "expression": "Expression {{n}}",
+      "hide": "Hide expression {{n}}",
+      "show": "Show expression {{n}}",
+      "delete": "Delete expression {{n}}",
+      "slow": "Too slow to plot fully",
+      "add": "Add expression",
+      "addShort": "+ Add",
+      "xMin": "x min",
+      "xMax": "x max",
+      "yMin": "y min",
+      "yMax": "y max",
+      "grid": "Grid",
+      "plot": "Graph plot"
+    }
+  },
+  "welcome": {
+    "steps": {
+      "welcome": "Welcome",
+      "ai": "AI setup",
+      "playground": "Playground"
+    },
+    "stepLabel": "Welcome, step {{step}} of {{total}}",
+    "playgroundFailed": "Could not create the Playground page. You can try again from Settings > About.",
+    "saveFailed": "Could not save your settings, so the welcome may show again next time.",
+    "title": "Welcome to Mate",
+    "intro": "Mate is a notebook for handwriting, drawing and typing, with an optional tutor that checks your work.",
+    "local": "Your notes stay on this device.",
+    "aiTitle": "Set up AI (optional)",
+    "aiIntro": "The tutor and practice questions use an AI provider with your own API key. You can do this later in Settings.",
+    "tryTitle": "Try it out",
+    "tryIntro": "Open a Playground page with a few tools to try. Nothing here is precious, so scribble freely.",
+    "skip": "Skip",
+    "skipForNow": "Skip for now",
+    "next": "Next",
+    "openPlayground": "Open the Playground",
+    "playground": "Playground",
+    "playgroundHint": "Try the pen (P), highlighter (H), eraser (E)… Press ? for shortcuts.",
+    "playgroundCreateFailed": "Could not create the Playground page."
+  },
+  "lifecycle": {
+    "safeClose": "Could not close safely — Your notes are not fully saved. Keep Mate open and try again.",
+    "safeCloseRecovery": "Could not close safely — Your notes are not fully saved. Keep Mate open and try again. Saved a recovery file: {{path}}",
+    "closeAnyway": "Close anyway",
+    "stillSaving": "Mate is still saving — try closing again in a moment.",
+    "saveFailed": "Some strokes could not be saved — Mate will keep retrying."
+  },
+  "pdf": {
+    "tooManyPages": "This PDF has {{n}} pages; Mate imports up to {{max}}.",
+    "noPages": "This PDF has no pages.",
+    "imported": "Imported",
+    "tooLarge": "PDF is larger than 50 MiB.",
+    "importFailed": "Could not import that PDF."
+  },
+  "table": {
+    "label": "Table",
+    "addRow": "Add row",
+    "addColumn": "Add column",
+    "deleteRow": "Delete row",
+    "deleteColumn": "Delete column",
+    "cell": "Row {{row}}, column {{column}}"
+  },
+  "code": {
+    "label": "Code",
+    "language": "Language"
   }
 }

@@ -11,6 +11,8 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 import { isDarkTheme } from "../ink/theme";
 import { contentOf, type CodespaceContent } from "../model/content";
 import type { Element } from "../model/types";
@@ -38,6 +40,7 @@ function languageExtension(language: CodeLanguage): Extension {
 }
 
 export default function CodeEditor({ el, store }: BoxEditorProps) {
+  const { t } = useTranslation();
   const theme = useSettingsStore((s) => s.settings.theme);
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -79,7 +82,7 @@ export default function CodeEditor({ el, store }: BoxEditorProps) {
         EditorView.updateListener.of((u) => {
           if (u.docChanged) latest.current.code = u.state.doc.toString();
         }),
-        EditorView.contentAttributes.of({ "aria-label": "Code" }),
+        EditorView.contentAttributes.of({ "aria-label": i18n.t("code.label") }),
       ],
     });
     const view = new EditorView({ state, parent: host });
@@ -103,8 +106,8 @@ export default function CodeEditor({ el, store }: BoxEditorProps) {
 
   return (
     <div ref={rootRef} className="code-editor">
-      <div className="text-format-bar" role="toolbar" aria-label="Code">
-        <select className="tb-select" aria-label="Language" value={language} onChange={(e) => pick(e.target.value as CodeLanguage)}>
+      <div className="text-format-bar" role="toolbar" aria-label={t("code.label")}>
+        <select className="tb-select" aria-label={t("code.language")} value={language} onChange={(e) => pick(e.target.value as CodeLanguage)}>
           {CODE_LANGUAGES.map((l) => (
             <option key={l} value={l}>
               {LANGUAGE_LABELS[l]}
