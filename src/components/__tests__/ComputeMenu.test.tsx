@@ -97,6 +97,48 @@ describe("insertResultBelow", () => {
     expect(c.contentHtml).toBe("<p>x is 3 &amp; more</p>");
   });
 
+  const nearBottom = (src: Element): Element => {
+    s().updateElements([{ ...src, points: [{ ...src.points[0], x: 100, y: 1340 }] }]);
+    return s().elements.get(src.id)!;
+  };
+
+  it("keeps_the_result_on_the_sheet_in_paper_mode", async () => {
+    const first = await mathBox("2+3");
+    useEditorStore.setState({ page: { ...s().page!, mode: "page", pageWidth: 1080, pageHeight: 1440 } });
+    const src = nearBottom(first);
+    const id = insertResultBelow(useEditorStore, src, { latex: "=5" })!;
+    const out = s().elements.get(id)!;
+    const b = elementBounds(src);
+    expect(out.points[0].y).toBe(b.y);
+    expect(out.points[0].x).toBe(b.x + b.width + 12);
+    const ob = elementBounds(out);
+    expect(ob.y + ob.height).toBeLessThanOrEqual(1440);
+    expect(ob.x + ob.width).toBeLessThanOrEqual(1080);
+  });
+
+  it("puts_the_result_below_on_a_later_sheet_when_it_fits", async () => {
+    const first = await mathBox("2+3");
+    useEditorStore.setState({ page: { ...s().page!, mode: "page", pageWidth: 1080, pageHeight: 1440 } });
+    // Top of the second sheet (sheets are 1440 high with a 24 gap).
+    s().updateElements([{ ...first, points: [{ ...first.points[0], x: 100, y: 1500 }] }]);
+    const src = s().elements.get(first.id)!;
+    const id = insertResultBelow(useEditorStore, src, { latex: "=5" })!;
+    const out = s().elements.get(id)!;
+    const b = elementBounds(src);
+    expect(out.points[0].y).toBe(b.y + b.height + 12);
+  });
+
+  it("puts_the_result_below_on_the_infinite_canvas", async () => {
+    const first = await mathBox("2+3");
+    useEditorStore.setState({ page: { ...s().page!, mode: "canvas" } });
+    const src = nearBottom(first);
+    const id = insertResultBelow(useEditorStore, src, { latex: "=5" })!;
+    const out = s().elements.get(id)!;
+    const b = elementBounds(src);
+    expect(out.points[0].y).toBe(b.y + b.height + 12);
+    expect(out.points[0].x).toBe(src.points[0].x);
+  });
+
   it("refuses_when_the_page_changed", async () => {
     const src = await mathBox("x");
     expect(insertResultBelow(useEditorStore, { ...src, pageId: "other" }, { latex: "1" })).toBeNull();

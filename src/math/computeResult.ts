@@ -7,7 +7,8 @@ import { looksLikeEquation, type Op } from "./cas";
 import { MATH_HEIGHT_FACTOR, mathContent, mathElement } from "./mathBox";
 import type { TextBoxContent } from "../model/content";
 import type { Element } from "../model/types";
-import type { EditorStore } from "../stores/editor";
+import { PAGE_GAP } from "../model/constants";
+import { sheetStack, type EditorStore } from "../stores/editor";
 import { textAttrsOf, textBoxElement } from "../text/textBox";
 import { sanitizeHtml } from "../text/sanitize";
 import { elementBounds, withMeta } from "../tools/spatialIndex";
@@ -34,9 +35,30 @@ export function resultLatex(sourceLatex: string, op: Op, result: string): string
 }
 
 /**
+ * Paper mode: keep `el` on the sheet its source starts on. When it would cross the sheet's bottom
+ * edge it goes to the right of the source at the source's top instead (pulled left to fit the
+ * sheet's width). The infinite canvas is left alone.
+ */
+function keepOnSheet(s: ReturnType<EditorStore["getState"]>, src: Element, el: Element): Element {
+  if (s.page?.mode !== "page") return el;
+  const sheet = sheetStack(s);
+  const b = elementBounds(src);
+  const pitch = sheet.height + PAGE_GAP;
+  const index = Math.max(0, Math.floor(b.y / pitch));
+  const sheetBottom = index * pitch + sheet.height;
+  const height = el.boxHeight ?? 0;
+  if (el.points[0].y + height <= sheetBottom) return el;
+  const width = el.boxWidth ?? 0;
+  const x = Math.max(0, Math.min(b.x + b.width + RESULT_GAP, sheet.width - width));
+  const y = Math.max(index * pitch, Math.min(b.y, sheetBottom - height));
+  return { ...el, points: [{ ...el.points[0], x, y }, ...el.points.slice(1)] };
+}
+
+/**
  * Insert a math box (`latex`) or a text box (`text`) under `source`: same x, top at the source's
- * bottom + RESULT_GAP, the source's font attributes; one undo step, then selected. Its id, or null
- * when the store no longer shows the source's page (or the page is full).
+ * bottom + RESULT_GAP, the source's font attributes; one undo step, then selected. In paper mode a
+ * result that would cross the sheet's bottom goes to the right of the source instead. Its id, or
+ * null when the store no longer shows the source's page (or the page is full).
  */
 export function insertResultBelow(store: EditorStore, source: Element, result: { latex: string } | { text: string }): string | null {
   const s = store.getState();
@@ -61,6 +83,7 @@ export function insertResultBelow(store: EditorStore, source: Element, result: {
     const content: TextBoxContent = { contentHtml: sanitizeHtml(`<p>${esc(result.text)}</p>`), rawContent: result.text, textAttributes: attrs };
     el = { ...base, boxWidth: src.boxWidth ?? base.boxWidth, content };
   }
+  el = keepOnSheet(s, src, el);
   const top = topZ(s.elements.values());
   if (top > 0) el = withMeta(el, { zIndex: top + 1 });
   if (!s.addElements("Compute", [el])) return null;
