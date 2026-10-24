@@ -35,6 +35,7 @@ export const NAV_GROUPS: NavGroup[] = [
     sections: [
       { id: "tutor", title: "Tutor & recognition" },
       { id: "tutor-interactions", title: "Tutor interactions" },
+      { id: "math-engines", title: "Maths engines" },
     ],
   },
   {

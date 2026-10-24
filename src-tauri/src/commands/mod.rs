@@ -6,6 +6,7 @@ pub mod elements;
 pub mod export;
 pub mod haptics;
 pub mod lifecycle;
+pub mod math;
 pub mod import;
 pub mod notebook;
 pub mod open_files;

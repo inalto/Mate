@@ -125,6 +125,8 @@ pub struct Settings {
     pub ai_model: String,
     /// Overrides the provider's address (local and custom providers only). Empty = the default.
     pub ai_base_url: String,
+    /// Wolfram|Alpha may be asked (the typed maths is sent to it). Off until the user turns it on.
+    pub wolfram_consent: bool,
     pub trash_retention_days: u32,
     pub default_export_format: String,
     // Mate additions
@@ -204,6 +206,7 @@ impl Default for Settings {
             ai_provider: s("anthropic"),
             ai_model: String::new(),
             ai_base_url: String::new(),
+            wolfram_consent: false,
             trash_retention_days: 30,
             default_export_format: s("pdf"),
             recent_colors: Vec::new(),

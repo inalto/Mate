@@ -11,7 +11,8 @@ import { hasFill } from "../shapes/geometry";
 import { isMathBox, latexOf } from "../math/mathBox";
 import { textAttrsOf } from "../text/textBox";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
-import ComputeMenu from "./ComputeMenu";
+import { useWolframItem } from "../math/useWolframItem";
+import ComputeMenu, { type ComputeMenuProps } from "./ComputeMenu";
 import TextFormatControls from "./TextFormatControls";
 import { useDismiss } from "./useDismiss";
 
@@ -28,6 +29,11 @@ const BAR_GAP = 12;
 const BAR_HEIGHT = 44;
 /** Keep clear of the top toolbar. */
 const TOP_RESERVED = 64;
+
+/** The Compute menu with its remote-engine entries (read only when a math box is selected). */
+function MathCompute(props: Omit<ComputeMenuProps, "extraItems">) {
+  return <ComputeMenu {...props} extraItems={useWolframItem()} />;
+}
 
 function ArrangeMenu() {
   const ed = useFocusedEditor();
@@ -200,7 +206,7 @@ export default function SelectionBar() {
           <ChartLine size={16} /> Graph
         </button>
       )}
-      {math && math.length === 1 && <ComputeMenu store={ed} source={math[0]} />}
+      {math && math.length === 1 && <MathCompute store={ed} source={math[0]} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} />}
       <span className="tb-sep" />
       {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}

@@ -354,6 +354,8 @@ export interface Settings {
   aiModel: string;
   /** Empty means the provider's default address; only used by local and custom providers. */
   aiBaseUrl: string;
+  /** Wolfram|Alpha may be sent typed maths when the user asks. */
+  wolframConsent: boolean;
   trashRetentionDays: number;
   defaultExportFormat: string;
   recentColors: string[];

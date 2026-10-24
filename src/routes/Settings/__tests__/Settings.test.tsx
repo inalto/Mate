@@ -12,6 +12,7 @@ vi.mock("../../../ipc/ai", () => ({
   listAiProviders: vi.fn(async () => [{ id: "anthropic", label: "Anthropic", group: "cloud", needsKey: true, editableBaseUrl: false, defaultBaseUrl: "", defaultModel: "claude-opus-5-5", vision: "yes", canListModels: false, keyUrl: "", cost: "Paid", privacy: "" }]),
   listAiModels: vi.fn(async () => []),
 }));
+vi.mock("../../../ipc/math", () => ({ wolframStatus: vi.fn(async () => ({ configured: false, consent: false })) }));
 vi.mock("../../../ipc/backup", () => ({
   exportBackup: vi.fn(async () => "C:/tmp/mate-backup-2026-10-23.zip"),
   resetLocalData: vi.fn(async () => {}),
@@ -250,6 +251,7 @@ describe("navigation and landmarks", () => {
       "Gestures & touch",
       "Tutor & recognition",
       "Tutor interactions",
+      "Maths engines",
       "Keyboard shortcuts",
       "Trash",
       "Backup",

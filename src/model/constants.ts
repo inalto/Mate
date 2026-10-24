@@ -81,6 +81,7 @@ export const DEFAULT_SETTINGS: Settings = {
   aiProvider: "anthropic",
   aiModel: "",
   aiBaseUrl: "",
+  wolframConsent: false,
   trashRetentionDays: 30,
   defaultExportFormat: "pdf",
   recentColors: [],
