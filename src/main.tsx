@@ -9,7 +9,9 @@ import "./i18n";
 import App from "./App.tsx";
 import { initRecovery, installCloseHandler } from "./lifecycle/close";
 import { watchSaveFailures } from "./lifecycle/saveStatus";
+import { loadPlatform } from "./platform";
 
+await loadPlatform();
 initRecovery();
 installCloseHandler();
 watchSaveFailures();
