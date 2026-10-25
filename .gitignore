@@ -13,3 +13,6 @@ src-tauri/gen/android/*.jks
 *.db-wal
 *.db-shm
 docs/
+
+# Kotlin compiler daemon state from Android builds
+src-tauri/gen/android/.kotlin/
