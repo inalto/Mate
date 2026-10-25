@@ -5,7 +5,7 @@
 //! bytes are read here in Rust through `tauri-plugin-fs` (`FsExt::fs().open` with
 //! `FilePath::Url`, which asks the plugin's Kotlin side for a file descriptor), so a large file
 //! never crosses the IPC bridge and the frontend needs no new handler. The bytes are stashed
-//! under `data_dir/incoming/` and the stashed path goes into the one router,
+//! as `data_dir/incoming/<uuid>/<name>` and the stashed path goes into the one router,
 //! [`super::open_files::file_opened`], exactly like a path opened on desktop.
 
 use std::path::{Path, PathBuf};
@@ -52,29 +52,58 @@ pub fn sanitize_name(name: &str) -> String {
     if out.is_empty() { "file".to_owned() } else { out }
 }
 
-/// Writes `bytes` to `dir/<uuid>-<sanitised name>` (creating `dir`) and returns that path.
-/// Refuses more than [`MAX_INCOMING_BYTES`].
+/// The error for a file over [`MAX_INCOMING_BYTES`].
+fn too_large() -> String {
+    format!("files over {} MiB are not opened", MAX_INCOMING_BYTES / (1024 * 1024))
+}
+
+/// Writes `bytes` to `dir/<uuid>/<sanitised name>` (creating the folders) and returns that path.
+/// The per-open folder keeps names unique while the file keeps the name the user sees in the
+/// import dialog and the book title. Refuses more than [`MAX_INCOMING_BYTES`].
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub fn stash_opened_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf, String> {
     if bytes.len() > MAX_INCOMING_BYTES {
-        return Err(format!("files over {} MiB are not opened", MAX_INCOMING_BYTES / (1024 * 1024)));
+        return Err(too_large());
     }
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let path = dir.join(format!("{}-{}", mate_core::model::new_id(), sanitize_name(name)));
+    let folder = dir.join(mate_core::model::new_id());
+    std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let path = folder.join(sanitize_name(name));
     std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
     Ok(path)
 }
 
-/// Deletes the files in `dir` last modified more than `older_than` ago; returns how many. A
-/// missing folder or a file that cannot be removed is ignored.
+/// When an entry of `incoming/` was last touched: a file's mtime; for a per-open folder the
+/// newest mtime of its entries, or the folder's own when it is empty.
+fn last_touched(path: &Path, meta: &std::fs::Metadata) -> Option<std::time::SystemTime> {
+    if !meta.is_dir() {
+        return meta.modified().ok();
+    }
+    let newest = std::fs::read_dir(path)
+        .ok()?
+        .flatten()
+        .filter_map(|e| e.metadata().ok()?.modified().ok())
+        .max();
+    newest.or_else(|| meta.modified().ok())
+}
+
+/// Deletes the per-open folders (and any stray files) in `dir` last touched more than
+/// `older_than` ago; returns how many entries went. A missing folder or an entry that cannot be
+/// removed is ignored.
 pub fn prune_incoming(dir: &Path, older_than: Duration) -> usize {
     let Ok(entries) = std::fs::read_dir(dir) else { return 0 };
     let now = std::time::SystemTime::now();
     let mut removed = 0;
     for entry in entries.flatten() {
+        let path = entry.path();
         let Ok(meta) = entry.metadata() else { continue };
-        let old = meta.modified().ok().and_then(|m| now.duration_since(m).ok()).is_some_and(|age| age > older_than);
-        if meta.is_file() && old && std::fs::remove_file(entry.path()).is_ok() {
+        let old = last_touched(&path, &meta)
+            .and_then(|m| now.duration_since(m).ok())
+            .is_some_and(|age| age > older_than);
+        if !old {
+            continue;
+        }
+        let gone = if meta.is_dir() { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+        if gone.is_ok() {
             removed += 1;
         }
     }
@@ -168,6 +197,9 @@ fn receive(app: &tauri::AppHandle, url: &tauri::Url) -> Result<PathBuf, String> 
     let file = app.fs().open(FilePath::Url(url.clone()), opts).map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
     file.take(MAX_INCOMING_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() > MAX_INCOMING_BYTES {
+        return Err(too_large()); // before any sniffing parses it
+    }
     let segment = url.path_segments().and_then(|mut s| s.rfind(|p| !p.is_empty())).unwrap_or("");
     let name = name_for(segment, &bytes).ok_or("not a file Mate opens")?;
     let dir = app.state::<crate::state::AppState>().data_dir.join(INCOMING_DIR);
@@ -215,15 +247,16 @@ mod tests {
     }
 
     #[test]
-    fn stash_writes_a_unique_file_in_dir() {
+    fn stash_writes_the_sanitised_name_in_a_folder_of_its_own() {
         let d = temp("stash");
         let dir = d.join(INCOMING_DIR); // created on demand
         let a = stash_opened_file(&dir, "../x.pdf", b"%PDF-1.4").unwrap();
         let b = stash_opened_file(&dir, "../x.pdf", b"%PDF-1.4").unwrap();
         assert_ne!(a, b);
         for p in [&a, &b] {
-            assert_eq!(p.parent().unwrap(), dir);
-            assert!(p.file_name().unwrap().to_string_lossy().ends_with("-_x.pdf"), "{}", p.display());
+            // incoming/<uuid>/<name>: the name the user sees carries no uuid.
+            assert_eq!(p.parent().unwrap().parent().unwrap(), dir);
+            assert_eq!(p.file_name().unwrap().to_string_lossy(), "_x.pdf");
             assert_eq!(fs::read(p).unwrap(), b"%PDF-1.4");
         }
         let _ = fs::remove_dir_all(&d);
@@ -239,16 +272,20 @@ mod tests {
     }
 
     #[test]
-    fn prune_removes_old_files_and_keeps_fresh_ones() {
+    fn prune_removes_old_folders_and_stray_files_and_keeps_fresh_ones() {
         let d = temp("prune");
-        let old = d.join("old.pdf");
-        let fresh = d.join("fresh.pdf");
-        fs::write(&old, b"x").unwrap();
-        fs::write(&fresh, b"x").unwrap();
         let two_days_ago = SystemTime::now() - Duration::from_secs(2 * 24 * 60 * 60);
-        fs::File::options().write(true).open(&old).unwrap().set_modified(two_days_ago).unwrap();
-        assert_eq!(prune_incoming(&d, KEEP_INCOMING), 1);
-        assert!(!old.exists() && fresh.exists());
+        let age = |p: &Path| fs::File::options().write(true).open(p).unwrap().set_modified(two_days_ago).unwrap();
+        let old = stash_opened_file(&d, "old.pdf", b"x").unwrap();
+        age(&old);
+        let fresh = stash_opened_file(&d, "fresh.pdf", b"x").unwrap();
+        let stray = d.join("stray.pdf");
+        fs::write(&stray, b"x").unwrap();
+        age(&stray);
+        fs::create_dir(d.join("empty")).unwrap(); // fresh folder mtime: kept
+        assert_eq!(prune_incoming(&d, KEEP_INCOMING), 2);
+        assert!(!old.parent().unwrap().exists() && !stray.exists());
+        assert!(fresh.exists() && d.join("empty").exists());
         assert_eq!(prune_incoming(&d.join("missing"), KEEP_INCOMING), 0);
         let _ = fs::remove_dir_all(&d);
     }
