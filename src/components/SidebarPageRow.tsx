@@ -4,6 +4,7 @@ import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { openPageWindow } from "../ipc/windows";
 import type { Page } from "../model/types";
+import { isMobile } from "../platform";
 import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
 import { useTabsStore } from "../stores/tabs";
@@ -58,7 +59,7 @@ function PageMenu({ page, at, onClose }: { page: Page; at: { x: number; y: numbe
           {item(t("sidebar.menu.demote"), () => nb.indentPage(page.id, 1), "Alt+→")}
           {item(t("sidebar.menu.duplicate"), () => nb.duplicatePage(page.id), "Ctrl+D")}
           {item(t("sidebar.menu.split"), split)}
-          {item(t("sidebar.menu.window"), openWindow)}
+          {!isMobile() && item(t("sidebar.menu.window"), openWindow)}
           {item(t("common.delete"), () => nb.trash("page", page.id))}
         </>
       ) : (

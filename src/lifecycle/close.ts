@@ -150,3 +150,15 @@ export function installCloseHandler(): void {
   window.addEventListener("beforeunload", bestEffort);
   window.addEventListener("pagehide", bestEffort);
 }
+
+/** Flush pending work when the page goes to the background (mobile may kill the process there). */
+export function installFlushOnHide(): () => void {
+  const onChange = () => {
+    if (document.visibilityState !== "hidden") return;
+    endAllEdits();
+    void elementsQueue.flushAll();
+    flushSettings().catch((err) => console.error("saving settings failed", err));
+  };
+  document.addEventListener("visibilitychange", onChange);
+  return () => document.removeEventListener("visibilitychange", onChange);
+}

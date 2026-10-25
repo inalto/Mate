@@ -1,5 +1,6 @@
 // Editor chrome state shared by the sidebar, top bar, dialogs and shortcuts.
 import { create } from "zustand";
+import { isMobile } from "../platform";
 
 export const SIDEBAR_MIN = 240;
 export const SIDEBAR_MAX = 560;
@@ -14,15 +15,19 @@ interface Persisted {
   sidebarWidth: number;
 }
 
+/** Tablet screens up to this width start with the sidebar closed, whatever was persisted. */
+const TABLET_NARROW_MAX = 1024;
+const startsClosed = (): boolean => isMobile() && window.innerWidth <= TABLET_NARROW_MAX;
+
 function load(): Persisted {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
     return {
-      sidebarOpen: raw?.sidebarOpen !== false,
+      sidebarOpen: !startsClosed() && raw?.sidebarOpen !== false,
       sidebarWidth: typeof raw?.sidebarWidth === "number" ? clampSidebarWidth(raw.sidebarWidth) : SIDEBAR_DEFAULT,
     };
   } catch {
-    return { sidebarOpen: true, sidebarWidth: SIDEBAR_DEFAULT };
+    return { sidebarOpen: !startsClosed(), sidebarWidth: SIDEBAR_DEFAULT };
   }
 }
 

@@ -6,6 +6,7 @@ import { installFlushOnly } from "./lifecycle/flushOnly";
 import { installCrossWindowSync } from "./lifecycle/crossWindow";
 import { StartupUpdateCheck } from "./components/UpdateSection";
 import { currentWindowLabel, isPageWindow } from "./ipc/windows";
+import { isMobile } from "./platform";
 import { installImportOpenHandler } from "./stores/importStore";
 import { installPdfOpenHandler } from "./pdf/openFile";
 import { markFileLaunch } from "./onboarding/fileLaunch";
@@ -36,7 +37,7 @@ export default function App() {
       <RouterProvider router={router} />
       <ToastHost />
       {!isPageWindow() && <LaunchChecks />}
-      {!isPageWindow() && <StartupUpdateCheck />}
+      {!isPageWindow() && !isMobile() && <StartupUpdateCheck />}
       {!isPageWindow() && <ResetNotice />}
     </>
   );
