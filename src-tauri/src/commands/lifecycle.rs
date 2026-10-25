@@ -128,6 +128,7 @@ fn eval_js(window: &Window, js: String) {
 
 /// Handles `CloseRequested`. Returns true if the close was prevented (the frontend flushes first);
 /// false if the window should close now.
+#[cfg(desktop)] // Mobile has no window close request.
 pub fn start_close_attempt(window: &Window) -> bool {
     start_attempt(window, false)
 }

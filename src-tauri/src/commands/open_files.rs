@@ -93,6 +93,7 @@ pub fn take_pending_import_files(pending: State<'_, PendingImportFiles>) -> Vec<
 
 /// What to do with the arguments of a (second) instance: emit the returned event, if any. Pure so
 /// it can be tested without a running app.
+#[cfg(desktop)] // A second instance exists on desktop only (single-instance plugin).
 pub fn route_args(
     pending: &PendingImportFiles,
     args: impl IntoIterator<Item = String>,
@@ -105,6 +106,7 @@ pub fn route_args(
 
 /// Route the arguments forwarded by a second instance: the first PDF as before, and all import
 /// files together.
+#[cfg(desktop)] // A second instance exists on desktop only (single-instance plugin).
 pub fn args_opened(app: &AppHandle, argv: Vec<String>, cwd: &Path) {
     if let Some(path) = pdf::pdf_from_args(argv.clone(), cwd)
         && Path::new(&path).is_file()
