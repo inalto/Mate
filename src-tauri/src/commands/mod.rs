@@ -8,6 +8,7 @@ pub mod haptics;
 pub mod lifecycle;
 pub mod math;
 pub mod import;
+pub mod incoming;
 pub mod notebook;
 pub mod open_files;
 pub mod pdf;

@@ -49,6 +49,9 @@ pub fn run() {
       WindowEvent::Destroyed => crate::windows::window_destroyed(window.app_handle(), window.label()),
       _ => {}
     });
+  // Mobile only: reads the `content://` URIs other apps hand to Mate, from Rust (commands/incoming.rs).
+  #[cfg(mobile)]
+  let builder = builder.plugin(tauri_plugin_fs::init());
   builder
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
@@ -73,6 +76,8 @@ pub fn run() {
       }
       // Old recovery files are not kept forever.
       commands::lifecycle::prune_recovery_files(&state.data_dir, commands::lifecycle::KEEP_RECOVERY_FILES);
+      // Files received from other apps (Android) are copies; drop the ones a day old.
+      commands::incoming::prune_incoming(&state.data_dir.join(commands::incoming::INCOMING_DIR), commands::incoming::KEEP_INCOMING);
       app.manage(state);
       app.manage(pdf::PendingOpenFile::new(pdf::pdf_from_args(
         std::env::args(),
@@ -170,12 +175,19 @@ pub fn run() {
     .expect("error while building tauri application")
     .run(|app, event| {
       // macOS delivers "Open with Mate" (and double-clicked .pdf files) as an event, not argv.
-      // Android delivers the intent's data URI the same way; only `file://` URIs map to a path
-      // here (`content://` URIs from other apps are skipped).
+      // Android delivers the intent's data URI the same way: a `file://` URI maps to a path, a
+      // `content://` URI from another app is copied into `incoming/` first (commands/incoming.rs).
       #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
       if let RunEvent::Opened { urls } = &event {
-        for path in urls.iter().filter_map(|u| u.to_file_path().ok()) {
-          open_files::file_opened(app, path.to_string_lossy().into_owned());
+        for url in urls {
+          #[cfg(target_os = "android")]
+          if url.scheme() == "content" {
+            commands::incoming::content_uri_opened(app, url.clone());
+            continue;
+          }
+          if let Ok(path) = url.to_file_path() {
+            open_files::file_opened(app, path.to_string_lossy().into_owned());
+          }
         }
       }
       // macOS: Cmd+Q, the app menu "Quit" and Dock "Quit" end the app without a window

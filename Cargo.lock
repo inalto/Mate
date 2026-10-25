@@ -2540,6 +2540,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-dialog",
+ "tauri-plugin-fs",
  "tauri-plugin-log",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
@@ -2548,6 +2549,7 @@ dependencies = [
  "time",
  "tokio",
  "windows",
+ "zip 2.6.1",
 ]
 
 [[package]]
