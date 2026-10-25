@@ -1617,8 +1617,15 @@ html.mobile .shell {
   padding-right: env(safe-area-inset-right);
 }
 
+/* Onboarding renders outside the shell: keep its own padding and add the insets. */
+html.mobile .welcome {
+  padding-top: calc(max(env(safe-area-inset-top), 24px) + var(--space-4));
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--space-4));
+}
+
 html.mobile .canvas-view,
 html.mobile .box-frame-edge,
+html.mobile .box-frame-handle,
 html.mobile .graph-plot {
   -webkit-touch-callout: none;
 }
