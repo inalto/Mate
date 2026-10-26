@@ -15,6 +15,7 @@ import {
   type SyncFolder,
 } from "../ipc/share";
 import type { Unit } from "../model/types";
+import { isMobile } from "../platform";
 import { navigateTo } from "../stores/navigation";
 import { AiIcon } from "./ai/AiField";
 import "./ai/ai.css";
@@ -39,8 +40,11 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /** Synced folders are a desktop idea; mobile only offers Nextcloud. */
+  const mobile = isMobile();
+
   useEffect(() => {
-    detectSyncFolders().then(setFolders, () => setFolders([]));
+    if (!isMobile()) detectSyncFolders().then(setFolders, () => setFolders([]));
     nextcloudStatus().then(setNc, () => setNc({ signedIn: false, server: "", user: "" }));
   }, []);
 
@@ -89,36 +93,38 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
       <div className="card dialog share-dialog" role="dialog" aria-modal="true" aria-label={t("share.title", { title: unit.title })}>
         <h2>{t("share.title", { title: unit.title })}</h2>
 
-        <section className="share-section" aria-label={t("share.folderTitle")}>
-          <h3 className="field-subtitle">{t("share.folderTitle")}</h3>
-          {folders === null && (
-            <p className="field-hint" role="status">
-              {t("share.lookingForFolders")}
-            </p>
-          )}
-          {folders?.length === 0 && <p className="field-hint">{t("share.noFolders")}</p>}
-          <div className="share-folders">
-            {folders?.map((f) => (
-              <button key={f.path} type="button" className="btn" disabled={busy} title={f.path} onClick={() => void saveTo(f.path)}>
-                <AiIcon icon={FolderOpen} />
-                {f.label}
+        {!mobile && (
+          <section className="share-section" aria-label={t("share.folderTitle")}>
+            <h3 className="field-subtitle">{t("share.folderTitle")}</h3>
+            {folders === null && (
+              <p className="field-hint" role="status">
+                {t("share.lookingForFolders")}
+              </p>
+            )}
+            {folders?.length === 0 && <p className="field-hint">{t("share.noFolders")}</p>}
+            <div className="share-folders">
+              {folders?.map((f) => (
+                <button key={f.path} type="button" className="btn" disabled={busy} title={f.path} onClick={() => void saveTo(f.path)}>
+                  <AiIcon icon={FolderOpen} />
+                  {f.label}
+                </button>
+              ))}
+              <button type="button" className="btn" disabled={busy} onClick={() => void chooseFolder()}>
+                <AiIcon icon={FolderPlus} />
+                {t("share.chooseFolder")}
               </button>
-            ))}
-            <button type="button" className="btn" disabled={busy} onClick={() => void chooseFolder()}>
-              <AiIcon icon={FolderPlus} />
-              {t("share.chooseFolder")}
-            </button>
-          </div>
-          {saved && (
-            <p className="field-hint" role="status">
-              {t("share.savedTo", { path: saved })}{" "}
-              <button type="button" className="btn" onClick={() => void revealItemInDir(saved)}>
-                <AiIcon icon={ArrowSquareOut} />
-                {t("share.showInFolder")}
-              </button>
-            </p>
-          )}
-        </section>
+            </div>
+            {saved && (
+              <p className="field-hint" role="status">
+                {t("share.savedTo", { path: saved })}{" "}
+                <button type="button" className="btn" onClick={() => void revealItemInDir(saved)}>
+                  <AiIcon icon={ArrowSquareOut} />
+                  {t("share.showInFolder")}
+                </button>
+              </p>
+            )}
+          </section>
+        )}
 
         <section className="share-section" aria-label={t("settings.sharing.nextcloud.label")}>
           <h3 className="field-subtitle">{t("settings.sharing.nextcloud.label")}</h3>

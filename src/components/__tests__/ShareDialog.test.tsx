@@ -18,6 +18,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { detectSyncFolders, nextcloudShare, nextcloudStatus, pickFolder, saveArchiveTo, type SyncFolder } from "../../ipc/share";
 import ShareDialog from "../ShareDialog";
+import { setPlatformForTests } from "../../platform";
 
 const unit = { id: "u1", title: "Algebra" } as Unit;
 const onClose = vi.fn();
@@ -29,9 +30,21 @@ beforeEach(() => {
   vi.mocked(detectSyncFolders).mockResolvedValue([{ service: "dropbox", label: "Dropbox", path: "C:/Dropbox" }]);
   vi.mocked(nextcloudStatus).mockResolvedValue(signedOut);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setPlatformForTests(false);
+});
 
 describe("ShareDialog", () => {
+  it("offers only Nextcloud on mobile", async () => {
+    setPlatformForTests(true);
+    render(<ShareDialog unit={unit} onClose={onClose} />);
+    expect(await screen.findByRole("button", { name: "Set up in Settings" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Choose another folder…" })).toBeNull();
+    expect(screen.queryByText("Looking for synced folders…")).toBeNull();
+    expect(detectSyncFolders).not.toHaveBeenCalled();
+  });
+
   it("saves a copy to a detected folder and can reveal it", async () => {
     vi.mocked(saveArchiveTo).mockResolvedValue("C:/Dropbox/Mate/Algebra.mate");
     render(<ShareDialog unit={unit} onClose={onClose} />);
