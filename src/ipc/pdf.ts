@@ -4,8 +4,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { AssetInfo } from "./assets";
 
+/** A stored PDF; `title` is the file stem Rust saw (set when `path` was a content:// URI). */
+export type SharedPdf = AssetInfo & { title?: string | null };
+
 /** Store the PDF at `path` in the asset store. Rejects with "PDF is larger than 50 MiB." when too big. */
-export const readSharedPdf = (path: string): Promise<AssetInfo> => invoke<AssetInfo>("read_shared_pdf", { path });
+export const readSharedPdf = (path: string): Promise<SharedPdf> => invoke<SharedPdf>("read_shared_pdf", { path });
 
 /** The PDF the app was opened with (once), else null. */
 export const takePendingOpenFile = (): Promise<string | null> => invoke<string | null>("take_pending_open_file");

@@ -4,6 +4,7 @@
 // cMaps, standard fonts and wasm decoders are fetched from the app's own origin (CSP connect-src
 // 'self'; the wasm needs script-src 'wasm-unsafe-eval'). Tests inject a stub loader (jsdom cannot run pdf.js).
 import { readAsset } from "../ipc/assets";
+import { isMobile } from "../platform";
 
 /** A rendered PDF page. */
 export type PdfBitmap = HTMLCanvasElement;
@@ -27,14 +28,34 @@ export const PDF_SOURCE_CACHE = 4;
 type PdfJs = typeof import("pdfjs-dist");
 let pdfjs: Promise<PdfJs> | null = null;
 
+// Mobile WebViews (Android System WebView) can lag Chrome by years and miss built-ins the modern
+// build uses (e.g. Map.getOrInsertComputed), so mobile loads pdf.js's legacy build. Each worker
+// script is a Vite-emitted asset URL; the one Worker is created below.
+async function importPdfJs(): Promise<{ lib: PdfJs; workerUrl: string }> {
+  if (isMobile()) {
+    const [lib, worker] = await Promise.all([
+      import("pdfjs-dist/legacy/build/pdf.mjs"),
+      import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"),
+    ]);
+    return { lib: lib as unknown as PdfJs, workerUrl: worker.default };
+  }
+  const [lib, worker] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.mjs?url")]);
+  return { lib, workerUrl: worker.default };
+}
+
 function loadPdfJs(): Promise<PdfJs> {
-  pdfjs ??= import("pdfjs-dist").then((m) => {
-    // A module worker bundled by Vite (served from 'self'; CSP worker-src allows it).
-    m.GlobalWorkerOptions.workerPort = new Worker(new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url), { type: "module" });
-    return m;
+  pdfjs ??= importPdfJs().then(({ lib, workerUrl }) => {
+    // A module worker served from 'self' (CSP worker-src allows it).
+    lib.GlobalWorkerOptions.workerPort = new Worker(workerUrl, { type: "module" });
+    return lib;
   });
   pdfjs.catch(() => (pdfjs = null));
   return pdfjs;
+}
+
+/** Forget the loaded pdf.js (tests, after switching platform). */
+export function resetPdfJsForTests(): void {
+  pdfjs = null;
 }
 
 /**

@@ -129,8 +129,11 @@ const messageOf = (err: unknown): string => {
 export async function importPdfFromPath(path: string, sectionId?: string): Promise<Page | null> {
   let stored: string | null = null;
   try {
-    stored = (await readSharedPdf(path)).id;
-    return await importPdfAsPage(stored, sectionId ?? (await defaultImportSection()), titleFromPath(path));
+    const shared = await readSharedPdf(path);
+    stored = shared.id;
+    // A content:// URI has no usable file name; Rust names the file it materialised from it.
+    const title = path.startsWith("content://") && shared.title?.trim() ? shared.title.trim() : titleFromPath(path);
+    return await importPdfAsPage(stored, sectionId ?? (await defaultImportSection()), title);
   } catch (err) {
     // A refused PDF must not linger in the asset store (nothing references it).
     if (stored) void deleteAsset(stored).catch(() => {});
