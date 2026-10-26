@@ -14,6 +14,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 use super::export::{export_filename, save_and_share, write_atomically};
+use super::incoming::materialize;
 use crate::state::AppState;
 
 /// Exports a unit (book) and the assets its elements reference to a `.mate` file chosen in a
@@ -50,13 +51,22 @@ pub async fn import_unit_archive(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Option<ImportReport>, String> {
+    let data_dir = state.data_dir.clone();
     let picked = tauri::async_runtime::spawn_blocking(move || {
-        app.dialog()
+        let Some(picked) = app
+            .dialog()
             .file()
             .add_filter("Mate archive", &["mate"])
             .blocking_pick_file()
-            .map(|p| p.into_path().map_err(|e| e.to_string()))
-            .transpose()
+        else {
+            return Ok(None);
+        };
+        // Android hands back a `content://` URI; it is copied into `incoming/` first.
+        let picked = match picked {
+            tauri_plugin_dialog::FilePath::Url(url) => url.as_str().to_string(),
+            tauri_plugin_dialog::FilePath::Path(path) => path.to_string_lossy().into_owned(),
+        };
+        materialize(&app, &data_dir, &picked).map(Some)
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -121,23 +131,38 @@ pub struct ResetOutcome {
 /// its real database) only come from before the storage swap. After the swap the app is running
 /// on an empty in-memory database, so a failed wipe is reported in the outcome and in a marker
 /// file instead of as an error: the caller must restart either way.
+#[cfg_attr(mobile, allow(dead_code))]
 pub fn run_reset(
     data_dir: &Path,
     storage: &Mutex<Storage>,
     settings: &Mutex<Settings>,
     wipe: &dyn Fn(&Path) -> io::Result<()>,
 ) -> Result<ResetOutcome, String> {
-    run_reset_with(data_dir, storage, settings, wipe, &|| {})
+    run_reset_with(data_dir, storage, settings, wipe, &|| {}, &|_| {})
+}
+
+/// [`run_reset`] with a hook that runs before the wipe, once the recovery zip is written and the
+/// storage has been swapped out (mobile hands the zip to the share sheet there).
+#[cfg_attr(desktop, allow(dead_code))]
+pub fn run_reset_sharing(
+    data_dir: &Path,
+    storage: &Mutex<Storage>,
+    settings: &Mutex<Settings>,
+    wipe: &dyn Fn(&Path) -> io::Result<()>,
+    before_wipe: &dyn Fn(&Path),
+) -> Result<ResetOutcome, String> {
+    run_reset_with(data_dir, storage, settings, wipe, &|| {}, before_wipe)
 }
 
 /// [`run_reset`] with a hook that runs while the zip is being built (tests use it to probe the
-/// storage lock).
+/// storage lock) and one that gets the recovery path just before the wipe.
 fn run_reset_with(
     data_dir: &Path,
     storage: &Mutex<Storage>,
     settings: &Mutex<Settings>,
     wipe: &dyn Fn(&Path) -> io::Result<()>,
     during_zip: &dyn Fn(),
+    before_wipe: &dyn Fn(&Path),
 ) -> Result<ResetOutcome, String> {
     // The storage lock is held from the snapshot through the swap, so no write can land after the
     // snapshot and then be deleted without being in the recovery zip.
@@ -153,6 +178,9 @@ fn run_reset_with(
     drop(guard);
     // Past the point of no return: a panic here must not skip the restart, so it is treated like
     // a failed wipe.
+    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| before_wipe(&recovery))).is_err() {
+        log::warn!("reset: the pre-wipe hook panicked");
+    }
     let wipe_error = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         wipe(data_dir).err().map(|e| e.to_string())
     }))
@@ -177,6 +205,7 @@ fn run_reset_with(
 /// fails nothing is deleted. Once data may have been touched the app always restarts; a failed
 /// wipe leaves `reset-incomplete.json` for the next launch. `confirm` must be `"RESET"`.
 /// Returns only on error.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn reset_local_data(app: AppHandle, confirm: String) -> Result<(), String> {
     if confirm != "RESET" {
@@ -195,6 +224,54 @@ pub async fn reset_local_data(app: AppHandle, confirm: String) -> Result<(), Str
         outcome.recovery.display()
     );
     app.restart()
+}
+
+/// Mobile reset: the app-private data directory is out of the user's reach, so before the wipe
+/// a copy of the recovery zip is staged in `exports/` and handed to the share sheet (the plugin
+/// copies it to the cache, so wiping `exports/` afterwards does not break the share). Android
+/// cannot restart an app, so it exits and the user reopens it into the first-run flow. The
+/// original recovery zip stays next to the database, as on desktop. Returns only on error.
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn reset_local_data(app: AppHandle, confirm: String) -> Result<(), String> {
+    if confirm != "RESET" {
+        return Err("reset was not confirmed".into());
+    }
+    let handle = app.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        let data_dir = state.data_dir.clone();
+        let share = |recovery: &Path| {
+            let Some(name) = recovery.file_name() else {
+                return;
+            };
+            let exports = data_dir.join(super::export::EXPORTS_DIR);
+            let shared = exports.join(name);
+            let staged = fs::create_dir_all(&exports).and_then(|()| fs::copy(recovery, &shared));
+            if let Err(e) = staged {
+                log::warn!("reset: could not stage the recovery zip for sharing: {e}");
+                return;
+            }
+            let result = tauri::async_runtime::block_on(super::export::share_file(
+                &handle,
+                &shared,
+                "application/zip",
+            ));
+            if let Err(e) = result {
+                log::warn!("reset: could not share the recovery zip: {e}");
+            }
+        };
+        run_reset_sharing(&data_dir, &state.storage, &state.settings, &wipe_local_data, &share)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    log::info!(
+        "local data reset (wipe error: {:?}); recovery backup at {}",
+        outcome.wipe_error,
+        outcome.recovery.display()
+    );
+    app.exit(0);
+    Ok(())
 }
 
 /// Returns (and clears) the marker left by a reset that could not delete everything.
@@ -295,7 +372,7 @@ mod tests {
                 "storage must stay locked while the zip is built"
             );
         };
-        run_reset_with(&dir, &st, &se, &wipe_local_data, &probe).unwrap();
+        run_reset_with(&dir, &st, &se, &wipe_local_data, &probe, &|_| {}).unwrap();
     }
 
     #[test]
@@ -307,5 +384,23 @@ mod tests {
         assert_eq!(out.wipe_error.as_deref(), Some("deleting local data panicked"));
         assert!(dir.join(RESET_MARKER).exists());
         assert_eq!(se.lock().unwrap().theme, "light");
+    }
+
+    #[test]
+    fn the_pre_wipe_hook_sees_the_recovery_zip_before_anything_is_deleted() {
+        let dir = tmp("hook");
+        let (st, se) = fixture(&dir);
+        fs::create_dir_all(dir.join("exports")).unwrap();
+        fs::create_dir_all(dir.join("incoming")).unwrap();
+        let seen = Mutex::new(None);
+        let hook = |recovery: &Path| {
+            *seen.lock().unwrap() = Some((recovery.exists(), dir.join("mate.db").exists()));
+        };
+        let out = run_reset_sharing(&dir, &st, &se, &wipe_local_data, &hook).unwrap();
+        assert_eq!(*seen.lock().unwrap(), Some((true, true)));
+        assert!(out.recovery.exists());
+        assert!(!dir.join("mate.db").exists());
+        assert!(!dir.join("exports").exists());
+        assert!(!dir.join("incoming").exists());
     }
 }

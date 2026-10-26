@@ -252,7 +252,8 @@
         "hint": "Apaga tudo neste dispositivo e recomeça pela tela de boas-vindas",
         "confirmTitle": "Redefinir dados locais?",
         "confirm": "Redefinir",
-        "confirmBody": "Isto apaga todos os cadernos, páginas e configurações deste dispositivo. Antes, um backup em zip é gerado. As chaves de API guardadas no chaveiro do sistema são mantidas."
+        "confirmBody": "Isto apaga todos os cadernos, páginas e configurações deste dispositivo. Antes, um backup em zip é gerado. As chaves de API guardadas no chaveiro do sistema são mantidas.",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {

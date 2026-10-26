@@ -33,7 +33,7 @@ export default function BackupSection() {
     setBusy(true);
     setError(null);
     try {
-      await resetLocalData(); // the app restarts on success
+      await resetLocalData(); // desktop restarts; mobile shares the backup, then closes
     } catch (err) {
       setError(message(err));
       setBusy(false);
@@ -73,6 +73,7 @@ export default function BackupSection() {
           onCancel={() => setConfirming(false)}
         >
           {t("settings.backup.reset.confirmBody")}
+          {isMobile() && ` ${t("settings.backup.reset.mobileNote")}`}
         </ConfirmDialog>
       )}
     </SettingsSection>

@@ -249,7 +249,8 @@
         "hint": "Deletes everything on this device and starts again from the welcome flow",
         "confirmTitle": "Reset local data?",
         "confirm": "Reset",
-        "confirmBody": "This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept."
+        "confirmBody": "This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain, or the app's private key file on Android, are kept.",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {

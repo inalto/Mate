@@ -244,9 +244,9 @@ pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<Vec<u8>> {
     zip_backup(&backup_entries(storage, assets_dir)?)
 }
 
-/// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store and
-/// `settings.json` under `data_dir`. Missing files are fine. The caller must have closed or
-/// replaced any open connection to the database first.
+/// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store,
+/// `incoming/`, `exports/` and `settings.json` under `data_dir`. Missing files are fine. The
+/// caller must have closed or replaced any open connection to the database first.
 pub fn wipe_local_data(data_dir: &Path) -> std::io::Result<()> {
     use std::fs;
     use std::io::ErrorKind::NotFound;
@@ -256,10 +256,15 @@ pub fn wipe_local_data(data_dir: &Path) -> std::io::Result<()> {
             _ => {}
         }
     }
-    match fs::remove_dir_all(data_dir.join("assets")) {
-        Err(e) if e.kind() != NotFound => Err(e),
-        _ => Ok(()),
+    // `incoming/` holds files opened from other apps and `exports/` files waiting to be shared
+    // (both mobile; absent on desktop).
+    for dir in ["assets", "incoming", "exports"] {
+        match fs::remove_dir_all(data_dir.join(dir)) {
+            Err(e) if e.kind() != NotFound => return Err(e),
+            _ => {}
+        }
     }
+    Ok(())
 }
 
 /// Reads one entry, enforcing [`MAX_ENTRY_BYTES`]; `None` if the entry does not exist.

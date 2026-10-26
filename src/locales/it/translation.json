@@ -249,7 +249,8 @@
         "hint": "Elimina tutto su questo dispositivo e riparte dalla schermata di benvenuto",
         "confirmTitle": "Reimpostare i dati locali?",
         "confirm": "Reimposta",
-        "confirmBody": "Questo elimina tutti i quaderni, le pagine e le impostazioni su questo dispositivo. Prima viene creato uno zip di backup. Le chiavi API nel portachiavi di sistema vengono conservate."
+        "confirmBody": "Questo elimina tutti i quaderni, le pagine e le impostazioni su questo dispositivo. Prima viene creato uno zip di backup. Le chiavi API nel portachiavi di sistema, o nel file privato delle chiavi dell'app su Android, vengono conservate.",
+        "mobileNote": "Su Android lo zip di backup si apre nel menu di condivisione per conservarlo, poi Mate si chiude. Riaprilo per ricominciare."
       }
     },
     "sharing": {

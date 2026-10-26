@@ -251,7 +251,8 @@
         "hint": "删除此设备上的所有内容，并从欢迎流程重新开始",
         "confirmTitle": "重置本地数据？",
         "confirm": "重置",
-        "confirmBody": "这将删除此设备上的所有笔记本、页面和设置。删除前会先生成一个备份压缩包。保存在系统钥匙串中的 API 密钥会被保留。"
+        "confirmBody": "这将删除此设备上的所有笔记本、页面和设置。删除前会先生成一个备份压缩包。保存在系统钥匙串中的 API 密钥会被保留。",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {

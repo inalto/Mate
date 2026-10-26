@@ -26,6 +26,7 @@ vi.mock("../../../ipc/share", () => ({
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "9.9.9") }));
 
 import { exportBackup, resetLocalData } from "../../../ipc/backup";
+import { setPlatformForTests } from "../../../platform";
 import { useSettingsStore } from "../../../stores/settings";
 import { PENDING_WIRING } from "../pendingWiring";
 import { collectEntries, fuzzyScore, searchEntries } from "../search";
@@ -43,6 +44,7 @@ const realUpdate = useSettingsStore.getState().update;
 beforeEach(() => useSettingsStore.setState({ settings: DEFAULT_SETTINGS, loaded: true, update: realUpdate }));
 afterEach(() => {
   cleanup();
+  setPlatformForTests(false);
   vi.useRealTimers();
   vi.clearAllMocks();
 });
@@ -324,7 +326,7 @@ describe("about and backup", () => {
     expect(resetLocalData).not.toHaveBeenCalled();
     const dialog = screen.getByRole("alertdialog");
     expect(dialog.textContent).toContain(
-      "Reset local data?This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept.",
+      "Reset local data?This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain, or the app's private key file on Android, are kept.",
     );
     // Cancel does nothing.
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
@@ -336,6 +338,13 @@ describe("about and backup", () => {
       fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reset" }));
     });
     expect(resetLocalData).toHaveBeenCalledTimes(1);
+  });
+
+  it("reset_on_mobile_says_mate_will_close", () => {
+    setPlatformForTests(true);
+    renderPane();
+    fireEvent.click(screen.getByRole("button", { name: "Reset local data" }));
+    expect(screen.getByRole("alertdialog").textContent).toContain("then Mate closes. Reopen it to start again.");
   });
 });
 

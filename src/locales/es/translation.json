@@ -252,7 +252,8 @@
         "hint": "Borra todo en este dispositivo y vuelve a empezar desde la bienvenida",
         "confirmTitle": "¿Restablecer los datos locales?",
         "confirm": "Restablecer",
-        "confirmBody": "Esto borra todos los cuadernos, páginas y ajustes de este dispositivo. Antes se guarda un zip de copia de seguridad. Las claves de API guardadas en el llavero del sistema se conservan."
+        "confirmBody": "Esto borra todos los cuadernos, páginas y ajustes de este dispositivo. Antes se guarda un zip de copia de seguridad. Las claves de API guardadas en el llavero del sistema se conservan.",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {

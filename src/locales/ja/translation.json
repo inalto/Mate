@@ -251,7 +251,8 @@
         "hint": "この端末のすべてを削除し、ようこそ画面からやり直します",
         "confirmTitle": "ローカルデータをリセットしますか？",
         "confirm": "リセット",
-        "confirmBody": "この端末のすべてのノート、ページ、設定が削除されます。削除の前にバックアップの zip が作成されます。システムのキーチェーンに保存された API キーは残ります。"
+        "confirmBody": "この端末のすべてのノート、ページ、設定が削除されます。削除の前にバックアップの zip が作成されます。システムのキーチェーンに保存された API キーは残ります。",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {
