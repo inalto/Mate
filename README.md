@@ -31,7 +31,7 @@ Open **Settings** from the More menu in the top bar. The pane has a list of sect
 - **Writing:** pen, highlighter, text, shape and eraser defaults; ink to shape and scribble to erase; pen barrel and eraser-end buttons; palm rejection, drawing with a finger, pinch and wheel behaviour; Pen haptics (Windows only; not yet verified on haptic pen hardware).
 - **Language:** the interface language, first row of General (see Languages below).
 - **Intelligence:** the AI provider, key and tutor options, and the maths engines (see below).
-- **System:** keyboard shortcuts, trash retention, Sharing (Nextcloud sign-in), **Download backup** (one zip holding a `.mate` archive per book; to restore, unzip it and import each `.mate` file) and **Reset local data**, which writes a recovery zip first and then restarts. API keys in the system keychain are kept. Updates and About (version, Show welcome again) are here too.
+- **System:** keyboard shortcuts, trash retention, Sharing (Nextcloud sign-in), **Download backup** (one zip holding a `.mate` archive per book; to restore, unzip it and import each `.mate` file) and **Reset local data**, which writes a recovery zip first and then restarts (on Android the zip goes to the share sheet and Mate closes; reopen it). API keys in the system keychain (desktop) or the app's private key file (Android) are kept. Updates and About (version, Show welcome again) are here too.
 
 ## Keyboard shortcuts
 
@@ -78,7 +78,7 @@ The interface comes in English, Italian, Spanish, French, German, Portuguese (Br
 
 ## Sharing
 
-Book menu → **Share…**. Mate can save a `.mate` copy into a Dropbox, Google Drive, OneDrive, iCloud Drive or Nextcloud folder that it finds on your computer (`<Folder>/Mate/<title>.mate`), so your sync app sends it. If you have a Nextcloud, sign in once under Settings → Sharing, and Mate can upload the book and give you a link, with an optional expiry. The password for that stays in the system keychain. Double-clicking a `.mate` file imports it. Direct Google Drive, Dropbox and OneDrive APIs and OS share sheets are not built yet. See [Sharing](https://github.com/inalto/Mate/wiki/Sharing).
+Book menu → **Share…**. Mate can save a `.mate` copy into a Dropbox, Google Drive, OneDrive, iCloud Drive or Nextcloud folder that it finds on your computer (`<Folder>/Mate/<title>.mate`), so your sync app sends it. If you have a Nextcloud, sign in once under Settings → Sharing, and Mate can upload the book and give you a link, with an optional expiry. The password for that stays in the system keychain (desktop) or the app's private key file (Android). Double-clicking a `.mate` file imports it. Direct Google Drive, Dropbox and OneDrive APIs and OS share sheets are not built yet. See [Sharing](https://github.com/inalto/Mate/wiki/Sharing).
 
 ## Maths engines
 
@@ -90,7 +90,7 @@ See [Maths engines](https://github.com/inalto/Mate/wiki/Maths-Engines).
 
 ## Android
 
-Since v0.7.0 Mate runs on Android tablets (Android 7.0, API 24, and later). It is the same app: the library, the ink canvas, typed maths, graphs, PDFs, the AI tutor and the maths engines all work. Pages open in place instead of in their own windows, the chrome is laid out for a tablet, and notes are saved when the app goes to the background. Exports (PNG, SVG, PDF, LaTeX, `.mate`) go through the Android share sheet, and Open and Import use the system file picker.
+Since v0.7.0 Mate runs on Android tablets. The APK installs on Android 7.0 (API 24) and later, but it has been tested on Android 16 (API 36, emulator) only: older versions are untested, and the Android System WebView must be reasonably current. It is the same app: the library, the ink canvas, typed maths, graphs, PDFs, the AI tutor and the maths engines all work. Pages open in place instead of in their own windows, the chrome is laid out for a tablet, and notes are saved when the app goes to the background. Exports (PNG, SVG, PDF, LaTeX, `.mate`) go through the Android share sheet, and Open and Import use the system file picker.
 
 ### Install
 
@@ -114,7 +114,8 @@ The Tauri CLI may add `features = []` to `tauri-build` in `src-tauri/Cargo.toml`
 - The Files app does not offer Mate for `.mate` files (Android reports them as a generic binary type), and "Share to Mate" from other apps is not handled yet. Use Import or Open inside Mate.
 - API keys are kept in `keys.json` in the app's private data folder, not in the Android Keystore.
 - No in-app updater: updates come from the next APK (or a store, later).
-- Tested on the API 36 tablet emulator only, not yet on real tablets with a pen.
+- Tested on Android 16 (API 36) on the tablet emulator only, not yet on real tablets with a pen. Older Android versions are untested; keep the Android System WebView up to date.
+- Opening a file that is too large (over 200 MiB) or unreadable shows nothing.
 
 iPad is not built yet; it is still a study. See [Mobile](https://github.com/inalto/Mate/wiki/Mobile).
 

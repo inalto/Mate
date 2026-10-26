@@ -29,7 +29,7 @@ jobs:
             echo "release $TAG already exists"
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "Mate ${TAG#v}" --notes "$(cat <<'NOTES'
-          Mate — local-first handwriting & math notes for Windows, macOS and Linux.
+          Mate — local-first handwriting & math notes for Windows, macOS, Linux and Android tablets.
 
           Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux), `_aarch64.apk` (Android tablets, sideload).
           macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
@@ -93,7 +93,7 @@ jobs:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: "Mate v__VERSION__"
           releaseBody: |
-            Mate — local-first handwriting & math notes for Windows, macOS and Linux.
+            Mate — local-first handwriting & math notes for Windows, macOS, Linux and Android tablets.
 
             Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux), `_aarch64.apk` (Android tablets, sideload).
             macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
