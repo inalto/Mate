@@ -246,6 +246,7 @@
         "hint": "Eine Zip-Datei mit einer .mate-Datei pro Notizbuch. Zum Wiederherstellen entpacken und jede .mate-Datei importieren."
       },
       "saved": "Sicherung gespeichert unter {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "Lokale Daten zurücksetzen",
         "hint": "Löscht alles auf diesem Gerät und beginnt wieder mit der Willkommensseite",
@@ -634,6 +635,7 @@
     "title": "Exportieren",
     "export": "Exportieren",
     "exporting": "Wird exportiert…",
+    "shared": "Shared",
     "notInBook": "Diese Seite gehört zu keinem Notizbuch",
     "format": "Format",
     "paper": "Papier",

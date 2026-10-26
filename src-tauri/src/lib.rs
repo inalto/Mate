@@ -50,8 +50,9 @@ pub fn run() {
       _ => {}
     });
   // Mobile only: reads the `content://` URIs other apps hand to Mate, from Rust (commands/incoming.rs).
+  // Exports go to the share sheet, from Rust (commands/export.rs).
   #[cfg(mobile)]
-  let builder = builder.plugin(tauri_plugin_fs::init());
+  let builder = builder.plugin(tauri_plugin_fs::init()).plugin(tauri_plugin_sharekit::init());
   builder
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
@@ -78,6 +79,8 @@ pub fn run() {
       commands::lifecycle::prune_recovery_files(&state.data_dir, commands::lifecycle::KEEP_RECOVERY_FILES);
       // Files received from other apps (Android) are copies; drop the ones a day old.
       commands::incoming::prune_incoming(&state.data_dir.join(commands::incoming::INCOMING_DIR), commands::incoming::KEEP_INCOMING);
+      // Exports (mobile) wait in `exports/` for the share target; drop the ones a week old.
+      commands::incoming::prune_incoming(&state.data_dir.join(export::EXPORTS_DIR), export::KEEP_EXPORTS);
       app.manage(state);
       app.manage(pdf::PendingOpenFile::new(pdf::pdf_from_args(
         std::env::args(),

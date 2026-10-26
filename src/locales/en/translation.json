@@ -243,6 +243,7 @@
         "hint": "One zip holding a .mate file per book. To restore, unzip it and import each .mate file."
       },
       "saved": "Backup saved to {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "Reset local data",
         "hint": "Deletes everything on this device and starts again from the welcome flow",
@@ -631,6 +632,7 @@
     "title": "Export",
     "export": "Export",
     "exporting": "Exporting…",
+    "shared": "Shared",
     "notInBook": "This page is not in a book",
     "format": "Format",
     "paper": "Paper",

@@ -245,6 +245,7 @@
         "hint": "一个压缩包，每个笔记本对应一个 .mate 文件。如需恢复，请解压后导入每个 .mate 文件。"
       },
       "saved": "备份已保存至 {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "重置本地数据",
         "hint": "删除此设备上的所有内容，并从欢迎流程重新开始",
@@ -633,6 +634,7 @@
     "title": "导出",
     "export": "导出",
     "exporting": "正在导出…",
+    "shared": "Shared",
     "notInBook": "此页面不属于任何笔记本",
     "format": "格式",
     "paper": "纸张",

@@ -245,6 +245,7 @@
         "hint": "ノートごとに .mate ファイルを含む zip です。復元するには展開して各 .mate ファイルを読み込んでください。"
       },
       "saved": "バックアップを {{path}} に保存しました",
+      "shared": "Backup shared",
       "reset": {
         "label": "ローカルデータをリセット",
         "hint": "この端末のすべてを削除し、ようこそ画面からやり直します",
@@ -633,6 +634,7 @@
     "title": "書き出し",
     "export": "書き出し",
     "exporting": "書き出し中…",
+    "shared": "Shared",
     "notInBook": "このページはノートに含まれていません",
     "format": "形式",
     "paper": "用紙",

@@ -246,6 +246,7 @@
         "hint": "Un zip con un archivo .mate por cada cuaderno. Para restaurarla, descomprímela e importa cada archivo .mate."
       },
       "saved": "Copia de seguridad guardada en {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "Restablecer los datos locales",
         "hint": "Borra todo en este dispositivo y vuelve a empezar desde la bienvenida",
@@ -634,6 +635,7 @@
     "title": "Exportar",
     "export": "Exportar",
     "exporting": "Exportando…",
+    "shared": "Shared",
     "notInBook": "Esta página no está en un cuaderno",
     "format": "Formato",
     "paper": "Papel",

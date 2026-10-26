@@ -13,11 +13,11 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use super::export::{ask_save_path, export_filename, write_atomically};
+use super::export::{after_export, ask_save_path, export_filename, write_atomically};
 use crate::state::AppState;
 
 /// Exports a unit (book) and the assets its elements reference to a `.mate` file chosen in a
-/// save dialog. `None` if cancelled.
+/// save dialog (mobile: written to `exports/` and shared). `None` if cancelled.
 #[tauri::command]
 pub async fn export_unit_archive(
     app: AppHandle,
@@ -40,10 +40,11 @@ pub async fn export_unit_archive(
             title,
         )
     };
-    let Some(path) = ask_save_path(app, export_filename(&title, "mate")).await? else {
+    let Some(path) = ask_save_path(app.clone(), export_filename(&title, "mate")).await? else {
         return Ok(None);
     };
     write_atomically(&path, &bytes)?;
+    after_export(&app, &path).await?;
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
@@ -99,10 +100,11 @@ pub async fn export_backup(
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
-    let Some(path) = ask_save_path(app, backup_filename()).await? else {
+    let Some(path) = ask_save_path(app.clone(), backup_filename()).await? else {
         return Ok(None);
     };
     write_atomically(&path, &bytes)?;
+    after_export(&app, &path).await?;
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 

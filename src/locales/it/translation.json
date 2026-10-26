@@ -243,6 +243,7 @@
         "hint": "Uno zip con un file .mate per ogni quaderno. Per ripristinare, decomprimilo e importa ogni file .mate."
       },
       "saved": "Backup salvato in {{path}}",
+      "shared": "Backup condiviso",
       "reset": {
         "label": "Reimposta i dati locali",
         "hint": "Elimina tutto su questo dispositivo e riparte dalla schermata di benvenuto",
@@ -631,6 +632,7 @@
     "title": "Esporta",
     "export": "Esporta",
     "exporting": "Esportazione…",
+    "shared": "Condiviso",
     "notInBook": "Questa pagina non è in un quaderno",
     "format": "Formato",
     "paper": "Carta",
