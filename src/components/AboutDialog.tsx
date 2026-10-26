@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getAppVersion, openExternal } from "../ipc/app";
 import { isPageWindow } from "../ipc/windows";
+import { isMobile } from "../platform";
 import { navigateTo } from "../stores/navigation";
 import { showToast } from "./Toast";
 import { formatProgress, useUpdater } from "./useUpdater";
@@ -87,6 +88,7 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
+        {!isMobile() && (
         <div className="about-block">
           <h3>{t("about.updates")}</h3>
           <span className="muted" role="status" aria-live="polite">
@@ -127,6 +129,7 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
             </button>
           )}
         </div>
+        )}
 
         <div className="dialog-actions">
           <button type="button" className="btn btn-primary" onClick={onClose}>

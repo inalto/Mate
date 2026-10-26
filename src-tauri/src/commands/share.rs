@@ -18,6 +18,7 @@ use mate_core::share::{remote_file_name, safe_file_name, unique_archive_path};
 use mate_core::storage::Storage;
 use serde::Serialize;
 use tauri::{AppHandle, State};
+#[cfg(desktop)]
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -237,6 +238,7 @@ pub async fn save_archive_to(
 }
 
 /// A directory chosen in a folder dialog; `None` if cancelled.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -252,6 +254,13 @@ pub async fn pick_folder(app: AppHandle) -> Result<Option<String>, String> {
     })
     .await
     .map_err(blocking_err)?
+}
+
+/// Mobile has no folder picker (the dialog plugin picks files only there).
+#[cfg(mobile)]
+#[tauri::command]
+pub async fn pick_folder() -> Result<Option<String>, String> {
+    Err(crate::commands::NOT_ON_MOBILE.into())
 }
 
 #[tauri::command]

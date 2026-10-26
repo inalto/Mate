@@ -246,12 +246,14 @@
         "hint": "Eine Zip-Datei mit einer .mate-Datei pro Notizbuch. Zum Wiederherstellen entpacken und jede .mate-Datei importieren."
       },
       "saved": "Sicherung gespeichert unter {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "Lokale Daten zurücksetzen",
         "hint": "Löscht alles auf diesem Gerät und beginnt wieder mit der Willkommensseite",
         "confirmTitle": "Lokale Daten zurücksetzen?",
         "confirm": "Zurücksetzen",
-        "confirmBody": "Dies löscht alle Notizbücher, Seiten und Einstellungen auf diesem Gerät. Vorher wird eine Sicherung als Zip-Datei erstellt. Im Systemschlüsselbund gespeicherte API-Schlüssel bleiben erhalten."
+        "confirmBody": "Dies löscht alle Notizbücher, Seiten und Einstellungen auf diesem Gerät. Vorher wird eine Sicherung als Zip-Datei erstellt. Im Systemschlüsselbund gespeicherte API-Schlüssel bleiben erhalten.",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {
@@ -634,6 +636,7 @@
     "title": "Exportieren",
     "export": "Exportieren",
     "exporting": "Wird exportiert…",
+    "shared": "Shared",
     "notInBook": "Diese Seite gehört zu keinem Notizbuch",
     "format": "Format",
     "paper": "Papier",

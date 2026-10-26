@@ -83,10 +83,33 @@ pub fn store_pdf(dir: &Path, path: &Path) -> Result<AssetInfo, String> {
     assets::save_asset(dir, &bytes, AssetKind::Pdf).map_err(|e| e.to_string())
 }
 
+/// A stored PDF: the asset plus the stem of the file it came from (for the page title).
+#[derive(serde::Serialize)]
+pub struct SharedPdf {
+    #[serde(flatten)]
+    pub asset: AssetInfo,
+    pub title: Option<String>,
+}
+
+/// The file name without its extension, if non-empty.
+fn stem_of(path: &Path) -> Option<String> {
+    path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).filter(|s| !s.is_empty())
+}
+
 /// Stores the PDF at `path` (dialog pick, drop or file association) in the asset store.
+/// On Android the picker hands over a `content://` URI, materialised first (off the main thread);
+/// `title` is then the materialised file's stem, since the URI has no usable name.
 #[tauri::command]
-pub fn read_shared_pdf(state: State<'_, AppState>, path: String) -> Result<AssetInfo, String> {
-    store_pdf(&state.data_dir.join("assets"), Path::new(&path))
+pub async fn read_shared_pdf(app: AppHandle, path: String) -> Result<SharedPdf, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let path = super::incoming::materialize(&app, &state.data_dir, &path)?;
+        log::info!("mate: read_shared_pdf {}", path.display());
+        let asset = store_pdf(&state.data_dir.join("assets"), &path)?;
+        Ok(SharedPdf { asset, title: stem_of(&path) })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// The PDF the app was opened with, once; afterwards opens arrive as `incoming-file-open`.
@@ -143,6 +166,22 @@ mod tests {
         assert!(info.path.exists());
         assert_eq!(store_pdf(&d.join("assets"), &fake), Err(NOT_A_PDF.to_string()));
         assert_eq!(store_pdf(&d.join("assets"), &d), Err(NOT_A_PDF.to_string()));
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn shared_pdf_serializes_flat_with_the_stem_as_title() {
+        assert_eq!(stem_of(Path::new("/x/incoming/u/Lecture 4.pdf")).as_deref(), Some("Lecture 4"));
+        assert_eq!(stem_of(Path::new("/")), None);
+        let d = root("shared");
+        let pdf = d.join("a.pdf");
+        fs::write(&pdf, b"%PDF-1.7
+").unwrap();
+        let asset = store_pdf(&d.join("assets"), &pdf).unwrap();
+        let v = serde_json::to_value(SharedPdf { asset, title: Some("a".into()) }).unwrap();
+        assert_eq!(v["title"], "a");
+        assert_eq!(v["mime"], "application/pdf");
+        assert!(v["id"].is_string());
         let _ = fs::remove_dir_all(&d);
     }
 

@@ -245,12 +245,14 @@
         "hint": "一个压缩包，每个笔记本对应一个 .mate 文件。如需恢复，请解压后导入每个 .mate 文件。"
       },
       "saved": "备份已保存至 {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "重置本地数据",
         "hint": "删除此设备上的所有内容，并从欢迎流程重新开始",
         "confirmTitle": "重置本地数据？",
         "confirm": "重置",
-        "confirmBody": "这将删除此设备上的所有笔记本、页面和设置。删除前会先生成一个备份压缩包。保存在系统钥匙串中的 API 密钥会被保留。"
+        "confirmBody": "这将删除此设备上的所有笔记本、页面和设置。删除前会先生成一个备份压缩包。保存在系统钥匙串中的 API 密钥会被保留。",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {
@@ -633,6 +635,7 @@
     "title": "导出",
     "export": "导出",
     "exporting": "正在导出…",
+    "shared": "Shared",
     "notInBook": "此页面不属于任何笔记本",
     "format": "格式",
     "paper": "纸张",

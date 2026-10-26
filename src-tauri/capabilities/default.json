@@ -2,6 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "enables the default permissions",
+  "platforms": ["linux", "macOS", "windows", "android", "iOS"],
   "windows": [
     "main",
     "page-*"
@@ -12,7 +13,6 @@
     "dialog:default",
     "opener:default",
     "clipboard-manager:allow-write-text",
-    "window-state:default",
     "core:window:allow-set-title",
     "core:window:allow-close"
   ]

@@ -4,13 +4,13 @@
 
 Your maths mate. (In Italian, *mate* is what students call *matematica*.)
 
-**A local-first handwriting & math notes app for Windows, macOS and Linux.**
+**A local-first handwriting & math notes app for Windows, macOS, Linux and Android tablets.**
 
 Write with a pen on an endless canvas or on paged sheets, organise pages into books, sections and shelves, and keep everything on your own machine in a single SQLite file. No account, no cloud, no subscription.
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **v0.6.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.6.0.md).
+> Status: **v0.7.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.7.0.md).
 
 ## Features
 
@@ -31,7 +31,7 @@ Open **Settings** from the More menu in the top bar. The pane has a list of sect
 - **Writing:** pen, highlighter, text, shape and eraser defaults; ink to shape and scribble to erase; pen barrel and eraser-end buttons; palm rejection, drawing with a finger, pinch and wheel behaviour; Pen haptics (Windows only; not yet verified on haptic pen hardware).
 - **Language:** the interface language, first row of General (see Languages below).
 - **Intelligence:** the AI provider, key and tutor options, and the maths engines (see below).
-- **System:** keyboard shortcuts, trash retention, Sharing (Nextcloud sign-in), **Download backup** (one zip holding a `.mate` archive per book; to restore, unzip it and import each `.mate` file) and **Reset local data**, which writes a recovery zip first and then restarts. API keys in the system keychain are kept. Updates and About (version, Show welcome again) are here too.
+- **System:** keyboard shortcuts, trash retention, Sharing (Nextcloud sign-in), **Download backup** (one zip holding a `.mate` archive per book; to restore, unzip it and import each `.mate` file) and **Reset local data**, which writes a recovery zip first and then restarts (on Android the zip goes to the share sheet and Mate closes; reopen it). API keys in the system keychain (desktop) or the app's private key file (Android) are kept. Updates and About (version, Show welcome again) are here too.
 
 ## Keyboard shortcuts
 
@@ -78,7 +78,7 @@ The interface comes in English, Italian, Spanish, French, German, Portuguese (Br
 
 ## Sharing
 
-Book menu → **Share…**. Mate can save a `.mate` copy into a Dropbox, Google Drive, OneDrive, iCloud Drive or Nextcloud folder that it finds on your computer (`<Folder>/Mate/<title>.mate`), so your sync app sends it. If you have a Nextcloud, sign in once under Settings → Sharing, and Mate can upload the book and give you a link, with an optional expiry. The password for that stays in the system keychain. Double-clicking a `.mate` file imports it. Direct Google Drive, Dropbox and OneDrive APIs and OS share sheets are not built yet. See [Sharing](https://github.com/inalto/Mate/wiki/Sharing).
+Book menu → **Share…**. Mate can save a `.mate` copy into a Dropbox, Google Drive, OneDrive, iCloud Drive or Nextcloud folder that it finds on your computer (`<Folder>/Mate/<title>.mate`), so your sync app sends it. If you have a Nextcloud, sign in once under Settings → Sharing, and Mate can upload the book and give you a link, with an optional expiry. The password for that stays in the system keychain (desktop) or the app's private key file (Android). Double-clicking a `.mate` file imports it. Direct Google Drive, Dropbox and OneDrive APIs and OS share sheets are not built yet. See [Sharing](https://github.com/inalto/Mate/wiki/Sharing).
 
 ## Maths engines
 
@@ -88,9 +88,36 @@ Book menu → **Share…**. Mate can save a `.mate` copy into a Dropbox, Google 
 
 See [Maths engines](https://github.com/inalto/Mate/wiki/Maths-Engines).
 
-## Mobile
+## Android
 
-Android tablets and iPads are studied but not built. The conclusion is that Tauri 2 mobile is the way, at roughly 4 to 6 person-weeks. Read the study: [Mobile](https://github.com/inalto/Mate/wiki/Mobile).
+Since v0.7.0 Mate runs on Android tablets. The APK installs on Android 7.0 (API 24) and later, but it has been tested on Android 16 (API 36, emulator) only: older versions are untested, and the Android System WebView must be reasonably current. It is the same app: the library, the ink canvas, typed maths, graphs, PDFs, the AI tutor and the maths engines all work. Pages open in place instead of in their own windows, the chrome is laid out for a tablet, and notes are saved when the app goes to the background. Exports (PNG, SVG, PDF, LaTeX, `.mate`) go through the Android share sheet, and Open and Import use the system file picker.
+
+### Install
+
+Each release has an `.apk` for 64-bit ARM tablets. Android installs it as a sideloaded app: allow "Install unknown apps" for your browser or file manager when it asks. There is no in-app updater on Android; install the next release's APK over the old one (your notes stay, because every release APK is signed with the same key).
+
+### Build the APK yourself
+
+You need JDK 17, the Android SDK (command-line tools, `platforms;android-35`, `platforms;android-36`, `platforms;android-37.0`, `build-tools;35.0.1`; the app compiles against 37 and plugin libraries against 36), NDK `27.2.12479018` and the Rust targets `aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android`. Set `JAVA_HOME`, `ANDROID_HOME` and `NDK_HOME` (see [Building and testing](https://github.com/inalto/Mate/wiki/Building-and-Testing)), then:
+
+```bash
+npm ci
+npm run tauri android build -- --apk --target aarch64   # release APK under src-tauri/gen/android/app/build/outputs/apk/
+npm run tauri android dev                                # debug build on a running emulator or a connected tablet
+```
+
+The Tauri CLI may add `features = []` to `tauri-build` in `src-tauri/Cargo.toml`; revert it before committing. The release APK is signed only when `src-tauri/gen/android/key.properties` exists (see "Android signing" under Updates); without it Gradle builds an unsigned APK that Android will not install until it is signed.
+
+### Known limitations
+
+- Files picked or opened on Android are titled by the provider's document id, not their display name.
+- The Files app does not offer Mate for `.mate` files (Android reports them as a generic binary type), and "Share to Mate" from other apps is not handled yet. Use Import or Open inside Mate.
+- API keys are kept in `keys.json` in the app's private data folder, not in the Android Keystore.
+- No in-app updater: updates come from the next APK (or a store, later).
+- Tested on Android 16 (API 36) on the tablet emulator only, not yet on real tablets with a pen. Older Android versions are untested; keep the Android System WebView up to date.
+- Opening a file that is too large (over 200 MiB) or unreadable shows nothing.
+
+iPad is not built yet; it is still a study. See [Mobile](https://github.com/inalto/Mate/wiki/Mobile).
 
 ## Screenshots
 
@@ -165,6 +192,22 @@ Mate can check GitHub Releases for a newer build, download it and restart into i
 
 The app looks at `https://github.com/inalto/Mate/releases/latest/download/latest.json`, which always points at the newest release.
 
+### Android signing
+
+The Android release job signs the APK with its own keystore (not the updater key). One-time setup:
+
+1. Generate the keystore (keep it, and its password, out of the repository):
+
+   ```
+   keytool -genkeypair -v -keystore ~/.tauri/mate-android.jks -alias mate -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+   Losing the keystore or its password means installed copies can no longer be updated in place: Android only installs an APK over one signed with the same key.
+2. For local release builds, create `src-tauri/gen/android/key.properties` (gitignored) with `storeFile` (absolute path to the `.jks`), `storePassword`, `keyAlias` (`mate`) and `keyPassword`. Gradle reads it as a Java properties file, so the passwords are taken verbatim: avoid backslashes and leading spaces in them (the CI job writes the secrets into this file the same way).
+3. Add GitHub repository secrets: `ANDROID_KEYSTORE_BASE64` (the keystore as one line of base64: `base64 -w0 ~/.tauri/mate-android.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`mate`) and `ANDROID_KEY_PASSWORD`. On PowerShell, copy the base64 with `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\.tauri\mate-android.jks")) | Set-Clipboard`.
+
+On a tag, the `android` job builds `Mate_<version>_aarch64.apk` and uploads it to the same draft release. Without `ANDROID_KEYSTORE_BASE64` the job skips its build steps and the release is published without an APK.
+
 ### Without a key
 
 Until step 2 is done the committed key is a throwaway placeholder whose private half does not exist. Such a build shows "Updates are not configured for this build." and never installs anything. A missing manifest (for example a release built without the signing secret) or an unreachable server is reported as "could not check" and can be retried. CI still builds installers without the secret: the workflow switches `bundle.createUpdaterArtifacts` off, so those builds are unsigned and cannot be updated to or from.
@@ -210,7 +253,7 @@ logo/                   the Mate logo and the source for the app icons
 
 ## Documentation
 
-The [project wiki](https://github.com/inalto/Mate/wiki) covers the [AI providers](https://github.com/inalto/Mate/wiki/AI-Providers), [sharing](https://github.com/inalto/Mate/wiki/Sharing), [maths engines](https://github.com/inalto/Mate/wiki/Maths-Engines), [languages](https://github.com/inalto/Mate/wiki/Languages), [mobile study](https://github.com/inalto/Mate/wiki/Mobile), the [architecture](https://github.com/inalto/Mate/wiki/Architecture), [data model](https://github.com/inalto/Mate/wiki/Data-Model), [ink engine](https://github.com/inalto/Mate/wiki/Ink-Engine), [building and testing](https://github.com/inalto/Mate/wiki/Building-and-Testing), the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and [contributing](https://github.com/inalto/Mate/wiki/Contributing).
+The [project wiki](https://github.com/inalto/Mate/wiki) covers the [AI providers](https://github.com/inalto/Mate/wiki/AI-Providers), [sharing](https://github.com/inalto/Mate/wiki/Sharing), [maths engines](https://github.com/inalto/Mate/wiki/Maths-Engines), [languages](https://github.com/inalto/Mate/wiki/Languages), [mobile](https://github.com/inalto/Mate/wiki/Mobile), the [architecture](https://github.com/inalto/Mate/wiki/Architecture), [data model](https://github.com/inalto/Mate/wiki/Data-Model), [ink engine](https://github.com/inalto/Mate/wiki/Ink-Engine), [building and testing](https://github.com/inalto/Mate/wiki/Building-and-Testing), the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and [contributing](https://github.com/inalto/Mate/wiki/Contributing).
 
 ## Acknowledgements
 

@@ -17,8 +17,10 @@ vi.mock("../ShareDialog", () => ({
 
 import { exportPage } from "../../export/exportPage";
 import { exportUnitArchive } from "../../ipc/archive";
+import { setPlatformForTests } from "../../platform";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
+import { useToastStore } from "../Toast";
 import ExportDialog from "../ExportDialog";
 
 const STAMP = "2026-01-01T00:00:00.000Z";
@@ -56,8 +58,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   useNotebookStore.setState({ tree: { bookshelves: [], units: [], sections: [section], pages: [page] }, loaded: true });
   useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, defaultExportFormat: "pdf" } });
+  useToastStore.getState().dismiss();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  setPlatformForTests(false);
+});
 
 describe("ExportDialog", () => {
   it("defaults to PDF and offers scale only for PNG", () => {
@@ -132,6 +138,30 @@ describe("ExportDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "close share" }));
     expect(onClose).toHaveBeenCalled();
     expect(exportUnitArchive).not.toHaveBeenCalled();
+  });
+
+  it("says nothing about a saved file on desktop", async () => {
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(useToastStore.getState().message).toBeNull();
+  });
+
+  it("says the export was shared on mobile", async () => {
+    setPlatformForTests(true);
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(useToastStore.getState().message).toBe("Shared");
+  });
+
+  it("says nothing on mobile when the export was cancelled", async () => {
+    setPlatformForTests(true);
+    vi.mocked(exportPage).mockResolvedValueOnce(null);
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(useToastStore.getState().message).toBeNull();
   });
 
   it("stays open and shows the error when export fails", async () => {

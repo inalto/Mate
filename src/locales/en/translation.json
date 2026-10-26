@@ -243,12 +243,14 @@
         "hint": "One zip holding a .mate file per book. To restore, unzip it and import each .mate file."
       },
       "saved": "Backup saved to {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "Reset local data",
         "hint": "Deletes everything on this device and starts again from the welcome flow",
         "confirmTitle": "Reset local data?",
         "confirm": "Reset",
-        "confirmBody": "This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain are kept."
+        "confirmBody": "This deletes all books, pages and settings on this device. A backup zip is written first. API keys stored in the system keychain, or the app's private key file on Android, are kept.",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {
@@ -631,6 +633,7 @@
     "title": "Export",
     "export": "Export",
     "exporting": "Exporting…",
+    "shared": "Shared",
     "notInBook": "This page is not in a book",
     "format": "Format",
     "paper": "Paper",

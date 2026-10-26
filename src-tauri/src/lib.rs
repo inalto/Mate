@@ -1,17 +1,25 @@
 mod commands;
 mod state;
+// The page-window registry and close ordering; on mobile only the close handshake helpers are used.
+#[cfg_attr(mobile, allow(dead_code))]
 mod windows;
 
 use commands::{
-  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, practice, recognition, recognize, settings,
-  semantics, thumbnails, updater,
+  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, platform, practice, recognition, recognize,
+  settings, semantics, thumbnails, updater,
 };
 use state::AppState;
-use tauri::{Manager, RunEvent, WindowEvent};
+use tauri::{Manager, RunEvent};
+#[cfg(desktop)]
+use tauri::WindowEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
+  let builder = tauri::Builder::default();
+  // Desktop only: single instance, window geometry, in-app updates, and the close handshake on
+  // window close. A mobile app is never closed by the user the way a desktop window is.
+  #[cfg(desktop)]
+  let builder = builder
     // Must be registered first. "Open with Mate" while Mate runs starts a second process (Windows,
     // Linux): it exits at once and its argv/cwd arrive here, so one process owns the database.
     // macOS never starts a second instance; opens arrive as `RunEvent::Opened` (see below).
@@ -23,11 +31,8 @@ pub fn run() {
       }
       open_files::args_opened(app, argv, std::path::Path::new(&cwd));
     }))
-    .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_opener::init())
     .plugin(tauri_plugin_window_state::Builder::default().build())
     .plugin(tauri_plugin_updater::Builder::new().build())
-    .plugin(tauri_plugin_clipboard_manager::init())
     .on_window_event(|window, event| match event {
       WindowEvent::CloseRequested { api, .. } => {
         // Fail open: if the frontend never acknowledged the previous attempt, let the window close.
@@ -43,7 +48,15 @@ pub fn run() {
       }
       WindowEvent::Destroyed => crate::windows::window_destroyed(window.app_handle(), window.label()),
       _ => {}
-    })
+    });
+  // Mobile only: reads the `content://` URIs other apps hand to Mate, from Rust (commands/incoming.rs).
+  // Exports go to the share sheet, from Rust (commands/export.rs).
+  #[cfg(mobile)]
+  let builder = builder.plugin(tauri_plugin_fs::init()).plugin(tauri_plugin_sharekit::init());
+  builder
+    .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_opener::init())
+    .plugin(tauri_plugin_clipboard_manager::init())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -64,6 +77,10 @@ pub fn run() {
       }
       // Old recovery files are not kept forever.
       commands::lifecycle::prune_recovery_files(&state.data_dir, commands::lifecycle::KEEP_RECOVERY_FILES);
+      // Files received from other apps (Android) are copies; drop the ones a day old.
+      commands::incoming::prune_incoming(&state.data_dir.join(commands::incoming::INCOMING_DIR), commands::incoming::KEEP_INCOMING);
+      // Exports (mobile) wait in `exports/` for the share target; drop the ones a week old.
+      commands::incoming::prune_incoming(&state.data_dir.join(export::EXPORTS_DIR), export::KEEP_EXPORTS);
       app.manage(state);
       app.manage(pdf::PendingOpenFile::new(pdf::pdf_from_args(
         std::env::args(),
@@ -155,15 +172,25 @@ pub fn run() {
       updater::install_update,
       updater::relaunch,
       updater::report_flush,
+      platform::platform_info,
     ])
     .build(tauri::generate_context!())
     .expect("error while building tauri application")
     .run(|app, event| {
       // macOS delivers "Open with Mate" (and double-clicked .pdf files) as an event, not argv.
-      #[cfg(any(target_os = "macos", target_os = "ios"))]
+      // Android delivers the intent's data URI the same way: a `file://` URI maps to a path, a
+      // `content://` URI from another app is copied into `incoming/` first (commands/incoming.rs).
+      #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
       if let RunEvent::Opened { urls } = &event {
-        for path in urls.iter().filter_map(|u| u.to_file_path().ok()) {
-          open_files::file_opened(app, path.to_string_lossy().into_owned());
+        for url in urls {
+          #[cfg(target_os = "android")]
+          if url.scheme() == "content" {
+            commands::incoming::content_uri_opened(app, url.clone());
+            continue;
+          }
+          if let Ok(path) = url.to_file_path() {
+            open_files::file_opened(app, path.to_string_lossy().into_owned());
+          }
         }
       }
       // macOS: Cmd+Q, the app menu "Quit" and Dock "Quit" end the app without a window
@@ -171,6 +198,7 @@ pub fn run() {
       // (`code: None`; a programmatic `app.exit` carries a code) through the same close attempt on
       // the main window. On Windows/Linux this event fires after the last window was destroyed,
       // when there is no main window any more, so it passes through unchanged.
+      #[cfg(desktop)]
       if let RunEvent::ExitRequested { api, code: None, .. } = event
         && app.get_webview_window(crate::windows::MAIN_LABEL).is_some()
         && crate::windows::request_main_close(app, true)

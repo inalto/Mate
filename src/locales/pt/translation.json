@@ -246,12 +246,14 @@
         "hint": "Um zip com um arquivo .mate por caderno. Para restaurar, descompacte e importe cada arquivo .mate."
       },
       "saved": "Backup salvo em {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "Redefinir dados locais",
         "hint": "Apaga tudo neste dispositivo e recomeça pela tela de boas-vindas",
         "confirmTitle": "Redefinir dados locais?",
         "confirm": "Redefinir",
-        "confirmBody": "Isto apaga todos os cadernos, páginas e configurações deste dispositivo. Antes, um backup em zip é gerado. As chaves de API guardadas no chaveiro do sistema são mantidas."
+        "confirmBody": "Isto apaga todos os cadernos, páginas e configurações deste dispositivo. Antes, um backup em zip é gerado. As chaves de API guardadas no chaveiro do sistema são mantidas.",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {
@@ -634,6 +636,7 @@
     "title": "Exportar",
     "export": "Exportar",
     "exporting": "Exportando…",
+    "shared": "Shared",
     "notInBook": "Esta página não está em um caderno",
     "format": "Formato",
     "paper": "Papel",

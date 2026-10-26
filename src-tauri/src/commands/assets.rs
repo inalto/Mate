@@ -3,8 +3,11 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use mate_core::assets::{self, AssetInfo, MAX_PDF_BYTES};
-use tauri::State;
-use tauri::ipc::{InvokeBody, Request, Response};
+use tauri::{AppHandle, Manager, State};
+use tauri::ipc::{Request, Response};
+
+use super::incoming::materialize;
+use super::ipc_body::body_bytes;
 
 use crate::state::AppState;
 
@@ -29,16 +32,23 @@ fn save_from_path(dir: &Path, path: &Path) -> Result<AssetInfo, String> {
 /// (the optional `x-asset-kind-hint` header is advisory only and ignored).
 #[tauri::command]
 pub fn save_asset(state: State<'_, AppState>, request: Request<'_>) -> Result<AssetInfo, String> {
-    let InvokeBody::Raw(bytes) = request.body() else {
+    let Some(bytes) = body_bytes(request.body()) else {
         return Err("expected raw bytes".into());
     };
-    assets::save_sniffed(&assets_dir(&state), bytes).map_err(|e| e.to_string())
+    assets::save_sniffed(&assets_dir(&state), &bytes).map_err(|e| e.to_string())
 }
 
 /// Stores a file the user picked or dropped, reading it in Rust so the bytes cross no IPC.
 #[tauri::command]
-pub fn save_asset_from_path(state: State<'_, AppState>, path: String) -> Result<AssetInfo, String> {
-    save_from_path(&assets_dir(&state), Path::new(&path))
+/// On Android the picker hands over a `content://` URI, materialised first (off the main thread).
+pub async fn save_asset_from_path(app: AppHandle, path: String) -> Result<AssetInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let path = materialize(&app, &state.data_dir, &path)?;
+        save_from_path(&assets_dir(&state), &path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

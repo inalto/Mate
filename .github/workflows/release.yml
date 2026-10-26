@@ -1,7 +1,7 @@
 name: release
 
-# Builds installers for Windows, macOS (Apple Silicon + Intel) and Linux and
-# attaches them to a GitHub Release. Triggered by pushing a tag such as v0.1.0,
+# Builds installers for Windows, macOS (Apple Silicon + Intel) and Linux, plus a signed Android APK,
+# and attaches them to a GitHub Release. Triggered by pushing a tag such as v0.1.0,
 # or manually from the Actions tab.
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 jobs:
-  # Creates the GitHub Release once, as a draft, so the four build jobs only upload to it and
+  # Creates the GitHub Release once, as a draft, so the build jobs only upload to it and
   # "latest" keeps pointing at the previous release (and its latest.json) until every installer
   # is attached. Without this step two jobs finishing at the same moment both try to create it
   # and one fails.
@@ -29,9 +29,9 @@ jobs:
             echo "release $TAG already exists"
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "Mate ${TAG#v}" --notes "$(cat <<'NOTES'
-          Mate — local-first handwriting & math notes for Windows, macOS and Linux.
+          Mate — local-first handwriting & math notes for Windows, macOS, Linux and Android tablets.
 
-          Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux).
+          Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux), `_aarch64.apk` (Android tablets, sideload).
           macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
           NOTES
           )"
@@ -93,9 +93,9 @@ jobs:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: "Mate v__VERSION__"
           releaseBody: |
-            Mate — local-first handwriting & math notes for Windows, macOS and Linux.
+            Mate — local-first handwriting & math notes for Windows, macOS, Linux and Android tablets.
 
-            Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux).
+            Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux), `_aarch64.apk` (Android tablets, sideload).
             macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
           # The release is created as a draft by `prepare` and published by `publish` below.
           releaseDraft: true
@@ -104,11 +104,117 @@ jobs:
           includeUpdaterJson: true
           args: ${{ matrix.args }}
 
-  # Publishes the draft only when all four builds uploaded their installers, so updaters never see
-  # a release without latest.json.
+  # Builds the signed Android APK (64-bit ARM) and attaches it to the same draft release.
+  # One-time setup: see README "Android signing". Without ANDROID_KEYSTORE_BASE64 the job still
+  # succeeds but skips every build step, so `publish` is never held up by it.
+  android:
+    needs: prepare
+    if: always() && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      # Secrets cannot be read in a job-level `if`, so this step turns "is the secret set" into an output.
+      - name: Check for the Android keystore
+        id: keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ANDROID_KEYSTORE_BASE64 is not set; skipping the Android build."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.keystore.outputs.has_keystore == 'true'
+
+      - uses: actions/setup-java@v4
+        if: steps.keystore.outputs.has_keystore == 'true'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+        if: steps.keystore.outputs.has_keystore == 'true'
+        with:
+          # The app compiles against 37; plugin libraries are raised to 36 (root build.gradle.kts).
+          packages: "ndk;27.2.12479018 platforms;android-35 platforms;android-36 platforms;android-37.0 build-tools;35.0.1"
+
+      - name: Point NDK_HOME at the installed NDK
+        if: steps.keystore.outputs.has_keystore == 'true'
+        run: echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        if: steps.keystore.outputs.has_keystore == 'true'
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.keystore.outputs.has_keystore == 'true'
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        if: steps.keystore.outputs.has_keystore == 'true'
+
+      - run: npm ci
+        if: steps.keystore.outputs.has_keystore == 'true'
+
+      # The keystore goes outside the checkout; key.properties (gitignored) is read by app/build.gradle.kts.
+      - name: Write the signing config
+        if: steps.keystore.outputs.has_keystore == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/mate-android.jks"
+          {
+            echo "storeFile=$RUNNER_TEMP/mate-android.jks"
+            echo "storePassword=$ANDROID_KEYSTORE_PASSWORD"
+            echo "keyAlias=$ANDROID_KEY_ALIAS"
+            echo "keyPassword=$ANDROID_KEY_PASSWORD"
+          } > src-tauri/gen/android/key.properties
+
+      - name: Build the APK
+        if: steps.keystore.outputs.has_keystore == 'true'
+        run: npm run tauri android build -- --apk --target aarch64
+
+      - name: Upload the APK
+        if: steps.keystore.outputs.has_keystore == 'true'
+        id: apk
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IS_TAG: ${{ github.ref_type == 'tag' }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          apk=$(find src-tauri/gen/android/app/build/outputs/apk -name '*-release.apk' | head -n 1)
+          [ -n "$apk" ] || { echo "no release APK was built"; exit 1; }
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          out="$RUNNER_TEMP/Mate_${version}_aarch64.apk"
+          cp "$apk" "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+          if [ "$IS_TAG" = "true" ]; then
+            gh release upload "$TAG" "$out" --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+
+      # workflow_dispatch has no release to attach to; keep the APK as a workflow artifact instead.
+      - uses: actions/upload-artifact@v4
+        if: steps.keystore.outputs.has_keystore == 'true' && github.ref_type != 'tag'
+        with:
+          name: mate-android-apk
+          path: ${{ steps.apk.outputs.path }}
+
+  # Publishes the draft only when all four desktop builds uploaded their installers, so updaters
+  # never see a release without latest.json. The Android job must not have failed; when it has no
+  # keystore it succeeds with its steps skipped, and a skipped job does not hold the release back.
   publish:
-    needs: [prepare, release]
-    if: github.ref_type == 'tag' && needs.release.result == 'success'
+    needs: [prepare, release, android]
+    if: >-
+      always() && github.ref_type == 'tag' && needs.release.result == 'success' &&
+      (needs.android.result == 'success' || needs.android.result == 'skipped')
     runs-on: ubuntu-22.04
     steps:
       - name: Publish the release

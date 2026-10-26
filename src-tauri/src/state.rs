@@ -4,7 +4,11 @@ use std::sync::{Arc, Mutex};
 
 use crate::commands::lifecycle::CloseGates;
 use crate::commands::recognize::{PageGates, ProviderCache};
-use mate_core::ai::keystore::{KeyStore, KeyringStore};
+use mate_core::ai::keystore::KeyStore;
+#[cfg(desktop)]
+use mate_core::ai::keystore::KeyringStore;
+#[cfg(mobile)]
+use mate_core::ai::keystore::FileKeyStore;
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
 use tauri::Manager;
@@ -16,7 +20,8 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// Window-close attempt state machines, one per window label.
     pub close_attempt: CloseGates,
-    /// API keys (OS keychain); never exposed to the frontend.
+    /// API keys (OS keychain on desktop, a file in the app sandbox on mobile); never exposed to
+    /// the frontend.
     pub keys: Arc<dyn KeyStore>,
     /// Per-page limit on concurrent AI checks.
     pub recognize_gates: PageGates,
@@ -39,12 +44,16 @@ impl AppState {
         if !settings_path.exists() {
             settings.save(&settings_path).map_err(|e| e.to_string())?;
         }
+        #[cfg(desktop)]
+        let keys: Arc<dyn KeyStore> = Arc::new(KeyringStore);
+        #[cfg(mobile)]
+        let keys: Arc<dyn KeyStore> = Arc::new(FileKeyStore::new(data_dir.join("keys.json")));
         Ok(AppState {
             storage: Mutex::new(storage),
             settings: Mutex::new(settings),
             data_dir,
             close_attempt: CloseGates::default(),
-            keys: Arc::new(KeyringStore),
+            keys,
             recognize_gates: PageGates::default(),
             providers: Arc::new(ProviderCache::default()),
         })

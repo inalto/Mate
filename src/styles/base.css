@@ -1606,3 +1606,47 @@ button.card:hover {
   flex: 1;
   min-width: 0;
 }
+
+/* Mobile / tablet (class set on <html> by platform.ts) */
+html.mobile .shell {
+  box-sizing: border-box;
+  /* Android WebViews often report 0 for the insets: 24px is the floor for the status bar. */
+  padding-top: max(env(safe-area-inset-top), 24px);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Onboarding renders outside the shell: keep its own padding and add the insets. */
+html.mobile .welcome {
+  padding-top: calc(max(env(safe-area-inset-top), 24px) + var(--space-4));
+  padding-bottom: calc(env(safe-area-inset-bottom) + var(--space-4));
+}
+
+html.mobile .canvas-view,
+html.mobile .box-frame-edge,
+html.mobile .box-frame-handle,
+html.mobile .graph-plot {
+  -webkit-touch-callout: none;
+}
+
+html.mobile .toolbar {
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+html.mobile .toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+html.mobile .toolbar .tb-btn {
+  min-width: 40px;
+  min-height: 40px;
+  flex: none;
+}
+
+html.mobile .sb-resize {
+  display: none;
+}

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import { errorMessage as message } from "../../../i18n";
 import { exportBackup, resetLocalData } from "../../../ipc/backup";
+import { isMobile } from "../../../platform";
 import { ButtonRow, SettingsSection } from "../rows";
 
 export default function BackupSection() {
@@ -18,7 +19,8 @@ export default function BackupSection() {
     setStatus(null);
     try {
       const path = await exportBackup();
-      if (path) setStatus(t("settings.backup.saved", { path }));
+      // Mobile: the zip went to the share sheet, its app-private path means nothing to the user.
+      if (path) setStatus(isMobile() ? t("settings.backup.shared") : t("settings.backup.saved", { path }));
     } catch (err) {
       setError(message(err));
     } finally {
@@ -31,7 +33,7 @@ export default function BackupSection() {
     setBusy(true);
     setError(null);
     try {
-      await resetLocalData(); // the app restarts on success
+      await resetLocalData(); // desktop restarts; mobile shares the backup, then closes
     } catch (err) {
       setError(message(err));
       setBusy(false);
@@ -71,6 +73,7 @@ export default function BackupSection() {
           onCancel={() => setConfirming(false)}
         >
           {t("settings.backup.reset.confirmBody")}
+          {isMobile() && ` ${t("settings.backup.reset.mobileNote")}`}
         </ConfirmDialog>
       )}
     </SettingsSection>

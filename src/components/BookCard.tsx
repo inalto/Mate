@@ -5,10 +5,12 @@ import { useNavigate } from "react-router";
 import { exportUnitArchive } from "../ipc/archive";
 import { thumbnailUrl, useThumbnailsReady } from "../ipc/thumbnails";
 import type { Unit } from "../model/types";
+import { isMobile } from "../platform";
 import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import PracticeDialog from "./PracticeDialog";
 import ShareDialog from "./ShareDialog";
+import { showToast } from "./Toast";
 import { useDismiss } from "./useDismiss";
 
 export const COVER_PALETTE = [
@@ -74,7 +76,9 @@ export default function BookCard({ unit }: { unit: Unit }) {
 
   const exportBook = async () => {
     try {
-      await exportUnitArchive(unit.id);
+      const saved = await exportUnitArchive(unit.id);
+      // Mobile: the archive went to the share sheet.
+      if (saved && isMobile()) showToast(t("export.shared"));
     } catch (err) {
       alert(t("export.failed", { message: err instanceof Error ? err.message : String(err) }));
     }

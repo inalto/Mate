@@ -4,9 +4,11 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { exportPage } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
+import { isMobile } from "../platform";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 import ShareDialog from "./ShareDialog";
+import { showToast } from "./Toast";
 
 type Format = "png" | "svg" | "pdf" | "latex" | "mate";
 
@@ -42,16 +44,19 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
     setBusy(true);
     setError(null);
     try {
+      let saved: string | null;
       if (format === "mate") {
         if (!unitId) throw new Error(t("export.notInBook"));
-        await exportUnitArchive(unitId);
+        saved = await exportUnitArchive(unitId);
       } else if (format === "latex") {
-        await exportPage(pageId, "latex", {});
+        saved = await exportPage(pageId, "latex", {});
       } else if (format === "pdf") {
-        await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable });
+        saved = await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable });
       } else {
-        await exportPage(pageId, format, format === "png" ? { theme, background, scale } : { theme, background });
+        saved = await exportPage(pageId, format, format === "png" ? { theme, background, scale } : { theme, background });
       }
+      // Mobile: the file went to the share sheet (desktop users picked the path themselves).
+      if (saved && isMobile()) showToast(t("export.shared"));
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

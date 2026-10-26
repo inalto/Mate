@@ -1,4 +1,5 @@
 import type { TKey } from "../../i18n";
+import { isMobile } from "../../platform";
 
 export interface NavSection {
   id: string;
@@ -53,3 +54,9 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
 ];
+
+/** The groups shown on this platform: Updates is desktop-only. */
+export const navGroups = (): NavGroup[] =>
+  isMobile()
+    ? NAV_GROUPS.map((g) => ({ ...g, sections: g.sections.filter((s) => s.id !== "updates") }))
+    : NAV_GROUPS;

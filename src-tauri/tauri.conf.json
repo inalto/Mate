@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Mate",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "identifier": "com.mate.notes",
   "build": {
     "frontendDist": "../dist",
@@ -60,6 +60,7 @@
       },
       {
         "ext": ["goodnotes"],
+        "mimeType": "application/x-goodnotes",
         "name": "GoodNotes file",
         "description": "GoodNotes file",
         "role": "Viewer",
@@ -67,6 +68,7 @@
       },
       {
         "ext": ["note"],
+        "mimeType": "application/x-notability",
         "name": "Notability file",
         "description": "Notability file",
         "role": "Viewer",
@@ -74,6 +76,7 @@
       },
       {
         "ext": ["one", "onepkg"],
+        "mimeType": "application/onenote",
         "name": "OneNote file",
         "description": "OneNote file",
         "role": "Viewer",
@@ -81,6 +84,7 @@
       },
       {
         "ext": ["freenotes", "freenotesv2", "freebackup"],
+        "mimeType": "application/x-freenotes",
         "name": "Freenotes file",
         "description": "Freenotes file",
         "role": "Viewer",
@@ -88,6 +92,7 @@
       },
       {
         "ext": ["sdocx"],
+        "mimeType": "application/x-samsung-notes",
         "name": "Samsung Notes file",
         "description": "Samsung Notes file",
         "role": "Viewer",

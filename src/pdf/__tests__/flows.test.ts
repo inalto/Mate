@@ -53,6 +53,15 @@ beforeEach(() => {
 afterEach(() => configurePdfLoader());
 
 describe("PDF import flows", () => {
+  it("titles a content:// import after the name Rust materialised", async () => {
+    vi.mocked(readSharedPdf).mockResolvedValueOnce({ id: "pdf-1", path: "x", mime: "application/pdf", bytes: 10, title: "Lecture 4" } as never);
+    const page = await importPdfFromPath("content://com.android.providers.downloads.documents/document/msf%3A22");
+    expect(page?.title).toBe("Lecture 4");
+    // a plain path keeps its own file name even if a title came back
+    vi.mocked(readSharedPdf).mockResolvedValueOnce({ id: "pdf-1", path: "x", mime: "application/pdf", bytes: 10, title: "other" } as never);
+    expect((await importPdfFromPath("C:/docs/Mine.pdf"))?.title).toBe("Mine");
+  });
+
   it("titles the page after the file", () => {
     expect(titleFromPath(String.raw`C:\docs\Lecture 3.PDF`)).toBe("Lecture 3");
     expect(titleFromPath("/tmp/.pdf")).toBe("PDF");

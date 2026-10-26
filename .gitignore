@@ -3,8 +3,16 @@ dist/
 # Copied from pdfjs-dist by scripts/copy-pdfjs-assets.mjs (predev / prebuild).
 public/pdfjs/
 target/
-src-tauri/gen/
+src-tauri/gen/schemas/
+src-tauri/gen/android/**/build/
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/key.properties
+src-tauri/gen/android/*.jks
 *.db
 *.db-wal
 *.db-shm
 docs/
+
+# Kotlin compiler daemon state from Android builds
+src-tauri/gen/android/.kotlin/

@@ -22,6 +22,7 @@ vi.mock("../../ipc/windows", () => ({
 }));
 
 import { openPageWindow } from "../../ipc/windows";
+import { setPlatformForTests } from "../../platform";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
 import Sidebar from "../Sidebar";
@@ -94,5 +95,17 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Open in new window" }));
     expect(openPageWindow).toHaveBeenCalledWith("p2");
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("sidebar_menu_hides_page_window_on_mobile", () => {
+    setPlatformForTests(true);
+    try {
+      renderSidebar();
+      fireEvent.contextMenu(screen.getByRole("button", { name: "Child" }));
+      expect(screen.getByRole("menuitem", { name: "Delete" })).toBeTruthy();
+      expect(screen.queryByRole("menuitem", { name: "Open in new window" })).toBeNull();
+    } finally {
+      setPlatformForTests(false);
+    }
   });
 });

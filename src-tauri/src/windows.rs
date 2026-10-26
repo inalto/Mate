@@ -224,6 +224,8 @@ impl WindowHost for TauriHost<'_> {
 
     fn focus(&self, label: &str) -> Result<(), String> {
         let w = self.0.get_webview_window(label).ok_or("window not found")?;
+        // Mobile windows cannot be minimized (and never get a second window to focus).
+        #[cfg(desktop)]
         let _ = w.unminimize();
         let _ = w.show();
         w.set_focus().map_err(|e| e.to_string())

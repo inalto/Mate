@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router";
-import { NAV_GROUPS } from "./nav";
+import { navGroups } from "./nav";
+import { isMobile } from "../../platform";
 import { collectEntries, jumpToRow, searchEntries, type SearchEntry } from "./search";
 import AboutSection from "./sections/AboutSection";
 import BackupSection from "./sections/BackupSection";
@@ -23,7 +24,7 @@ import "./settings.css";
 /** The settings section a location hash (`#sharing`) names, or null. */
 const sectionOf = (hash: string): string | null => {
   const id = hash.replace(/^#/, "");
-  return NAV_GROUPS.some((g) => g.sections.some((s) => s.id === id)) ? id : null;
+  return navGroups().some((g) => g.sections.some((s) => s.id === id)) ? id : null;
 };
 
 export default function Settings() {
@@ -35,7 +36,7 @@ export default function Settings() {
   // `/settings#sharing` opens at that section (links from dialogs elsewhere in the app).
   const { hash } = useLocation();
   const linked = sectionOf(hash);
-  const [active, setActive] = useState(linked ?? NAV_GROUPS[0].sections[0].id);
+  const [active, setActive] = useState(linked ?? navGroups()[0].sections[0].id);
   useEffect(() => {
     if (linked) document.getElementById(`set-sec-${linked}`)?.scrollIntoView?.({ block: "start" });
   }, [linked]);
@@ -76,7 +77,7 @@ export default function Settings() {
           if (it.isIntersecting) seen.add(id);
           else seen.delete(id);
         }
-        const first = NAV_GROUPS.flatMap((g) => g.sections).find((s) => seen.has(s.id));
+        const first = navGroups().flatMap((g) => g.sections).find((s) => seen.has(s.id));
         if (first) setActive(first.id);
       },
       { root: null, rootMargin: "0px 0px -70% 0px" },
@@ -138,7 +139,7 @@ export default function Settings() {
               </ul>
             )}
           </div>
-          {NAV_GROUPS.map((g) => (
+          {navGroups().map((g) => (
             <div key={g.id} className="settings-nav-group" role="group" aria-labelledby={`set-nav-${g.id}`}>
               <span id={`set-nav-${g.id}`} className="settings-nav-title">
                 {t(g.titleKey)}
@@ -174,7 +175,7 @@ export default function Settings() {
           <TrashSection />
           <BackupSection />
           <SharingSection />
-          <UpdatesSection />
+          {!isMobile() && <UpdatesSection />}
           <AboutSection />
         </div>
       </div>

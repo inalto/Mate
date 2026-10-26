@@ -246,12 +246,14 @@
         "hint": "Un zip contenant un fichier .mate par cahier. Pour restaurer, dézippe-le et importe chaque fichier .mate."
       },
       "saved": "Sauvegarde enregistrée dans {{path}}",
+      "shared": "Backup shared",
       "reset": {
         "label": "Réinitialiser les données locales",
         "hint": "Supprime tout sur cet appareil et recommence depuis l'accueil",
         "confirmTitle": "Réinitialiser les données locales ?",
         "confirm": "Réinitialiser",
-        "confirmBody": "Cela supprime tous les cahiers, pages et réglages de cet appareil. Une sauvegarde zip est d'abord créée. Les clés API enregistrées dans le trousseau système sont conservées."
+        "confirmBody": "Cela supprime tous les cahiers, pages et réglages de cet appareil. Une sauvegarde zip est d'abord créée. Les clés API enregistrées dans le trousseau système sont conservées.",
+        "mobileNote": "On Android the backup zip opens in the share sheet so you can keep it, then Mate closes. Reopen it to start again."
       }
     },
     "sharing": {
@@ -634,6 +636,7 @@
     "title": "Exporter",
     "export": "Exporter",
     "exporting": "Export en cours…",
+    "shared": "Shared",
     "notInBook": "Cette page n'appartient à aucun cahier",
     "format": "Format",
     "paper": "Papier",
