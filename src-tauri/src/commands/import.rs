@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use super::incoming::materialize;
 use super::open_files::{is_import_path, is_mate_path};
 use mate_core::archive::{MAX_ARCHIVE_BYTES, import_archive};
 use mate_core::import::place::{ImportReport, PlaceControl, PlaceTarget, place_document_with};
@@ -408,13 +409,38 @@ fn too_many() -> String {
     format!("Choose at most {MAX_PATHS} files at a time.")
 }
 
+/// The result for a picked entry that could not be read at all (logged; the user sees [`UNREADABLE`]).
+fn unreadable(path: &str, error: &str) -> SniffResult {
+    log::warn!("mate: could not read {path}: {error}");
+    SniffResult {
+        path: path.to_owned(),
+        filename: filename_of(Path::new(path)),
+        size: 0,
+        status: SniffStatus::Rejected,
+        source: None,
+        source_name: None,
+        reason: Some(UNREADABLE.into()),
+    }
+}
+
 /// Detects the format of each picked or dropped file.
 #[tauri::command]
-pub async fn sniff_import_files(paths: Vec<String>) -> Result<Vec<SniffResult>, String> {
+/// A picked `content://` URI (Android) is materialised first; its result then carries the
+/// stashed path, which is what `import_files` receives next.
+pub async fn sniff_import_files(app: AppHandle, paths: Vec<String>) -> Result<Vec<SniffResult>, String> {
     if paths.len() > MAX_PATHS {
         return Err(too_many());
     }
-    tauri::async_runtime::spawn_blocking(move || paths.iter().map(|p| sniff_path(p)).collect())
+    tauri::async_runtime::spawn_blocking(move || {
+        let data_dir = app.state::<AppState>().data_dir.clone();
+        paths
+            .iter()
+            .map(|p| match materialize(&app, &data_dir, p) {
+                Ok(path) => sniff_path(&path.to_string_lossy()),
+                Err(e) => unreadable(p, &e),
+            })
+            .collect()
+    })
         .await
         .map_err(|e| e.to_string())
 }
@@ -447,6 +473,9 @@ pub async fn import_files(
         let (app2, path2, target2) = (app.clone(), path.clone(), target.clone());
         let outcome = tauri::async_runtime::spawn_blocking(move || {
             let state: State<'_, AppState> = app2.state();
+            // Normally a no-op: the sniff already materialised picked URIs.
+            let local = materialize(&app2, &state.data_dir, &path2)?;
+            let path2 = local.to_string_lossy().into_owned();
             let control: State<'_, ImportControl> = app2.state();
             let assets = state.data_dir.join("assets");
             let job = Job {
@@ -458,14 +487,14 @@ pub async fn import_files(
             let emit = |p: Progress| {
                 let _ = app2.emit(PROGRESS_EVENT, p);
             };
-            import_one(&CoreImporter, &job, &path2, target2, &emit)
+            import_one(&CoreImporter, &job, &path2, target2, &emit).map(|report| (report, path2))
         })
         .await
         .map_err(|e| e.to_string())?;
         results.push(match outcome {
-            Ok(report) => {
+            Ok((report, local)) => {
                 // A Mate archive is a book of its own; the next files do not go into it.
-                if matches!(target, PlaceTarget::NewUnit { .. }) && !is_mate_path(&path) {
+                if matches!(target, PlaceTarget::NewUnit { .. }) && !is_mate_path(&local) {
                     target = PlaceTarget::ExistingUnit { unit_id: report.unit_id.clone() };
                 }
                 ImportFileResult { path, status: FileStatus::Ok, report: Some(report), error: None }

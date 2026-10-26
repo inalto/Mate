@@ -85,8 +85,16 @@ pub fn store_pdf(dir: &Path, path: &Path) -> Result<AssetInfo, String> {
 
 /// Stores the PDF at `path` (dialog pick, drop or file association) in the asset store.
 #[tauri::command]
-pub fn read_shared_pdf(state: State<'_, AppState>, path: String) -> Result<AssetInfo, String> {
-    store_pdf(&state.data_dir.join("assets"), Path::new(&path))
+/// On Android the picker hands over a `content://` URI, materialised first (off the main thread).
+pub async fn read_shared_pdf(app: AppHandle, path: String) -> Result<AssetInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let path = super::incoming::materialize(&app, &state.data_dir, &path)?;
+        log::info!("mate: read_shared_pdf {}", path.display());
+        store_pdf(&state.data_dir.join("assets"), &path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// The PDF the app was opened with, once; afterwards opens arrive as `incoming-file-open`.

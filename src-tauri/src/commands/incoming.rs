@@ -115,13 +115,83 @@ pub fn prune_incoming(dir: &Path, older_than: Duration) -> usize {
 /// matching the content is appended. `None` when the content is nothing Mate opens.
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub fn name_for(uri_segment: &str, bytes: &[u8]) -> Option<String> {
-    let decoded = percent_decode(uri_segment);
-    let name = sanitize_name(decoded.rsplit(['/', '\\']).next().unwrap_or(""));
+    let name = segment_name(uri_segment);
     let is_pdf = Path::new(&name).extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
     if is_pdf || is_import_path(&name) {
         return Some(name);
     }
     sniff_extension(bytes).map(|ext| format!("{name}.{ext}"))
+}
+
+/// The last segment of a URI as a file name: percent-decoded, last path component, sanitised.
+fn segment_name(uri_segment: &str) -> String {
+    let decoded = percent_decode(uri_segment);
+    sanitize_name(decoded.rsplit(['/', '\\']).next().unwrap_or(""))
+}
+
+/// The name to stash a picked image under: the URI's last segment, sanitised, keeping its own
+/// image extension or given the one of the content (PNG, JPEG, GIF, WebP, SVG, as the asset
+/// store sniffs them). `None` when the content is not an image.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub fn image_name_for(uri_segment: &str, bytes: &[u8]) -> Option<String> {
+    use mate_core::assets::{AssetKind, sniff};
+    let kind = sniff(bytes).filter(|k| *k != AssetKind::Pdf)?;
+    let name = segment_name(uri_segment);
+    let has_image_ext = Path::new(&name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| ["png", "jpg", "jpeg", "gif", "webp", "svg"].iter().any(|x| e.eq_ignore_ascii_case(x)));
+    Some(if has_image_ext { name } else { format!("{name}.{}", kind.ext()) })
+}
+
+/// The name to stash a picked file under: [`name_for`] (PDFs and notebooks), else
+/// [`image_name_for`], else the bare segment, which the command it goes to then rejects.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn picked_name(uri_segment: &str, bytes: &[u8]) -> String {
+    name_for(uri_segment, bytes)
+        .or_else(|| image_name_for(uri_segment, bytes))
+        .unwrap_or_else(|| segment_name(uri_segment))
+}
+
+/// A path the commands can hand to `std::fs`: a picked `content://` URI (what the dialog plugin
+/// returns on Android) is read, stashed as `data_dir/incoming/<uuid>/<name>` (pruned like files
+/// opened from other apps) and the stashed path returned; anything else is a path already and
+/// comes back unchanged. On desktop nothing is ever read. Blocking: call it off the main thread.
+pub fn materialize(app: &tauri::AppHandle, data_dir: &Path, path_or_uri: &str) -> Result<PathBuf, String> {
+    #[cfg(target_os = "android")]
+    return materialize_with(data_dir, path_or_uri, |url| read_content_uri(app, url));
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, data_dir);
+        Ok(PathBuf::from(path_or_uri))
+    }
+}
+
+/// [`materialize`] with the reader passed in, so it can be tested without a device.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn materialize_with(
+    data_dir: &Path,
+    path_or_uri: &str,
+    read: impl FnOnce(&tauri::Url) -> Result<Vec<u8>, String>,
+) -> Result<PathBuf, String> {
+    if !path_or_uri.starts_with("content://") {
+        return Ok(PathBuf::from(path_or_uri));
+    }
+    let url = tauri::Url::parse(path_or_uri).map_err(|e| e.to_string())?;
+    let bytes = read(&url)?;
+    if bytes.len() > MAX_INCOMING_BYTES {
+        return Err(too_large());
+    }
+    let name = picked_name(last_segment(&url), &bytes);
+    let path = stash_opened_file(&data_dir.join(INCOMING_DIR), &name, &bytes)?;
+    log::info!("mate: picked {url} as {}", path.display());
+    Ok(path)
+}
+
+/// The last non-empty path segment of `url`, or `""`.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn last_segment(url: &tauri::Url) -> &str {
+    url.path_segments().and_then(|mut s| s.rfind(|p| !p.is_empty())).unwrap_or("")
 }
 
 /// The extension of the format `bytes` holds, among those the router opens.
@@ -188,8 +258,18 @@ pub fn content_uri_opened(app: &tauri::AppHandle, url: tauri::Url) {
 /// Reads `url` through the fs plugin (a file descriptor from the content resolver) and stashes it.
 #[cfg(target_os = "android")]
 fn receive(app: &tauri::AppHandle, url: &tauri::Url) -> Result<PathBuf, String> {
-    use std::io::Read;
     use tauri::Manager;
+    let bytes = read_content_uri(app, url)?;
+    let name = name_for(last_segment(url), &bytes).ok_or("not a file Mate opens")?;
+    let dir = app.state::<crate::state::AppState>().data_dir.join(INCOMING_DIR);
+    stash_opened_file(&dir, &name, &bytes)
+}
+
+/// The bytes behind a `content://` URI, through the fs plugin; refuses more than
+/// [`MAX_INCOMING_BYTES`] before anything parses them. Blocking.
+#[cfg(target_os = "android")]
+fn read_content_uri(app: &tauri::AppHandle, url: &tauri::Url) -> Result<Vec<u8>, String> {
+    use std::io::Read;
     use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 
     let mut opts = OpenOptions::new();
@@ -198,12 +278,9 @@ fn receive(app: &tauri::AppHandle, url: &tauri::Url) -> Result<PathBuf, String> 
     let mut bytes = Vec::new();
     file.take(MAX_INCOMING_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
     if bytes.len() > MAX_INCOMING_BYTES {
-        return Err(too_large()); // before any sniffing parses it
+        return Err(too_large());
     }
-    let segment = url.path_segments().and_then(|mut s| s.rfind(|p| !p.is_empty())).unwrap_or("");
-    let name = name_for(segment, &bytes).ok_or("not a file Mate opens")?;
-    let dir = app.state::<crate::state::AppState>().data_dir.join(INCOMING_DIR);
-    stash_opened_file(&dir, &name, &bytes)
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -306,6 +383,55 @@ mod tests {
         assert_eq!(name_for("34", &mate_archive()).as_deref(), Some("34.mate"));
         assert_eq!(name_for("34", b"hello world"), None);
         assert_eq!(name_for("34", b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"), None); // empty zip
+    }
+
+    const PNG_HEAD: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR";
+    const JPEG_HEAD: &[u8] = b"\xFF\xD8\xFF\xE0\0\x10JFIF\0";
+
+    #[test]
+    fn image_name_gets_the_extension_of_its_content() {
+        assert_eq!(image_name_for("image%3A1000000041", PNG_HEAD).as_deref(), Some("image_1000000041.png"));
+        assert_eq!(image_name_for("41", JPEG_HEAD).as_deref(), Some("41.jpg"));
+        assert_eq!(image_name_for("41", b"<svg xmlns='http://www.w3.org/2000/svg'/>").as_deref(), Some("41.svg"));
+        assert_eq!(image_name_for("photo.JPG", JPEG_HEAD).as_deref(), Some("photo.JPG")); // its own kept
+        assert_eq!(image_name_for("41", b"hello world"), None);
+    }
+
+    #[test]
+    fn picked_name_prefers_notebooks_and_pdfs_then_images_then_the_segment() {
+        assert_eq!(picked_name("msf%3A7", b"%PDF-1.7\n"), "msf_7.pdf");
+        assert_eq!(picked_name("image%3A7", PNG_HEAD), "image_7.png");
+        assert_eq!(picked_name("7", b"hello"), "7"); // the command then rejects it
+    }
+
+    #[test]
+    fn materialize_leaves_a_plain_path_alone() {
+        let d = temp("materialize-plain");
+        let never = |_: &tauri::Url| -> Result<Vec<u8>, String> { panic!("a path is not read") };
+        for s in [r"C:\Users\me\Pictures\cat.png", "/storage/emulated/0/Download/cat.png", "file:///tmp/x.pdf"] {
+            assert_eq!(materialize_with(&d, s, never).unwrap(), PathBuf::from(s));
+        }
+        assert_eq!(fs::read_dir(&d).unwrap().count(), 0);
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn materialize_stashes_a_content_uri_under_incoming() {
+        let d = temp("materialize-uri");
+        let uri = "content://com.android.providers.media.documents/document/image%3A1000000041";
+        let p = materialize_with(&d, uri, |u| {
+            assert_eq!(u.as_str(), uri);
+            Ok(PNG_HEAD.to_vec())
+        })
+        .unwrap();
+        assert_eq!(p.parent().unwrap().parent().unwrap(), d.join(INCOMING_DIR));
+        assert_eq!(p.file_name().unwrap().to_string_lossy(), "image_1000000041.png");
+        assert_eq!(fs::read(&p).unwrap(), PNG_HEAD);
+        let err = materialize_with(&d, "content://x/y", |_| Err("denied".into())).unwrap_err();
+        assert!(err.contains("denied"), "{err}");
+        let big = materialize_with(&d, "content://x/big", |_| Ok(vec![0; MAX_INCOMING_BYTES + 1]));
+        assert!(big.is_err());
+        let _ = fs::remove_dir_all(&d);
     }
 
     /// A zip carrying a `manifest.json`, as a Mate archive does.
