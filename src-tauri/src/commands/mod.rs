@@ -9,6 +9,7 @@ pub mod lifecycle;
 pub mod math;
 pub mod import;
 pub mod incoming;
+pub mod ipc_body;
 pub mod notebook;
 pub mod open_files;
 pub mod pdf;

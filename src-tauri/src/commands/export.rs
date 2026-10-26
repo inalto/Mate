@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use tauri::AppHandle;
-use tauri::ipc::{InvokeBody, Request};
+use tauri::ipc::Request;
+
+use super::ipc_body::body_bytes;
 #[cfg(desktop)]
 use tauri_plugin_dialog::DialogExt;
 
@@ -213,17 +215,19 @@ pub async fn after_export(app: &AppHandle, path: &Path) -> Result<(), String> {
     }
 }
 
-/// The file content of a raw-body request. Android has no custom-protocol IPC (the webview
-/// cannot read request bodies), so there a `Uint8Array` arrives as a JSON array of numbers.
-pub fn body_bytes(body: &InvokeBody) -> Option<Vec<u8>> {
-    match body {
-        InvokeBody::Raw(bytes) => Some(bytes.clone()),
-        InvokeBody::Json(serde_json::Value::Array(items)) => items
-            .iter()
-            .map(|v| v.as_u64().and_then(|n| u8::try_from(n).ok()))
-            .collect(),
-        InvokeBody::Json(_) => None,
-    }
+/// Writes `bytes` where `ask_save_path` says (a save dialog on desktop, `exports/` on mobile),
+/// then hands the file to the share sheet on mobile. The written path, or `None` if cancelled.
+pub async fn save_and_share(
+    app: AppHandle,
+    suggested_name: String,
+    bytes: &[u8],
+) -> Result<Option<String>, String> {
+    let Some(path) = ask_save_path(app.clone(), suggested_name).await? else {
+        return Ok(None);
+    };
+    write_atomically(&path, bytes)?;
+    after_export(&app, &path).await?;
+    Ok(Some(path.to_string_lossy().into_owned()))
 }
 
 /// Saves an exported file. The raw request body is the file content; the `x-suggested-name`
@@ -233,7 +237,7 @@ pub async fn write_export_file(
     app: AppHandle,
     request: Request<'_>,
 ) -> Result<Option<String>, String> {
-    let Some(bytes) = body_bytes(request.body()) else {
+    let Some(bytes) = body_bytes(request.body()).map(|b| b.into_owned()) else {
         return Err("expected raw bytes".into());
     };
     if bytes.is_empty() || bytes.len() > MAX_EXPORT_BYTES {
@@ -246,12 +250,7 @@ pub async fn write_export_file(
         .filter(|s| !s.is_empty())
         .unwrap_or("mate-export")
         .to_string();
-    let Some(path) = ask_save_path(app.clone(), suggested_name).await? else {
-        return Ok(None);
-    };
-    write_atomically(&path, &bytes)?;
-    after_export(&app, &path).await?;
-    Ok(Some(path.to_string_lossy().into_owned()))
+    save_and_share(app, suggested_name, &bytes).await
 }
 
 #[cfg(test)]
@@ -316,30 +315,6 @@ mod tests {
             exports.join("mate-export.bin")
         );
         assert_eq!(mobile_save_path(data, "x.p/df"), exports.join("df.bin"));
-    }
-
-    #[test]
-    fn body_bytes_accepts_raw_and_json_arrays() {
-        assert_eq!(
-            body_bytes(&InvokeBody::Raw(vec![1, 2, 255])),
-            Some(vec![1, 2, 255])
-        );
-        assert_eq!(
-            body_bytes(&InvokeBody::Json(serde_json::json!([37, 80, 68, 70]))),
-            Some(b"%PDF".to_vec())
-        );
-        assert_eq!(
-            body_bytes(&InvokeBody::Json(serde_json::json!([1, 256]))),
-            None
-        );
-        assert_eq!(
-            body_bytes(&InvokeBody::Json(serde_json::json!([1, -1]))),
-            None
-        );
-        assert_eq!(
-            body_bytes(&InvokeBody::Json(serde_json::json!({"0": 1}))),
-            None
-        );
     }
 
     #[test]

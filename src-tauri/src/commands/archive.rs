@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use super::export::{after_export, ask_save_path, export_filename, write_atomically};
+use super::export::{export_filename, save_and_share, write_atomically};
 use crate::state::AppState;
 
 /// Exports a unit (book) and the assets its elements reference to a `.mate` file chosen in a
@@ -40,12 +40,7 @@ pub async fn export_unit_archive(
             title,
         )
     };
-    let Some(path) = ask_save_path(app.clone(), export_filename(&title, "mate")).await? else {
-        return Ok(None);
-    };
-    write_atomically(&path, &bytes)?;
-    after_export(&app, &path).await?;
-    Ok(Some(path.to_string_lossy().into_owned()))
+    save_and_share(app, export_filename(&title, "mate"), &bytes).await
 }
 
 /// Imports a `.mate` file chosen in an open dialog as a new book (its assets go to the asset
@@ -100,12 +95,7 @@ pub async fn export_backup(
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
-    let Some(path) = ask_save_path(app.clone(), backup_filename()).await? else {
-        return Ok(None);
-    };
-    write_atomically(&path, &bytes)?;
-    after_export(&app, &path).await?;
-    Ok(Some(path.to_string_lossy().into_owned()))
+    save_and_share(app, backup_filename(), &bytes).await
 }
 
 /// Left in the data directory when a reset could not delete everything; the next launch tells
