@@ -55,19 +55,23 @@ impl KeyStore for KeyringStore {
 /// File-backed store for mobile: a JSON object `{ "<provider>": "<key>" }`, written atomically.
 pub struct FileKeyStore {
     path: PathBuf,
+    /// Held across load + save so concurrent `set`/`delete` calls cannot drop each other's keys.
+    write: Mutex<()>,
 }
 
 impl FileKeyStore {
     pub fn new(path: PathBuf) -> FileKeyStore {
-        FileKeyStore { path }
+        FileKeyStore { path, write: Mutex::new(()) }
     }
 
-    /// A missing or corrupt file reads as empty.
-    fn load(&self) -> HashMap<String, String> {
-        std::fs::read_to_string(&self.path)
-            .ok()
-            .and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or_default()
+    /// A missing or corrupt file reads as empty; any other read error is returned, so a store
+    /// that cannot be read is never overwritten with an empty one.
+    fn load(&self) -> Result<HashMap<String, String>, String> {
+        match std::fs::read_to_string(&self.path) {
+            Ok(text) => Ok(serde_json::from_str(&text).unwrap_or_default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(HashMap::new()),
+            Err(e) => Err(format!("could not read the key store: {e}")),
+        }
     }
 
     fn save(&self, map: &HashMap<String, String>) -> Result<(), String> {
@@ -85,17 +89,19 @@ impl FileKeyStore {
 
 impl KeyStore for FileKeyStore {
     fn get(&self, provider: &str) -> Result<Option<String>, String> {
-        Ok(self.load().get(provider).cloned())
+        Ok(self.load()?.get(provider).cloned())
     }
 
     fn set(&self, provider: &str, key: &str) -> Result<(), String> {
-        let mut map = self.load();
+        let _guard = self.write.lock().map_err(|e| e.to_string())?;
+        let mut map = self.load()?;
         map.insert(provider.into(), key.into());
         self.save(&map)
     }
 
     fn delete(&self, provider: &str) -> Result<(), String> {
-        let mut map = self.load();
+        let _guard = self.write.lock().map_err(|e| e.to_string())?;
+        let mut map = self.load()?;
         if map.remove(provider).is_some() {
             self.save(&map)?;
         }
@@ -153,5 +159,38 @@ mod tests {
         assert_eq!(s.get("anthropic").unwrap(), None);
         s.set("anthropic", "sk-2").unwrap();
         assert_eq!(FileKeyStore::new(path).get("anthropic").unwrap(), Some("sk-2".into()));
+    }
+
+    #[test]
+    fn file_store_propagates_read_errors_and_does_not_overwrite() {
+        // A directory where the file should be: reading fails with something other than NotFound.
+        let path = temp_path();
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(path.join("marker"), "keep").unwrap();
+        let s = FileKeyStore::new(path.clone());
+        assert!(s.get("anthropic").is_err());
+        assert!(s.set("anthropic", "sk-3").is_err());
+        assert!(s.delete("anthropic").is_err());
+        assert!(path.is_dir());
+        assert_eq!(std::fs::read_to_string(path.join("marker")).unwrap(), "keep");
+    }
+
+    #[test]
+    fn concurrent_sets_keep_every_key() {
+        let path = temp_path();
+        let s = std::sync::Arc::new(FileKeyStore::new(path.clone()));
+        let handles: Vec<_> = (0..8)
+            .map(|i| {
+                let s = s.clone();
+                std::thread::spawn(move || s.set(&format!("p{i}"), "k").unwrap())
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        let fresh = FileKeyStore::new(path);
+        for i in 0..8 {
+            assert_eq!(fresh.get(&format!("p{i}")).unwrap(), Some("k".into()));
+        }
     }
 }
