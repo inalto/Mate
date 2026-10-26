@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 // The release notes are bundled as raw text, the same way src/whatsnew/index.ts loads them.
-const notes = import.meta.glob("../0.5.0.md", { query: "?raw", import: "default", eager: true }) as Record<
-  string,
-  string
->;
+const notes = import.meta.glob(["../0.5.0.md", "../0.7.0.md"], {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
 
-describe("0.5.0 release notes", () => {
-  const text = notes["../0.5.0.md"];
+describe.each(["0.5.0", "0.7.0"])("%s release notes", (version) => {
+  const text = notes[`../${version}.md`];
 
   it("exists and is not empty", () => {
     expect(text).toBeDefined();
