@@ -95,7 +95,7 @@ jobs:
           releaseBody: |
             Mate — local-first handwriting & math notes for Windows, macOS and Linux.
 
-            Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux).
+            Installers: `.msi` / `-setup.exe` (Windows), `.dmg` (macOS, Apple Silicon and Intel), `.deb` / `.rpm` / `.AppImage` (Linux), `_aarch64.apk` (Android tablets, sideload).
             macOS builds are not notarised yet: right-click → Open the first time, or run `xattr -dr com.apple.quarantine /Applications/Mate.app`.
           # The release is created as a draft by `prepare` and published by `publish` below.
           releaseDraft: true
@@ -137,7 +137,8 @@ jobs:
       - uses: android-actions/setup-android@v3
         if: steps.keystore.outputs.has_keystore == 'true'
         with:
-          packages: "ndk;27.2.12479018 platforms;android-35 build-tools;35.0.1"
+          # The app compiles against 37; plugin libraries are raised to 36 (root build.gradle.kts).
+          packages: "ndk;27.2.12479018 platforms;android-35 platforms;android-36 platforms;android-37.0 build-tools;35.0.1"
 
       - name: Point NDK_HOME at the installed NDK
         if: steps.keystore.outputs.has_keystore == 'true'

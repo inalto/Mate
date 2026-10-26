@@ -98,7 +98,7 @@ Each release has an `.apk` for 64-bit ARM tablets. Android installs it as a side
 
 ### Build the APK yourself
 
-You need JDK 17, the Android SDK (command-line tools, `platforms;android-35`, `build-tools;35.0.1`), NDK `27.2.12479018` and the Rust targets `aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android`. Set `JAVA_HOME`, `ANDROID_HOME` and `NDK_HOME` (see [Building and testing](https://github.com/inalto/Mate/wiki/Building-and-Testing)), then:
+You need JDK 17, the Android SDK (command-line tools, `platforms;android-35`, `platforms;android-36`, `platforms;android-37.0`, `build-tools;35.0.1`; the app compiles against 37 and plugin libraries against 36), NDK `27.2.12479018` and the Rust targets `aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android`. Set `JAVA_HOME`, `ANDROID_HOME` and `NDK_HOME` (see [Building and testing](https://github.com/inalto/Mate/wiki/Building-and-Testing)), then:
 
 ```bash
 npm ci
@@ -202,7 +202,7 @@ The Android release job signs the APK with its own keystore (not the updater key
    ```
 
    Losing the keystore or its password means installed copies can no longer be updated in place: Android only installs an APK over one signed with the same key.
-2. For local release builds, create `src-tauri/gen/android/key.properties` (gitignored) with `storeFile` (absolute path to the `.jks`), `storePassword`, `keyAlias` (`mate`) and `keyPassword`.
+2. For local release builds, create `src-tauri/gen/android/key.properties` (gitignored) with `storeFile` (absolute path to the `.jks`), `storePassword`, `keyAlias` (`mate`) and `keyPassword`. Gradle reads it as a Java properties file, so the passwords are taken verbatim: avoid backslashes and leading spaces in them (the CI job writes the secrets into this file the same way).
 3. Add GitHub repository secrets: `ANDROID_KEYSTORE_BASE64` (the keystore as one line of base64: `base64 -w0 ~/.tauri/mate-android.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`mate`) and `ANDROID_KEY_PASSWORD`. On PowerShell, copy the base64 with `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\.tauri\mate-android.jks")) | Set-Clipboard`.
 
 On a tag, the `android` job builds `Mate_<version>_aarch64.apk` and uploads it to the same draft release. Without `ANDROID_KEYSTORE_BASE64` the job skips its build steps and the release is published without an APK.

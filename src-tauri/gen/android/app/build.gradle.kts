@@ -37,11 +37,13 @@ android {
     }
     signingConfigs {
         if (keystoreProperties.containsKey("storeFile")) {
+            fun key(name: String): String =
+                keystoreProperties.getProperty(name) ?: error("key.properties missing $name")
             create("release") {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = key("keyAlias")
+                keyPassword = key("keyPassword")
+                storeFile = file(key("storeFile"))
+                storePassword = key("storePassword")
             }
         }
     }
