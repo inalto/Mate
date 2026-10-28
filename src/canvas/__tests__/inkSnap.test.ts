@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Point } from "../../model/types";
-import { createInkSnap, inkSnapAllowed, snapShapeElement } from "../inkSnap";
+import { createInkSnap, dwellSlopFor, inkSnapAllowed, snapShapeElement } from "../inkSnap";
 
 const rectPath = (): Point[] => {
   const corners: Array<[number, number]> = [[60, 0], [120, 0], [120, 80], [0, 80], [0, 0], [56, 0]];
@@ -74,6 +74,10 @@ describe("ink snap state machine", () => {
     expect(second.onSnap).not.toHaveBeenCalled();
     vi.advanceTimersByTime(260);
     expect(second.onSnap).toHaveBeenCalledTimes(1);
+  });
+
+  it("dwell_slop_per_pointer_type", () => {
+    expect([dwellSlopFor("touch"), dwellSlopFor("pen"), dwellSlopFor("mouse")]).toEqual([8, 2, 2]);
   });
 
   it("touch_slop_keeps_a_6px_wobble_armed", () => {

@@ -129,3 +129,15 @@ fn legacy_draw_with_finger_maps_to_finger_action() {
     assert!(!text.contains("drawWithFinger"));
     assert!(text.contains("\"fingerAction\": \"pan\""));
 }
+
+#[test]
+fn unknown_finger_action_loads_as_auto() {
+    let dir = tempdir();
+    let p = dir.join("settings.json");
+    for bad in [r#""sideways""#, "3", "null"] {
+        std::fs::write(&p, format!(r#"{{"fingerAction":{bad},"theme":"dark"}}"#)).unwrap();
+        let s = Settings::load(&p);
+        assert_eq!(s.finger_action, "auto", "{bad}");
+        assert_eq!(s.theme, "dark");
+    }
+}

@@ -325,8 +325,7 @@ const FINGER_LABEL = {
 /** Mobile only: what one finger does, cycling draw ↔ pan ("auto" goes to "draw"). */
 function FingerToggle() {
   const { t } = useTranslation();
-  const stored = useSettingsStore((s) => s.settings.fingerAction);
-  const action: FingerAction = stored in FINGER_LABEL ? stored : "auto";
+  const action = useSettingsStore((s) => s.settings.fingerAction);
   const next = action === "draw" ? "pan" : "draw";
   const label = t(FINGER_LABEL[action]);
   return (

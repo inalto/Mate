@@ -7,7 +7,8 @@ export type { FingerAction };
 
 /**
  * settings.palmRejection. Rules for a touch contact (pen and mouse are never rejected):
- * - "off": every touch is accepted (draws per settings.fingerAction, else pans/pinches).
+ * - "off": every touch is accepted, the 45 px definite-palm check included (draws per
+ *   settings.fingerAction, else pans/pinches).
  * - "standard" ("low" is the legacy name): rejected when its radius exceeds 45 px (a definite
  *   palm); when a stylus was seen (down, move or hover) in the last 2 s, also when its contact
  *   diameter exceeds 40 px, and with fingerAction "auto"/"pan" any touch is rejected then.

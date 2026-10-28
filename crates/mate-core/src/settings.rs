@@ -228,7 +228,8 @@ impl Default for Settings {
 }
 
 /// Maps keys from older settings files onto their replacements (the old keys are then unknown,
-/// so they are ignored on load and dropped on the next save).
+/// so they are ignored on load and dropped on the next save), and normalises enum-like values the
+/// frontend switches on: an unknown `fingerAction` becomes `"auto"`.
 fn migrate_legacy_keys(value: &mut serde_json::Value) {
     let serde_json::Value::Object(map) = value else {
         return;
@@ -244,6 +245,11 @@ fn migrate_legacy_keys(value: &mut serde_json::Value) {
                 "fingerAction".into(),
                 serde_json::Value::String(action.into()),
             );
+        }
+    }
+    if let Some(action) = map.get_mut("fingerAction") {
+        if !matches!(action.as_str(), Some("auto" | "draw" | "pan")) {
+            *action = serde_json::Value::String("auto".into());
         }
     }
 }

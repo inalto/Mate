@@ -187,7 +187,7 @@
       },
       "fingerAction": {
         "label": "One finger",
-        "hint": "Automatic: a finger draws until you use a pen, then fingers pan",
+        "hint": "Automatic: a finger draws; fingers pan while you are using a pen",
         "auto": "Automatic",
         "draw": "Draws",
         "pan": "Pans and zooms"

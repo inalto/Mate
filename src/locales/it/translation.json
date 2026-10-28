@@ -187,7 +187,7 @@
       },
       "fingerAction": {
         "label": "Un dito",
-        "hint": "Automatico: il dito disegna finché non usi una penna, poi le dita spostano",
+        "hint": "Automatico: il dito disegna; le dita spostano mentre usi una penna",
         "auto": "Automatico",
         "draw": "Disegna",
         "pan": "Sposta e ingrandisce"
