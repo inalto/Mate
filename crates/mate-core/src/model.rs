@@ -130,6 +130,9 @@ pub struct Bookshelf {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
     pub version: i64,
+    /// The folder this bookshelf sits in; `None` is the Library root (schema v4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

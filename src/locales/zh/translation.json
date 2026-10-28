@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "库视图",
         "recent": "最近",
-        "shelves": "书架",
+        "shelves": "Folders",
         "az": "按字母顺序"
       },
       "sidebarLayout": {
@@ -620,18 +620,11 @@
     "changeColour": "更改颜色",
     "favourite": "收藏",
     "unfavourite": "取消收藏",
-    "moveToShelf": "移到书架",
     "practice": "基于此笔记本练习…",
     "exportBook": "导出笔记本…",
     "share": "分享…",
     "importInto": "导入到此笔记本…",
     "colour": "颜色 {{color}}",
-    "noShelf": "无书架",
-    "shelfName": "书架名称",
-    "unshelved": "未归入书架",
-    "renameShelf": "重命名书架",
-    "deleteShelf": "删除书架",
-    "emptyShelf": "此书架上没有笔记本",
     "imported": "已导入笔记本：{{pages}} 页，{{elements}} 个元素。",
     "importedSkipped": "已导入笔记本：{{pages}} 页，{{elements}} 个元素，{{skipped}} 个因超出限制被跳过。",
     "importFailed": "导入失败：{{message}}",
@@ -642,8 +635,18 @@
     "emptyHint": "创建第一个笔记本，开始整理您的笔记、公式和想法",
     "noneFound": "未找到笔记本",
     "clearSearch": "清除搜索",
-    "newShelf": "新建书架",
-    "newShelfName": "新书架名称"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "导出失败：{{message}}",
@@ -1007,7 +1010,7 @@
     "emptyHint": "已删除的页面、章节和笔记本会显示在这里，以便恢复。",
     "deleted": "{{kind}}——删除于 {{date}}",
     "kinds": {
-      "bookshelf": "书架",
+      "bookshelf": "folder",
       "unit": "单元",
       "section": "分区",
       "page": "页面"

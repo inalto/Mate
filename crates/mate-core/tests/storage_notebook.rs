@@ -1,8 +1,8 @@
 mod common;
 
-use common::{page, seeded, stroke};
+use common::{folder, page, seeded, stroke, unit};
 use mate_core::model::{BackgroundType, PageMode};
-use mate_core::storage::{EntityKind, Storage};
+use mate_core::storage::{EntityKind, Storage, StorageError};
 
 #[test]
 fn tree_round_trip() {
@@ -262,4 +262,179 @@ fn bump_thumbnail_version_increments_and_never_regresses() {
 fn bump_thumbnail_version_unknown_page_is_not_found() {
     let mut st = seeded();
     assert!(st.bump_thumbnail_version("nope").is_err());
+}
+
+// ---- Folders (nested bookshelves, schema v4) ----
+
+fn shelf_ids(st: &Storage) -> Vec<String> {
+    st.list_tree().unwrap().bookshelves.into_iter().map(|b| b.id).collect()
+}
+
+fn parent_of(st: &Storage, id: &str) -> Option<String> {
+    st.list_tree()
+        .unwrap()
+        .bookshelves
+        .into_iter()
+        .find(|b| b.id == id)
+        .expect("live folder")
+        .parent_id
+}
+
+fn trash_ids(st: &Storage) -> Vec<String> {
+    st.list_trash().unwrap().into_iter().map(|t| t.id).collect()
+}
+
+/// s1 > s2 > s3, with book u1 in s1 (from `seeded`) and u3 in s3.
+fn nested() -> Storage {
+    let mut st = seeded();
+    st.upsert_bookshelf(&folder("s2", Some("s1"))).unwrap();
+    st.upsert_bookshelf(&folder("s3", Some("s2"))).unwrap();
+    st.upsert_unit(&unit("u3", Some("s3"))).unwrap();
+    st
+}
+
+#[test]
+fn migrates_v3_to_v4_keeping_shelves_at_the_root() {
+    let path = std::env::temp_dir().join(format!("mate-v3-{}.db", mate_core::model::new_id()));
+    {
+        // A database exactly as v0.8 left it: schema v3 with one shelf holding one book.
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(include_str!("../src/storage/schema.sql")).unwrap();
+        conn.execute_batch(include_str!("../src/storage/schema_v2.sql")).unwrap();
+        conn.execute_batch(include_str!("../src/storage/schema_v3.sql")).unwrap();
+        conn.execute_batch("INSERT INTO schema_version (version) VALUES (1), (2), (3)").unwrap();
+        let now = "2026-01-01T00:00:00.000Z";
+        conn.execute(
+            "INSERT INTO bookshelves (id, title, created_at, updated_at) VALUES ('s1', 'Maths', ?1, ?1)",
+            [now],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO units (id, title, bookshelf_id, created_at, updated_at) \
+             VALUES ('u1', 'Algebra', 's1', ?1, ?1)",
+            [now],
+        )
+        .unwrap();
+    }
+
+    let mut st = Storage::open(&path).unwrap();
+    let tree = st.list_tree().unwrap();
+    assert_eq!(tree.bookshelves.len(), 1);
+    assert_eq!(tree.bookshelves[0].title, "Maths");
+    assert_eq!(tree.bookshelves[0].parent_id, None);
+    assert_eq!(tree.units[0].bookshelf_id.as_deref(), Some("s1"));
+    // The v4 column works on the migrated database and serializes as `parentId`.
+    st.upsert_bookshelf(&folder("s2", Some("s1"))).unwrap();
+    let child = st.list_tree().unwrap().bookshelves.into_iter().find(|b| b.id == "s2").unwrap();
+    assert_eq!(serde_json::to_value(&child).unwrap()["parentId"], "s1");
+    drop(st);
+
+    // Reopening is a no-op migration and keeps the hierarchy.
+    let st = Storage::open(&path).unwrap();
+    assert_eq!(parent_of(&st, "s2").as_deref(), Some("s1"));
+    drop(st);
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+}
+
+#[test]
+fn folder_moves_between_parents_and_to_the_root() {
+    let mut st = nested();
+    st.upsert_bookshelf(&folder("other", None)).unwrap();
+    st.move_bookshelf("s3", Some("other")).unwrap();
+    assert_eq!(parent_of(&st, "s3").as_deref(), Some("other"));
+    st.move_bookshelf("s3", None).unwrap();
+    assert_eq!(parent_of(&st, "s3"), None);
+    // The book inside travels with its folder.
+    let u3 = st.list_tree().unwrap().units.into_iter().find(|u| u.id == "u3").unwrap();
+    assert_eq!(u3.bookshelf_id.as_deref(), Some("s3"));
+}
+
+#[test]
+fn folder_cannot_move_into_itself_or_a_descendant() {
+    let mut st = nested();
+    assert!(matches!(st.move_bookshelf("s1", Some("s1")), Err(StorageError::FolderCycle)));
+    assert!(matches!(st.move_bookshelf("s1", Some("s3")), Err(StorageError::FolderCycle)));
+    // The same rule holds for a full upsert carrying a parent.
+    assert!(matches!(
+        st.upsert_bookshelf(&folder("s1", Some("s2"))),
+        Err(StorageError::FolderCycle)
+    ));
+    assert_eq!(parent_of(&st, "s1"), None);
+    assert_eq!(parent_of(&st, "s2").as_deref(), Some("s1"));
+    assert_eq!(StorageError::FolderCycle.to_string(), "Cannot move a folder into itself");
+}
+
+#[test]
+fn folder_parent_must_exist_and_be_live() {
+    let mut st = nested();
+    assert!(matches!(st.move_bookshelf("s3", Some("nope")), Err(StorageError::NotFound(_))));
+    assert!(matches!(st.move_bookshelf("nope", None), Err(StorageError::NotFound(_))));
+    st.upsert_bookshelf(&folder("gone", None)).unwrap();
+    st.soft_delete(EntityKind::Bookshelf, "gone").unwrap();
+    assert!(matches!(st.move_bookshelf("s3", Some("gone")), Err(StorageError::NotFound(_))));
+    assert!(matches!(
+        st.upsert_bookshelf(&folder("new", Some("gone"))),
+        Err(StorageError::NotFound(_))
+    ));
+}
+
+#[test]
+fn trashing_a_folder_trashes_subfolders_and_unfiles_books() {
+    let mut st = nested();
+    st.soft_delete(EntityKind::Bookshelf, "s1").unwrap();
+
+    let tree = st.list_tree().unwrap();
+    assert!(tree.bookshelves.is_empty());
+    assert_eq!(tree.units.len(), 2, "books are never trashed with a folder");
+    assert!(tree.units.iter().all(|u| u.bookshelf_id.is_none()));
+    assert_eq!(trash_ids(&st), ["s1"], "only the top-most folder is listed");
+
+    st.restore(EntityKind::Bookshelf, "s1").unwrap();
+    assert_eq!(shelf_ids(&st), ["s1", "s2", "s3"]);
+    assert_eq!(parent_of(&st, "s1"), None);
+    assert_eq!(parent_of(&st, "s2").as_deref(), Some("s1"));
+    assert_eq!(parent_of(&st, "s3").as_deref(), Some("s2"));
+    assert!(st.list_trash().unwrap().is_empty());
+}
+
+#[test]
+fn restore_keeps_a_separately_trashed_subfolder_in_the_trash() {
+    let mut st = nested();
+    st.soft_delete(EntityKind::Bookshelf, "s3").unwrap();
+    st.soft_delete(EntityKind::Bookshelf, "s1").unwrap();
+    // s3 sits under a trashed folder: hidden until its parent comes back.
+    assert_eq!(trash_ids(&st), ["s1"]);
+    st.restore(EntityKind::Bookshelf, "s1").unwrap();
+    assert_eq!(shelf_ids(&st), ["s1", "s2"]);
+    assert_eq!(trash_ids(&st), ["s3"]);
+}
+
+#[test]
+fn restoring_a_folder_whose_parent_is_trashed_puts_it_at_the_root() {
+    let mut st = nested();
+    st.soft_delete(EntityKind::Bookshelf, "s1").unwrap();
+    st.restore(EntityKind::Bookshelf, "s2").unwrap();
+    assert_eq!(shelf_ids(&st), ["s2", "s3"]);
+    assert_eq!(parent_of(&st, "s2"), None);
+    assert_eq!(parent_of(&st, "s3").as_deref(), Some("s2"));
+}
+
+#[test]
+fn purging_a_folder_removes_subfolders_and_keeps_books() {
+    let mut st = nested();
+    st.upsert_elements(&[stroke("e1", "p1", 2)]).unwrap();
+    st.soft_delete(EntityKind::Bookshelf, "s1").unwrap();
+    st.purge(EntityKind::Bookshelf, "s1").unwrap();
+
+    let tree = st.list_tree().unwrap();
+    assert!(tree.bookshelves.is_empty());
+    assert_eq!(tree.units.len(), 2);
+    assert!(tree.units.iter().all(|u| u.bookshelf_id.is_none()));
+    assert_eq!(st.count_elements("p1").unwrap(), 1);
+    assert!(st.list_trash().unwrap().is_empty());
+    for id in ["s1", "s2", "s3"] {
+        assert!(matches!(st.restore(EntityKind::Bookshelf, id), Err(StorageError::NotFound(_))));
+    }
 }

@@ -14,7 +14,7 @@
       "libraryView": {
         "label": "Vista della libreria",
         "recent": "Recenti",
-        "shelves": "Scaffali",
+        "shelves": "Cartelle",
         "az": "Dalla A alla Z"
       },
       "sidebarLayout": {
@@ -618,18 +618,11 @@
     "changeColour": "Cambia colore",
     "favourite": "Aggiungi ai preferiti",
     "unfavourite": "Rimuovi dai preferiti",
-    "moveToShelf": "Sposta nello scaffale",
     "practice": "Esercitati da questo quaderno…",
     "exportBook": "Esporta il quaderno…",
     "share": "Condividi…",
     "importInto": "Importa in questo quaderno…",
     "colour": "Colore {{color}}",
-    "noShelf": "Nessuno scaffale",
-    "shelfName": "Nome dello scaffale",
-    "unshelved": "Fuori scaffale",
-    "renameShelf": "Rinomina lo scaffale",
-    "deleteShelf": "Elimina lo scaffale",
-    "emptyShelf": "Nessun quaderno in questo scaffale",
     "imported": "Quaderno importato: {{pages}} pagine, {{elements}} elementi.",
     "importedSkipped": "Quaderno importato: {{pages}} pagine, {{elements}} elementi, {{skipped}} saltati (oltre i limiti).",
     "importFailed": "Importazione non riuscita: {{message}}",
@@ -640,8 +633,18 @@
     "emptyHint": "Crea il tuo primo quaderno per iniziare a organizzare appunti, equazioni e idee",
     "noneFound": "Nessun quaderno trovato",
     "clearSearch": "Cancella la ricerca",
-    "newShelf": "Nuovo scaffale",
-    "newShelfName": "Nome del nuovo scaffale"
+    "folders": "Cartelle",
+    "unfiled": "Senza cartella",
+    "newFolder": "Nuova cartella",
+    "newFolderName": "Nome della nuova cartella",
+    "folderName": "Nome della cartella",
+    "moveTo": "Sposta in…",
+    "moveItemTo": "Sposta {{title}} in…",
+    "folderCycle": "Impossibile spostare una cartella dentro sé stessa",
+    "openFolder": "Apri la cartella {{title}}",
+    "folderActions": "Azioni per la cartella {{title}}",
+    "emptyFolder": "Questa cartella è vuota",
+    "breadcrumb": "Percorso della cartella"
   },
   "export": {
     "failed": "Esportazione non riuscita: {{message}}",
@@ -1014,7 +1017,7 @@
     "emptyHint": "Pagine, capitoli e quaderni eliminati compariranno qui per il recupero.",
     "deleted": "{{kind}} - eliminazione: {{date}}",
     "kinds": {
-      "bookshelf": "scaffale",
+      "bookshelf": "cartella",
       "unit": "unità",
       "section": "sezione",
       "page": "pagina"

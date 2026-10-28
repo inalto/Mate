@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "ライブラリの表示",
         "recent": "最近使った順",
-        "shelves": "棚別",
+        "shelves": "Folders",
         "az": "A から Z 順"
       },
       "sidebarLayout": {
@@ -620,18 +620,11 @@
     "changeColour": "色を変更",
     "favourite": "お気に入りに追加",
     "unfavourite": "お気に入りから削除",
-    "moveToShelf": "棚に移動",
     "practice": "このノートから練習…",
     "exportBook": "ノートを書き出し…",
     "share": "共有…",
     "importInto": "このノートに読み込み…",
     "colour": "色 {{color}}",
-    "noShelf": "棚なし",
-    "shelfName": "棚の名前",
-    "unshelved": "棚なし",
-    "renameShelf": "棚の名前を変更",
-    "deleteShelf": "棚を削除",
-    "emptyShelf": "この棚にノートはありません",
     "imported": "ノートを読み込みました: {{pages}} ページ、{{elements}} 要素。",
     "importedSkipped": "ノートを読み込みました: {{pages}} ページ、{{elements}} 要素、{{skipped}} 件をスキップ（上限を超過）。",
     "importFailed": "読み込みに失敗しました: {{message}}",
@@ -642,8 +635,18 @@
     "emptyHint": "最初のノートを作成して、メモ、数式、アイデアを整理しましょう",
     "noneFound": "ノートが見つかりません",
     "clearSearch": "検索をクリア",
-    "newShelf": "新しい棚",
-    "newShelfName": "新しい棚の名前"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "書き出しに失敗しました: {{message}}",
@@ -1007,7 +1010,7 @@
     "emptyHint": "削除したページ、章、ノートはここに表示され、復元できます。",
     "deleted": "{{kind}} - {{date}} に削除",
     "kinds": {
-      "bookshelf": "棚",
+      "bookshelf": "folder",
       "unit": "単元",
       "section": "セクション",
       "page": "ページ"

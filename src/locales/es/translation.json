@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "Vista de la biblioteca",
         "recent": "Recientes",
-        "shelves": "Estantes",
+        "shelves": "Folders",
         "az": "De la A a la Z"
       },
       "sidebarLayout": {
@@ -621,18 +621,11 @@
     "changeColour": "Cambiar color",
     "favourite": "Marcar como favorito",
     "unfavourite": "Quitar de favoritos",
-    "moveToShelf": "Mover a estante",
     "practice": "Practicar con este cuaderno…",
     "exportBook": "Exportar cuaderno…",
     "share": "Compartir…",
     "importInto": "Importar en este cuaderno…",
     "colour": "Color {{color}}",
-    "noShelf": "Sin estante",
-    "shelfName": "Nombre del estante",
-    "unshelved": "Sin estante",
-    "renameShelf": "Renombrar estante",
-    "deleteShelf": "Eliminar estante",
-    "emptyShelf": "No hay cuadernos en este estante",
     "imported": "Cuaderno importado: {{pages}} páginas, {{elements}} elementos.",
     "importedSkipped": "Cuaderno importado: {{pages}} páginas, {{elements}} elementos, {{skipped}} omitidos (superan los límites).",
     "importFailed": "La importación falló: {{message}}",
@@ -643,8 +636,18 @@
     "emptyHint": "Crea tu primer cuaderno para empezar a organizar tus notas, ecuaciones e ideas",
     "noneFound": "No se encontraron cuadernos",
     "clearSearch": "Borrar búsqueda",
-    "newShelf": "Nuevo estante",
-    "newShelfName": "Nombre del nuevo estante"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "La exportación falló: {{message}}",
@@ -1017,7 +1020,7 @@
     "emptyHint": "Las páginas, capítulos y cuadernos eliminados aparecerán aquí para recuperarlos.",
     "deleted": "{{kind}}: eliminado el {{date}}",
     "kinds": {
-      "bookshelf": "estante de cuadernos",
+      "bookshelf": "folder",
       "unit": "unidad",
       "section": "sección",
       "page": "página"

@@ -73,6 +73,8 @@ export interface Bookshelf {
   updatedAt: string;
   deletedAt?: string;
   version: number;
+  /** The folder this one sits in; absent at the Library root. */
+  parentId?: string;
 }
 
 export interface Unit {

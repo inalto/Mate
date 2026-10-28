@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "Bibliotheksansicht",
         "recent": "Zuletzt",
-        "shelves": "Regale",
+        "shelves": "Folders",
         "az": "A bis Z"
       },
       "sidebarLayout": {
@@ -621,18 +621,11 @@
     "changeColour": "Farbe ändern",
     "favourite": "Als Favorit markieren",
     "unfavourite": "Favorit entfernen",
-    "moveToShelf": "In Regal verschieben",
     "practice": "Mit diesem Notizbuch üben…",
     "exportBook": "Notizbuch exportieren…",
     "share": "Teilen…",
     "importInto": "In dieses Notizbuch importieren…",
     "colour": "Farbe {{color}}",
-    "noShelf": "Kein Regal",
-    "shelfName": "Regalname",
-    "unshelved": "Ohne Regal",
-    "renameShelf": "Regal umbenennen",
-    "deleteShelf": "Regal löschen",
-    "emptyShelf": "Keine Notizbücher in diesem Regal",
     "imported": "Notizbuch importiert: {{pages}} Seiten, {{elements}} Elemente.",
     "importedSkipped": "Notizbuch importiert: {{pages}} Seiten, {{elements}} Elemente, {{skipped}} übersprungen (über den Grenzwerten).",
     "importFailed": "Import fehlgeschlagen: {{message}}",
@@ -643,8 +636,18 @@
     "emptyHint": "Erstelle dein erstes Notizbuch, um deine Notizen, Gleichungen und Ideen zu ordnen",
     "noneFound": "Keine Notizbücher gefunden",
     "clearSearch": "Suche löschen",
-    "newShelf": "Neues Regal",
-    "newShelfName": "Name des neuen Regals"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "Export fehlgeschlagen: {{message}}",
@@ -1017,7 +1020,7 @@
     "emptyHint": "Gelöschte Seiten, Kapitel und Notizbücher erscheinen hier zur Wiederherstellung.",
     "deleted": "{{kind}} – gelöscht am {{date}}",
     "kinds": {
-      "bookshelf": "Regal",
+      "bookshelf": "folder",
       "unit": "Einheit",
       "section": "Abschnitt",
       "page": "Seite"

@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "Visualização da biblioteca",
         "recent": "Recentes",
-        "shelves": "Prateleiras",
+        "shelves": "Folders",
         "az": "De A a Z"
       },
       "sidebarLayout": {
@@ -621,18 +621,11 @@
     "changeColour": "Alterar cor",
     "favourite": "Favoritar",
     "unfavourite": "Desfavoritar",
-    "moveToShelf": "Mover para prateleira",
     "practice": "Praticar com este caderno…",
     "exportBook": "Exportar caderno…",
     "share": "Compartilhar…",
     "importInto": "Importar para este caderno…",
     "colour": "Cor {{color}}",
-    "noShelf": "Nenhuma prateleira",
-    "shelfName": "Nome da prateleira",
-    "unshelved": "Sem prateleira",
-    "renameShelf": "Renomear prateleira",
-    "deleteShelf": "Excluir prateleira",
-    "emptyShelf": "Nenhum caderno nesta prateleira",
     "imported": "Caderno importado: {{pages}} páginas, {{elements}} elementos.",
     "importedSkipped": "Caderno importado: {{pages}} páginas, {{elements}} elementos, {{skipped}} ignorados (acima dos limites).",
     "importFailed": "Falha na importação: {{message}}",
@@ -643,8 +636,18 @@
     "emptyHint": "Crie seu primeiro caderno para começar a organizar suas anotações, equações e ideias",
     "noneFound": "Nenhum caderno encontrado",
     "clearSearch": "Limpar pesquisa",
-    "newShelf": "Nova prateleira",
-    "newShelfName": "Nome da nova prateleira"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "Falha na exportação: {{message}}",
@@ -1017,7 +1020,7 @@
     "emptyHint": "Páginas, capítulos e cadernos excluídos aparecerão aqui para recuperação.",
     "deleted": "{{kind}} - excluído em {{date}}",
     "kinds": {
-      "bookshelf": "prateleira",
+      "bookshelf": "folder",
       "unit": "unidade",
       "section": "seção",
       "page": "página"

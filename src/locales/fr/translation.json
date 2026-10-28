@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "Affichage de la bibliothèque",
         "recent": "Récents",
-        "shelves": "Étagères",
+        "shelves": "Folders",
         "az": "De A à Z"
       },
       "sidebarLayout": {
@@ -621,18 +621,11 @@
     "changeColour": "Changer la couleur",
     "favourite": "Ajouter aux favoris",
     "unfavourite": "Retirer des favoris",
-    "moveToShelf": "Déplacer vers une étagère",
     "practice": "S'entraîner avec ce cahier…",
     "exportBook": "Exporter le cahier…",
     "share": "Partager…",
     "importInto": "Importer dans ce cahier…",
     "colour": "Couleur {{color}}",
-    "noShelf": "Aucune étagère",
-    "shelfName": "Nom de l'étagère",
-    "unshelved": "Hors étagère",
-    "renameShelf": "Renommer l'étagère",
-    "deleteShelf": "Supprimer l'étagère",
-    "emptyShelf": "Aucun cahier sur cette étagère",
     "imported": "Cahier importé : {{pages}} pages, {{elements}} éléments.",
     "importedSkipped": "Cahier importé : {{pages}} pages, {{elements}} éléments, {{skipped}} ignorés (limites dépassées).",
     "importFailed": "Échec de l'import : {{message}}",
@@ -643,8 +636,18 @@
     "emptyHint": "Crée ton premier cahier pour commencer à organiser tes notes, équations et idées",
     "noneFound": "Aucun cahier trouvé",
     "clearSearch": "Effacer la recherche",
-    "newShelf": "Nouvelle étagère",
-    "newShelfName": "Nom de la nouvelle étagère"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "Échec de l'export : {{message}}",
@@ -1017,7 +1020,7 @@
     "emptyHint": "Les pages, chapitres et cahiers supprimés apparaîtront ici pour être récupérés.",
     "deleted": "{{kind}} : supprimé le {{date}}",
     "kinds": {
-      "bookshelf": "étagère",
+      "bookshelf": "folder",
       "unit": "unité",
       "section": "section",
       "page": "page"

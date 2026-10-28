@@ -15,6 +15,10 @@ export const getNotebookTree = (): Promise<NotebookTree> =>
 export const upsertBookshelf = (b: Bookshelf): Promise<void> =>
   invoke("upsert_bookshelf", { b });
 
+/** Moves a folder; `parentId` null is the Library root. Rejects a move into itself or a subfolder. */
+export const moveBookshelf = (id: string, parentId: string | null): Promise<void> =>
+  invoke("move_bookshelf", { id, parentId });
+
 export const upsertUnit = (u: Unit): Promise<void> =>
   invoke("upsert_unit", { u });
 

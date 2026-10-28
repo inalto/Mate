@@ -12,6 +12,7 @@ vi.mock("../../ipc/notebook", () => ({
   listTrash: vi.fn(async () => []),
   purgeEntity: vi.fn(async () => {}),
   purgeTrashOlderThan: vi.fn(async () => 0),
+  moveBookshelf: vi.fn(async () => {}),
 }));
 vi.mock("../../ipc/settings", () => ({
   getSettings: vi.fn(),
@@ -32,7 +33,7 @@ const unit = (id: string, updatedAt: string, extra: Partial<Unit> = {}): Unit =>
   version: 0,
   ...extra,
 });
-const shelf = (id: string, order: number): Bookshelf => ({
+const shelf = (id: string, order: number, parentId?: string): Bookshelf => ({
   id,
   title: id,
   order,
@@ -40,6 +41,7 @@ const shelf = (id: string, order: number): Bookshelf => ({
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-01T00:00:00Z",
   version: 0,
+  parentId,
 });
 const setTree = (tree: Partial<NotebookTree>) =>
   useNotebookStore.setState({
@@ -84,18 +86,76 @@ describe("notebook store", () => {
     ]);
   });
 
-  it("unitsByShelf_groups_unshelved_last", () => {
+  it("unitsInFolder_lists_a_folder_and_unfiled_books_at_the_root", () => {
     setTree({
       bookshelves: [shelf("s2", 1), shelf("s1", 0)],
       units: [
         unit("loose", "2026-01-01T00:00:00Z"),
         unit("a", "2026-01-01T00:00:00Z", { bookshelfId: "s1" }),
         unit("b", "2026-01-01T00:00:00Z", { bookshelfId: "s2" }),
+        unit("orphan", "2026-01-01T00:00:00Z", { bookshelfId: "gone" }),
       ],
     });
-    const groups = useNotebookStore.getState().unitsByShelf();
-    expect(groups.map((g) => g.shelf?.id ?? null)).toEqual(["s1", "s2", null]);
-    expect(groups[2].units.map((u) => u.id)).toEqual(["loose"]);
+    const s = useNotebookStore.getState();
+    expect(s.unitsInFolder("s1").map((u) => u.id)).toEqual(["a"]);
+    expect(s.unitsInFolder(null).map((u) => u.id)).toEqual(["loose", "orphan"]);
+  });
+
+  it("childFolders_lists_direct_children_in_order", () => {
+    setTree({
+      bookshelves: [shelf("b", 2), shelf("a", 1), shelf("a1", 3, "a"), shelf("a0", 0, "a"), shelf("lost", 4, "gone")],
+    });
+    const s = useNotebookStore.getState();
+    // A folder whose parent is not in the tree shows at the root rather than vanishing.
+    expect(s.childFolders(null).map((b) => b.id)).toEqual(["a", "b", "lost"]);
+    expect(s.childFolders("a").map((b) => b.id)).toEqual(["a0", "a1"]);
+    expect(s.childFolders("b")).toEqual([]);
+  });
+
+  it("folderPath_runs_from_the_root_to_the_folder", () => {
+    setTree({ bookshelves: [shelf("a", 0), shelf("b", 1, "a"), shelf("c", 2, "b")] });
+    const s = useNotebookStore.getState();
+    expect(s.folderPath("c").map((b) => b.id)).toEqual(["a", "b", "c"]);
+    expect(s.folderPath("a").map((b) => b.id)).toEqual(["a"]);
+    expect(s.folderPath(null)).toEqual([]);
+    expect(s.folderPath("missing")).toEqual([]);
+  });
+
+  it("folderPath_survives_a_corrupt_cycle", () => {
+    setTree({ bookshelves: [shelf("a", 0, "b"), shelf("b", 1, "a")] });
+    expect(useNotebookStore.getState().folderPath("a").map((b) => b.id)).toEqual(["b", "a"]);
+  });
+
+  it("folderSubtree_holds_the_folder_and_every_subfolder", () => {
+    setTree({ bookshelves: [shelf("a", 0), shelf("b", 1, "a"), shelf("c", 2, "b"), shelf("d", 3)] });
+    expect([...useNotebookStore.getState().folderSubtree("a")].sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("createBookshelf_creates_inside_a_parent", async () => {
+    setTree({ bookshelves: [shelf("s1", 0)] });
+    const b = await useNotebookStore.getState().createBookshelf("Physics", "s1");
+    expect(b.parentId).toBe("s1");
+    expect(vi.mocked(ipc.upsertBookshelf).mock.calls[0][0].parentId).toBe("s1");
+    expect(useNotebookStore.getState().childFolders("s1").map((x) => x.title)).toEqual(["Physics"]);
+  });
+
+  it("moveBookshelf_moves_through_the_backend_and_updates_the_tree", async () => {
+    setTree({ bookshelves: [shelf("a", 0), shelf("b", 1)] });
+    await useNotebookStore.getState().moveBookshelf("b", "a");
+    expect(ipc.moveBookshelf).toHaveBeenCalledWith("b", "a");
+    expect(useNotebookStore.getState().childFolders("a").map((x) => x.id)).toEqual(["b"]);
+    await useNotebookStore.getState().moveBookshelf("b", null);
+    expect(ipc.moveBookshelf).toHaveBeenLastCalledWith("b", null);
+    expect(useNotebookStore.getState().childFolders(null).map((x) => x.id)).toEqual(["a", "b"]);
+  });
+
+  it("moveBookshelf_reports_a_cycle_readably_and_keeps_the_tree", async () => {
+    setTree({ bookshelves: [shelf("a", 0), shelf("b", 1, "a")] });
+    vi.mocked(ipc.moveBookshelf).mockRejectedValueOnce("Cannot move a folder into itself");
+    await expect(useNotebookStore.getState().moveBookshelf("a", "b")).rejects.toThrow(
+      "Cannot move a folder into itself",
+    );
+    expect(useNotebookStore.getState().folderPath("b").map((x) => x.id)).toEqual(["a", "b"]);
   });
 
   it("unitsByRecent_rolls_up_page_activity", () => {

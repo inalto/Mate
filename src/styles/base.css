@@ -316,6 +316,108 @@ button.card:hover {
   cursor: pointer;
 }
 
+/* Folder cards (Library, Folders view) */
+.folder-cover {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-2);
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.folder-cover:hover {
+  border-color: var(--color-primary);
+}
+
+.folder-card .book-menu-btn {
+  background: none;
+  color: var(--color-text-muted);
+}
+
+.folder-header {
+  flex-wrap: wrap;
+}
+
+.breadcrumb {
+  margin-right: auto;
+  min-width: 0;
+}
+
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.breadcrumb li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.breadcrumb .crumb {
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.breadcrumb .crumb:hover {
+  background: var(--color-surface-2);
+}
+
+.breadcrumb .crumb-sep {
+  color: var(--color-text-muted);
+}
+
+.folder-options {
+  display: flex;
+  flex-direction: column;
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+}
+
+.folder-option {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  padding-right: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-option:hover:not(:disabled) {
+  background: var(--color-surface-2);
+}
+
+.folder-option:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.folder-option[aria-current="location"] {
+  font-weight: 600;
+}
+
 .new-tile {
   display: grid;
   place-items: center;
