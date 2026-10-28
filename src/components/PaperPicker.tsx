@@ -6,23 +6,9 @@ import type { TKey } from "../i18n";
 import type { BackgroundConfig, BackgroundType, Page } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
+import { PAPER_TEMPLATES } from "../model/paperTemplates";
 import { paperPreview } from "./paperPreview";
 import { useModal } from "./useModal";
-
-const PAPER_TEMPLATES: [BackgroundType, TKey][] = [
-  ["blank", "settings.paper.background.blank"],
-  ["ruled", "settings.paper.background.ruled"],
-  ["ruled-no-margin", "settings.paper.background.ruledNoMargin"],
-  ["grid", "settings.paper.background.grid"],
-  ["grid-uniform", "settings.paper.background.gridUniform"],
-  ["dot-grid", "settings.paper.background.dotGrid"],
-  ["isometric", "settings.paper.background.isometric"],
-  ["hex", "settings.paper.background.hex"],
-  ["cornell", "settings.paper.background.cornell"],
-  ["handwriting", "settings.paper.background.handwriting"],
-  ["columns", "settings.paper.background.columns"],
-  ["music", "settings.paper.background.music"],
-];
 
 const PRESETS: [number, TKey][] = [
   [20, "paperPicker.small"],
@@ -59,9 +45,10 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
   const { t } = useTranslation();
   const [cfg, setCfg] = useState<BackgroundConfig>(page.backgroundConfig);
   const [draft, setDraft] = useState<string | null>(null);
-  const [forNew, setForNew] = useState(false);
+  const [forNew, setForNew] = useState(() => useSettingsStore.getState().settings.defaultBackground === page.backgroundConfig.type);
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
+  const draftRef = useRef<() => void>(() => {});
   useEffect(() => {
     close.current = onClose;
   });
@@ -81,6 +68,7 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopImmediatePropagation(); // closes the picker only, nothing behind it
+        draftRef.current(); // a typed spacing still in the field is applied first
         close.current();
       } else if (e.key === "Tab") {
         const items = [...(ref.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
@@ -100,18 +88,24 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
   const apply = (next: BackgroundConfig) => {
     setCfg(next);
     void useNotebookStore.getState().updatePage({ ...page, backgroundConfig: next });
-    if (forNew && next.type !== cfg.type) void useSettingsStore.getState().update({ defaultBackground: next.type });
+    if (forNew && next.type !== cfg.type && next.type !== "custom") void useSettingsStore.getState().update({ defaultBackground: next.type });
   };
   const pickType = (type: BackgroundType) => {
+    setDraft(null);
     if (type !== cfg.type) apply({ ...cfg, type });
   };
   const pickSpacing = (spacing: number) => {
     setDraft(null);
     if (spacing !== cfg.spacing) apply({ ...cfg, spacing });
   };
+  useEffect(() => {
+    draftRef.current = () => {
+      if (draft !== null) pickSpacing(clampSpacing(Number(draft), cfg.spacing));
+    };
+  });
   const toggleForNew = (on: boolean) => {
     setForNew(on);
-    if (on) void useSettingsStore.getState().update({ defaultBackground: cfg.type });
+    if (on && cfg.type !== "custom") void useSettingsStore.getState().update({ defaultBackground: cfg.type });
   };
 
   return (

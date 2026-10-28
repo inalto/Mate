@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TKey } from "../i18n";
 import { ASPECT_PRESET_HEIGHTS, PAGE_WIDTH } from "../model/constants";
+import { PAPER_TEMPLATES } from "../model/paperTemplates";
 import type { AspectPreset, BackgroundType, Page, PageMode } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
@@ -17,20 +18,6 @@ const ASPECT_LABELS: Record<AspectPreset, { key: TKey } | { text: string }> = {
   "4:3": { text: "4:3" },
   square: { key: "settings.paper.pageSize.square" },
 };
-const BACKGROUNDS: [BackgroundType, TKey][] = [
-  ["blank", "settings.paper.background.blank"],
-  ["ruled", "settings.paper.background.ruled"],
-  ["ruled-no-margin", "settings.paper.background.ruledNoMargin"],
-  ["grid", "settings.paper.background.grid"],
-  ["grid-uniform", "settings.paper.background.gridUniform"],
-  ["dot-grid", "settings.paper.background.dotGrid"],
-  ["isometric", "settings.paper.background.isometric"],
-  ["hex", "settings.paper.background.hex"],
-  ["cornell", "settings.paper.background.cornell"],
-  ["handwriting", "settings.paper.background.handwriting"],
-  ["columns", "settings.paper.background.columns"],
-  ["music", "settings.paper.background.music"],
-];
 
 /** Aspect preset and orientation that describe the page's sheet. */
 function sheetOf(page: Page, defaultAspect: string, defaultOrientation: string): { aspect: AspectPreset; landscape: boolean } {
@@ -101,7 +88,7 @@ export default function PageSettingsDialog({ page, onClose }: { page: Page; onCl
         <div className="field">
           <label className="field-label" htmlFor="ps-bg">{t("settings.paper.background.label")}</label>
           <select id="ps-bg" className="input" value={bg} onChange={(e) => setBg(e.target.value as BackgroundType)}>
-            {BACKGROUNDS.map(([v, label]) => <option key={v} value={v}>{t(label)}</option>)}
+            {PAPER_TEMPLATES.map(([v, label]) => <option key={v} value={v}>{t(label)}</option>)}
           </select>
         </div>
         {bg !== "blank" && (

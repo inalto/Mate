@@ -48,6 +48,7 @@ describe("PaperPicker", () => {
   });
 
   it("applies a template to the page at once", () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, defaultBackground: "grid" } });
     render(<PaperPicker page={page} onClose={onClose} />);
     fireEvent.click(screen.getByRole("button", { name: "Isometric" }));
     expect(updatePage).toHaveBeenCalledTimes(1);
@@ -71,12 +72,32 @@ describe("PaperPicker", () => {
   });
 
   it("Use for new pages writes the default background", () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, defaultBackground: "grid" } });
     render(<PaperPicker page={page} onClose={onClose} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Use for new pages" }));
     expect(update).toHaveBeenLastCalledWith({ defaultBackground: "ruled" });
     fireEvent.click(screen.getByRole("button", { name: "Music staves" }));
     expect(update).toHaveBeenLastCalledWith({ defaultBackground: "music" });
     expect(lastPage().backgroundConfig.type).toBe("music");
+  });
+
+  it("Escape with a typed spacing applies it before closing", () => {
+    render(<PaperPicker page={page} onClose={onClose} />);
+    const field = screen.getByRole("spinbutton", { name: "Spacing" });
+    field.focus();
+    fireEvent.change(field, { target: { value: "55" } });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(lastPage().backgroundConfig.spacing).toBe(55);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("starts the Use for new pages checkbox checked when the page type is already the default", () => {
+    render(<PaperPicker page={page} onClose={onClose} />);
+    expect((screen.getByRole("checkbox", { name: "Use for new pages" }) as HTMLInputElement).checked).toBe(true);
+    cleanup();
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, defaultBackground: "grid" } });
+    render(<PaperPicker page={page} onClose={onClose} />);
+    expect((screen.getByRole("checkbox", { name: "Use for new pages" }) as HTMLInputElement).checked).toBe(false);
   });
 
   it("moves focus to the selected tile, traps Tab and restores focus on close", () => {

@@ -1,3 +1,4 @@
+import { PAPER_TEMPLATES } from "../../../model/paperTemplates";
 import { useTranslation } from "react-i18next";
 import { SelectRow, SettingsSection, ToggleRow } from "../rows";
 
@@ -16,20 +17,7 @@ export default function PaperSection() {
       <SelectRow
         k="defaultBackground"
         label={t("settings.paper.background.label")}
-        options={[
-          { value: "blank", label: t("settings.paper.background.blank") },
-          { value: "ruled", label: t("settings.paper.background.ruled") },
-          { value: "ruled-no-margin", label: t("settings.paper.background.ruledNoMargin") },
-          { value: "grid", label: t("settings.paper.background.grid") },
-          { value: "grid-uniform", label: t("settings.paper.background.gridUniform") },
-          { value: "dot-grid", label: t("settings.paper.background.dotGrid") },
-          { value: "isometric", label: t("settings.paper.background.isometric") },
-          { value: "hex", label: t("settings.paper.background.hex") },
-          { value: "cornell", label: t("settings.paper.background.cornell") },
-          { value: "handwriting", label: t("settings.paper.background.handwriting") },
-          { value: "columns", label: t("settings.paper.background.columns") },
-          { value: "music", label: t("settings.paper.background.music") },
-        ]}
+        options={PAPER_TEMPLATES.map(([value, key]) => ({ value, label: t(key) }))}
       />
       <SelectRow
         k="defaultPageAspectRatio"
