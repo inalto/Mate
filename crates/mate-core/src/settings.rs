@@ -234,23 +234,16 @@ fn migrate_legacy_keys(value: &mut serde_json::Value) {
     let serde_json::Value::Object(map) = value else {
         return;
     };
-    if let Some(old) = map.remove("drawWithFinger") {
-        if !map.contains_key("fingerAction") {
-            let action = if old.as_bool() == Some(true) {
-                "draw"
-            } else {
-                "auto"
-            };
-            map.insert(
-                "fingerAction".into(),
-                serde_json::Value::String(action.into()),
-            );
-        }
+    if let Some(old) = map.remove("drawWithFinger")
+        && !map.contains_key("fingerAction")
+    {
+        let action = if old.as_bool() == Some(true) { "draw" } else { "auto" };
+        map.insert("fingerAction".into(), serde_json::Value::String(action.into()));
     }
-    if let Some(action) = map.get_mut("fingerAction") {
-        if !matches!(action.as_str(), Some("auto" | "draw" | "pan")) {
-            *action = serde_json::Value::String("auto".into());
-        }
+    if let Some(action) = map.get_mut("fingerAction")
+        && !matches!(action.as_str(), Some("auto" | "draw" | "pan"))
+    {
+        *action = serde_json::Value::String("auto".into());
     }
 }
 
