@@ -30,6 +30,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "pen", titleKey: "settings.nav.sections.pen" },
       { id: "pen-buttons", titleKey: "settings.nav.sections.penButtons" },
       { id: "gestures", titleKey: "settings.nav.sections.gestures" },
+      { id: "graphs", titleKey: "settings.nav.sections.graphs" },
     ],
   },
   {

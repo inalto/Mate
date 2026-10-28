@@ -68,7 +68,8 @@
         "backup": "バックアップ",
         "sharing": "共有",
         "updates": "アップデート",
-        "about": "バージョン情報"
+        "about": "バージョン情報",
+        "graphs": "Graphs"
       }
     },
     "resetIncomplete": "ローカルデータを完全にリセットできませんでした。バックアップは {{path}} にあります。",
@@ -284,6 +285,12 @@
       "welcome": "ようこそ",
       "showWelcome": "ようこそ画面をもう一度表示",
       "unknownVersion": "不明"
+    },
+    "graphs": {
+      "empty": "No graph presets yet. Save one from a graph's Presets row.",
+      "rename": "Rename",
+      "delete": "Delete",
+      "name": "Preset name"
     }
   },
   "common": {
@@ -1068,6 +1075,25 @@
       "yMax": "y 最大",
       "grid": "方眼",
       "plot": "グラフのプロット"
+    },
+    "presets": {
+      "label": "Presets",
+      "select": "Preset",
+      "none": "No saved presets",
+      "choose": "Choose a preset",
+      "default": "default",
+      "apply": "Apply",
+      "delete": "Delete",
+      "name": "Preset name",
+      "namePlaceholder": "Save current as…",
+      "save": "Save",
+      "includeExpressions": "Include expressions",
+      "setDefault": "Default for new graphs of this kind"
+    },
+    "kinds": {
+      "2d-function": "Function graphs",
+      "2d-polar": "Polar graphs",
+      "2d-parametric": "Parametric graphs"
     }
   },
   "welcome": {

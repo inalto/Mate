@@ -68,7 +68,8 @@
         "backup": "Copia de seguridad",
         "sharing": "Compartir",
         "updates": "Actualizaciones",
-        "about": "Acerca de"
+        "about": "Acerca de",
+        "graphs": "Graphs"
       }
     },
     "resetIncomplete": "No se pudieron borrar del todo los datos locales. Tu copia de seguridad está en {{path}}.",
@@ -285,6 +286,12 @@
       "welcome": "Bienvenida",
       "showWelcome": "Mostrar la bienvenida otra vez",
       "unknownVersion": "desconocida"
+    },
+    "graphs": {
+      "empty": "No graph presets yet. Save one from a graph's Presets row.",
+      "rename": "Rename",
+      "delete": "Delete",
+      "name": "Preset name"
     }
   },
   "common": {
@@ -1081,6 +1088,25 @@
       "yMax": "y máx",
       "grid": "Cuadrícula",
       "plot": "Gráfico"
+    },
+    "presets": {
+      "label": "Presets",
+      "select": "Preset",
+      "none": "No saved presets",
+      "choose": "Choose a preset",
+      "default": "default",
+      "apply": "Apply",
+      "delete": "Delete",
+      "name": "Preset name",
+      "namePlaceholder": "Save current as…",
+      "save": "Save",
+      "includeExpressions": "Include expressions",
+      "setDefault": "Default for new graphs of this kind"
+    },
+    "kinds": {
+      "2d-function": "Function graphs",
+      "2d-polar": "Polar graphs",
+      "2d-parametric": "Parametric graphs"
     }
   },
   "welcome": {

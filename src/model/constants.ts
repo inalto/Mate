@@ -93,6 +93,7 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: "preset-4", type: "highlighter", color: "#FDE047", width: 20.06 },
     { id: "preset-5", type: "fountain-pen", color: "#000000", width: 4.11 },
   ],
+  graphPresets: [],
   keybindings: [],
   onboardingDone: false,
   lastSeenVersion: "",

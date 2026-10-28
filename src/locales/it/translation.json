@@ -65,7 +65,8 @@
         "backup": "Backup",
         "sharing": "Condivisione",
         "updates": "Aggiornamenti",
-        "about": "Informazioni"
+        "about": "Informazioni",
+        "graphs": "Grafici"
       }
     },
     "resetIncomplete": "Non è stato possibile reimpostare del tutto i dati locali. Il tuo backup è in {{path}}.",
@@ -282,6 +283,12 @@
       "welcome": "Benvenuto",
       "showWelcome": "Mostra di nuovo il benvenuto",
       "unknownVersion": "sconosciuta"
+    },
+    "graphs": {
+      "empty": "Ancora nessuna preimpostazione. Salvane una dalla riga Preimpostazioni di un grafico.",
+      "rename": "Rinomina",
+      "delete": "Elimina",
+      "name": "Nome della preimpostazione"
     }
   },
   "common": {
@@ -1078,6 +1085,25 @@
       "yMax": "y max",
       "grid": "Griglia",
       "plot": "Grafico della funzione"
+    },
+    "presets": {
+      "label": "Preimpostazioni",
+      "select": "Preimpostazione",
+      "none": "Nessuna preimpostazione salvata",
+      "choose": "Scegli una preimpostazione",
+      "default": "predefinita",
+      "apply": "Applica",
+      "delete": "Elimina",
+      "name": "Nome della preimpostazione",
+      "namePlaceholder": "Salva l'attuale come…",
+      "save": "Salva",
+      "includeExpressions": "Includi le espressioni",
+      "setDefault": "Predefinita per i nuovi grafici di questo tipo"
+    },
+    "kinds": {
+      "2d-function": "Grafici di funzioni",
+      "2d-polar": "Grafici polari",
+      "2d-parametric": "Grafici parametrici"
     }
   },
   "welcome": {

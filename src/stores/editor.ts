@@ -10,7 +10,8 @@ import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "..
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
-import { defaultGraphData, graphElement, inferGraphKind } from "../graph/data";
+import { defaultGraphData, graphElement, inferGraphKind, presetFor } from "../graph/data";
+import { lastGraphKind } from "../graph/presets";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
 import { isMathBox, latexOf, mathElement } from "../math/mathBox";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
@@ -474,7 +475,10 @@ export function createEditorStore(): EditorStore {
     },
 
     addGraph() {
-      return insertBox("Graph", graphElement);
+      // New graphs start from the default preset of the kind last edited (the function kind at first).
+      const settings = useSettingsStore.getState().settings;
+      const preset = presetFor(lastGraphKind(), settings) ?? presetFor("2d-function", settings);
+      return insertBox("Graph", (pageId, id, now, at, color) => graphElement(pageId, id, now, at, color, preset));
     },
 
     addTextBox(at) {

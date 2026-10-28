@@ -6,6 +6,7 @@ import { isMobile } from "../../platform";
 import { collectEntries, jumpToRow, searchEntries, type SearchEntry } from "./search";
 import AboutSection from "./sections/AboutSection";
 import BackupSection from "./sections/BackupSection";
+import GraphsSection from "./sections/GraphsSection";
 import SharingSection from "./sections/SharingSection";
 import GeneralSection from "./sections/GeneralSection";
 import GesturesSection from "./sections/GesturesSection";
@@ -168,6 +169,7 @@ export default function Settings() {
           <PenSection />
           <PenButtonsSection />
           <GesturesSection />
+          <GraphsSection />
           <TutorSection />
           <TutorInteractionsSection />
           <MathEnginesSection />

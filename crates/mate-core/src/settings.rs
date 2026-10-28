@@ -42,6 +42,39 @@ fn default_toolbar_presets() -> Vec<PenPreset> {
     ]
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphDomain {
+    pub x_min: f64,
+    pub x_max: f64,
+    pub y_min: f64,
+    pub y_max: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphExpression {
+    pub id: String,
+    pub latex: String,
+    pub color: String,
+    pub visible: bool,
+}
+
+/// A named graph setup for one kind (`"2d-function" | "2d-polar" | "2d-parametric"`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphPreset {
+    pub id: String,
+    pub name: String,
+    pub kind: String,
+    pub domain: GraphDomain,
+    pub grid: bool,
+    /// When present, applying the preset replaces the graph's expressions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expressions: Option<Vec<GraphExpression>>,
+    pub is_default: bool,
+}
+
 /// A user override of one action's key binding (`keys` is a chord string such as `"Mod+Shift+K"`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -138,6 +171,8 @@ pub struct Settings {
     /// Most recent first, max 6 entries.
     pub recent_colors: Vec<String>,
     pub toolbar_presets: Vec<PenPreset>,
+    /// Named graph presets for every graph kind; empty until the user saves one.
+    pub graph_presets: Vec<GraphPreset>,
     // Phase 5
     /// Per-action key binding overrides (empty means all defaults).
     pub keybindings: Vec<KeybindingOverride>,
@@ -217,6 +252,7 @@ impl Default for Settings {
             default_export_format: s("pdf"),
             recent_colors: Vec::new(),
             toolbar_presets: default_toolbar_presets(),
+            graph_presets: Vec::new(),
             keybindings: Vec::new(),
             onboarding_done: false,
             last_seen_version: String::new(),
