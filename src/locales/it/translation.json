@@ -93,7 +93,13 @@
         "ruledNoMargin": "A righe (senza margine)",
         "grid": "Quadretti",
         "gridUniform": "Quadretti uniformi",
-        "dotGrid": "Puntini"
+        "dotGrid": "Puntini",
+        "isometric": "Isometrica",
+        "hex": "Punti esagonali",
+        "cornell": "Appunti Cornell",
+        "handwriting": "Calligrafia",
+        "columns": "Colonne",
+        "music": "Pentagrammi"
       },
       "pageSize": {
         "label": "Dimensione della pagina",
@@ -185,9 +191,12 @@
         "standard": "Standard",
         "high": "Alto"
       },
-      "drawWithFinger": {
-        "label": "Disegna con il dito",
-        "hint": "Disattivato: le dita spostano e ingrandiscono, la penna disegna"
+      "fingerAction": {
+        "label": "Un dito",
+        "hint": "Automatico: il dito disegna; le dita spostano mentre usi una penna",
+        "auto": "Automatico",
+        "draw": "Disegna",
+        "pan": "Sposta e ingrandisce"
       },
       "pinchToZoom": "Pizzica per ingrandire",
       "mouseWheel": {
@@ -496,6 +505,11 @@
     "updateSettings": "Impostazioni di aggiornamento"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Dita: automatico",
+      "draw": "Le dita disegnano",
+      "pan": "Le dita spostano"
+    },
     "label": "Strumenti dell'editor",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · clic destro per rimuovere",
@@ -546,6 +560,7 @@
     "exportPage": "Esporta la pagina…",
     "importNotes": "Importa appunti…",
     "pageSettings": "Impostazioni della pagina",
+    "paper": "Carta",
     "searchActions": "Cerca e azioni…",
     "about": "Informazioni su Mate",
     "pageTitle": "Titolo della pagina"
@@ -707,7 +722,6 @@
   "pageSettings": {
     "mode": "Modalità",
     "paperSize": "Formato della carta",
-    "gridUniform": "Quadretti (uniformi)",
     "spacing": "Spaziatura"
   },
   "import": {
@@ -1113,5 +1127,15 @@
     "label": "Codice",
     "language": "Linguaggio",
     "plain": "Testo semplice"
+  },
+  "paperPicker": {
+    "title": "Carta",
+    "templates": "Modelli",
+    "presets": "Spaziature predefinite",
+    "small": "Piccola",
+    "medium": "Media",
+    "large": "Grande",
+    "useForNew": "Usa per le nuove pagine",
+    "done": "Fine"
   }
 }

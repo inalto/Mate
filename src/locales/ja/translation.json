@@ -96,7 +96,13 @@
         "ruledNoMargin": "罫線（余白なし）",
         "grid": "方眼",
         "gridUniform": "均一な方眼",
-        "dotGrid": "ドット方眼"
+        "dotGrid": "ドット方眼",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "用紙サイズ",
@@ -188,9 +194,12 @@
         "standard": "標準",
         "high": "強"
       },
-      "drawWithFinger": {
-        "label": "指で描く",
-        "hint": "オフの場合、指は画面の移動と拡大縮小に使われ、ペンで描きます"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws; fingers pan while you are using a pen",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "ピンチで拡大縮小",
       "mouseWheel": {
@@ -498,6 +507,11 @@
     "updateSettings": "アップデートの設定"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "エディターのツール",
     "hintWithKeys": "{{label}}（{{keys}}）",
     "presetRemoveHint": "{{title}} · 右クリックで削除",
@@ -548,6 +562,7 @@
     "exportPage": "ページを書き出し…",
     "importNotes": "ノートを読み込み…",
     "pageSettings": "ページの設定",
+    "paper": "Paper",
     "searchActions": "検索とアクション…",
     "about": "Mate について",
     "pageTitle": "ページのタイトル"
@@ -709,7 +724,6 @@
   "pageSettings": {
     "mode": "モード",
     "paperSize": "用紙サイズ",
-    "gridUniform": "方眼（均一）",
     "spacing": "間隔"
   },
   "import": {
@@ -1103,5 +1117,15 @@
     "label": "コード",
     "language": "言語",
     "plain": "プレーンテキスト"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

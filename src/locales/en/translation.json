@@ -93,7 +93,13 @@
         "ruledNoMargin": "Ruled (no margin)",
         "grid": "Grid",
         "gridUniform": "Uniform grid",
-        "dotGrid": "Dot grid"
+        "dotGrid": "Dot grid",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "Page size",
@@ -185,9 +191,12 @@
         "standard": "Standard",
         "high": "High"
       },
-      "drawWithFinger": {
-        "label": "Draw with finger",
-        "hint": "Off: fingers pan and zoom, the pen draws"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws; fingers pan while you are using a pen",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "Pinch to zoom",
       "mouseWheel": {
@@ -496,6 +505,11 @@
     "updateSettings": "Update settings"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "Editor tools",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · right-click to remove",
@@ -546,6 +560,7 @@
     "exportPage": "Export page…",
     "importNotes": "Import notes…",
     "pageSettings": "Page settings",
+    "paper": "Paper",
     "searchActions": "Search and actions…",
     "about": "About Mate",
     "pageTitle": "Page title"
@@ -707,7 +722,6 @@
   "pageSettings": {
     "mode": "Mode",
     "paperSize": "Paper size",
-    "gridUniform": "Grid (uniform)",
     "spacing": "Spacing"
   },
   "import": {
@@ -1113,5 +1127,15 @@
     "label": "Code",
     "language": "Language",
     "plain": "Plain text"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

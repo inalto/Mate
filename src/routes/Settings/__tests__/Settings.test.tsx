@@ -119,8 +119,8 @@ describe("Settings rows", () => {
     expect(cfg().penBarrelButtonAction).toBe("lasso");
     fireEvent.change(screen.getByLabelText("Mouse wheel"), { target: { value: "zoom" } });
     expect(cfg().scrollBehavior).toBe("zoom");
-    fireEvent.click(screen.getByLabelText("Draw with finger"));
-    expect(cfg().drawWithFinger).toBe(true);
+    fireEvent.change(screen.getByLabelText("One finger"), { target: { value: "pan" } });
+    expect(cfg().fingerAction).toBe("pan");
     fireEvent.change(screen.getByLabelText("Keep deleted items for"), { target: { value: "0" } });
     expect(cfg().trashRetentionDays).toBe(0);
     fireEvent.click(screen.getByRole("radio", { name: "Dark" }));

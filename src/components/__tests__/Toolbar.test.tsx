@@ -12,6 +12,7 @@ import { patchSettings } from "../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import { useEditorStore } from "../../stores/editor";
 import { flushSettings, useSettingsStore } from "../../stores/settings";
+import { setPlatformForTests } from "../../platform";
 import Toolbar from "../Toolbar";
 
 const renderBar = () =>
@@ -25,6 +26,29 @@ describe("Toolbar", () => {
   afterEach(() => {
     cleanup();
     useSettingsStore.setState({ settings: DEFAULT_SETTINGS });
+  });
+
+  it("finger_toggle_only_on_mobile_and_cycles_draw_pan", () => {
+    setPlatformForTests(false);
+    renderBar();
+    expect(screen.queryByRole("button", { name: /^Fingers/ })).toBeNull();
+    cleanup();
+    setPlatformForTests(true);
+    try {
+      renderBar();
+      const btn = () => screen.getByRole("button", { name: /^Fingers/ });
+      expect(btn().getAttribute("aria-label")).toBe("Fingers: automatic");
+      fireEvent.click(btn());
+      expect(useSettingsStore.getState().settings.fingerAction).toBe("draw");
+      expect(btn().getAttribute("aria-label")).toBe("Fingers draw");
+      fireEvent.click(btn());
+      expect(useSettingsStore.getState().settings.fingerAction).toBe("pan");
+      expect(btn().getAttribute("aria-label")).toBe("Fingers pan");
+      fireEvent.click(btn());
+      expect(useSettingsStore.getState().settings.fingerAction).toBe("draw");
+    } finally {
+      setPlatformForTests(false);
+    }
   });
 
   it("selects_and_removes_presets", () => {

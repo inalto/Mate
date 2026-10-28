@@ -96,7 +96,13 @@
         "ruledNoMargin": "Lignée (sans marge)",
         "grid": "Quadrillé",
         "gridUniform": "Quadrillage uniforme",
-        "dotGrid": "Pointillé"
+        "dotGrid": "Pointillé",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "Format de page",
@@ -188,9 +194,12 @@
         "standard": "Standard",
         "high": "Élevé"
       },
-      "drawWithFinger": {
-        "label": "Dessiner au doigt",
-        "hint": "Désactivé : les doigts déplacent et zooment, le stylo dessine"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws; fingers pan while you are using a pen",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "Zoom par pincement",
       "mouseWheel": {
@@ -499,6 +508,11 @@
     "updateSettings": "Réglages des mises à jour"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "Outils de l'éditeur",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · clic droit pour retirer",
@@ -549,6 +563,7 @@
     "exportPage": "Exporter la page…",
     "importNotes": "Importer des notes…",
     "pageSettings": "Réglages de la page",
+    "paper": "Paper",
     "searchActions": "Rechercher et actions…",
     "about": "À propos de Mate",
     "pageTitle": "Titre de la page"
@@ -710,7 +725,6 @@
   "pageSettings": {
     "mode": "Mode",
     "paperSize": "Format du papier",
-    "gridUniform": "Quadrillage (uniforme)",
     "spacing": "Espacement"
   },
   "import": {
@@ -1116,5 +1130,15 @@
     "label": "Code",
     "language": "Langage",
     "plain": "Texte brut"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

@@ -109,6 +109,15 @@ describe("renderToSvg", () => {
     expect(transparent).not.toContain("<rect");
   });
 
+  it("exports the isometric template's diagonal rules", () => {
+    const iso = page({ mode: "page", pageWidth: 1080, pageHeight: 1440, backgroundConfig: { type: "isometric", spacing: 40, dotRadius: 1.5 } });
+    const svg = renderToSvg([stroke("a", line(100, 200, 900, 600), "pen")], iso, opts);
+    const diagonal = [...svg.matchAll(/<line x1="([-\d.]+)" y1="([-\d.]+)" x2="([-\d.]+)" y2="([-\d.]+)"/g)].filter(
+      (m) => m[1] !== m[3] && m[2] !== m[4],
+    );
+    expect(diagonal.length).toBeGreaterThan(10);
+  });
+
   it("stacks every sheet with content in page mode", () => {
     const paged = page({ mode: "page", pageWidth: 1080, pageHeight: 1440 });
     const els = [stroke("a", line(100, 100, 200, 1600), "pen")];

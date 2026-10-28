@@ -1,7 +1,8 @@
 // Ink-to-shape while drawing: a dwell timer runs while the pen is down; when the pen has held still
-// (≤ 2 screen px since the dwell started) for `dwellMs`, the stroke so far is recognised and, on a
-// match, snaps to a shape (the caller previews it and commits it on pen-up). With snap-on-release,
-// a stroke lifted without a hold is recognised too. The highlighter never snaps.
+// (≤ 2 screen px since the dwell started, 8 px for a finger) for `dwellMs`, the stroke so far is
+// recognised and, on a match, snaps to a shape (the caller previews it and commits it on pen-up).
+// With snap-on-release, a stroke lifted without a hold is recognised too. The highlighter never
+// snaps.
 import type { Element, PenPreset, Point, Settings } from "../model/types";
 import { shapeElement, shapeFromDrag, shapeOutline } from "../shapes/geometry";
 import { recognizeShape, type RecognizedShape } from "../shapes/recognize";
@@ -9,6 +10,8 @@ import type { Camera } from "./camera";
 
 /** Pen movement (screen px) that restarts the dwell. */
 export const DWELL_SLOP_PX = 2;
+/** Finger movement (screen px) that restarts the dwell: a held fingertip jitters more than a pen. */
+export const TOUCH_DWELL_SLOP_PX = 8;
 /** How long the snapped outline flashes on the interaction layer (ms). */
 export const SNAP_FLASH_MS = 150;
 
@@ -16,6 +19,8 @@ export interface InkSnapOptions {
   dwellMs: number;
   snapsOnRelease: boolean;
   zoom: number;
+  /** Movement (screen px) that restarts the dwell; default `DWELL_SLOP_PX`. */
+  slopPx?: number;
   /** The stroke's processed points so far. */
   points(): readonly Point[];
   /** Called once when a hold snaps the stroke. */
@@ -31,7 +36,10 @@ export interface InkSnap {
   snapped(): RecognizedShape | null;
 }
 
-/** Ink-to-shape applies to this ink type under these settings. */
+/** Dwell slop for a pointer type: wider for touch. */
+export const dwellSlopFor = (pointerType: string): number => (pointerType === "touch" ? TOUCH_DWELL_SLOP_PX : DWELL_SLOP_PX);
+
+/** Ink-to-shape applies to this ink type under these settings (any pointer type, touch included). */
 export const inkSnapAllowed = (type: PenPreset["type"], cfg: Pick<Settings, "inkToShape">): boolean =>
   cfg.inkToShape && type !== "highlighter";
 
@@ -39,6 +47,7 @@ export function createInkSnap(opts: InkSnapOptions): InkSnap {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let anchor: Point | null = null;
   let result: RecognizedShape | null = null;
+  const slop = opts.slopPx ?? DWELL_SLOP_PX;
 
   const clear = () => {
     if (timer !== null) clearTimeout(timer);
@@ -61,7 +70,7 @@ export function createInkSnap(opts: InkSnapOptions): InkSnap {
     down: (p) => arm(p),
     move(p) {
       if (result || !anchor) return;
-      if (Math.hypot(p.x - anchor.x, p.y - anchor.y) * opts.zoom > DWELL_SLOP_PX) arm(p);
+      if (Math.hypot(p.x - anchor.x, p.y - anchor.y) * opts.zoom > slop) arm(p);
     },
     up() {
       clear();

@@ -44,6 +44,12 @@ pub enum BackgroundType {
     Grid,
     GridUniform,
     DotGrid,
+    Isometric,
+    Hex,
+    Cornell,
+    Handwriting,
+    Columns,
+    Music,
     Custom,
 }
 

@@ -1,9 +1,10 @@
 {
   "name": "mate",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.8.0",
   "type": "module",
   "scripts": {
+    "icons:android": "node scripts/copy-android-icons.mjs",
     "predev": "node scripts/copy-pdfjs-assets.mjs",
     "dev": "vite",
     "prebuild": "node scripts/copy-pdfjs-assets.mjs",

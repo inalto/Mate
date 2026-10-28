@@ -21,7 +21,7 @@ import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
-import { createInkSnap, drawSnapFlash, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
+import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
 import { createDismissPress, createToolController, pointerTool } from "./toolInteractions";
@@ -336,6 +336,7 @@ function createEngine(
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
               snapsOnRelease: set.inkToShapeSnapsOnRelease,
               zoom: s.camera.z,
+              slopPx: dwellSlopFor(info.pointerType),
               points: () => builder?.points() ?? [],
               onSnap,
             })
@@ -423,8 +424,8 @@ function createEngine(
       get palmRejection() {
         return getSettings().palmRejection as PalmRejection;
       },
-      get drawWithFinger() {
-        return getSettings().drawWithFinger;
+      get fingerAction() {
+        return getSettings().fingerAction;
       },
       get pinchToZoom() {
         return getSettings().pinchToZoom;

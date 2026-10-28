@@ -63,6 +63,29 @@ fn background_default_is_ruled_40() {
 }
 
 #[test]
+fn background_template_names_match_the_frontend() {
+    for (variant, name) in [
+        (BackgroundType::RuledNoMargin, "ruled-no-margin"),
+        (BackgroundType::GridUniform, "grid-uniform"),
+        (BackgroundType::DotGrid, "dot-grid"),
+        (BackgroundType::Isometric, "isometric"),
+        (BackgroundType::Hex, "hex"),
+        (BackgroundType::Cornell, "cornell"),
+        (BackgroundType::Handwriting, "handwriting"),
+        (BackgroundType::Columns, "columns"),
+        (BackgroundType::Music, "music"),
+    ] {
+        let json = serde_json::to_string(&variant).unwrap();
+        assert_eq!(json, format!("\"{name}\""));
+        let back: BackgroundType = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, variant);
+    }
+    let bg: BackgroundConfig =
+        serde_json::from_str(r#"{"type":"isometric","spacing":20,"dotRadius":1.5}"#).unwrap();
+    assert_eq!(bg.r#type, BackgroundType::Isometric);
+}
+
+#[test]
 fn now_iso_is_utc_with_millis() {
     let s = mate_core::model::now_iso();
     assert_eq!(s.len(), "2026-10-22T13:05:07.123Z".len(), "{s}");

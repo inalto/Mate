@@ -96,7 +96,13 @@
         "ruledNoMargin": "横线（无页边距）",
         "grid": "方格",
         "gridUniform": "均匀方格",
-        "dotGrid": "点阵"
+        "dotGrid": "点阵",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "纸张大小",
@@ -188,9 +194,12 @@
         "standard": "标准",
         "high": "高"
       },
-      "drawWithFinger": {
-        "label": "用手指绘图",
-        "hint": "关闭时：手指用于平移和缩放，笔用于绘图"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws; fingers pan while you are using a pen",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "双指缩放",
       "mouseWheel": {
@@ -498,6 +507,11 @@
     "updateSettings": "更新设置"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "编辑器工具",
     "hintWithKeys": "{{label}}（{{keys}}）",
     "presetRemoveHint": "{{title}} · 右键单击以移除",
@@ -548,6 +562,7 @@
     "exportPage": "导出页面…",
     "importNotes": "导入笔记…",
     "pageSettings": "页面设置",
+    "paper": "Paper",
     "searchActions": "搜索与操作…",
     "about": "关于 Mate",
     "pageTitle": "页面标题"
@@ -709,7 +724,6 @@
   "pageSettings": {
     "mode": "模式",
     "paperSize": "纸张大小",
-    "gridUniform": "方格（均匀）",
     "spacing": "间距"
   },
   "import": {
@@ -1103,5 +1117,15 @@
     "label": "代码",
     "language": "语言",
     "plain": "纯文本"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

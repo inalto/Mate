@@ -105,7 +105,10 @@ pub struct Settings {
     pub pen_eraser_button_action: String,
     pub scroll_behavior: String,
     pub pinch_to_zoom: bool,
-    pub draw_with_finger: bool,
+    /// What one finger does on a touch screen: `"auto"` (draws unless a stylus was seen in the
+    /// last 2 s), `"draw"` (always draws) or `"pan"` (never draws). Replaces the boolean
+    /// `drawWithFinger` (`true` loads as `"draw"`, `false` as `"auto"`).
+    pub finger_action: String,
     // Tutor
     pub conversion_enabled: bool,
     pub correctness_mode: bool,
@@ -194,7 +197,7 @@ impl Default for Settings {
             pen_eraser_button_action: s("eraser"),
             scroll_behavior: s("pan"),
             pinch_to_zoom: true,
-            draw_with_finger: false,
+            finger_action: s("auto"),
             conversion_enabled: true,
             correctness_mode: false,
             tutor_underline_errors: true,
@@ -224,11 +227,39 @@ impl Default for Settings {
     }
 }
 
+/// Maps keys from older settings files onto their replacements (the old keys are then unknown,
+/// so they are ignored on load and dropped on the next save), and normalises enum-like values the
+/// frontend switches on: an unknown `fingerAction` becomes `"auto"`.
+fn migrate_legacy_keys(value: &mut serde_json::Value) {
+    let serde_json::Value::Object(map) = value else {
+        return;
+    };
+    if let Some(old) = map.remove("drawWithFinger") {
+        if !map.contains_key("fingerAction") {
+            let action = if old.as_bool() == Some(true) {
+                "draw"
+            } else {
+                "auto"
+            };
+            map.insert(
+                "fingerAction".into(),
+                serde_json::Value::String(action.into()),
+            );
+        }
+    }
+    if let Some(action) = map.get_mut("fingerAction") {
+        if !matches!(action.as_str(), Some("auto" | "draw" | "pan")) {
+            *action = serde_json::Value::String("auto".into());
+        }
+    }
+}
+
 impl Settings {
     /// Parses a settings file. A field with the wrong type falls back to its default instead of
     /// discarding the whole file; only non-JSON or non-object input is an error.
     pub fn from_json_lenient(text: &str) -> Result<Settings, serde_json::Error> {
-        let value: serde_json::Value = serde_json::from_str(text)?;
+        let mut value: serde_json::Value = serde_json::from_str(text)?;
+        migrate_legacy_keys(&mut value);
         if let Ok(s) = serde_json::from_value::<Settings>(value.clone()) {
             return Ok(s);
         }

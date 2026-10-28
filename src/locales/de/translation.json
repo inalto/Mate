@@ -96,7 +96,13 @@
         "ruledNoMargin": "Liniert (ohne Rand)",
         "grid": "Kariert",
         "gridUniform": "Gleichmäßiges Raster",
-        "dotGrid": "Punktraster"
+        "dotGrid": "Punktraster",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "Seitengröße",
@@ -188,9 +194,12 @@
         "standard": "Standard",
         "high": "Hoch"
       },
-      "drawWithFinger": {
-        "label": "Mit dem Finger zeichnen",
-        "hint": "Aus: Finger verschieben und zoomen, der Stift zeichnet"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws; fingers pan while you are using a pen",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "Mit Fingern zoomen",
       "mouseWheel": {
@@ -499,6 +508,11 @@
     "updateSettings": "Update-Einstellungen"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "Editor-Werkzeuge",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · Rechtsklick zum Entfernen",
@@ -549,6 +563,7 @@
     "exportPage": "Seite exportieren…",
     "importNotes": "Notizen importieren…",
     "pageSettings": "Seiteneinstellungen",
+    "paper": "Paper",
     "searchActions": "Suche und Aktionen…",
     "about": "Über Mate",
     "pageTitle": "Seitentitel"
@@ -710,7 +725,6 @@
   "pageSettings": {
     "mode": "Modus",
     "paperSize": "Papierformat",
-    "gridUniform": "Raster (gleichmäßig)",
     "spacing": "Abstand"
   },
   "import": {
@@ -1116,5 +1130,15 @@
     "label": "Code",
     "language": "Sprache",
     "plain": "Reiner Text"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

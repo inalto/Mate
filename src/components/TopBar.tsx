@@ -1,5 +1,5 @@
 // Editor top bar: navigation, undo/redo, page title (inline rename) and the "more actions" menu.
-import { ArrowArcLeft, ArrowArcRight, DotsThree, House, Plus, SidebarSimple } from "@phosphor-icons/react";
+import { ArrowArcLeft, ArrowArcRight, DotsThree, House, Note, Plus, SidebarSimple } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
@@ -99,6 +99,7 @@ export default function TopBar() {
           }
         }}
       />
+      <button className="icon-btn" aria-label={t("topbar.paper")} title={t("topbar.paper")} disabled={!pageId} onClick={() => useChromeStore.getState().setPaperPickerOpen(true)}><Note size={18} /></button>
       <MoreMenu pageId={pageId} onExport={() => setExporting(true)} />
       {exporting && pageId && <ExportDialog pageId={pageId} onClose={() => setExporting(false)} />}
     </header>

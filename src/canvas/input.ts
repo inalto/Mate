@@ -1,14 +1,19 @@
 // Pointer input adapter (spec 03 §2): drawing pointers (pen, mouse, permitted touch) go to
 // onDown/onMove/onUp in world coordinates; other touches become pan/pinch gestures.
-import type { Point } from "../model/types";
+import type { FingerAction, Point } from "../model/types";
 import { screenToWorld, type Camera, type Vec2 } from "./camera";
+
+export type { FingerAction };
 
 /**
  * settings.palmRejection. Rules for a touch contact (pen and mouse are never rejected):
- * - "off": every touch is accepted (draws with drawWithFinger, else pans/pinches).
- * - "standard" ("low" is the legacy name): rejected when its contact diameter exceeds 40 px, its
- *   radius exceeds 45 px, or a stylus was seen (down, move or hover) in the last 2 s.
+ * - "off": every touch is accepted, the 45 px definite-palm check included (draws per
+ *   settings.fingerAction, else pans/pinches).
+ * - "standard" ("low" is the legacy name): rejected when its radius exceeds 45 px (a definite
+ *   palm); when a stylus was seen (down, move or hover) in the last 2 s, also when its contact
+ *   diameter exceeds 40 px, and with fingerAction "auto"/"pan" any touch is rejected then.
  * - "high": as standard, with a 20 px diameter threshold.
+ * Without a recent stylus the 20/40 px thresholds do not apply: a fingertip (25–50 px) draws.
  * A touch that lands while a pen/mouse stroke is open is always rejected (resting hand).
  */
 export type PalmRejection = "off" | "standard" | "low" | "high";
@@ -44,7 +49,7 @@ export interface PointerHandlers {
 
 export interface PointerAdapterOptions {
   palmRejection: PalmRejection;
-  drawWithFinger: boolean;
+  fingerAction: FingerAction;
   getCamera(): Camera;
   /** Two-finger pinch zoom (default true); when off two fingers pan. */
   pinchToZoom?: boolean;
@@ -54,7 +59,7 @@ export const BUTTON_TIP = 1;
 export const BUTTON_BARREL = 2;
 export const BUTTON_ERASER = 32;
 export const STYLUS_SEEN_WINDOW_MS = 2000;
-const DEFINITE_PALM_RADIUS = 45;
+export const DEFINITE_PALM_RADIUS = 45;
 
 export function pointerInfo(e: PointerEvent): PointerInfo {
   const pen = e.pointerType === "pen" || e.pointerType === "eraser";
@@ -72,6 +77,37 @@ export function isPalmContact(e: Pick<PointerEvent, "width" | "height">, mode: P
   const diameter = Math.max(e.width || 0, e.height || 0);
   if (diameter / 2 > DEFINITE_PALM_RADIUS) return true;
   return diameter > (mode === "high" ? 20 : 40);
+}
+
+const contactRadius = (e: Pick<PointerEvent, "width" | "height">) => Math.max(e.width || 0, e.height || 0) / 2;
+
+/**
+ * May a single touch contact draw? Never with "pan" or for a definite palm (radius > 45 px, unless
+ * palm rejection is off); with "auto" only when no stylus was seen in the last
+ * `STYLUS_SEEN_WINDOW_MS`. The 20/40 px palm thresholds apply only when a stylus was seen recently.
+ */
+export function fingerMayDraw(
+  e: Pick<PointerEvent, "width" | "height">,
+  mode: PalmRejection,
+  fingerAction: FingerAction,
+  lastStylusAt: number,
+  now: number,
+): boolean {
+  if (fingerAction === "pan") return false;
+  const stylusRecent = now - lastStylusAt < STYLUS_SEEN_WINDOW_MS;
+  if (fingerAction === "auto" && stylusRecent) return false;
+  if (mode === "off") return true;
+  if (contactRadius(e) > DEFINITE_PALM_RADIUS) return false;
+  return !stylusRecent || !isPalmContact(e, mode);
+}
+
+/** Whether a touch contact is ignored outright (neither draws nor pans): a definite palm, or, with
+ * a stylus seen recently, a palm-sized contact (any contact unless fingers draw). */
+function touchRejected(e: PointerEvent, mode: PalmRejection, fingerAction: FingerAction, stylusRecent: boolean): boolean {
+  if (mode === "off") return false;
+  if (contactRadius(e) > DEFINITE_PALM_RADIUS) return true;
+  if (!stylusRecent) return false;
+  return fingerAction !== "draw" || isPalmContact(e, mode);
 }
 
 /** Attach the adapter to `el`; returns a disposer. Options are read at event time. */
@@ -159,10 +195,8 @@ export function createPointerAdapter(
         rejected.add(e.pointerId);
         return;
       }
-      const palm =
-        isPalmContact(e, opts.palmRejection) ||
-        (opts.palmRejection !== "off" && e.timeStamp - lastStylusAt < STYLUS_SEEN_WINDOW_MS);
-      if (palm) {
+      const stylusRecent = e.timeStamp - lastStylusAt < STYLUS_SEEN_WINDOW_MS;
+      if (touchRejected(e, opts.palmRejection, opts.fingerAction, stylusRecent)) {
         rejected.add(e.pointerId);
         return;
       }
@@ -174,7 +208,11 @@ export function createPointerAdapter(
         addGestureTouch(e);
         return;
       }
-      if (opts.drawWithFinger && drawId === null && touches.size === 0) {
+      if (
+        drawId === null &&
+        touches.size === 0 &&
+        fingerMayDraw(e, opts.palmRejection, opts.fingerAction, lastStylusAt, e.timeStamp)
+      ) {
         drawId = e.pointerId;
         drawType = t;
         drawLast = local(e);

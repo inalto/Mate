@@ -96,7 +96,13 @@
         "ruledNoMargin": "Con renglones (sin margen)",
         "grid": "Cuadrícula",
         "gridUniform": "Cuadrícula uniforme",
-        "dotGrid": "Cuadrícula de puntos"
+        "dotGrid": "Cuadrícula de puntos",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "Tamaño de página",
@@ -188,9 +194,12 @@
         "standard": "Estándar",
         "high": "Alto"
       },
-      "drawWithFinger": {
-        "label": "Dibujar con el dedo",
-        "hint": "Desactivado: los dedos desplazan y amplían, el lápiz dibuja"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws; fingers pan while you are using a pen",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "Pellizcar para ampliar",
       "mouseWheel": {
@@ -499,6 +508,11 @@
     "updateSettings": "Ajustes de actualización"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "Herramientas del editor",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · clic derecho para quitar",
@@ -549,6 +563,7 @@
     "exportPage": "Exportar página…",
     "importNotes": "Importar notas…",
     "pageSettings": "Ajustes de la página",
+    "paper": "Paper",
     "searchActions": "Buscar y acciones…",
     "about": "Acerca de Mate",
     "pageTitle": "Título de la página"
@@ -710,7 +725,6 @@
   "pageSettings": {
     "mode": "Modo",
     "paperSize": "Tamaño del papel",
-    "gridUniform": "Cuadrícula (uniforme)",
     "spacing": "Espaciado"
   },
   "import": {
@@ -1116,5 +1130,15 @@
     "label": "Código",
     "language": "Lenguaje",
     "plain": "Texto sin formato"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

@@ -19,6 +19,8 @@ import {
   Code,
   MathOperations,
   ChartLine,
+  HandPointing,
+  HandGrabbing,
 } from "@phosphor-icons/react";
 import { useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,10 +29,11 @@ import type { TKey } from "../i18n";
 import { pickAndInsertImage } from "../images/insert";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
-import type { PenPreset } from "../model/types";
+import type { FingerAction, PenPreset } from "../model/types";
 import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useSettingsStore } from "../stores/settings";
+import { isMobile } from "../platform";
 import PresetMenu from "./PresetMenu";
 import { SHAPE_LABEL_KEY } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
@@ -313,6 +316,36 @@ function HintButton({
   );
 }
 
+const FINGER_LABEL = {
+  auto: "toolbar.finger.auto",
+  draw: "toolbar.finger.draw",
+  pan: "toolbar.finger.pan",
+} as const satisfies Record<FingerAction, TKey>;
+
+/** Mobile only: what one finger does, cycling draw ↔ pan ("auto" goes to "draw"). */
+function FingerToggle() {
+  const { t } = useTranslation();
+  const action = useSettingsStore((s) => s.settings.fingerAction);
+  const next = action === "draw" ? "pan" : "draw";
+  const label = t(FINGER_LABEL[action]);
+  return (
+    <button
+      type="button"
+      className={action === "draw" ? "tb-btn active" : "tb-btn"}
+      aria-label={label}
+      title={label}
+      onClick={() =>
+        useSettingsStore
+          .getState()
+          .update({ fingerAction: next })
+          .catch((err) => console.error("saving finger setting failed", err))
+      }
+    >
+      {action === "pan" ? <HandGrabbing size={18} /> : <HandPointing size={18} weight={action === "draw" ? "fill" : "regular"} />}
+    </button>
+  );
+}
+
 export default function Toolbar() {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
@@ -373,6 +406,7 @@ export default function Toolbar() {
       {toolBtn("cursor", "tool.cursor", t("toolbar.select"), <Cursor size={18} />)}
       {toolBtn("lasso", "tool.lasso", t("toolbar.lasso"), <Lasso size={18} />)}
       <InsertSpaceButton />
+      {isMobile() && <FingerToggle />}
       <span className="tb-sep" />
       <HintButton action="undo" label={t("keys.actions.undo")} disabled={!canUndo} onClick={() => s().undo()}>
         <ArrowUUpLeft size={18} />
