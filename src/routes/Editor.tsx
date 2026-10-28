@@ -38,6 +38,10 @@ export default function Editor() {
   const paperPickerOpen = useChromeStore((s) => s.paperPickerOpen);
   const focusedId = useTabsStore((s) => focusedPageId(s));
   const paperPage = useNotebookStore((s) => (paperPickerOpen ? s.tree.pages.find((p) => p.id === focusedId) : undefined));
+  // Nothing focused (last tab closed): drop the request so the picker does not pop up later.
+  useEffect(() => {
+    if (paperPickerOpen && !focusedId) closePaperPicker();
+  }, [paperPickerOpen, focusedId]);
   const leftHanded = useSettingsStore((s) => s.settings.handedness) === "left";
 
   // The URL names a page: make sure a tab shows it.

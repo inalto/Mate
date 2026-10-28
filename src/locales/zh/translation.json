@@ -724,7 +724,6 @@
   "pageSettings": {
     "mode": "模式",
     "paperSize": "纸张大小",
-    "gridUniform": "方格（均匀）",
     "spacing": "间距"
   },
   "import": {

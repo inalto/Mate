@@ -725,7 +725,6 @@
   "pageSettings": {
     "mode": "Mode",
     "paperSize": "Format du papier",
-    "gridUniform": "Quadrillage (uniforme)",
     "spacing": "Espacement"
   },
   "import": {

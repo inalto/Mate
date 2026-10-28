@@ -22,7 +22,7 @@ const BACKGROUNDS: [BackgroundType, TKey][] = [
   ["ruled", "settings.paper.background.ruled"],
   ["ruled-no-margin", "settings.paper.background.ruledNoMargin"],
   ["grid", "settings.paper.background.grid"],
-  ["grid-uniform", "pageSettings.gridUniform"],
+  ["grid-uniform", "settings.paper.background.gridUniform"],
   ["dot-grid", "settings.paper.background.dotGrid"],
   ["isometric", "settings.paper.background.isometric"],
   ["hex", "settings.paper.background.hex"],

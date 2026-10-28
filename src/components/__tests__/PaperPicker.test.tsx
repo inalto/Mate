@@ -79,6 +79,23 @@ describe("PaperPicker", () => {
     expect(lastPage().backgroundConfig.type).toBe("music");
   });
 
+  it("moves focus to the selected tile, traps Tab and restores focus on close", () => {
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    const { unmount } = render(<PaperPicker page={page} onClose={onClose} />);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ruled" }));
+    const done = screen.getByRole("button", { name: "Done" });
+    done.focus();
+    fireEvent.keyDown(window, { key: "Tab" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Blank" }));
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+    unmount();
+    expect(document.activeElement).toBe(opener);
+    opener.remove();
+  });
+
   it("counts as a modal and closes with Done", () => {
     const depth = useChromeStore.getState().modalDepth;
     render(<PaperPicker page={page} onClose={onClose} />);

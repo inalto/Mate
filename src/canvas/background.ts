@@ -185,11 +185,13 @@ function emitRegion(
     }
     case "handwriting": {
       // Groups of cap (minor), mid (thin) and base (major) lines spanning s, with s/2 between groups.
+      // On a sheet only whole groups that fit below its top edge are drawn.
       while ((2 * Math.max(r.width, r.height)) / step > MAX_LINES_PER_AXIS) step *= 2;
       const pitch = step * 1.5;
       const [g0, g1] = range(r.y - step, bottom, originY + step / 2, pitch);
       for (let g = g0; g <= g1; g++) {
         const cap = originY + step / 2 + g * pitch;
+        if (sheet && !wholeOnSheet(sheet, cap, cap + step)) continue;
         hLineIn(cap, c.rule, 1, false);
         hLineIn(cap + step / 2, c.rule, 0.5, false);
         hLineIn(cap + step, c.major, 1.5, true);
@@ -220,6 +222,7 @@ function emitRegion(
       const [k0, k1] = range(r.y - step, bottom, first, pitch);
       for (let k = k0; k <= k1; k++) {
         const top = first + k * pitch;
+        if (sheet && !wholeOnSheet(sheet, top, top + step)) continue;
         for (let i = 0; i < 5; i++) hLineIn(top + (i * step) / 4, c.major, 1, false);
       }
       return;
@@ -227,6 +230,11 @@ function emitRegion(
     default:
       return; // blank, custom (image backgrounds are not drawn in phase 1)
   }
+}
+
+/** A band [top, bottom] lies strictly below the sheet's top edge and within its bottom edge. */
+function wholeOnSheet(sheet: Rect, top: number, bottom: number): boolean {
+  return top > sheet.y && bottom <= sheet.y + sheet.height;
 }
 
 function intersect(a: Rect, b: Rect): Rect | null {

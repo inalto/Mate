@@ -1,6 +1,6 @@
 // Paper picker: a preview tile per page template, spacing presets and "Use for new pages".
 // Every choice applies to the page at once (same updatePage path as the Page settings dialog).
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TKey } from "../i18n";
 import type { BackgroundConfig, BackgroundType, Page } from "../model/types";
@@ -29,6 +29,7 @@ const PRESETS: [number, TKey][] = [
   [40, "paperPicker.medium"],
   [60, "paperPicker.large"],
 ];
+const FOCUSABLE = "button:not([disabled]), input:not([disabled])";
 const MIN_SPACING = 10;
 const MAX_SPACING = 200;
 const clampSpacing = (n: number, fallback: number) =>
@@ -36,7 +37,7 @@ const clampSpacing = (n: number, fallback: number) =>
 
 function PaperTile({ cfg, label, selected, onPick }: { cfg: BackgroundConfig; label: string; selected: boolean; onPick(): void }) {
   const theme = useSettingsStore((s) => s.settings.theme);
-  const p = paperPreview(cfg, theme);
+  const p = useMemo(() => paperPreview(cfg, theme), [cfg, theme]);
   return (
     <button type="button" className="paper-tile" aria-pressed={selected} onClick={onPick}>
       <svg width={p.width} height={p.height} viewBox={`0 0 ${p.width} ${p.height}`} aria-hidden="true">
@@ -59,17 +60,42 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
   const [cfg, setCfg] = useState<BackgroundConfig>(page.backgroundConfig);
   const [draft, setDraft] = useState<string | null>(null);
   const [forNew, setForNew] = useState(false);
-
+  const ref = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
   useEffect(() => {
+    close.current = onClose;
+  });
+  // One config per tile, rebuilt only when spacing or the other shared fields change.
+  const tileCfgs = useMemo(
+    () => Object.fromEntries(PAPER_TEMPLATES.map(([type]) => [type, { ...cfg, type }])) as Record<BackgroundType, BackgroundConfig>,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the type is replaced per tile
+    [cfg.spacing, cfg.dotRadius, cfg.gridColor, cfg.ruleInsetX, cfg.offsetX],
+  );
+
+  // Focus moves in on open (the selected tile), stays inside, and returns to the opener on close.
+  useEffect(() => {
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const root = ref.current;
+    (root?.querySelector<HTMLElement>('.paper-tile[aria-pressed="true"]') ?? root?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopImmediatePropagation(); // closes the picker only, nothing behind it
-      onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation(); // closes the picker only, nothing behind it
+        close.current();
+      } else if (e.key === "Tab") {
+        const items = [...(ref.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
+        e.preventDefault();
+        if (items.length === 0) return;
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        items[e.shiftKey ? (i <= 0 ? items.length - 1 : i - 1) : i === items.length - 1 ? 0 : i + 1].focus();
+      }
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      before?.focus?.();
+    };
+  }, []);
 
   const apply = (next: BackgroundConfig) => {
     setCfg(next);
@@ -95,11 +121,11 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="card dialog paper-picker" role="dialog" aria-modal="true" aria-label={t("paperPicker.title")}>
+      <div ref={ref} className="card dialog paper-picker" role="dialog" aria-modal="true" aria-label={t("paperPicker.title")}>
         <h2>{t("paperPicker.title")}</h2>
         <div className="paper-tiles" role="group" aria-label={t("paperPicker.templates")}>
           {PAPER_TEMPLATES.map(([type, label]) => (
-            <PaperTile key={type} cfg={{ ...cfg, type }} label={t(label)} selected={cfg.type === type} onPick={() => pickType(type)} />
+            <PaperTile key={type} cfg={tileCfgs[type]} label={t(label)} selected={cfg.type === type} onPick={() => pickType(type)} />
           ))}
         </div>
         {cfg.type !== "blank" && (

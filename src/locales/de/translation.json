@@ -725,7 +725,6 @@
   "pageSettings": {
     "mode": "Modus",
     "paperSize": "Papierformat",
-    "gridUniform": "Raster (gleichmäßig)",
     "spacing": "Abstand"
   },
   "import": {

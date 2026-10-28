@@ -722,7 +722,6 @@
   "pageSettings": {
     "mode": "Mode",
     "paperSize": "Paper size",
-    "gridUniform": "Grid (uniform)",
     "spacing": "Spacing"
   },
   "import": {

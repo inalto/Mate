@@ -112,6 +112,35 @@ describe("background", () => {
       expect(horizontal.some((l) => !l.major && l.width === 0.5)).toBe(true);
     });
 
+    it("handwriting_draws_whole_groups_inside_each_sheet", () => {
+      const two = { mode: "page" as const, width: 1080, height: 1528, count: 2 };
+      const stride = 1528 + 24; // PAGE_GAP
+      const both = { x: 0, y: 0, width: 1080, height: stride + 1528 };
+      const { lines } = buildBackgroundPattern({ type: "handwriting", spacing: 40, dotRadius: 1.5 }, both, two, "light");
+      const ys = lines.map((l) => l.y1);
+      expect(ys).not.toContain(0);
+      expect(ys).not.toContain(stride);
+      for (const top of [0, stride]) {
+        const onSheet = lines.filter((l) => l.y1 > top && l.y1 <= top + 1528).sort((a, b) => a.y1 - b.y1);
+        expect(onSheet.length).toBeGreaterThan(0);
+        expect(onSheet.length % 3).toBe(0);
+        for (let i = 0; i < onSheet.length; i += 3) {
+          const [cap, mid, base] = onSheet.slice(i, i + 3);
+          expect([cap.major, cap.width]).toEqual([false, 1]);
+          expect([mid.major, mid.width]).toEqual([false, 0.5]);
+          expect(base.major).toBe(true);
+          expect(mid.y1 - cap.y1).toBeCloseTo(20);
+          expect(base.y1 - cap.y1).toBeCloseTo(40);
+        }
+      }
+    });
+
+    it("music_draws_whole_staves_inside_the_sheet", () => {
+      const { lines } = buildBackgroundPattern({ type: "music", spacing: 40, dotRadius: 1.5 }, sheetClip, a4, "light");
+      expect(lines.length % 5).toBe(0);
+      expect(lines.every((l) => l.y1 > 0 && l.y1 <= 1528)).toBe(true);
+    });
+
     it("line_templates_stay_under_the_cap_on_a_huge_canvas_clip", () => {
       const huge = { x: 0, y: 0, width: 50_000, height: 50_000 };
       for (const type of ["isometric", "cornell", "handwriting", "columns", "music"] as const) {
