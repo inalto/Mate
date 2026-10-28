@@ -4,6 +4,7 @@ import i18n from "../i18n";
 import { closeThisWindow, isPageWindow, setThisWindowTitle } from "../ipc/windows";
 import CanvasView from "../canvas/CanvasView";
 import PageSettingsDialog from "../components/PageSettingsDialog";
+import PaperPicker from "../components/PaperPicker";
 import SelectionBar from "../components/SelectionBar";
 import Sidebar from "../components/Sidebar";
 import TabBar from "../components/TabBar";
@@ -23,6 +24,8 @@ import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
 import TutorController from "../tutor/TutorController";
 
+const closePaperPicker = () => useChromeStore.getState().setPaperPickerOpen(false);
+
 export default function Editor() {
   const { pageId } = useParams();
   // `?window=1`: this page has its own window. No sidebar, no tabs; closing the window is the exit.
@@ -32,6 +35,9 @@ export default function Editor() {
   const tab = useTabsStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const pageSettingsFor = useChromeStore((s) => s.pageSettingsFor);
   const settingsPage = useNotebookStore((s) => s.tree.pages.find((p) => p.id === pageSettingsFor));
+  const paperPickerOpen = useChromeStore((s) => s.paperPickerOpen);
+  const focusedId = useTabsStore((s) => focusedPageId(s));
+  const paperPage = useNotebookStore((s) => (paperPickerOpen ? s.tree.pages.find((p) => p.id === focusedId) : undefined));
   const leftHanded = useSettingsStore((s) => s.settings.handedness) === "left";
 
   // The URL names a page: make sure a tab shows it.
@@ -127,6 +133,9 @@ export default function Editor() {
       </div>
       {settingsPage && (
         <PageSettingsDialog key={settingsPage.id} page={settingsPage} onClose={() => useChromeStore.getState().openPageSettings(null)} />
+      )}
+      {paperPage && (
+        <PaperPicker key={paperPage.id} page={paperPage} onClose={closePaperPicker} />
       )}
     </div>
   );

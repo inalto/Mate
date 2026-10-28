@@ -1650,3 +1650,55 @@ html.mobile .toolbar .tb-btn {
 html.mobile .sb-resize {
   display: none;
 }
+
+/* Paper picker */
+.dialog.paper-picker {
+  width: min(640px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.paper-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: var(--space-2);
+}
+
+.paper-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.paper-tile[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.paper-tile svg {
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.paper-tile-sheet {
+  fill: var(--canvas-page, #ffffff);
+}
+
+.paper-spacing {
+  width: 5.5em;
+}
+
+.paper-for-new {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}

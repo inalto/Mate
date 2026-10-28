@@ -96,7 +96,13 @@
         "ruledNoMargin": "罫線（余白なし）",
         "grid": "方眼",
         "gridUniform": "均一な方眼",
-        "dotGrid": "ドット方眼"
+        "dotGrid": "ドット方眼",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "用紙サイズ",
@@ -556,6 +562,7 @@
     "exportPage": "ページを書き出し…",
     "importNotes": "ノートを読み込み…",
     "pageSettings": "ページの設定",
+    "paper": "Paper",
     "searchActions": "検索とアクション…",
     "about": "Mate について",
     "pageTitle": "ページのタイトル"
@@ -1111,5 +1118,15 @@
     "label": "コード",
     "language": "言語",
     "plain": "プレーンテキスト"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

@@ -24,6 +24,12 @@ const BACKGROUNDS: [BackgroundType, TKey][] = [
   ["grid", "settings.paper.background.grid"],
   ["grid-uniform", "pageSettings.gridUniform"],
   ["dot-grid", "settings.paper.background.dotGrid"],
+  ["isometric", "settings.paper.background.isometric"],
+  ["hex", "settings.paper.background.hex"],
+  ["cornell", "settings.paper.background.cornell"],
+  ["handwriting", "settings.paper.background.handwriting"],
+  ["columns", "settings.paper.background.columns"],
+  ["music", "settings.paper.background.music"],
 ];
 
 /** Aspect preset and orientation that describe the page's sheet. */

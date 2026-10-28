@@ -93,7 +93,13 @@
         "ruledNoMargin": "A righe (senza margine)",
         "grid": "Quadretti",
         "gridUniform": "Quadretti uniformi",
-        "dotGrid": "Puntini"
+        "dotGrid": "Puntini",
+        "isometric": "Isometrica",
+        "hex": "Punti esagonali",
+        "cornell": "Appunti Cornell",
+        "handwriting": "Calligrafia",
+        "columns": "Colonne",
+        "music": "Pentagrammi"
       },
       "pageSize": {
         "label": "Dimensione della pagina",
@@ -554,6 +560,7 @@
     "exportPage": "Esporta la pagina…",
     "importNotes": "Importa appunti…",
     "pageSettings": "Impostazioni della pagina",
+    "paper": "Carta",
     "searchActions": "Cerca e azioni…",
     "about": "Informazioni su Mate",
     "pageTitle": "Titolo della pagina"
@@ -1121,5 +1128,15 @@
     "label": "Codice",
     "language": "Linguaggio",
     "plain": "Testo semplice"
+  },
+  "paperPicker": {
+    "title": "Carta",
+    "templates": "Modelli",
+    "presets": "Spaziature predefinite",
+    "small": "Piccola",
+    "medium": "Media",
+    "large": "Grande",
+    "useForNew": "Usa per le nuove pagine",
+    "done": "Fine"
   }
 }

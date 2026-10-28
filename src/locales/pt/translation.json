@@ -96,7 +96,13 @@
         "ruledNoMargin": "Pautado (sem margem)",
         "grid": "Quadriculado",
         "gridUniform": "Quadriculado uniforme",
-        "dotGrid": "Pontilhado"
+        "dotGrid": "Pontilhado",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "Tamanho da página",
@@ -557,6 +563,7 @@
     "exportPage": "Exportar página…",
     "importNotes": "Importar anotações…",
     "pageSettings": "Configurações da página",
+    "paper": "Paper",
     "searchActions": "Pesquisar e ações…",
     "about": "Sobre o Mate",
     "pageTitle": "Título da página"
@@ -1124,5 +1131,15 @@
     "label": "Código",
     "language": "Linguagem",
     "plain": "Texto simples"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

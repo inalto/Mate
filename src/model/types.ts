@@ -20,6 +20,12 @@ export type BackgroundType =
   | "grid"
   | "grid-uniform"
   | "dot-grid"
+  | "isometric"
+  | "hex"
+  | "cornell"
+  | "handwriting"
+  | "columns"
+  | "music"
   | "custom";
 export type ShapeType =
   | "rectangle"

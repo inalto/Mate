@@ -93,7 +93,13 @@
         "ruledNoMargin": "Ruled (no margin)",
         "grid": "Grid",
         "gridUniform": "Uniform grid",
-        "dotGrid": "Dot grid"
+        "dotGrid": "Dot grid",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "Page size",
@@ -554,6 +560,7 @@
     "exportPage": "Export page…",
     "importNotes": "Import notes…",
     "pageSettings": "Page settings",
+    "paper": "Paper",
     "searchActions": "Search and actions…",
     "about": "About Mate",
     "pageTitle": "Page title"
@@ -1121,5 +1128,15 @@
     "label": "Code",
     "language": "Language",
     "plain": "Plain text"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

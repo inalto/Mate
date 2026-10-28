@@ -23,6 +23,12 @@ export default function PaperSection() {
           { value: "grid", label: t("settings.paper.background.grid") },
           { value: "grid-uniform", label: t("settings.paper.background.gridUniform") },
           { value: "dot-grid", label: t("settings.paper.background.dotGrid") },
+          { value: "isometric", label: t("settings.paper.background.isometric") },
+          { value: "hex", label: t("settings.paper.background.hex") },
+          { value: "cornell", label: t("settings.paper.background.cornell") },
+          { value: "handwriting", label: t("settings.paper.background.handwriting") },
+          { value: "columns", label: t("settings.paper.background.columns") },
+          { value: "music", label: t("settings.paper.background.music") },
         ]}
       />
       <SelectRow

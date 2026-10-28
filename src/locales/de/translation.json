@@ -96,7 +96,13 @@
         "ruledNoMargin": "Liniert (ohne Rand)",
         "grid": "Kariert",
         "gridUniform": "Gleichmäßiges Raster",
-        "dotGrid": "Punktraster"
+        "dotGrid": "Punktraster",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "Seitengröße",
@@ -557,6 +563,7 @@
     "exportPage": "Seite exportieren…",
     "importNotes": "Notizen importieren…",
     "pageSettings": "Seiteneinstellungen",
+    "paper": "Paper",
     "searchActions": "Suche und Aktionen…",
     "about": "Über Mate",
     "pageTitle": "Seitentitel"
@@ -1124,5 +1131,15 @@
     "label": "Code",
     "language": "Sprache",
     "plain": "Reiner Text"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }

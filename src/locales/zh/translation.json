@@ -96,7 +96,13 @@
         "ruledNoMargin": "横线（无页边距）",
         "grid": "方格",
         "gridUniform": "均匀方格",
-        "dotGrid": "点阵"
+        "dotGrid": "点阵",
+        "isometric": "Isometric",
+        "hex": "Hexagonal dots",
+        "cornell": "Cornell notes",
+        "handwriting": "Handwriting",
+        "columns": "Columns",
+        "music": "Music staves"
       },
       "pageSize": {
         "label": "纸张大小",
@@ -556,6 +562,7 @@
     "exportPage": "导出页面…",
     "importNotes": "导入笔记…",
     "pageSettings": "页面设置",
+    "paper": "Paper",
     "searchActions": "搜索与操作…",
     "about": "关于 Mate",
     "pageTitle": "页面标题"
@@ -1111,5 +1118,15 @@
     "label": "代码",
     "language": "语言",
     "plain": "纯文本"
+  },
+  "paperPicker": {
+    "title": "Paper",
+    "templates": "Templates",
+    "presets": "Spacing presets",
+    "small": "Small",
+    "medium": "Medium",
+    "large": "Large",
+    "useForNew": "Use for new pages",
+    "done": "Done"
   }
 }
