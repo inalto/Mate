@@ -8,3 +8,7 @@
 Regenerate the app icons (writes into `src-tauri/icons`) from the repo root:
 
     npm run tauri icon -- logo/mate-logo-square-bg.svg
+
+Then copy the Android launcher icons into the generated Android project (replacing the Tauri template icon):
+
+    npm run icons:android
