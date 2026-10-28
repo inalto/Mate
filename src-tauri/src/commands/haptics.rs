@@ -20,12 +20,14 @@ pub enum HapticKind {
 
 /// The `KnownSimpleHapticsControllerWaveforms` a kind plays.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub enum Waveform {
     InkContinuous,
     Click,
 }
 
 /// The waveform `kind` starts, or `None` for `inkStop` (which stops the running feedback instead).
+#[cfg_attr(not(windows), allow(dead_code))]
 pub fn waveform_for(kind: HapticKind) -> Option<Waveform> {
     match kind {
         HapticKind::InkStart => Some(Waveform::InkContinuous),
