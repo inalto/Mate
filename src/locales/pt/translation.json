@@ -188,9 +188,12 @@
         "standard": "Padrão",
         "high": "Alta"
       },
-      "drawWithFinger": {
-        "label": "Desenhar com o dedo",
-        "hint": "Desligado: os dedos movem e dão zoom, a caneta desenha"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws until you use a pen, then fingers pan",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "Zoom com pinça",
       "mouseWheel": {
@@ -499,6 +502,11 @@
     "updateSettings": "Configurações de atualização"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "Ferramentas do editor",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · clique com o botão direito para remover",

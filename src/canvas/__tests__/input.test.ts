@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPointerAdapter } from "../input";
+import { createPointerAdapter, fingerMayDraw, type FingerAction } from "../input";
 
 const camera = () => ({ x: 0, y: 0, z: 1 });
 
-function setup(opts: { palmRejection?: "off" | "low" | "high"; drawWithFinger?: boolean } = {}) {
+function setup(opts: { palmRejection?: "off" | "low" | "high"; fingerAction?: FingerAction } = {}) {
   const el = document.createElement("div");
   document.body.appendChild(el);
   const handlers = { onDown: vi.fn(), onMove: vi.fn(), onUp: vi.fn(), onCancel: vi.fn() };
   const dispose = createPointerAdapter(el, handlers, {
     palmRejection: opts.palmRejection ?? "high",
-    drawWithFinger: opts.drawWithFinger ?? false,
+    fingerAction: opts.fingerAction ?? "pan",
     getCamera: camera,
   });
   return { el, handlers, dispose };
@@ -41,18 +41,62 @@ describe("pointer adapter", () => {
     dispose();
   });
 
-  it("touch_with_large_radius_rejected_when_high", () => {
-    const { el, handlers } = setup({ palmRejection: "high", drawWithFinger: true });
+  it("fingertip_draws_under_high_without_a_stylus", () => {
+    const { el, handlers } = setup({ palmRejection: "high", fingerAction: "auto" });
     fire(el, "pointerdown", { pointerId: 2, pointerType: "touch", width: 30, height: 30, buttons: 1, clientX: 5, clientY: 5 });
     fire(el, "pointermove", { pointerId: 2, pointerType: "touch", width: 30, height: 30, buttons: 1, clientX: 9, clientY: 9 });
     fire(el, "pointerup", { pointerId: 2, pointerType: "touch", width: 30, height: 30, clientX: 9, clientY: 9 });
+    expect(handlers.onDown).toHaveBeenCalledTimes(1);
+    expect(handlers.onDown.mock.calls[0][1]).toMatchObject({ pointerType: "touch" });
+    expect(handlers.onMove).toHaveBeenCalledTimes(1);
+    expect(handlers.onUp).toHaveBeenCalledTimes(1);
+  });
+
+  it("touch_with_large_radius_rejected_when_high_after_a_stylus", () => {
+    const at = (el: HTMLElement, type: string, init: PointerEventInit, t: number) => {
+      const ev = new PointerEvent(type, { bubbles: true, cancelable: true, ...init });
+      Object.defineProperty(ev, "timeStamp", { value: t });
+      el.dispatchEvent(ev);
+    };
+    const pen = { pointerId: 1, pointerType: "pen", pressure: 0.5 };
+    const finger = { pointerId: 2, pointerType: "touch", width: 30, height: 30, buttons: 1, clientX: 5, clientY: 5 };
+    const { el, handlers } = setup({ palmRejection: "high", fingerAction: "draw" });
+    at(el, "pointermove", { ...pen, buttons: 0 }, 0); // stylus hover
+    at(el, "pointerdown", finger, 500);
     expect(handlers.onDown).not.toHaveBeenCalled();
-    expect(handlers.onMove).not.toHaveBeenCalled();
-    expect(handlers.onUp).not.toHaveBeenCalled();
     // The same contact passes with low sensitivity (40 px threshold).
-    const low = setup({ palmRejection: "low", drawWithFinger: true });
-    fire(low.el, "pointerdown", { pointerId: 3, pointerType: "touch", width: 30, height: 30, buttons: 1, clientX: 5, clientY: 5 });
+    const low = setup({ palmRejection: "low", fingerAction: "draw" });
+    at(low.el, "pointermove", { ...pen, buttons: 0 }, 0);
+    at(low.el, "pointerdown", { ...finger, pointerId: 3 }, 500);
     expect(low.handlers.onDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto_finger_down_calls_onDown", () => {
+    const { el, handlers } = setup({ palmRejection: "high", fingerAction: "auto" });
+    fire(el, "pointerdown", { pointerId: 5, pointerType: "touch", width: 8, height: 8, buttons: 1, clientX: 5, clientY: 5 });
+    expect(handlers.onDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("resting_hand_during_a_pen_stroke_is_rejected", () => {
+    for (const fingerAction of ["auto", "draw"] as const) {
+      const { el, handlers } = setup({ palmRejection: "high", fingerAction });
+      fire(el, "pointerdown", { pointerId: 1, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 0, clientY: 0 });
+      fire(el, "pointerdown", { pointerId: 2, pointerType: "touch", width: 60, height: 60, buttons: 1, clientX: 50, clientY: 50 });
+      fire(el, "pointermove", { pointerId: 2, pointerType: "touch", width: 60, height: 60, buttons: 1, clientX: 60, clientY: 60 });
+      expect(handlers.onDown).toHaveBeenCalledTimes(1);
+      expect(handlers.onCancel).not.toHaveBeenCalled();
+      expect(handlers.onMove).not.toHaveBeenCalled();
+      // A small fingertip during the pen stroke is rejected too.
+      fire(el, "pointerdown", { pointerId: 3, pointerType: "touch", width: 8, height: 8, buttons: 1, clientX: 50, clientY: 50 });
+      expect(handlers.onDown).toHaveBeenCalledTimes(1);
+      expect(handlers.onCancel).not.toHaveBeenCalled();
+    }
+  });
+
+  it("pan_finger_never_draws", () => {
+    const { el, handlers } = setup({ palmRejection: "off", fingerAction: "pan" });
+    fire(el, "pointerdown", { pointerId: 5, pointerType: "touch", width: 8, height: 8, buttons: 1, clientX: 5, clientY: 5 });
+    expect(handlers.onDown).not.toHaveBeenCalled();
   });
 
   it("barrel_button_flag_set", () => {
@@ -119,7 +163,7 @@ describe("pointer adapter", () => {
   });
 
   it("touch_rejected_within_2s_after_pen_up", () => {
-    const { el, handlers } = setup({ palmRejection: "high", drawWithFinger: true });
+    const { el, handlers } = setup({ palmRejection: "high", fingerAction: "auto" });
     const at = (type: string, init: PointerEventInit, t: number) => {
       const ev = new PointerEvent(type, { bubbles: true, cancelable: true, ...init });
       Object.defineProperty(ev, "timeStamp", { value: t });
@@ -168,7 +212,7 @@ describe("pointer adapter", () => {
       hasPointerCapture: (id: number) => captured.has(id),
       releasePointerCapture: (id: number) => captured.delete(id),
     });
-    createPointerAdapter(el, h, { palmRejection: "high", drawWithFinger: true, getCamera: camera });
+    createPointerAdapter(el, h, { palmRejection: "high", fingerAction: "draw", getCamera: camera });
     const finger = { pointerType: "touch", width: 8, height: 8, buttons: 1 };
     fire(el, "pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 });
     expect(h.onDown).toHaveBeenCalledTimes(1);
@@ -193,5 +237,30 @@ describe("pointer adapter", () => {
     expect(h.onCancel).toHaveBeenCalledTimes(2);
     fire(el, "pointerup", { ...mouse, clientX: 60, buttons: 0 });
     expect(h.onUp).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fingerMayDraw", () => {
+  const tip = { width: 30, height: 30 };
+  const now = 10_000;
+  it("fingertip_draws_under_high_with_no_stylus", () => {
+    expect(fingerMayDraw(tip, "high", "auto", -Infinity, now)).toBe(true);
+  });
+  it("auto_finger_pans_after_a_recent_stylus", () => {
+    expect(fingerMayDraw(tip, "high", "auto", now - 500, now)).toBe(false);
+  });
+  it("definite_palm_never_draws", () => {
+    expect(fingerMayDraw({ width: 100, height: 100 }, "high", "auto", -Infinity, now)).toBe(false);
+    expect(fingerMayDraw({ width: 100, height: 100 }, "high", "draw", -Infinity, now)).toBe(false);
+  });
+  it("pan_never_draws", () => {
+    expect(fingerMayDraw(tip, "high", "pan", -Infinity, now)).toBe(false);
+    expect(fingerMayDraw(tip, "off", "pan", -Infinity, now)).toBe(false);
+  });
+  it("draw_applies_size_thresholds_only_after_a_recent_stylus", () => {
+    expect(fingerMayDraw(tip, "high", "draw", -Infinity, now)).toBe(true);
+    expect(fingerMayDraw(tip, "high", "draw", now - 500, now)).toBe(false);
+    expect(fingerMayDraw(tip, "standard", "draw", now - 500, now)).toBe(true);
+    expect(fingerMayDraw({ width: 8, height: 8 }, "high", "draw", now - 500, now)).toBe(true);
   });
 });

@@ -15,13 +15,14 @@ const rectPath = (): Point[] => {
   return out;
 };
 
-function setup(over: { snapsOnRelease?: boolean; zoom?: number } = {}) {
+function setup(over: { snapsOnRelease?: boolean; zoom?: number; slopPx?: number } = {}) {
   const drawn: Point[] = [];
   const onSnap = vi.fn();
   const snap = createInkSnap({
     dwellMs: 750,
     snapsOnRelease: over.snapsOnRelease ?? false,
     zoom: over.zoom ?? 1,
+    slopPx: over.slopPx,
     points: () => drawn,
     onSnap,
   });
@@ -73,6 +74,28 @@ describe("ink snap state machine", () => {
     expect(second.onSnap).not.toHaveBeenCalled();
     vi.advanceTimersByTime(260);
     expect(second.onSnap).toHaveBeenCalledTimes(1);
+  });
+
+  it("touch_slop_keeps_a_6px_wobble_armed", () => {
+    const wobble = (slopPx: number) => {
+      const t = setup({ slopPx });
+      // A slightly wavy finger line, 300 px long.
+      t.draw(Array.from({ length: 76 }, (_, i) => ({ x: i * 4, y: Math.sin(i / 6) * 2, pressure: 0.5, timestamp: 0 })));
+      vi.advanceTimersByTime(500);
+      const last = t.drawn[t.drawn.length - 1];
+      // A fingertip held still wobbles about 6 screen px.
+      t.draw([{ ...last, y: last.y + 6 }]);
+      vi.advanceTimersByTime(260);
+      return t.onSnap;
+    };
+    const finger = wobble(8);
+    expect(finger).toHaveBeenCalledTimes(1);
+    expect(finger.mock.calls[0][0].type).toBe("line");
+    // With the pen's 2 px slop the same wobble restarts the dwell.
+    const pen = wobble(2);
+    expect(pen).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(500);
+    expect(pen).toHaveBeenCalledTimes(1);
   });
 
   it("release_without_hold_snaps_only_with_snap_on_release", () => {

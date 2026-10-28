@@ -188,9 +188,12 @@
         "standard": "标准",
         "high": "高"
       },
-      "drawWithFinger": {
-        "label": "用手指绘图",
-        "hint": "关闭时：手指用于平移和缩放，笔用于绘图"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws until you use a pen, then fingers pan",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "双指缩放",
       "mouseWheel": {
@@ -498,6 +501,11 @@
     "updateSettings": "更新设置"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "编辑器工具",
     "hintWithKeys": "{{label}}（{{keys}}）",
     "presetRemoveHint": "{{title}} · 右键单击以移除",

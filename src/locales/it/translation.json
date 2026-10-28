@@ -185,9 +185,12 @@
         "standard": "Standard",
         "high": "Alto"
       },
-      "drawWithFinger": {
-        "label": "Disegna con il dito",
-        "hint": "Disattivato: le dita spostano e ingrandiscono, la penna disegna"
+      "fingerAction": {
+        "label": "Un dito",
+        "hint": "Automatico: il dito disegna finché non usi una penna, poi le dita spostano",
+        "auto": "Automatico",
+        "draw": "Disegna",
+        "pan": "Sposta e ingrandisce"
       },
       "pinchToZoom": "Pizzica per ingrandire",
       "mouseWheel": {
@@ -496,6 +499,11 @@
     "updateSettings": "Impostazioni di aggiornamento"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Dita: automatico",
+      "draw": "Le dita disegnano",
+      "pan": "Le dita spostano"
+    },
     "label": "Strumenti dell'editor",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · clic destro per rimuovere",

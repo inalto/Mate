@@ -188,9 +188,12 @@
         "standard": "Standard",
         "high": "Hoch"
       },
-      "drawWithFinger": {
-        "label": "Mit dem Finger zeichnen",
-        "hint": "Aus: Finger verschieben und zoomen, der Stift zeichnet"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws until you use a pen, then fingers pan",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "Mit Fingern zoomen",
       "mouseWheel": {
@@ -499,6 +502,11 @@
     "updateSettings": "Update-Einstellungen"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "Editor-Werkzeuge",
     "hintWithKeys": "{{label}} ({{keys}})",
     "presetRemoveHint": "{{title}} · Rechtsklick zum Entfernen",

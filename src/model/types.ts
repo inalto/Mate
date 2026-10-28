@@ -302,6 +302,10 @@ export interface LearningEvent {
   createdAt?: string;
 }
 
+/** One finger on a touch screen: "auto" draws unless a stylus was seen in the last 2 s, "draw" always
+ * draws, "pan" never draws (two fingers always pan/pinch). */
+export type FingerAction = "auto" | "draw" | "pan";
+
 export interface Settings {
   settingsVersion: number;
   theme: Theme;
@@ -346,7 +350,8 @@ export interface Settings {
   penEraserButtonAction: string;
   scrollBehavior: string;
   pinchToZoom: boolean;
-  drawWithFinger: boolean;
+  /** What one finger does on a touch screen (see `FingerAction`). */
+  fingerAction: FingerAction;
   conversionEnabled: boolean;
   correctnessMode: boolean;
   tutorUnderlineErrors: boolean;

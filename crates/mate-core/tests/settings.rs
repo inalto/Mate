@@ -105,3 +105,27 @@ fn tempdir() -> std::path::PathBuf {
     std::fs::create_dir_all(&d).unwrap();
     d
 }
+
+#[test]
+fn finger_action_defaults_to_auto() {
+    assert_eq!(Settings::default().finger_action, "auto");
+}
+
+#[test]
+fn legacy_draw_with_finger_maps_to_finger_action() {
+    let dir = tempdir();
+    let p = dir.join("settings.json");
+    std::fs::write(&p, r#"{"drawWithFinger":true}"#).unwrap();
+    assert_eq!(Settings::load(&p).finger_action, "draw");
+    std::fs::write(&p, r#"{"drawWithFinger":false}"#).unwrap();
+    assert_eq!(Settings::load(&p).finger_action, "auto");
+    // An explicit fingerAction wins over the legacy key.
+    std::fs::write(&p, r#"{"drawWithFinger":true,"fingerAction":"pan"}"#).unwrap();
+    let s = Settings::load(&p);
+    assert_eq!(s.finger_action, "pan");
+    // The legacy key is dropped on save.
+    s.save(&p).unwrap();
+    let text = std::fs::read_to_string(&p).unwrap();
+    assert!(!text.contains("drawWithFinger"));
+    assert!(text.contains("\"fingerAction\": \"pan\""));
+}

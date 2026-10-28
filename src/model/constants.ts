@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
   penEraserButtonAction: "eraser",
   scrollBehavior: "pan",
   pinchToZoom: true,
-  drawWithFinger: false,
+  fingerAction: "auto",
   conversionEnabled: true,
   correctnessMode: false,
   tutorUnderlineErrors: true,

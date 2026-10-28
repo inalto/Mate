@@ -188,9 +188,12 @@
         "standard": "標準",
         "high": "強"
       },
-      "drawWithFinger": {
-        "label": "指で描く",
-        "hint": "オフの場合、指は画面の移動と拡大縮小に使われ、ペンで描きます"
+      "fingerAction": {
+        "label": "One finger",
+        "hint": "Automatic: a finger draws until you use a pen, then fingers pan",
+        "auto": "Automatic",
+        "draw": "Draws",
+        "pan": "Pans and zooms"
       },
       "pinchToZoom": "ピンチで拡大縮小",
       "mouseWheel": {
@@ -498,6 +501,11 @@
     "updateSettings": "アップデートの設定"
   },
   "toolbar": {
+    "finger": {
+      "auto": "Fingers: automatic",
+      "draw": "Fingers draw",
+      "pan": "Fingers pan"
+    },
     "label": "エディターのツール",
     "hintWithKeys": "{{label}}（{{keys}}）",
     "presetRemoveHint": "{{title}} · 右クリックで削除",

@@ -14,10 +14,15 @@ export default function GesturesSection() {
           { value: "high", label: t("settings.gestures.palmRejection.high") },
         ]}
       />
-      <ToggleRow
-        k="drawWithFinger"
-        label={t("settings.gestures.drawWithFinger.label")}
-        hint={t("settings.gestures.drawWithFinger.hint")}
+      <SelectRow
+        k="fingerAction"
+        label={t("settings.gestures.fingerAction.label")}
+        hint={t("settings.gestures.fingerAction.hint")}
+        options={[
+          { value: "auto", label: t("settings.gestures.fingerAction.auto") },
+          { value: "draw", label: t("settings.gestures.fingerAction.draw") },
+          { value: "pan", label: t("settings.gestures.fingerAction.pan") },
+        ]}
       />
       <ToggleRow k="pinchToZoom" label={t("settings.gestures.pinchToZoom")} />
       <SelectRow

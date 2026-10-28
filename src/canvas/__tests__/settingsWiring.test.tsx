@@ -45,8 +45,8 @@ function adapter() {
     get palmRejection() {
       return cfg().palmRejection as PalmRejection;
     },
-    get drawWithFinger() {
-      return cfg().drawWithFinger;
+    get fingerAction() {
+      return cfg().fingerAction;
     },
     get pinchToZoom() {
       return cfg().pinchToZoom;
@@ -85,32 +85,31 @@ describe("input settings", () => {
     expect(pointerTool("pen", false, end, cfg()).tool).toBe("lasso");
   });
 
-  it("finger_draws_only_when_enabled", () => {
+  it("finger_draws_unless_set_to_pan", () => {
     const { handlers, fire, dispose } = adapter();
-    set({ drawWithFinger: false, palmRejection: "off" });
+    set({ fingerAction: "pan", palmRejection: "off" });
     fire("pointerdown", touch(1, 10, 100));
     fire("pointermove", { ...touch(1, 10, 110), clientX: 25 });
     fire("pointerup", { ...touch(1, 10, 120), buttons: 0 });
     expect(handlers.onDown).not.toHaveBeenCalled();
     expect(handlers.onPan).toHaveBeenCalled();
-    set({ drawWithFinger: true });
+    set({ fingerAction: "auto" });
     fire("pointerdown", touch(2, 10, 200));
     expect(handlers.onDown).toHaveBeenCalledTimes(1);
     dispose();
   });
 
-  it("palm_rejection_high_ignores_large_touch", () => {
+  it("palm_rejection_high_ignores_definite_palm_but_not_fingertips", () => {
     const { handlers, fire, dispose } = adapter();
-    set({ drawWithFinger: true, palmRejection: "standard" });
-    fire("pointerdown", touch(1, 30, 100)); // 30 px contact: under the standard 40 px threshold
+    set({ fingerAction: "auto", palmRejection: "high" });
+    fire("pointerdown", touch(1, 30, 100)); // 30 px fingertip, no stylus seen: draws
     fire("pointerup", { ...touch(1, 30, 110), buttons: 0 });
     expect(handlers.onDown).toHaveBeenCalledTimes(1);
-    set({ palmRejection: "high" });
-    fire("pointerdown", touch(2, 30, 200)); // over the high 20 px threshold
-    fire("pointerup", { ...touch(2, 30, 210), buttons: 0 });
+    fire("pointerdown", touch(2, 100, 200)); // 50 px radius: a definite palm
+    fire("pointerup", { ...touch(2, 100, 210), buttons: 0 });
     expect(handlers.onDown).toHaveBeenCalledTimes(1);
     set({ palmRejection: "off" });
-    fire("pointerdown", touch(3, 60, 300));
+    fire("pointerdown", touch(3, 100, 300));
     expect(handlers.onDown).toHaveBeenCalledTimes(2);
     dispose();
   });
