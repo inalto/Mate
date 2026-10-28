@@ -1,6 +1,6 @@
 [package]
 name = "mate"
-version = "0.7.0"
+version = "0.8.0"
 description = "Mate"
 authors = ["you"]
 license = ""

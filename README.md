@@ -10,12 +10,12 @@ Write with a pen on an endless canvas or on paged sheets, organise pages into bo
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **v0.7.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.7.0.md).
+> Status: **v0.8.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). Version 0.8.0 adds finger drawing and six more paper templates. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.8.0.md).
 
 ## Features
 
 - **Ink** — pen, highlighter and fountain pen (pressure, tilt, nib flatness), toolbar presets, palettes, recent colours, stroke stabilisation, palm rejection, pen barrel/eraser-end actions
-- **Canvas** — infinite canvas or paper mode (A4, Letter, 16:9, 4:3, square; ruled, grid, dot, blank), zoom 0.1×–10×, pinch, wheel, overscroll
+- **Canvas** — infinite canvas or paper mode (A4, Letter, 16:9, 4:3, square; ruled, grid, dot, blank, plus isometric, hex, Cornell, handwriting, columns and music templates from the **Paper** button in the editor top bar), zoom 0.1×–10×, pinch, wheel, overscroll
 - **Editing** — whole/partial eraser, lasso select, move, scale, arrange, duplicate, undo/redo (100 entries / 50 MiB), keyboard shortcuts
 - **Organisation** — shelves → books → sections → nestable pages; favourites; recent; trash with retention; thumbnails
 - **Workspace** — sidebar (tree or split layout, left- or right-handed), tabs, split view, page settings
@@ -91,6 +91,10 @@ See [Maths engines](https://github.com/inalto/Mate/wiki/Maths-Engines).
 ## Android
 
 Since v0.7.0 Mate runs on Android tablets. The APK installs on Android 7.0 (API 24) and later, but it has been tested on Android 16 (API 36, emulator) only: older versions are untested, and the Android System WebView must be reasonably current. It is the same app: the library, the ink canvas, typed maths, graphs, PDFs, the AI tutor and the maths engines all work. Pages open in place instead of in their own windows, the chrome is laid out for a tablet, and notes are saved when the app goes to the background. Exports (PNG, SVG, PDF, LaTeX, `.mate`) go through the Android share sheet, and Open and Import use the system file picker.
+
+### Touch
+
+A finger draws by default and two fingers pan and zoom. While you use a pen, Automatic mode makes single fingers pan instead. The finger button in the toolbar cycles Automatic, Draw and Pan; Settings → Gestures & touch has the same choice as **Finger action**. Holding still at the end of a stroke straightens it or recognises a shape with a finger too.
 
 ### Install
 
