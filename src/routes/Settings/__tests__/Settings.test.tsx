@@ -20,8 +20,9 @@ vi.mock("../../../ipc/speech", () => ({
   clearSpeechKey: vi.fn(),
   transcribeAudio: vi.fn(),
 }));
-vi.mock("../../../ipc/backup", () => ({
-  exportBackup: vi.fn(async () => "C:/tmp/mate-backup-2026-10-23.zip"),
+vi.mock("../../../ipc/backup", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../ipc/backup")>()),
+  exportBackup: vi.fn(async () => ({ path: "C:/tmp/mate-backup-2026-10-23.zip", skipped: [] })),
   resetLocalData: vi.fn(async () => {}),
 }));
 vi.mock("../../../ipc/share", () => ({
@@ -336,6 +337,17 @@ describe("about and backup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Download backup" }));
     expect(await screen.findByText(/mate-backup-2026-10-23\.zip/)).toBeTruthy();
     expect(exportBackup).toHaveBeenCalledTimes(1);
+  });
+
+  it("download_backup_names_the_books_it_left_out", async () => {
+    vi.mocked(exportBackup).mockResolvedValueOnce({
+      path: "C:/tmp/mate-backup-2026-10-24.zip",
+      skipped: [{ unitId: "u9", title: "Films", reason: "left out of the backup: larger than 512 MiB" }],
+    });
+    renderPane();
+    fireEvent.click(screen.getByRole("button", { name: "Download backup" }));
+    expect(await screen.findByText(/mate-backup-2026-10-24\.zip/)).toBeTruthy();
+    expect(screen.getByText("Films: left out of the backup: larger than 512 MiB")).toBeTruthy();
   });
 
   it("reset_local_data_requires_confirmation", async () => {

@@ -1,6 +1,7 @@
 // DOM layer over one pane's canvas, in page units: the inner layer carries the camera transform, so
 // children are positioned with plain page coordinates. Hosts a BoxFrame for each selected boxed
-// element and the editor slot (`data-editor-for`) of the element being edited. The layer itself
+// element and the editor slot (`data-editor-for`) of the element being edited, when its type has
+// an editor (an empty slot would sit over the element and swallow its input). The layer itself
 // lets pointer events through to the canvas; only its frames, handles and editors take them.
 // Also hosts the search flash (page units) and the tutor card (screen space, beside the layer).
 import { createElement, useCallback, type CSSProperties } from "react";
@@ -14,7 +15,7 @@ import { useTutorViews } from "../tutor/useTutor";
 import { boxRect, contentMeta, isBoxed } from "../tools/spatialIndex";
 import BoxFrame from "./BoxFrame";
 import { boxStyle } from "./boxGeometry";
-import { editorFor } from "./editorRegistry";
+import { editorFor, NoEditor } from "./editorRegistry";
 
 export default function OverlayLayer({ store }: { store: EditorStore }) {
   const camera = store((s) => s.camera);
@@ -28,7 +29,9 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
   const boundsOf = useCallback((id: string) => recognitions.get(id)?.bounds ?? regions.get(id)?.bounds, [recognitions, regions]);
 
   const framed = [...selection].map((id) => elements.get(id)).filter((el): el is Element => el !== undefined && isBoxed(el));
-  const editing = editingId !== null ? elements.get(editingId) : undefined;
+  const edited = editingId !== null ? elements.get(editingId) : undefined;
+  const editor = edited ? editorFor(edited.type, contentOf<{ subtype?: string }>(edited).subtype) : NoEditor;
+  const editing = editor !== NoEditor ? edited : undefined;
 
   const layerStyle = {
     transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})`,
@@ -41,7 +44,7 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
       <div className="overlay-layer" data-testid="overlay-layer" style={layerStyle}>
         {editing && (
           <div className="box-editor" data-editor-for={editing.id} data-editor-type={editing.type} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
-            {createElement(editorFor(editing.type, contentOf<{ subtype?: string }>(editing).subtype), { el: editing, store })}
+            {createElement(editor, { el: editing, store })}
           </div>
         )}
         {framed.map((el) => (

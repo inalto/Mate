@@ -138,18 +138,25 @@ export const naturalSize = (img: DecodedImage): { width: number; height: number 
 export const SVG_FALLBACK_WIDTH = 400;
 export const SVG_FALLBACK_HEIGHT = 300;
 
+/** CSS px per absolute SVG length unit (96 dpi). */
+const PX_PER_UNIT: Record<string, number> = { "": 1, px: 1, in: 96, cm: 96 / 2.54, mm: 96 / 25.4, pt: 96 / 72, pc: 16 };
+
+/** An SVG `width`/`height` in px: unitless, px or an absolute unit (mm, cm, in, pt, pc); else null. */
 const svgLength = (v: string | undefined): number | null => {
-  const m = v === undefined ? null : /^\s*(\d*\.?\d+)\s*(px)?\s*$/i.exec(v);
-  const n = m ? Number(m[1]) : NaN;
+  const m = v === undefined ? null : /^\s*(\d*\.?\d+)\s*(px|mm|cm|in|pt|pc)?\s*$/i.exec(v);
+  const n = m ? Number(m[1]) * PX_PER_UNIT[(m[2] ?? "").toLowerCase()] : NaN;
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
+type Size = { width: number; height: number };
+
 /**
- * Size of the SVG document `text` (null when it is not SVG markup): its root `width`/`height` in
- * px when both are given, else the `viewBox` aspect at `SVG_FALLBACK_WIDTH` (or at the given
- * width), else 400×300.
+ * Size the SVG document `text` declares: its root `width`/`height` (in px, absolute units
+ * converted at 96 dpi) when both are given, else the `viewBox` aspect at `SVG_FALLBACK_WIDTH` (or
+ * at the given width or height). `undefined` when the markup declares neither; null when it is
+ * not SVG markup.
  */
-export function svgIntrinsicSize(text: string): { width: number; height: number } | null {
+function svgDeclaredSize(text: string): Size | undefined | null {
   const root = /<svg\b([^>]*)>/i.exec(text);
   if (!root) return null;
   const attrs = new Map<string, string>();
@@ -163,20 +170,30 @@ export function svgIntrinsicSize(text: string): { width: number; height: number 
     const width = w ?? SVG_FALLBACK_WIDTH;
     return { width, height: (width * vb[3]) / vb[2] };
   }
-  return { width: SVG_FALLBACK_WIDTH, height: SVG_FALLBACK_HEIGHT };
+  return undefined;
+}
+
+/**
+ * Size of the SVG document `text` (null when it is not SVG markup): the size it declares
+ * (`svgDeclaredSize`), else 400×300.
+ */
+export function svgIntrinsicSize(text: string): Size | null {
+  const size = svgDeclaredSize(text);
+  return size === undefined ? { width: SVG_FALLBACK_WIDTH, height: SVG_FALLBACK_HEIGHT } : size;
 }
 
 /**
  * Natural size of asset `id` decoded as `img`. An SVG (or any image reporting 0×0) is sized from
- * its markup (`svgIntrinsicSize`): browsers report no, or a made-up, intrinsic size for an SVG
- * that only has a viewBox.
+ * the size its markup declares (`svgDeclaredSize`): browsers report no, or a made-up, intrinsic
+ * size for an SVG that only has a viewBox. Markup that declares no size keeps the decoded size;
+ * 400×300 only when there is none either.
  */
-export async function intrinsicSize(id: string, img: DecodedImage, mime?: string): Promise<{ width: number; height: number }> {
+export async function intrinsicSize(id: string, img: DecodedImage, mime?: string): Promise<Size> {
   const n = naturalSize(img);
   const known = n.width > 0 && n.height > 0;
   if (known && mime !== "image/svg+xml") return n;
   try {
-    const svg = svgIntrinsicSize(new TextDecoder().decode(await bytesReader(id)));
+    const svg = svgDeclaredSize(new TextDecoder().decode(await bytesReader(id)));
     if (svg) return svg;
   } catch {
     /* fall through */

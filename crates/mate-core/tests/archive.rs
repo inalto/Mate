@@ -339,7 +339,7 @@ fn source_with_images(dir: &std::path::Path, n: usize, bytes: usize) -> Storage 
 #[test]
 fn import_rejects_decompressed_assets_over_cap() {
     // Scaled down: three 200 KiB assets against a 512 KiB cap (the default cap is 512 MiB, with
-    // 64 MiB per entry, so the same arithmetic at full size would need >8 entries of ~64 MiB).
+    // up to 256 MiB per asset entry, so at full size three media files of ~200 MiB would trip it).
     let src_dir = tmp("cap-src");
     let src = source_with_images(&src_dir, 3, 200 * 1024);
     let bytes = export_unit(&src, "u1", &src_dir).unwrap();
@@ -480,4 +480,58 @@ fn archive_round_trips_media_assets() {
     assert_eq!(els[0].content.as_ref().unwrap()["kind"], "audio");
     let _ = fs::remove_dir_all(&src_dir);
     let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn import_matches_the_element_type_to_the_asset_kind() {
+    const MP3: &[u8] = &[0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, 0xFF, 0xFB, 0x90, 0x00];
+    let src_dir = tmp("media-kind-src");
+    let img = assets::save_sniffed(&src_dir, PNG).unwrap();
+    let audio = assets::save_sniffed(&src_dir, MP3).unwrap();
+    let mut src = Storage::open_in_memory().unwrap();
+    src.upsert_unit(&unit("u1", None)).unwrap();
+    src.upsert_section(&section("s", "u1")).unwrap();
+    src.upsert_page(&page("p", "s", None)).unwrap();
+    // Swapped: the image element points at the MP3 and the media element at the PNG.
+    let mut image = stroke("img", "p", 2);
+    image.r#type = mate_core::model::ElementType::Image;
+    image.image_url = Some(audio.id.clone());
+    let mut media = stroke("m", "p", 1);
+    media.r#type = mate_core::model::ElementType::Media;
+    media.image_url = Some(img.id.clone());
+    src.upsert_elements(&[image, media]).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+
+    let dst_dir = tmp("media-kind-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    assert_eq!(report.elements, 2, "elements kept");
+    let els = imported_elements(&dst, &report.unit_id);
+    let url_of = |t| els.iter().find(|e| e.r#type == t).and_then(|e| e.image_url.clone());
+    assert_eq!(url_of(mate_core::model::ElementType::Image), Some(audio.id.clone()), "left dangling");
+    assert_eq!(url_of(mate_core::model::ElementType::Media), Some(img.id.clone()), "left dangling");
+    assert_eq!(asset_files(&dst_dir), 0, "nothing imported");
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn json_entries_keep_their_own_smaller_cap() {
+    use mate_core::archive::{MAX_ENTRY_BYTES, MAX_JSON_ENTRY_BYTES};
+    assert_eq!(MAX_JSON_ENTRY_BYTES, 64 * 1024 * 1024);
+    assert_eq!(MAX_ENTRY_BYTES, assets::MAX_ASSET_BYTES as u64);
+    // A unit.json declared larger than the JSON cap is refused before it is read.
+    let big = vec![b' '; MAX_JSON_ENTRY_BYTES as usize + 1];
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    zip.start_file("manifest.json", opts).unwrap();
+    zip.write_all(br#"{"format":"mate-archive","schemaVersion":1,"exportedAt":"x","app":"Mate"}"#).unwrap();
+    zip.start_file("unit.json", opts).unwrap();
+    zip.write_all(&big).unwrap();
+    let bytes = zip.finish().unwrap().into_inner();
+    let mut dst = Storage::open_in_memory().unwrap();
+    match import_archive(&mut dst, &bytes, &tmp("json-cap")) {
+        Err(StorageError::Limit(msg)) => assert!(msg.contains("unit.json is too large"), "{msg}"),
+        other => panic!("expected Limit error, got {other:?}"),
+    }
 }

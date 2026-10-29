@@ -122,10 +122,37 @@ pub struct AssetInfo {
     pub bytes: u64,
 }
 
+/// How much of a file is scanned for an SVG root (matches the drop/paste sniffer in the UI, so a
+/// long XML prolog or DOCTYPE is accepted on both sides).
+pub const SVG_SNIFF_BYTES: usize = 4096;
+
+/// An MPEG-1/2/2.5 Layer III frame header: an MP3 without an ID3 tag starts with one.
+fn is_mp3_frame(bytes: &[u8]) -> bool {
+    let [b0, b1, b2, ..] = *bytes else {
+        return false;
+    };
+    let version = (b1 >> 3) & 0b11;
+    let layer = (b1 >> 1) & 0b11;
+    let bitrate = b2 >> 4;
+    let sampling = (b2 >> 2) & 0b11;
+    b0 == 0xFF
+        && (b1 & 0xE0) == 0xE0
+        && layer == 0b01
+        && version != 0b01
+        && bitrate != 0
+        && bitrate != 0b1111
+        && sampling != 0b11
+}
+
 /// Detects the asset type from its content (never its name). SVG is recognised by a leading
-/// `<svg` (or `<?xml` followed by `<svg`) since `infer` does not sniff text formats.
+/// `<svg` (or `<?xml` followed by `<svg`) in the first [`SVG_SNIFF_BYTES`], since `infer` does
+/// not sniff text formats.
 pub fn sniff(bytes: &[u8]) -> Option<AssetKind> {
-    if let Some(t) = infer::get(bytes) {
+    if is_mp3_frame(bytes) {
+        return Some(AssetKind::Mp3);
+    }
+    // `infer` reports an XML prolog as `text/xml`: that may still be an SVG, checked below.
+    if let Some(t) = infer::get(bytes).filter(|t| t.mime_type() != "text/xml") {
         return match t.mime_type() {
             "image/png" => Some(AssetKind::Png),
             "image/jpeg" => Some(AssetKind::Jpeg),
@@ -142,7 +169,7 @@ pub fn sniff(bytes: &[u8]) -> Option<AssetKind> {
             _ => None,
         };
     }
-    let head = &bytes[..bytes.len().min(512)];
+    let head = &bytes[..bytes.len().min(SVG_SNIFF_BYTES)];
     let head = head.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(head);
     let lower = String::from_utf8_lossy(head).trim_start().to_ascii_lowercase();
     if lower.starts_with("<svg") || (lower.starts_with("<?xml") && lower.contains("<svg")) {
@@ -257,11 +284,35 @@ mod tests {
         assert_eq!(sniff(b"GIF89a\x01\x00\x01\x00"), Some(AssetKind::Gif));
     }
 
+    #[test]
+    fn sniffs_svg_after_a_long_prolog() {
+        // The same 4 KiB window as the drop/paste sniffer in the UI.
+        let pad = " ".repeat(1500);
+        let svg = format!(
+            "<?xml version=\"1.0\"?>\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"x\" [{pad}]>\n<svg xmlns=\"x\"/>"
+        );
+        assert!(svg.find("<svg").unwrap() > 512);
+        assert_eq!(sniff(svg.as_bytes()), Some(AssetKind::Svg));
+        let far = format!("<?xml version=\"1.0\"?><!--{}--><svg/>", " ".repeat(SVG_SNIFF_BYTES));
+        assert_eq!(sniff(far.as_bytes()), None);
+        assert_eq!(sniff(b"<?xml version=\"1.0\"?><svg/>"), Some(AssetKind::Svg));
+        assert_eq!(sniff(b"<?xml version=\"1.0\"?><note/>"), None);
+    }
+
     const MP3: &[u8] = &[0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, 0xFF, 0xFB, 0x90, 0x00];
 
     #[test]
     fn sniffs_media() {
         assert_eq!(sniff(MP3), Some(AssetKind::Mp3));
+        // Bare Layer III frames (no ID3 tag): MPEG-1 without CRC, MPEG-2 with and without CRC.
+        for head in [[0xFF, 0xFA, 0x90, 0x00], [0xFF, 0xF3, 0x90, 0x00], [0xFF, 0xF2, 0x54, 0x00]] {
+            assert_eq!(sniff(&head), Some(AssetKind::Mp3), "{head:02X?}");
+        }
+        // Not Layer III (ADTS AAC), reserved version, bad bitrate, reserved sampling rate.
+        for head in [[0xFF, 0xF1, 0x50, 0x80], [0xFF, 0xEB, 0x90, 0x00], [0xFF, 0xFA, 0xF0, 0x00], [0xFF, 0xFA, 0x0C, 0x00], [0xFF, 0xFA, 0x9C, 0x00]] {
+            assert_ne!(sniff(&head), Some(AssetKind::Mp3), "{head:02X?}");
+        }
+        assert_eq!(sniff(&[0xFF, 0xD8, 0xFF, 0xE0]), Some(AssetKind::Jpeg));
         assert_eq!(sniff(b"RIFF\x24\0\0\0WAVEfmt \x10\0\0\0"), Some(AssetKind::Wav));
         assert_eq!(sniff(b"OggS\0\x02\0\0\0\0\0\0"), Some(AssetKind::Ogg));
         assert_eq!(sniff(b"\0\0\0\x20ftypM4A \0\0\0\0"), Some(AssetKind::M4a));

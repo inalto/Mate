@@ -78,9 +78,12 @@ describe("OverlayLayer", () => {
     act(() => s().beginEdit("box"));
     expect(container.querySelector('[data-editor-for="box"]')).not.toBeNull();
     expect(queryByTestId("tb-editor")?.textContent).toBe("box");
-    // Types without an editor get an empty slot (no-op default).
+    // Types without an editor get no slot: an empty one would cover the element (a media
+    // player's controls) and swallow its input.
     act(() => s().beginEdit("img"));
-    expect(container.querySelector('[data-editor-for="img"]')!.childElementCount).toBe(0);
+    expect(s().editingId).toBe("img");
+    expect(container.querySelector("[data-editor-for]")).toBeNull();
+    expect(container.querySelector(".box-editor")).toBeNull();
     unregister();
   });
 

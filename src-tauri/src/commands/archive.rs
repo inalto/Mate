@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use mate_core::archive::{
-    ImportReport, MAX_ARCHIVE_BYTES, backup_entries, export_unit, import_archive, wipe_local_data,
-    zip_backup,
+    BackupReport, ImportReport, MAX_ARCHIVE_BYTES, SkippedBook, export_unit, import_archive,
+    wipe_local_data, write_backup,
 };
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
@@ -13,7 +13,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
-use super::export::{export_filename, save_and_share, write_atomically};
+use super::export::{
+    after_export, ask_save_path, export_filename, save_and_share, write_atomically,
+    write_atomically_with,
+};
 use super::incoming::materialize;
 use crate::state::AppState;
 
@@ -89,27 +92,57 @@ fn backup_filename() -> String {
     format!("mate-backup-{}.zip", &mate_core::model::now_iso()[..10])
 }
 
-/// Zips every book (one `.mate` archive each) to a file chosen in a save dialog.
-/// `None` if cancelled.
-#[tauri::command]
-pub async fn export_backup(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<Option<String>, String> {
-    // Export the books under the storage lock, build the zip without it.
-    let entries = {
-        let storage = state.storage.lock().map_err(|e| e.to_string())?;
-        backup_entries(&storage, &state.data_dir.join("assets")).map_err(|e| e.to_string())?
-    };
-    let bytes = tauri::async_runtime::spawn_blocking(move || zip_backup(&entries))
-        .await
-        .map_err(|e| e.to_string())?
+/// Streams a backup of every book into `file` (buffered); see [`write_backup`].
+fn write_backup_file(
+    storage: &Storage,
+    assets_dir: &Path,
+    file: &mut fs::File,
+) -> Result<BackupReport, String> {
+    let (out, report) = write_backup(storage, assets_dir, io::BufWriter::new(file))
         .map_err(|e| e.to_string())?;
-    save_and_share(app, backup_filename(), &bytes).await
+    out.into_inner().map_err(|e| e.to_string())?;
+    Ok(report)
 }
 
-/// Left in the data directory when a reset could not delete everything; the next launch tells
-/// the user where their backup is.
+/// A backup written to disk, with the books it had to leave out.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupSaved {
+    pub path: String,
+    pub skipped: Vec<SkippedBook>,
+}
+
+/// Zips every book (one `.mate` archive each) to a file chosen in a save dialog, streaming it to
+/// disk one book at a time. A book too large for an archive is left out and listed in the
+/// result. `None` if cancelled.
+#[tauri::command]
+pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String> {
+    let Some(path) = ask_save_path(app.clone(), backup_filename()).await? else {
+        return Ok(None);
+    };
+    let handle = app.clone();
+    let target = path.clone();
+    // Written under the storage lock (off the async runtime), so the backup is one snapshot.
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        let storage = state.storage.lock().map_err(|e| e.to_string())?;
+        let assets_dir = state.data_dir.join("assets");
+        write_atomically_with(&target, |f| write_backup_file(&storage, &assets_dir, f))
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    if !report.skipped.is_empty() {
+        log::warn!("backup: left out {} book(s) over the archive cap", report.skipped.len());
+    }
+    after_export(&app, &path).await?;
+    Ok(Some(BackupSaved {
+        path: path.to_string_lossy().into_owned(),
+        skipped: report.skipped,
+    }))
+}
+
+/// Left in the data directory when a reset could not delete everything or had to leave books out
+/// of the recovery zip; the next launch tells the user where their backup is and what it lacks.
 pub const RESET_MARKER: &str = "reset-incomplete.json";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -117,7 +150,13 @@ pub const RESET_MARKER: &str = "reset-incomplete.json";
 pub struct ResetIncomplete {
     /// The recovery zip written before anything was deleted.
     pub recovery_path: String,
-    pub error: String,
+    /// Why deleting local data failed; `None` when it succeeded (the marker is only there for
+    /// `skipped`).
+    #[serde(default)]
+    pub error: Option<String>,
+    /// Books too large for the recovery zip (deleted with the rest).
+    #[serde(default)]
+    pub skipped: Vec<SkippedBook>,
 }
 
 /// What [`run_reset`] did once it passed the point of no return.
@@ -125,6 +164,8 @@ pub struct ResetIncomplete {
 pub struct ResetOutcome {
     pub recovery: PathBuf,
     pub wipe_error: Option<String>,
+    /// Books left out of the recovery zip for being too large.
+    pub skipped: Vec<SkippedBook>,
 }
 
 /// The reset itself, with the deleter injectable. Errors (nothing deleted, app keeps running on
@@ -166,13 +207,17 @@ fn run_reset_with(
 ) -> Result<ResetOutcome, String> {
     // The storage lock is held from the snapshot through the swap, so no write can land after the
     // snapshot and then be deleted without being in the recovery zip.
+    // A book too large for an archive does not block the reset: it is left out of the zip and
+    // reported (on the next launch, through the marker).
     let mut guard = storage.lock().map_err(|e| e.to_string())?;
-    let entries = backup_entries(&guard, &data_dir.join("assets")).map_err(|e| e.to_string())?;
-    during_zip();
-    let bytes = zip_backup(&entries).map_err(|e| e.to_string())?;
     let stamp = mate_core::model::now_iso().replace([':', '.'], "-");
     let recovery = data_dir.join(format!("mate-recovery-{stamp}.zip"));
-    write_atomically(&recovery, &bytes)?;
+    let assets_dir = data_dir.join("assets");
+    let report = write_atomically_with(&recovery, |f| {
+        during_zip();
+        write_backup_file(&guard, &assets_dir, f)
+    })?;
+    let skipped = report.skipped;
     // Drop the file connection so the database can be deleted (Windows keeps it locked).
     *guard = Storage::open_in_memory().map_err(|e| e.to_string())?;
     drop(guard);
@@ -188,16 +233,21 @@ fn run_reset_with(
     if let Ok(mut s) = settings.lock() {
         *s = Settings::default();
     }
-    if let Some(error) = &wipe_error {
+    if wipe_error.is_some() || !skipped.is_empty() {
         let marker = ResetIncomplete {
             recovery_path: recovery.to_string_lossy().into_owned(),
-            error: error.clone(),
+            error: wipe_error.clone(),
+            skipped: skipped.clone(),
         };
         if let Ok(json) = serde_json::to_vec_pretty(&marker) {
             let _ = write_atomically(&data_dir.join(RESET_MARKER), &json);
         }
     }
-    Ok(ResetOutcome { recovery, wipe_error })
+    Ok(ResetOutcome {
+        recovery,
+        wipe_error,
+        skipped,
+    })
 }
 
 /// Deletes all local data (books, pages, assets, settings) and restarts the app into the
@@ -343,7 +393,29 @@ mod tests {
         let marker: ResetIncomplete =
             serde_json::from_slice(&fs::read(dir.join(RESET_MARKER)).unwrap()).unwrap();
         assert_eq!(marker.recovery_path, out.recovery.to_string_lossy());
-        assert_eq!(marker.error, "asset is locked");
+        assert_eq!(marker.error.as_deref(), Some("asset is locked"));
+        assert!(marker.skipped.is_empty());
+    }
+
+    #[test]
+    fn an_old_marker_without_skipped_books_still_reads() {
+        let marker: ResetIncomplete =
+            serde_json::from_str(r#"{"recoveryPath":"r.zip","error":"locked"}"#).unwrap();
+        assert_eq!(marker.error.as_deref(), Some("locked"));
+        assert!(marker.skipped.is_empty());
+    }
+
+    #[test]
+    fn the_recovery_zip_is_a_readable_backup() {
+        let dir = tmp("zip");
+        let (st, se) = fixture(&dir);
+        let out = run_reset(&dir, &st, &se, &wipe_local_data).unwrap();
+        assert!(out.skipped.is_empty());
+        let zip = zip::ZipArchive::new(fs::File::open(&out.recovery).unwrap()).unwrap();
+        let names: Vec<&str> = zip.file_names().collect();
+        assert!(names.contains(&"backup.json"), "{names:?}");
+        assert!(names.contains(&"books/01-maths.mate"), "{names:?}");
+        assert!(!dir.join(format!("{}.tmp", out.recovery.file_name().unwrap().to_string_lossy())).exists());
     }
 
     #[test]

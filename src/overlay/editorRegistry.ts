@@ -1,5 +1,5 @@
 // DOM editors for boxed element types, mounted by OverlayLayer into the `data-editor-for` slot of
-// the element being edited. Types without a registered editor get an empty slot.
+// the element being edited. Types without a registered editor get no slot.
 import { createElement, lazy, Suspense, type ComponentType } from "react";
 import type { Element, ElementType } from "../model/types";
 import type { EditorStore } from "../stores/editor";

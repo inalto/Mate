@@ -1,4 +1,4 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 import { el } from "../../tools/__tests__/fixtures";
@@ -77,5 +77,65 @@ describe("MediaLayer", () => {
     act(() => s().removeElements(["au"]));
     expect(container.querySelector('[data-media-id="au"]')).toBeNull();
     expect(pause).toHaveBeenCalledTimes(1);
+  });
+
+  it("hands wheel events over a player to the canvas host", async () => {
+    const { container } = render(
+      <div>
+        <div className="canvas-view" data-testid="host" />
+        <MediaLayer store={store} />
+      </div>,
+    );
+    await act(async () => {});
+    const host = container.querySelector(".canvas-view") as HTMLElement;
+    const got: WheelEvent[] = [];
+    host.addEventListener("wheel", (e) => got.push(e));
+    const tag = container.querySelector("audio") as HTMLElement;
+    const wheel = new WheelEvent("wheel", { deltaY: -120, clientX: 40, clientY: 30, ctrlKey: true, bubbles: true, cancelable: true });
+    tag.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(got).toHaveLength(1);
+    expect([got[0].deltaY, got[0].clientX, got[0].clientY, got[0].ctrlKey]).toEqual([-120, 40, 30, true]);
+    expect(got[0]).not.toBe(wheel);
+  });
+
+  it("lets events through the players while a touch is down elsewhere in the pane", async () => {
+    const { container } = render(
+      <div>
+        <div className="canvas-view" />
+        <MediaLayer store={store} />
+      </div>,
+    );
+    await act(async () => {});
+    act(() => s().setTool("cursor"));
+    const tag = () => container.querySelector("audio") as HTMLElement;
+    const host = container.querySelector(".canvas-view") as HTMLElement;
+    const fire = (t: EventTarget, type: string, init: PointerEventInit) =>
+      act(() => {
+        t.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, ...init }));
+      });
+    expect(tag().style.pointerEvents).toBe("auto");
+    fire(host, "pointerdown", { pointerId: 1, pointerType: "touch" });
+    expect(tag().style.pointerEvents).toBe("none");
+    fire(host, "pointerup", { pointerId: 1, pointerType: "touch" });
+    expect(tag().style.pointerEvents).toBe("auto");
+    // A mouse press does not change anything; neither does a touch on the player itself.
+    fire(host, "pointerdown", { pointerId: 2, pointerType: "mouse" });
+    expect(tag().style.pointerEvents).toBe("auto");
+    fire(tag(), "pointerdown", { pointerId: 3, pointerType: "touch" });
+    expect(tag().style.pointerEvents).toBe("auto");
+  });
+
+  it("shows a video without a picture track as an audio player", async () => {
+    const { container } = render(<MediaLayer store={store} />);
+    await act(async () => {});
+    const v = container.querySelector('[data-media-id="vi"] video') as HTMLVideoElement;
+    Object.defineProperty(v, "videoWidth", { value: 0 });
+    Object.defineProperty(v, "videoHeight", { value: 0 });
+    fireEvent.loadedMetadata(v);
+    const box = container.querySelector('[data-media-id="vi"]') as HTMLElement;
+    expect(box.dataset.mediaKind).toBe("audio");
+    expect(box.querySelector("video")).toBeNull();
+    expect(box.querySelector("audio")?.getAttribute("src")).toBe("http://asset.localhost/v1");
   });
 });

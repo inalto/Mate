@@ -1,11 +1,17 @@
 // Always-mounted DOM layer of one pane: a native `<audio controls>` / `<video controls>` per media
 // element of the page, laid over its canvas placeholder in screen pixels (the controls keep their native
 // size at any zoom). The layer and each player's top strip let pointer events through to the
-// canvas, so the cursor tool selects and drags media by that strip (or by lasso) and ink can be
-// drawn over a player; the player itself takes events only while the cursor tool is active. While
-// the selection is being dragged or scaled the selected players hide, and the canvas preview of
-// their placeholder moves instead. Players pause when they leave (page change, delete, unmount).
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+// canvas, so the cursor tool selects and drags media by that strip (or by lasso), and with the
+// other tools a stroke can start or pass over a player. Limitation: the players sit above the
+// canvas and are opaque, so ink drawn across one is stored and drawn on the canvas but hidden
+// under the player until it is moved. The player itself takes events only while the cursor tool is
+// active, and not while a touch is down elsewhere in the pane (the second finger of a pinch lands
+// on the canvas); wheel / trackpad-pinch events over a player are handed to the canvas, so zoom
+// and scroll keep working. While the selection is being dragged or scaled the selected players
+// hide, and the canvas preview of their placeholder moves instead. Players pause when they leave
+// (page change, delete, unmount). A "video" whose file has no picture (an audio-only MP4/WebM) is
+// shown as an audio player.
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from "react";
 import { worldToScreen } from "../canvas/camera";
 import { contentOf, type MediaContent } from "../model/content";
 import type { Element } from "../model/types";
@@ -17,6 +23,34 @@ import { mediaUrl } from "./url";
 export const MEDIA_GRIP_PX = 10;
 /** Pointer travel (px) after which a press counts as a selection drag. */
 const DRAG_SLOP = 3;
+
+/** The pane's canvas host (`.canvas-view`), a sibling before the media layer. */
+function canvasHostOf(layer: HTMLElement): HTMLElement | null {
+  for (let n = layer.previousElementSibling; n; n = n.previousElementSibling) {
+    if (n instanceof HTMLElement && n.classList.contains("canvas-view")) return n;
+  }
+  return null;
+}
+
+/** A copy of `e` to dispatch on another target (the canvas host). */
+function cloneWheel(e: WheelEvent): WheelEvent {
+  return new WheelEvent("wheel", {
+    deltaX: e.deltaX,
+    deltaY: e.deltaY,
+    deltaZ: e.deltaZ,
+    deltaMode: e.deltaMode,
+    clientX: e.clientX,
+    clientY: e.clientY,
+    screenX: e.screenX,
+    screenY: e.screenY,
+    ctrlKey: e.ctrlKey, // trackpad pinch
+    shiftKey: e.shiftKey,
+    altKey: e.altKey,
+    metaKey: e.metaKey,
+    bubbles: true,
+    cancelable: true,
+  });
+}
 
 /** Screen rect of `el` in a pane with `camera`. */
 function screenRect(el: Element, camera: { x: number; y: number; z: number }) {
@@ -36,7 +70,13 @@ function Player({ el, camera, interactive, hidden }: { el: Element; camera: { x:
   }, []);
   const assetId = el.imageUrl ?? "";
   const c = contentOf<MediaContent>(el);
-  const kind = c.kind === "video" ? "video" : "audio";
+  // A video file without a picture track (audio-only MP4/WebM) plays as audio.
+  const [noPicture, setNoPicture] = useState(false);
+  const kind = c.kind === "video" && !noPicture ? "video" : "audio";
+  const onMetadata = (e: SyntheticEvent<HTMLVideoElement>) => {
+    const v = e.currentTarget;
+    if (v.videoWidth === 0 && v.videoHeight === 0) setNoPicture(true);
+  };
 
   useEffect(() => {
     let live = true;
@@ -72,6 +112,7 @@ function Player({ el, camera, interactive, hidden }: { el: Element; camera: { x:
             playsInline
             preload="metadata"
             aria-label={label}
+            onLoadedMetadata={onMetadata}
           />
         ) : (
           <audio
@@ -96,6 +137,49 @@ export default function MediaLayer({ store }: { store: EditorStore }) {
   const pageId = store((s) => s.loadedPageId);
   const root = useRef<HTMLDivElement | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [touching, setTouching] = useState(false);
+
+  // Wheel / trackpad pinch over a player (it takes events with the cursor tool): hand a copy to
+  // the canvas host, whose listener scrolls and zooms the camera.
+  useEffect(() => {
+    const layer = root.current;
+    if (!layer) return;
+    const onWheel = (e: WheelEvent) => {
+      const host = canvasHostOf(layer);
+      if (!host) return;
+      e.preventDefault();
+      e.stopPropagation();
+      host.dispatchEvent(cloneWheel(e));
+    };
+    layer.addEventListener("wheel", onWheel, { passive: false });
+    return () => layer.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // While a touch is down in this pane outside the players, the players let events through, so
+  // the second finger of a pinch that lands on one reaches the canvas gesture.
+  useEffect(() => {
+    const touches = new Set<number>();
+    const pane = () => root.current?.parentElement ?? null;
+    const down = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      const t = e.target as Node | null;
+      if (!t || !pane()?.contains(t) || (t instanceof HTMLElement && t.closest(".media-native"))) return;
+      touches.add(e.pointerId);
+      setTouching(true);
+    };
+    const up = (e: PointerEvent) => {
+      if (!touches.delete(e.pointerId)) return;
+      if (touches.size === 0) setTouching(false);
+    };
+    window.addEventListener("pointerdown", down, true);
+    window.addEventListener("pointerup", up, true);
+    window.addEventListener("pointercancel", up, true);
+    return () => {
+      window.removeEventListener("pointerdown", down, true);
+      window.removeEventListener("pointerup", up, true);
+      window.removeEventListener("pointercancel", up, true);
+    };
+  }, []);
 
   // A cursor press inside this pane that travels hides the selected players until release.
   useEffect(() => {
@@ -135,7 +219,7 @@ export default function MediaLayer({ store }: { store: EditorStore }) {
   return (
     <div ref={root} className="media-layer" data-testid="media-layer" data-page={pageId ?? undefined}>
       {players.map((el) => (
-        <Player key={`${pageId}:${el.id}`} el={el} camera={camera} interactive={tool === "cursor"} hidden={dragging && selection.has(el.id)} />
+        <Player key={`${pageId}:${el.id}`} el={el} camera={camera} interactive={tool === "cursor" && !touching} hidden={dragging && selection.has(el.id)} />
       ))}
     </div>
   );

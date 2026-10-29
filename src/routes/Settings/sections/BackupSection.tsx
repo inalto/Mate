@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import { errorMessage as message } from "../../../i18n";
-import { exportBackup, resetLocalData } from "../../../ipc/backup";
+import { exportBackup, resetLocalData, skippedLines } from "../../../ipc/backup";
 import { isMobile } from "../../../platform";
 import { ButtonRow, SettingsSection } from "../rows";
 
@@ -18,9 +18,14 @@ export default function BackupSection() {
     setError(null);
     setStatus(null);
     try {
-      const path = await exportBackup();
-      // Mobile: the zip went to the share sheet, its app-private path means nothing to the user.
-      if (path) setStatus(isMobile() ? t("settings.backup.shared") : t("settings.backup.saved", { path }));
+      const saved = await exportBackup();
+      if (saved) {
+        const { path } = saved;
+        // Mobile: the zip went to the share sheet, its app-private path means nothing to the user.
+        setStatus(isMobile() ? t("settings.backup.shared") : t("settings.backup.saved", { path }));
+        // Books over the archive cap were left out: name them (the reason comes from Rust).
+        if (saved.skipped.length > 0) setError(skippedLines(saved.skipped));
+      }
     } catch (err) {
       setError(message(err));
     } finally {
