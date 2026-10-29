@@ -815,6 +815,7 @@ button.card:hover {
   right: 100%;
   top: 0;
   width: 260px;
+  box-sizing: border-box;
   transform-origin: 100% 0;
   transform: scale(var(--overlay-inv-z, 1)) translateX(-8px);
   display: flex;
@@ -902,10 +903,11 @@ button.card:hover {
 }
 .graph-domain {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-1);
 }
 .graph-domain-field {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -913,8 +915,10 @@ button.card:hover {
   font-size: 12px;
 }
 .graph-domain-field input {
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
-  height: 26px;
+  height: 28px;
   padding: 0 var(--space-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -1852,7 +1856,9 @@ html.mobile .sb-resize {
 .graph-presets {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
 }
 .graph-presets-row {
   display: flex;
@@ -1861,6 +1867,30 @@ html.mobile .sb-resize {
 }
 .graph-presets-row > select,
 .graph-presets-row > input {
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: 13px var(--font-ui);
+}
+.graph-presets-row > select {
+  text-overflow: ellipsis;
+}
+.graph-presets-row > .graph-add {
+  flex: none;
+  height: 28px;
+  padding: 0 var(--space-2);
+}
+.graph-presets-row > .graph-grid-toggle {
+  flex: 1;
+  min-width: 0;
+}
+.graph-presets > .graph-grid-toggle,
+.graph-presets-row > .graph-grid-toggle {
+  line-height: 1.3;
 }
