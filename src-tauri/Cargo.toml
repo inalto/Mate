@@ -1,6 +1,6 @@
 [package]
 name = "mate"
-version = "1.0.0"
+version = "1.0.1"
 description = "Mate"
 authors = ["you"]
 license = ""
@@ -15,7 +15,7 @@ name = "mate_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.7.4" }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dependencies]
 serde_json = "1.0"

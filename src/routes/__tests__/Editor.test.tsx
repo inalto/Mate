@@ -78,6 +78,15 @@ describe("Editor", () => {
     expect(setThisWindowTitle).not.toHaveBeenCalled();
   });
 
+  it("toolbar_precedes_the_canvas_so_the_dock_side_is_right", () => {
+    renderEditor("/edit/p1");
+    const editor = document.querySelector(".editor")!;
+    expect(editor.getAttribute("data-dock")).toBe("top");
+    const children = Array.from(editor.children);
+    expect(children[0].getAttribute("data-testid")).toBe("toolbar");
+    expect(children[1].classList.contains("editor-canvas")).toBe(true);
+  });
+
   it("editor_in_window_mode_hides_chrome", () => {
     win.page = true;
     localStorage.clear();
