@@ -129,15 +129,11 @@ fn the_style_hint_follows_the_language() {
     let (base, seen) = stub(200, r#"{"text":"x"}"#);
     transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", Some("it")).unwrap();
     let body = seen.lock().unwrap()[0].body_text();
-    assert!(body.contains("name=\"prompt\"
-
-La matematica"), "{body}");
+    assert!(body.contains("name=\"prompt\"\r\n\r\nLa matematica"), "{body}");
     let (base, seen) = stub(200, r#"{"text":"x"}"#);
     transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", None).unwrap();
     let body = seen.lock().unwrap()[0].body_text();
-    assert!(body.contains("name=\"prompt\"
-
-Mathematics is written"), "{body}");
+    assert!(body.contains("name=\"prompt\"\r\n\r\nMathematics is written"), "{body}");
 }
 
 #[test]
