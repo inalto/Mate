@@ -6,7 +6,7 @@ const CORPUS: Record<string, [string, string][]> = {
     ["y uguale x più 10", "y = x + 10"],
     ["x al quadrato meno quattro uguale zero", "x^2 - 4 = 0"],
     ["radice quadrata di due per x", "sqrt(2)*x"],
-    ["uno fratto due x", "1/2*x"],
+    ["uno fratto due x", "1/(2x)"],
     ["seno di x più coseno di x", "sin(x) + cos(x)"],
     ["y uguale tre virgola cinque per dieci", "y = 3.5*10"],
     ["f di x uguale x alla terza", "f(x) = x^3"],
@@ -172,8 +172,12 @@ describe("rewriteSpokenMath", () => {
 describe("review findings", () => {
   const cases: [string, string, string][] = [
     // A letter "a" after an operand is a variable, never dropped.
-    ["en", "x equals minus b over two a", "x = -b/2*a"],
-    ["it", "x uguale meno b fratto due a", "x = -b/2*a"],
+    ["en", "x equals minus b over two a", "x = -b/(2a)"],
+    ["it", "x uguale meno b fratto due a", "x = -b/(2a)"],
+    ["it", "y uguale uno fratto due", "y = 1/2"],
+    ["it", "a fratto b", "a/b"],
+    ["en", "x over y z", "x/(y*z)"],
+    ["en", "one over two x plus one", "1/(2x) + 1"],
     ["en", "two a plus one", "2a + 1"],
     ["en", "x equals the square root of b squared minus four a c", "x = sqrt(b^2) - 4a*c"],
     ["en", "a hundred plus x", "100 + x"],

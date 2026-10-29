@@ -35,14 +35,15 @@
 //      di x coseno di x" → `sin(x)*cos(x)`. A power before the argument applies to the call ("sine
 //      squared of x" → `sin(x)^2`); "log base two of eight" → `log2(8)`.
 //    - "cube root of a" → `a^(1/3)` (`(…)^(1/3)` for a compound operand).
-//    - "fratto"/"over" between operands is a plain `/`, read as a calculator would; an implicit
-//      product after it gets an explicit `*` so it is not read as one denominator:
-//      "uno fratto due x" → `1/2*x` (no guessing of `1/(2x)`).
+//    - "fratto"/"over" between operands is `/`; an implicit product right after it is the whole
+//      denominator, in parentheses: "uno fratto due x" → `1/(2x)`, "minus b over two a" →
+//      `-b/(2a)`; a single operand stays bare: "a fratto b" → `a/b`.
 //    - "tutto fratto"/"all over" wraps everything since the last relation (`=`, `<`, …) as the
 //      numerator and everything up to the next relation or the end as the denominator:
 //      "x più uno tutto fratto x meno uno" → `(x + 1)/(x - 1)`.
 //    - A number and a plural ordinal are a fraction: "due terzi" → `2/3`, "three halves" → `3/2`,
-//      "un mezzo" → `1/2` (in parentheses as an argument or exponent: `x^(2/3)`).
+//      "un mezzo" → `1/2` (in parentheses as an argument or exponent: `x^(2/3)`); what follows a
+//      spoken fraction multiplies it: "due terzi x" → `2/3*x`.
 //    - A power takes one operand: "x alla n più uno" → `x^n + 1`; a multi-token exponent needs
 //      spoken parentheses (no guessing). Ordinals give the exponent ("alla terza" → `^3`).
 //    - "per cento"/"percent" → `/100`.
@@ -1169,6 +1170,9 @@ function mergeFractions(items: Item[]): Item[] {
   return out;
 }
 
+/** The bar of a spoken fraction ("due terzi") in the emitter's items; written as `/`. */
+const FRAC_BAR = "/frac";
+
 /** Fractions as `a / b` for the emitter, in parentheses where they are an argument or exponent. */
 function expandFractions(items: Item[]): Item[] {
   const out: Item[] = [];
@@ -1179,7 +1183,7 @@ function expandFractions(items: Item[]): Item[] {
     }
     const prev = out[out.length - 1];
     const wrap = !!prev && (prev.k === "pow" || prev.k === "func" || prev.k === "sqrt" || prev.k === "cbrt" || prev.k === "of");
-    const parts: Item[] = [{ k: "num", s: it.a }, op("/"), { k: "num", s: it.b }];
+    const parts: Item[] = [{ k: "num", s: it.a }, op(FRAC_BAR), { k: "num", s: it.b }];
     out.push(...(wrap ? [OPEN, ...parts, CLOSE] : parts));
   }
   return out;
@@ -1232,8 +1236,8 @@ const OPERAND_START = new Set<Item["k"]>(["num", "var", "const", "func", "sqrt",
 const SIMPLE = /^(?:[0-9.]+|[A-Za-z]|pi|theta|[α-ω])$/;
 
 /**
- * Two operands side by side (implicit product). `explicit` (after a `/`) always writes the `*`, so
- * `1/2*x` is not read as 1/(2x).
+ * Two operands side by side (implicit product). `explicit` (after a spoken fraction) always writes
+ * the `*`, so `2/3*x` is not read as 2/(3x).
  */
 function join(a: string, b: string, explicit = false): string {
   const la = a[a.length - 1];
@@ -1311,10 +1315,21 @@ class Emitter {
     let divided = false;
     for (;;) {
       const it = this.peek();
-      if (it?.k === "op" && (it.s === "*" || it.s === "/")) {
+      if (it?.k === "op" && it.s === "/") {
+        // Spoken "b over two a" is b/(2a): an implicit product right after `/` is the denominator.
         this.i++;
-        if (it.s === "/") divided = true;
-        out += it.s + this.operand(true);
+        let den = this.operand(true);
+        let product = false;
+        for (let p = this.peek(); p && OPERAND_START.has(p.k); p = this.peek()) {
+          den = join(den, this.operand(false));
+          product = true;
+        }
+        out += `/${product ? `(${den})` : den}`;
+      } else if (it?.k === "op" && (it.s === "*" || it.s === FRAC_BAR)) {
+        // A spoken fraction ("due terzi x") is a number: what follows multiplies it.
+        this.i++;
+        if (it.s === FRAC_BAR) divided = true;
+        out += (it.s === FRAC_BAR ? "/" : it.s) + this.operand(true);
       } else if (it && OPERAND_START.has(it.k)) out = join(out, this.operand(false), divided);
       else {
         this.single = single;
