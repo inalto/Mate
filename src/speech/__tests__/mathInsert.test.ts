@@ -2,8 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
+vi.mock("../../math/mathBox", async (orig) => {
+  const real = await orig<typeof import("../../math/mathBox")>();
+  return { ...real, measureMathSize: vi.fn(real.measureMathSize) };
+});
 
-import { isMathBox, latexOf } from "../../math/mathBox";
+import { isMathBox, latexOf, measureMathSize } from "../../math/mathBox";
+import { DEFAULT_BOX_WIDTH } from "../../text/style";
 import { contentOf, type TextBoxContent } from "../../model/content";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useSettingsStore } from "../../stores/settings";
@@ -14,6 +19,14 @@ describe("latexForPlain", () => {
     expect(await latexForPlain("y = x + 10")).toBe("y = x + 10");
     expect(await latexForPlain("x^2 + 1")).toBe("x^2 + 1");
     expect(await latexForPlain("sqrt(2)*x")).toContain(String.raw`\sqrt{2}`);
+  }, 20000);
+
+  it("writes products and inequalities as cdot, geq and leq", async () => {
+    expect(await latexForPlain("x*y")).toBe(String.raw`x\cdot y`);
+    expect(await latexForPlain("pi*r^2")).toBe(String.raw`\pi\cdot r^2`);
+    expect(await latexForPlain("x >= 5")).toBe(String.raw`x \geq 5`);
+    expect(await latexForPlain("x<=5")).toBe(String.raw`x \leq 5`);
+    expect(await latexForPlain("1/2*x")).toBe(String.raw`1/2\cdot x`);
   }, 20000);
 
   it("is null for what the engine rejects or for nothing", async () => {
@@ -50,6 +63,23 @@ describe("insertMathBox", () => {
     expect([...store.getState().selection]).toEqual([id]);
     store.getState().undo();
     expect(store.getState().elements.has(id)).toBe(false);
+  });
+
+  it("sizes the box to the rendered equation (padded), at least the default width, then centres it", () => {
+    vi.mocked(measureMathSize).mockReturnValueOnce({ width: 600, height: 80 });
+    const wideId = insertMathBox(store, String.raw`x^2+2x+1=\frac{1}{2}`)!;
+    const wide = store.getState().elements.get(wideId)!;
+    expect(wide.boxWidth).toBe(Math.ceil(600 + 28 * 0.6));
+    expect(wide.boxHeight).toBe(Math.ceil(80 + 28 * 0.6));
+    expect(wide.points[0].x + (wide.boxWidth ?? 0) / 2).toBeCloseTo(500);
+    expect(wide.points[0].y + (wide.boxHeight ?? 0) / 2).toBeCloseTo(300);
+
+    vi.mocked(measureMathSize).mockReturnValueOnce({ width: 40, height: 20 });
+    const narrowId = insertMathBox(store, "x")!;
+    const narrow = store.getState().elements.get(narrowId)!;
+    expect(narrow.boxWidth).toBe(DEFAULT_BOX_WIDTH);
+    expect(narrow.boxHeight).toBe(Math.ceil(28 * 2.2));
+    expect(narrow.points[0].x + DEFAULT_BOX_WIDTH / 2).toBeCloseTo(500);
   });
 
   it("is null without a page", () => {

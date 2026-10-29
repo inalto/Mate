@@ -1080,9 +1080,9 @@
       "testHint": "Envia meio segundo de silêncio para {{provider}} para verificar a chave, o modelo e o endereço. Este áudio sai do dispositivo, por isso o consentimento abaixo tem de estar ativado.",
       "testHintLocal": "Envia meio segundo de silêncio para o programa em {{address}} para verificar se responde. O consentimento abaixo tem de estar ativado.",
       "convertMath": "Converter matemática ditada em notação",
-      "convertMathHelp": "Expressões ditadas como «y igual a x mais dez» tornam-se y = x + 10 e são inseridas como equação. Funciona offline em português, inglês, italiano, francês, espanhol e alemão.",
+      "convertMathHelp": "Expressões ditadas como «y igual a x mais dez» tornam-se y = x + 10 e são inseridas como equação; numa caixa de texto em edição, a notação é acrescentada como texto. Funciona offline no idioma da interface (português, inglês, italiano, francês, espanhol ou alemão).",
       "tidy": "Aperfeiçoar o ditado com o assistente de IA",
-      "tidyHelp": "O texto transcrito, nunca o áudio, é enviado ao assistente de IA configurado para o tutor, para corrigir a pontuação e escrever a matemática em notação. Desativado por padrão.",
+      "tidyHelp": "O texto transcrito, nunca o áudio, é enviado ao assistente de IA configurado para o tutor, para corrigir a pontuação e escrever a matemática em notação.",
       "tidyNeedsAi": "Para usar, configure o assistente de IA em Configurações, Tutor e reconhecimento (consentimento e chave)."
     },
     "consent": {

@@ -8,35 +8,50 @@
 // 1. Tokenise on whitespace/punctuation, keeping digits with their decimal separator (`3,5` → 3.5;
 //    in English `1,000` is a thousands separator) and maths symbols the speech service may already
 //    have written (`=`, `+`, `^`, `√`, `π`, `≤`, `%`…). Words are matched case- and accent-
-//    insensitively (`più` = `piu`, `größer` = `grosser`); variable letters keep their case.
+//    insensitively (`più` = `piu`, `größer` = `grosser`); variable letters keep their case. `²`, `³`
+//    are squared/cubed, `½`, `⅓`… fractions. When the text already holds maths symbols, a short
+//    ASCII letter run that is no word ("mx", "sinx") is split into names and single-letter variables.
 // 2. Per language, multi-word phrases first (longest match: "diviso per" beats "diviso" + "per",
 //    "per cento" beats "per"), then number words (0–999 and thousands, compounds such as
 //    "venticinque", "centoventi", "fünfundzwanzig", "veintidós", "quatre-vingt-dix", and connectors
 //    "and"/"y"/"e"/"et"/"und" inside a number only), then single words, Greek names, articles
-//    (dropped) and single letters (variables).
+//    (dropped) and single letters (variables). A phrase ending in "a" ("uguale a", "igual a", "égal
+//    à") is matched without it when an operator (but a minus) or the end follows: "x uguale a più b"
+//    → `x = a + b`. The bare copula ("is", "è", "est", "ist", "es", "é") is `=`.
 // 3. Ambiguous letters that are also words — "a" (en/it/fr/es/pt), "y" (es "and") — are variables
-//    only in an operand position (between operators, or at the start/end next to one): "a > b" keeps
-//    `a`, "a hundred" drops it. Italian/Portuguese "e" ("and"/"is") and Spanish "o"/"e"/"u" are never
-//    variables: they stay leftover words, so "e poi andiamo a casa" or "x e y" stay prose. The
+//    in an operand position (between operators, or at the start/end next to one), or after an
+//    operand when an operator or the end follows ("two a plus one" → `2a + 1`; "a" also before
+//    another letter: "four a c" → `4a*c`): "a > b" keeps `a`, "a hundred" drops it. Any other one
+//    is left as a word, so the text stays prose. Italian/Portuguese "e" ("and"/"is") and Spanish
+//    "o"/"e"/"u" are never variables: they stay leftover words, so "e poi andiamo a casa" or "x e
+//    y" stay prose. The
 //    constant e is spoken as "e di Nepero", "numero di Nepero", "Euler's number", etc. (in English a
 //    bare "e" is the letter, so "e to the x" → `e^x`).
 // 4. Grouping, emitted by a small recursive parser:
 //    - `sqrt`, functions and "f of x" calls take the next operand, i.e. an implicit product of
 //      operands with their powers ("radice di due x" → `sqrt(2x)`, "the square root of x squared
 //      plus one" → `sqrt(x^2) + 1`); a spoken parenthesised group is taken whole. Explicit `*` / `/`
-//      end the argument: "radice quadrata di due per x" → `sqrt(2)*x`.
+//      and the next function end the argument: "radice quadrata di due per x" → `sqrt(2)*x`, "seno
+//      di x coseno di x" → `sin(x)*cos(x)`. A power before the argument applies to the call ("sine
+//      squared of x" → `sin(x)^2`); "log base two of eight" → `log2(8)`.
 //    - "cube root of a" → `a^(1/3)` (`(…)^(1/3)` for a compound operand).
-//    - "fratto"/"over" between operands is a plain `/`, left to the calculator reading:
-//      "uno fratto due x" → `1/2x` (no guessing of `1/(2x)`).
+//    - "fratto"/"over" between operands is a plain `/`, read as a calculator would; an implicit
+//      product after it gets an explicit `*` so it is not read as one denominator:
+//      "uno fratto due x" → `1/2*x` (no guessing of `1/(2x)`).
 //    - "tutto fratto"/"all over" wraps everything since the last relation (`=`, `<`, …) as the
-//      numerator: "y uguale x più uno tutto fratto due" → `y = (x + 1)/2`.
+//      numerator and everything up to the next relation or the end as the denominator:
+//      "x più uno tutto fratto x meno uno" → `(x + 1)/(x - 1)`.
+//    - A number and a plural ordinal are a fraction: "due terzi" → `2/3`, "three halves" → `3/2`,
+//      "un mezzo" → `1/2` (in parentheses as an argument or exponent: `x^(2/3)`).
 //    - A power takes one operand: "x alla n più uno" → `x^n + 1`; a multi-token exponent needs
 //      spoken parentheses (no guessing). Ordinals give the exponent ("alla terza" → `^3`).
 //    - "per cento"/"percent" → `/100`.
 // 5. Maths-likeness gate: the result is `math` only when at least one operator or function was
 //    produced AND nothing is left over (no prose word, no dangling operator, balanced parentheses, no
-//    two bare numbers side by side). Otherwise the ORIGINAL text is returned unchanged as `text` —
-//    never a partial rewrite of prose.
+//    two bare numbers side by side). Bare numbers with a single operator and nothing else ("uno per
+//    uno", "dieci per cento", "plus one": idioms) and dates or times (`12/05/2024`, `10:30`) are
+//    not maths. Otherwise the ORIGINAL text is returned unchanged as `text` — never a partial
+//    rewrite of prose.
 // 6. Output: ` = `, ` + `, ` - `, ` < `, ` > `, ` <= `, ` >= ` spaced; `*`, `/`, `^` unspaced; a
 //    number before a letter stays `2x`; two letter runs side by side get `*` (`pi*r`, `x*y`) so the
 //    reader never sees a different name (`a`+`sin` would read `asin`). Sentence punctuation is
@@ -64,6 +79,12 @@ type Item =
   | { k: "allover" }
   | { k: "dec" }
   | { k: "ord"; n: number }
+  /** A plural ordinal ("terzi", "thirds", "Drittel"): the denominator after a number. */
+  | { k: "denom"; n: number }
+  /** A fraction already whole ("un mezzo", `½`), or a number and a denominator. */
+  | { k: "frac"; a: string; b: string }
+  /** "in base" / "base": the base of a logarithm follows. */
+  | { k: "base" }
   | { k: "amb"; s: string }
   | { k: "filler" }
   | { k: "word" };
@@ -86,6 +107,12 @@ const PI: Item = { k: "const", s: "pi" };
 const SQUARED = post("^2");
 const CUBED = post("^3");
 const PERCENT = post("/100");
+const BASE: Item = { k: "base" };
+const den = (n: number): Item => ({ k: "denom", n });
+const frac = (a: number, b: number): Item => ({ k: "frac", a: String(a), b: String(b) });
+/** Each word as the denominator `n`. */
+const DENOMS = (entries: Record<string, number>): Record<string, Item> =>
+  Object.fromEntries(Object.entries(entries).map(([w, n]) => [w, den(n)]));
 
 /** Lowercase, accents stripped, ß → ss: the form words are matched in. */
 const norm = (s: string): string =>
@@ -142,6 +169,8 @@ interface Lang {
   amb: Set<string>;
   /** Single letters that are always words here (conjunctions), never variables. */
   notVars: Set<string>;
+  /** The copula as written (lowercase, accents kept: "è", "é"), read as `=`. */
+  copula: Set<string>;
 }
 
 function numbers(groups: Partial<Record<NumKind, Record<string, number>>>, bound: Record<string, [number, NumKind]> = {}): Map<string, Morph> {
@@ -159,6 +188,7 @@ function lang(
   fillers: string[],
   amb: string[],
   notVars: string[],
+  copula: string[] = [],
 ): Lang {
   const map = new Map<string, Item>();
   for (const [w, it] of Object.entries(COMMON)) map.set(w, it);
@@ -168,7 +198,15 @@ function lang(
     map.set(key, it);
     maxPhrase = Math.max(maxPhrase, key.split(" ").length);
   }
-  return { words: map, maxPhrase, numbers: nums, fillers: new Set(fillers.map(norm)), amb: new Set(amb), notVars: new Set(notVars) };
+  return {
+    words: map,
+    maxPhrase,
+    numbers: nums,
+    fillers: new Set(fillers.map(norm)),
+    amb: new Set(amb),
+    notVars: new Set(notVars),
+    copula: new Set(copula),
+  };
 }
 
 const UNITS_10 = (names: string[]): Record<string, number> => Object.fromEntries(names.map((n, i) => [n, i + 1]));
@@ -251,6 +289,12 @@ const EN = lang(
     ninth: ord(9),
     tenth: ord(10),
     nth: { k: "var", s: "n" },
+    is: op("="),
+    base: BASE,
+    "in base": BASE,
+    "to base": BASE,
+    "to the base": BASE,
+    ...DENOMS({ half: 2, halves: 2, thirds: 3, quarter: 4, quarters: 4, fourths: 4, fifths: 5, sixths: 6, sevenths: 7, eighths: 8, ninths: 9, tenths: 10 }),
   },
   numbers({
     z: { zero: 0 },
@@ -270,6 +314,11 @@ const IT_ORD: Record<string, Item> = {};
 for (const [stem, n] of [["second", 2], ["terz", 3], ["quart", 4], ["quint", 5], ["sest", 6], ["settim", 7], ["ottav", 8], ["non", 9], ["decim", 10]] as const) {
   IT_ORD[`${stem}a`] = ord(n);
   IT_ORD[`${stem}o`] = ord(n);
+  if (n > 2) {
+    // Not "secondi" / "un secondo": time.
+    IT_ORD[`${stem}i`] = den(n); // "due terzi"
+    IT_ORD[`un ${stem}o`] = frac(1, n); // "un terzo" ("un" is otherwise an article)
+  }
 }
 
 const IT = lang(
@@ -343,6 +392,12 @@ const IT = lang(
     "numero di nepero": E,
     "costante di nepero": E,
     ennesima: { k: "var", s: "n" },
+    quadro: SQUARED,
+    cubo: CUBED,
+    base: BASE,
+    "in base": BASE,
+    "un mezzo": frac(1, 2),
+    ...DENOMS({ mezzo: 2, mezzi: 2 }),
     ...IT_ORD,
   },
   numbers(
@@ -369,6 +424,7 @@ const IT = lang(
   ["il", "lo", "la", "l'", "gli", "le", "un", "una"],
   ["a"],
   ["e", "o"],
+  ["è"],
 );
 
 const FR = lang(
@@ -436,6 +492,29 @@ const FR = lang(
     "pour cent": PERCENT,
     pourcent: PERCENT,
     "nombre de euler": E,
+    est: op("="),
+    base: BASE,
+    "en base": BASE,
+    ...DENOMS({
+      demi: 2,
+      demie: 2,
+      demis: 2,
+      tiers: 3,
+      quart: 4,
+      quarts: 4,
+      cinquième: 5,
+      cinquièmes: 5,
+      sixième: 6,
+      sixièmes: 6,
+      septième: 7,
+      septièmes: 7,
+      huitième: 8,
+      huitièmes: 8,
+      neuvième: 9,
+      neuvièmes: 9,
+      dixième: 10,
+      dixièmes: 10,
+    }),
   },
   numbers({
     z: { zéro: 0 },
@@ -520,6 +599,27 @@ const ES = lang(
     "por ciento": PERCENT,
     "número e": E,
     "número de euler": E,
+    es: op("="),
+    base: BASE,
+    "en base": BASE,
+    ...DENOMS({
+      medio: 2,
+      medios: 2,
+      tercio: 3,
+      tercios: 3,
+      cuartos: 4,
+      quintos: 5,
+      sexto: 6,
+      sextos: 6,
+      séptimo: 7,
+      séptimos: 7,
+      octavo: 8,
+      octavos: 8,
+      noveno: 9,
+      novenos: 9,
+      décimo: 10,
+      décimos: 10,
+    }),
     ...ES_ORD,
   },
   numbers(
@@ -603,6 +703,10 @@ const DE = lang(
     von: OF,
     prozent: PERCENT,
     "eulersche zahl": E,
+    ist: op("="),
+    basis: BASE,
+    "zur basis": BASE,
+    ...DENOMS({ halb: 2, halbe: 2, halben: 2, drittel: 3, viertel: 4, fünftel: 5, sechstel: 6, siebtel: 7, achtel: 8, neuntel: 9, zehntel: 10 }),
   },
   numbers({
     z: { null: 0 },
@@ -678,6 +782,29 @@ const PT = lang(
     da: OF,
     "por cento": PERCENT,
     "número de euler": E,
+    base: BASE,
+    "na base": BASE,
+    "em base": BASE,
+    ...DENOMS({
+      meio: 2,
+      meios: 2,
+      terço: 3,
+      terços: 3,
+      quarto: 4,
+      quartos: 4,
+      quinto: 5,
+      quintos: 5,
+      sexto: 6,
+      sextos: 6,
+      sétimo: 7,
+      sétimos: 7,
+      oitavo: 8,
+      oitavos: 8,
+      nono: 9,
+      nonos: 9,
+      décimo: 10,
+      décimos: 10,
+    }),
     ...PT_ORD,
   },
   numbers({
@@ -709,6 +836,7 @@ const PT = lang(
   ["o", "os", "as"],
   ["a"],
   ["e"],
+  ["é"],
 );
 
 const LANGS: Record<string, Lang> = { en: EN, it: IT, fr: FR, es: ES, de: DE, pt: PT };
@@ -756,9 +884,16 @@ const SYMBOLS: Record<string, Item> = {
   π: PI,
   "√": SQRT,
   θ: { k: "var", s: "theta" },
+  "²": SQUARED,
+  "³": CUBED,
+  "½": frac(1, 2),
+  "⅓": frac(1, 3),
+  "⅔": frac(2, 3),
+  "¼": frac(1, 4),
+  "¾": frac(3, 4),
 };
 
-const TOKEN = /(\d+(?:[.,]\d+)*)|(\p{L}+')|(\p{L}+)|(<=|>=|\*\*|[=+\-−*×·/÷^<>≤≥()%π√θ])|(\S)/gu;
+const TOKEN = /(\d+(?:[.,]\d+)*)|(\p{L}+')|(\p{L}+)|(<=|>=|\*\*|[=+\-−*×·/÷^<>≤≥()%π√θ²³½⅓⅔¼¾])|(\S)/gu;
 const PUNCTUATION = /^[.,;:!?¿¡"'«»“”…]$/;
 
 function tokenize(text: string, code: string): Tok[] {
@@ -880,7 +1015,7 @@ function apply(st: NumState, m: Morph, code: string): boolean {
 function readNumber(toks: Tok[], i: number, L: Lang, code: string): { s: string; next: number } | null {
   let st: NumState = { cur: 0, last: "", zero: false };
   let found: { s: string; next: number } | null = null;
-  for (let j = i; j < toks.length && toks[j].word; j++) {
+  for (let j = i; j < toks.length && toks[j].word && !L.copula.has(toks[j].raw.toLowerCase()); j++) {
     const ms = decompose(toks[j].n, L.numbers);
     if (!ms) break;
     const trial = { ...st };
@@ -895,41 +1030,78 @@ function readNumber(toks: Tok[], i: number, L: Lang, code: string): { s: string;
 // Words → items
 // ---------------------------------------------------------------------------------------------
 
+/** What follows an operand: after a phrase ending in "a", these make that "a" the operand. */
+const FOLLOWS_OPERAND = new Set<Item["k"]>(["op", "close", "post", "pow", "allover"]);
+
+/** Known names a run of letters written as notation is split into (`sinx` → sin, x). */
+const RUN_NAMES = Object.keys(COMMON).sort((a, b) => b.length - a.length);
+
+/**
+ * The items of word `i` on: a phrase (longest), a number, or a single word. With `notation` (the
+ * text already holds maths symbols) a short ASCII letter run that is no word here is split into
+ * known names and single-letter variables (`mx` → m, x).
+ */
+function lexAt(toks: Tok[], i: number, L: Lang, code: string, notation: boolean): { items: Item[]; next: number } {
+  const tk = toks[i];
+  if (!tk.word) return { items: [tk.item!], next: i + 1 };
+  for (let len = Math.min(L.maxPhrase, toks.length - i); len >= 2; len--) {
+    const window = toks.slice(i, i + len);
+    if (!window.every((t) => t.word)) continue;
+    const key = window.map((t) => t.n);
+    const it = L.words.get(key.join(" "));
+    if (!it) continue;
+    // "uguale a più b", "igual a": the trailing "a" is the variable a when an operator (other than a
+    // minus: "uguale a meno x" is = -x) or the end follows it.
+    if (it.k === "op" && key[len - 1] === "a" && L.amb.has("a")) {
+      const shorter = L.words.get(key.slice(0, -1).join(" "));
+      const after = i + len < toks.length ? lexAt(toks, i + len, L, code, notation).items[0] : undefined;
+      const operatorNext = !after || (FOLLOWS_OPERAND.has(after.k) && !(after.k === "op" && after.s === "-"));
+      if (shorter && operatorNext) return { items: [shorter], next: i + len - 1 };
+    }
+    return { items: [it], next: i + len };
+  }
+  const num = readNumber(toks, i, L, code);
+  if (num) return { items: [{ k: "num", s: num.s }], next: num.next };
+  const it = single(tk, L);
+  if (it.k === "word" && notation && isRun(tk.raw)) return { items: splitRun(tk.raw), next: i + 1 };
+  return { items: [it], next: i + 1 };
+}
+
+/** A short letter run written as notation: up to 3 letters, or a known name and a letter (`sinx`). */
+const isRun = (raw: string): boolean =>
+  /^[A-Za-z]{2,3}$/.test(raw) || (/^[A-Za-z]{4,5}$/.test(raw) && RUN_NAMES.some((n) => raw.toLowerCase().startsWith(n) && raw.length - n.length <= 2));
+
+/** `mx` → m, x; `sinx` → sin, x (letters as variables, whatever the language's words). */
+function splitRun(run: string): Item[] {
+  const out: Item[] = [];
+  let k = 0;
+  while (k < run.length) {
+    const name = RUN_NAMES.find((n) => run.toLowerCase().startsWith(n, k));
+    if (name) {
+      out.push(COMMON[name]);
+      k += name.length;
+    } else {
+      out.push({ k: "var", s: run[k] });
+      k++;
+    }
+  }
+  return out;
+}
+
 function lex(toks: Tok[], L: Lang, code: string): Item[] {
+  const notation = toks.some((t) => !t.word && t.item && t.item.k !== "num" && t.item.k !== "word");
   const items: Item[] = [];
   let i = 0;
   while (i < toks.length) {
-    const tk = toks[i];
-    if (!tk.word) {
-      items.push(tk.item!);
-      i++;
-      continue;
-    }
-    let matched = false;
-    for (let len = Math.min(L.maxPhrase, toks.length - i); len >= 2 && !matched; len--) {
-      const window = toks.slice(i, i + len);
-      if (!window.every((t) => t.word)) continue;
-      const it = L.words.get(window.map((t) => t.n).join(" "));
-      if (it) {
-        items.push(it);
-        i += len;
-        matched = true;
-      }
-    }
-    if (matched) continue;
-    const num = readNumber(toks, i, L, code);
-    if (num) {
-      items.push({ k: "num", s: num.s });
-      i = num.next;
-      continue;
-    }
-    items.push(single(tk, L));
-    i++;
+    const r = lexAt(toks, i, L, code, notation);
+    items.push(...r.items);
+    i = r.next;
   }
   return items;
 }
 
 function single(tk: Tok, L: Lang): Item {
+  if (L.copula.has(tk.raw.toLowerCase())) return op("="); // "è", "é": norm() would make them "e"
   const it = L.words.get(tk.n);
   if (it) return it;
   if (GREEK[tk.n]) return { k: "var", s: GREEK[tk.n] };
@@ -945,8 +1117,17 @@ function single(tk: Tok, L: Lang): Item {
 
 const BEFORE_OPERAND = new Set<Item["k"]>(["op", "pow", "open", "of", "allover", "sqrt", "cbrt", "func"]);
 const AFTER_OPERAND = new Set<Item["k"]>(["op", "close", "post", "pow", "allover"]);
+/** Items an operand ends with: a letter after one is a factor of an implicit product ("two a"). */
+const OPERAND_END = new Set<Item["k"]>(["num", "var", "const", "close", "post", "frac"]);
+const LETTER_NEXT = new Set<Item["k"]>(["var", "const", "amb"]);
 
-/** Drops articles; an ambiguous letter is a variable only in an operand position. */
+/**
+ * Drops articles and resolves ambiguous letters. A letter is a variable in an operand position
+ * (between operators, or at the start/end next to one), or after an operand when an operator or
+ * the end follows ("two a plus one" → `2a + 1`); "a" also before another letter ("four a c").
+ * "a" before a number is the article ("a hundred"; "a third" is one third). Anything else is left
+ * as a word, so the text stays prose rather than losing a letter.
+ */
 function resolve(items: Item[]): Item[] {
   const kept = items.filter((it) => it.k !== "filler");
   const out: Item[] = [];
@@ -955,10 +1136,52 @@ function resolve(items: Item[]): Item[] {
       out.push(it);
       return;
     }
-    const prev = kept[j - 1];
+    const prev = out[out.length - 1];
     const next = kept[j + 1];
-    if ((!prev || BEFORE_OPERAND.has(prev.k)) && (!next || AFTER_OPERAND.has(next.k))) out.push({ k: "var", s: it.s });
+    const isA = norm(it.s) === "a";
+    const operatorNext = !next || AFTER_OPERAND.has(next.k);
+    const afterOperand = !!prev && OPERAND_END.has(prev.k);
+    if ((!prev || BEFORE_OPERAND.has(prev.k)) && operatorNext) out.push({ k: "var", s: it.s });
+    else if (afterOperand && (operatorNext || (isA && !!next && LETTER_NEXT.has(next.k)))) out.push({ k: "var", s: it.s });
+    else if (!afterOperand && isA && (next?.k === "denom" || next?.k === "ord")) out.push({ k: "num", s: "1" });
+    else if (!afterOperand && next?.k === "num") return; // the article
+    else out.push({ k: "word" });
   });
+  return out;
+}
+
+/**
+ * A whole number and a denominator ("due terzi", "three halves", "one third") → a fraction; a
+ * lone denominator is left for the gate to refuse.
+ */
+function mergeFractions(items: Item[]): Item[] {
+  const out: Item[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const a = items[i];
+    const b = items[i + 1];
+    if (a.k === "num" && /^\d+$/.test(a.s) && (b?.k === "denom" || (b?.k === "ord" && a.s === "1"))) {
+      out.push({ k: "frac", a: a.s, b: String(b.n) });
+      i++;
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
+}
+
+/** Fractions as `a / b` for the emitter, in parentheses where they are an argument or exponent. */
+function expandFractions(items: Item[]): Item[] {
+  const out: Item[] = [];
+  for (const it of items) {
+    if (it.k !== "frac") {
+      out.push(it);
+      continue;
+    }
+    const prev = out[out.length - 1];
+    const wrap = !!prev && (prev.k === "pow" || prev.k === "func" || prev.k === "sqrt" || prev.k === "cbrt" || prev.k === "of");
+    const parts: Item[] = [{ k: "num", s: it.a }, op("/"), { k: "num", s: it.b }];
+    out.push(...(wrap ? [OPEN, ...parts, CLOSE] : parts));
+  }
   return out;
 }
 
@@ -1008,18 +1231,26 @@ const RELATIONS = new Set(["=", "<", ">", "<=", ">="]);
 const OPERAND_START = new Set<Item["k"]>(["num", "var", "const", "func", "sqrt", "cbrt", "open"]);
 const SIMPLE = /^(?:[0-9.]+|[A-Za-z]|pi|theta|[α-ω])$/;
 
-/** Two operands side by side (implicit product). */
-function join(a: string, b: string): string {
+/**
+ * Two operands side by side (implicit product). `explicit` (after a `/`) always writes the `*`, so
+ * `1/2*x` is not read as 1/(2x).
+ */
+function join(a: string, b: string, explicit = false): string {
   const la = a[a.length - 1];
   const fb = b[0];
   if (/[0-9.]/.test(fb) && /[0-9.A-Za-z)α-ω]/.test(la)) throw new Fail();
-  if (/[A-Za-z]/.test(la) && /[A-Za-z]/.test(fb)) return `${a}*${b}`;
+  if (explicit || (/[A-Za-z)]/.test(la) && /[A-Za-z]/.test(fb))) return `${a}*${b}`;
   return a + b;
 }
+
+/** Items that start a new operand rather than continue a function's argument. */
+const ARG_STOP = new Set<Item["k"]>(["func", "sqrt", "cbrt"]);
 
 class Emitter {
   private i = 0;
   private readonly items: Item[];
+  /** The last `term()` was a single operand (no `*`, `/` or implicit product). */
+  private single = true;
 
   constructor(items: Item[]) {
     this.items = items;
@@ -1055,22 +1286,41 @@ class Emitter {
       } else if (it.k === "allover") {
         const num = out.slice(segStart);
         if (!num) throw new Fail();
-        out = `${out.slice(0, segStart)}${terms > 1 ? `(${num})` : num}/${this.term()}`;
+        out = `${out.slice(0, segStart)}${terms > 1 ? `(${num})` : num}/${this.denominator()}`;
         terms = 1;
       } else throw new Fail();
     }
   }
 
+  /** After "all over": everything up to the next relation or the end, in parentheses unless one operand. */
+  private denominator(): string {
+    let out = this.term();
+    let single = this.single;
+    for (let it = this.peek(); it?.k === "op" && (it.s === "+" || it.s === "-"); it = this.peek()) {
+      this.i++;
+      out += ` ${it.s} ${this.term()}`;
+      single = false;
+    }
+    return single ? out : `(${out})`;
+  }
+
   /** Operands joined by `*`, `/` or side by side. */
   private term(): string {
     let out = this.operand(true);
+    let single = true;
+    let divided = false;
     for (;;) {
       const it = this.peek();
       if (it?.k === "op" && (it.s === "*" || it.s === "/")) {
         this.i++;
+        if (it.s === "/") divided = true;
         out += it.s + this.operand(true);
-      } else if (it && OPERAND_START.has(it.k)) out = join(out, this.operand(false));
-      else return out;
+      } else if (it && OPERAND_START.has(it.k)) out = join(out, this.operand(false), divided);
+      else {
+        this.single = single;
+        return out;
+      }
+      single = false;
     }
   }
 
@@ -1119,9 +1369,28 @@ class Emitter {
           return `${it.s}(${this.argument()})`;
         }
         return it.s;
-      case "func":
+      case "func": {
+        // "log base two of eight" → log2(8) (toLatex reads `log2` as base 2).
+        let name = it.s;
+        if (name === "log" && this.peek()?.k === "base") {
+          this.i++;
+          const b = this.items[this.i++];
+          if (b?.k !== "num" || !/^\d+$/.test(b.s)) throw new Fail();
+          name = `log${b.s}`;
+        }
+        // "sine squared of x", "seno al quadrato di x" → sin(x)^2.
+        let power = "";
+        const p = this.peek();
+        if (p?.k === "post" && p.s.startsWith("^")) {
+          this.i++;
+          power = p.s;
+        } else if (p?.k === "pow") {
+          this.i++;
+          power = `^${this.exponent()}`;
+        }
         if (this.peek()?.k === "of") this.i++;
-        return `${it.s}(${this.argument()})`;
+        return `${name}(${this.argument()})${power}`;
+      }
       case "sqrt":
         return `sqrt(${this.argument()})`;
       case "cbrt": {
@@ -1149,12 +1418,41 @@ class Emitter {
       return this.group();
     }
     let s = this.operand(true);
-    for (let it = this.peek(); it && OPERAND_START.has(it.k); it = this.peek()) s = join(s, this.operand(false));
+    for (let it = this.peek(); it && OPERAND_START.has(it.k) && !this.startsCall(it); it = this.peek()) s = join(s, this.operand(false));
     return s;
+  }
+
+  /** A function, root or "f of x" call at the cursor: it starts the next factor ("sin x cos x"). */
+  private startsCall(it: Item): boolean {
+    return ARG_STOP.has(it.k) || (it.k === "var" && this.items[this.i + 1]?.k === "of");
   }
 }
 
-const PRODUCES_MATH = new Set<Item["k"]>(["op", "pow", "post", "sqrt", "cbrt", "func", "allover"]);
+const PRODUCES_MATH = new Set<Item["k"]>(["op", "pow", "post", "sqrt", "cbrt", "func", "allover", "frac"]);
+const PERCENT_S = "/100";
+
+/**
+ * Bare number arithmetic with one operator and nothing else ("uno per uno", "ein mal eins", "un
+ * sur deux", "dieci per cento", "plus one"): idioms far more often than maths. A spoken fraction
+ * ("due terzi"), a power, a variable, a function or a relation make it maths.
+ */
+function idiomArithmetic(items: Item[]): boolean {
+  let ops = 0;
+  for (const it of items) {
+    if (it.k === "op") {
+      if (RELATIONS.has(it.s)) return false;
+      ops++;
+    } else if (it.k === "post") {
+      if (it.s !== PERCENT_S) return false;
+      ops++;
+    } else if (it.k === "allover") ops++;
+    else if (it.k !== "num" && it.k !== "open" && it.k !== "close" && it.k !== "dec") return false;
+  }
+  return ops <= 1;
+}
+
+/** A date (`12/05/2024`, `12.5.24`) or a time (`10:30`): never maths. */
+const DATE_OR_TIME = /\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b|\b\d{1,2}:\d{2}\b/;
 
 /**
  * Dictated `text` as calculator-style notation when it is a spoken expression in `lang` (a BCP-47
@@ -1164,13 +1462,15 @@ export function rewriteSpokenMath(text: string, lang: string): SpokenMathResult 
   const asText: SpokenMathResult = { kind: "text", text };
   const code = primary(lang);
   const L = LANGS[code];
-  if (!L || !text.trim()) return asText;
+  if (!L || !text.trim() || DATE_OR_TIME.test(text)) return asText;
   let items = lex(tokenize(text, code), L, code);
   if (items.some((it) => it.k === "word")) return asText;
-  items = lowerSentenceStart(mergeDecimals(resolve(items)));
-  if (!items.some((it) => PRODUCES_MATH.has(it.k))) return asText;
+  items = resolve(items);
+  if (items.some((it) => it.k === "word")) return asText;
+  items = lowerSentenceStart(mergeFractions(mergeDecimals(items)));
+  if (!items.some((it) => PRODUCES_MATH.has(it.k)) || idiomArithmetic(items)) return asText;
   try {
-    const plain = new Emitter(items).run().replace(/ {2,}/g, " ").trim();
+    const plain = new Emitter(expandFractions(items)).run().replace(/ {2,}/g, " ").trim();
     return plain ? { kind: "math", plain } : asText;
   } catch (e) {
     if (e instanceof Fail) return asText;

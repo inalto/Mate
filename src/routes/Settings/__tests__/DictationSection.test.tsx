@@ -13,9 +13,11 @@ vi.mock("../../../ipc/speech", () => ({
 }));
 
 import { getAiStatus } from "../../../ipc/ai";
+import { patchSettings } from "../../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../../model/constants";
 import type { AiStatus } from "../../../model/types";
 import { useSettingsStore } from "../../../stores/settings";
+import { notifyKeyChanged } from "../../../tutor/attempts";
 import DictationSection from "../sections/DictationSection";
 
 const NEEDS_AI = "Set up the AI assistant in Settings, Tutor & recognition (consent and a key) to use this.";
@@ -63,6 +65,32 @@ describe("DictationSection", () => {
     await waitFor(() => expect(getAiStatus).toHaveBeenCalled());
     expect(tidy().disabled).toBe(true);
     expect(screen.getByText(/consent and a key/)).toBeTruthy();
+  });
+
+  it("a key saved meanwhile makes the tidy-up available", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue({ configured: false } as AiStatus);
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, aiConsent: true } });
+    render(<DictationSection />);
+    await waitFor(() => expect(getAiStatus).toHaveBeenCalledTimes(1));
+    expect(tidy().disabled).toBe(true);
+    vi.mocked(getAiStatus).mockResolvedValue({ configured: true } as AiStatus);
+    act(() => notifyKeyChanged());
+    await waitFor(() => expect(tidy().disabled).toBe(false));
+    expect(getAiStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it("a model change re-reads the status once the settings are written", async () => {
+    vi.mocked(getAiStatus).mockResolvedValue({ configured: false } as AiStatus);
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, aiConsent: true } });
+    render(<DictationSection />);
+    await waitFor(() => expect(getAiStatus).toHaveBeenCalledTimes(1));
+    vi.mocked(getAiStatus).mockResolvedValue({ configured: true } as AiStatus);
+    act(() => void useSettingsStore.getState().update({ aiModel: "a-fixed-model" }));
+    await waitFor(() => expect(tidy().disabled).toBe(false), { timeout: 3000 });
+    expect(patchSettings).toHaveBeenCalledWith(expect.objectContaining({ aiModel: "a-fixed-model" }));
+    const written = vi.mocked(patchSettings).mock.invocationCallOrder[0];
+    const read = vi.mocked(getAiStatus).mock.invocationCallOrder[1];
+    expect(written).toBeLessThan(read);
   });
 
   it("a tidy-up left on without the assistant can still be turned off", async () => {

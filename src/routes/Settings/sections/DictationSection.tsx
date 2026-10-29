@@ -1,28 +1,47 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import SpeechSetup from "../../../components/speech/SpeechSetup";
 import { getAiStatus } from "../../../ipc/ai";
-import { useSettingsStore } from "../../../stores/settings";
+import { flushSettings, useSettingsStore } from "../../../stores/settings";
+import { onKeyChanged } from "../../../tutor/attempts";
 import { Row, SettingsSection, ToggleRow } from "../rows";
+
+/** Quiet time after the AI address or model is typed before the status is read again. */
+const TYPING_PAUSE_MS = 500;
 
 /**
  * Whether the AI assistant could tidy a dictation: its consent given and a provider configured
- * (the tutor switch is not needed). The keychain is read only once consent is on.
+ * (the tutor switch is not needed). The keychain is read only once consent is on, and again when a
+ * key is saved or removed or the provider, model or address changes. Rust reads the stored
+ * settings, so pending ones are written first.
  */
 function useAiReady(): boolean {
   const consent = useSettingsStore((s) => s.settings.aiConsent === true);
   const provider = useSettingsStore((s) => s.settings.aiProvider);
+  const model = useSettingsStore((s) => s.settings.aiModel);
+  const address = useSettingsStore((s) => s.settings.aiBaseUrl);
   const [configured, setConfigured] = useState(false);
+  const [keyChanges, setKeyChanges] = useState(0);
+  useEffect(() => onKeyChanged(() => setKeyChanges((n) => n + 1)), []);
+  const typed = useRef({ model, address });
   useEffect(() => {
     if (!consent) return; // the result below ignores `configured` without consent
     let live = true;
-    getAiStatus()
-      .then((s) => live && setConfigured(s.configured))
-      .catch(() => live && setConfigured(false));
+    const wasTyped = typed.current.model !== model || typed.current.address !== address;
+    typed.current = { model, address };
+    const read = () =>
+      void flushSettings()
+        .catch(() => {})
+        .then(() => getAiStatus())
+        .then((s) => live && setConfigured(s.configured))
+        .catch(() => live && setConfigured(false));
+    const timer = wasTyped ? setTimeout(read, TYPING_PAUSE_MS) : null;
+    if (!timer) read();
     return () => {
       live = false;
+      if (timer) clearTimeout(timer);
     };
-  }, [consent, provider]);
+  }, [consent, provider, model, address, keyChanges]);
   return consent && configured;
 }
 

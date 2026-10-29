@@ -332,6 +332,50 @@ describe("dictated maths", () => {
     expect(latexOf(box)).toBe("y=2x+1");
   });
 
+  it("with maths conversion off, the tidy-up's maths answer is inserted as text, never a box", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true, dictationTidy: true, dictationMath: false } });
+    vi.mocked(tidyDictation).mockResolvedValueOnce({ text: "y = 2x + 1", kind: "math", latex: "y=2x+1" });
+    await dictate("y uguale due x più uno");
+    const [box] = boxes();
+    expect(boxes()).toHaveLength(1);
+    expect(isMathBox(box)).toBe(false);
+    expect(textOf(box)).toBe("<p>y = 2x + 1</p>");
+  });
+
+  it("into a text box deleted meanwhile, the maths becomes an equation box", async () => {
+    const el = textBoxElement(page, "t1", new Date().toISOString(), { x: 0, y: 0 }, defaultTextAttributes());
+    store.getState().addElements("Text", [el]);
+    store.setState({ editingId: "t1" });
+    noteEditTarget();
+    vi.mocked(transcribeAudio).mockImplementationOnce(async () => {
+      store.getState().removeElements(["t1"]);
+      return "y uguale x più 10";
+    });
+    await toggleDictation();
+    await toggleDictation();
+    const live = boxes().filter((b) => !b.deletedAt);
+    expect(live).toHaveLength(1);
+    expect(isMathBox(live[0])).toBe(true);
+    expect(latexOf(live[0])).toBe("y = x + 10");
+  });
+
+  it("into a text box deleted meanwhile, words become a new text box", async () => {
+    const el = textBoxElement(page, "t1", new Date().toISOString(), { x: 0, y: 0 }, defaultTextAttributes());
+    store.getState().addElements("Text", [el]);
+    store.setState({ editingId: "t1" });
+    noteEditTarget();
+    vi.mocked(transcribeAudio).mockImplementationOnce(async () => {
+      store.getState().removeElements(["t1"]);
+      return "domani a scuola";
+    });
+    await toggleDictation();
+    await toggleDictation();
+    const live = boxes().filter((b) => !b.deletedAt);
+    expect(live).toHaveLength(1);
+    expect(isMathBox(live[0])).toBe(false);
+    expect(textOf(live[0])).toBe("<p>domani a scuola</p>");
+  });
+
   it("with the AI tidy-up on, its text answer is used", async () => {
     useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true, dictationTidy: true } });
     vi.mocked(tidyDictation).mockResolvedValueOnce({ text: "Domani, a scuola.", kind: "text", latex: null });
@@ -354,22 +398,31 @@ describe("shapeDictation", () => {
   const on = { dictationMath: true, dictationTidy: false };
 
   it("leaves unsupported languages and missing languages as words", async () => {
-    expect(await shapeDictation("y uguale x più 10", "ja", false, on)).toEqual({ kind: "text", text: "y uguale x più 10" });
-    expect(await shapeDictation("y equals x plus 10", undefined, false, on)).toEqual({ kind: "text", text: "y equals x plus 10" });
+    expect(await shapeDictation("y uguale x più 10", "ja", on)).toEqual({ kind: "text", text: "y uguale x più 10" });
+    expect(await shapeDictation("y equals x plus 10", undefined, on)).toEqual({ kind: "text", text: "y equals x plus 10" });
+  });
+
+  it("without maths conversion, a tidy-up maths answer is text", async () => {
+    vi.mocked(tidyDictation).mockResolvedValueOnce({ text: "x = 1", kind: "math", latex: "x=1" });
+    expect(await shapeDictation("x uguale uno", "it", { dictationMath: false, dictationTidy: true })).toEqual({ kind: "text", text: "x = 1" });
+  });
+
+  it("maths is shaped as an equation whatever the target (decided when inserted)", async () => {
+    expect(await shapeDictation("y uguale x più 10", "it", on)).toEqual({ kind: "math", latex: "y = x + 10", plain: "y = x + 10" });
   });
 
   it("English maths becomes an equation", async () => {
-    expect(await shapeDictation("y equals x plus ten", "en", false, on)).toEqual({ kind: "math", latex: "y = x + 10", plain: "y = x + 10" });
+    expect(await shapeDictation("y equals x plus ten", "en", on)).toEqual({ kind: "math", latex: "y = x + 10", plain: "y = x + 10" });
   });
 
   it("skips the tidy-up for passages over 1,000 characters", async () => {
     const long = "a".repeat(1001);
-    expect(await shapeDictation(long, "en", false, { dictationMath: false, dictationTidy: true })).toEqual({ kind: "text", text: long });
+    expect(await shapeDictation(long, "en", { dictationMath: false, dictationTidy: true })).toEqual({ kind: "text", text: long });
     expect(tidyDictation).not.toHaveBeenCalled();
   });
 
   it("an invalid LaTeX answer from the tidy-up falls back to its text", async () => {
     vi.mocked(tidyDictation).mockResolvedValueOnce({ text: "x plus", kind: "math", latex: String.raw`\frac{1}{` });
-    expect(await shapeDictation("x più", "it", false, { dictationMath: true, dictationTidy: true })).toEqual({ kind: "text", text: "x plus" });
+    expect(await shapeDictation("x più", "it", { dictationMath: true, dictationTidy: true })).toEqual({ kind: "text", text: "x plus" });
   });
 });

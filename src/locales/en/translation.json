@@ -1077,9 +1077,9 @@
       "testHint": "Sends half a second of silence to {{provider}} to check the key, model and address. This audio leaves the device, so the consent below must be on.",
       "testHintLocal": "Sends half a second of silence to the program at {{address}} to check that it answers. The consent below must be on.",
       "convertMath": "Convert spoken maths to notation",
-      "convertMathHelp": "Dictated expressions such as “y equals x plus ten” become y = x + 10 and are inserted as an equation. Works offline in English, Italian, French, Spanish, German and Portuguese.",
+      "convertMathHelp": "Dictated expressions such as “y equals x plus ten” become y = x + 10 and are inserted as an equation; into a text box being edited, the notation is appended as text. Works offline in the interface language (English, Italian, French, Spanish, German or Portuguese).",
       "tidy": "Tidy dictation with the AI assistant",
-      "tidyHelp": "The transcribed text, never the audio, is sent to the AI assistant set up for the tutor, to fix punctuation and write maths as notation. Off by default.",
+      "tidyHelp": "The transcribed text, never the audio, is sent to the AI assistant set up for the tutor, to fix punctuation and write maths as notation.",
       "tidyNeedsAi": "Set up the AI assistant in Settings, Tutor & recognition (consent and a key) to use this."
     },
     "consent": {

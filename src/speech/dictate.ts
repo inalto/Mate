@@ -163,16 +163,16 @@ export type ShapedDictation = { kind: "text"; text: string } | { kind: "math"; l
 
 /**
  * Turns transcribed `text` into what is inserted. With `dictationTidy`, the AI assistant first
- * tidies it (a valid LaTeX answer is an equation; any error falls back silently to the text as
- * transcribed). Then, with `dictationMath` and a supported `lang`, the spoken-maths rewriter:
- * an expression the engine accepts is an equation, one it rejects stays text in its plain form
- * (`y = x + 10`). `into` (appending to a text box being edited) always gives text, maths in
- * its plain form.
+ * tidies it (with `dictationMath`, a valid LaTeX answer is an equation; without it, its text is
+ * used; any error falls back silently to the text as transcribed). Then, with `dictationMath` and
+ * a supported `lang`, the spoken-maths rewriter: an expression the engine accepts is an equation,
+ * one it rejects stays text in its plain form (`y = x + 10`). Where it goes is decided when it is
+ * inserted (`insertShaped`): into a text box still being edited, an equation is appended as its
+ * plain form.
  */
 export async function shapeDictation(
   text: string,
   lang: string | undefined,
-  into: boolean,
   settings: Pick<Settings, "dictationMath" | "dictationTidy">,
 ): Promise<ShapedDictation> {
   let words = text;
@@ -180,8 +180,7 @@ export async function shapeDictation(
     try {
       const r = await tidyDictation(text, lang);
       const tidied = typeof r.text === "string" ? r.text.trim() : "";
-      if (r.kind === "math" && typeof r.latex === "string" && r.latex.trim() !== "") {
-        if (into) return { kind: "text", text: tidied || text };
+      if (settings.dictationMath && r.kind === "math" && typeof r.latex === "string" && r.latex.trim() !== "") {
         const latex = await checkLatex(r.latex);
         if (latex) return { kind: "math", latex, plain: tidied || text };
       }
@@ -198,7 +197,6 @@ export async function shapeDictation(
       r = { kind: "text", text: words }; // a rewriter bug never loses the dictation
     }
     if (r.kind === "math") {
-      if (into) return { kind: "text", text: r.plain };
       const latex = await latexForPlain(r.plain);
       return latex ? { kind: "math", latex, plain: r.plain } : { kind: "text", text: r.plain };
     }
@@ -206,10 +204,16 @@ export async function shapeDictation(
   return { kind: "text", text: words };
 }
 
-/** Inserts a shaped dictation: an equation box in `pane`, else text as `insertDictation` does. */
+/**
+ * Inserts a shaped dictation: appended to the text box `into` while it still exists (an equation
+ * as its plain form), else an equation box in `pane`, else text in a new text box.
+ */
 function insertShaped(shaped: ShapedDictation, into: { store: EditorStore; id: string } | null, pane?: EditorStore): boolean {
-  if (shaped.kind === "math" && !into && insertMathBox(pane ?? getFocusedEditor(), shaped.latex)) return true;
-  return insertDictation(shaped.kind === "math" ? shaped.plain : shaped.text, into, pane);
+  const text = shaped.kind === "math" ? shaped.plain : shaped.text;
+  if (into && appendToBox(into.store, into.id, text)) return true;
+  const where = pane ?? into?.store ?? getFocusedEditor();
+  if (shaped.kind === "math" && insertMathBox(where, shaped.latex)) return true;
+  return insertDictation(text, null, where);
 }
 
 const failure = (e: unknown): string => {
@@ -322,7 +326,7 @@ async function finish(): Promise<void> {
     }
     const { settings } = useSettingsStore.getState();
     // The language spoken: the interface language, also when it follows the system (no hint was sent).
-    const shaped = await shapeDictation(text, uiLanguage(), into !== null, settings);
+    const shaped = await shapeDictation(text, uiLanguage(), settings);
     if (mine !== session || !originOpen(from)) return;
     insertShaped(shaped, into, from?.store);
   } catch (e) {
