@@ -123,6 +123,24 @@ fn sends_the_key_model_and_no_language_when_none() {
 }
 
 #[test]
+fn the_style_hint_follows_the_language() {
+    // The stub is reached through the editable "custom" spec (Mistral is skipped by id; see the
+    // unit test in speech.rs, since its address is fixed).
+    let (base, seen) = stub(200, r#"{"text":"x"}"#);
+    transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", Some("it")).unwrap();
+    let body = seen.lock().unwrap()[0].body_text();
+    assert!(body.contains("name=\"prompt\"
+
+La matematica"), "{body}");
+    let (base, seen) = stub(200, r#"{"text":"x"}"#);
+    transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", None).unwrap();
+    let body = seen.lock().unwrap()[0].body_text();
+    assert!(body.contains("name=\"prompt\"
+
+Mathematics is written"), "{body}");
+}
+
+#[test]
 fn provider_errors_are_mapped() {
     let (base, _) = stub(401, r#"{"error":{"message":"bad key"}}"#);
     let r = transcribe(spec("custom").unwrap(), "k", "", &base, vec![0], "audio/webm", None);

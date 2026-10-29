@@ -193,6 +193,28 @@ fn language_code(language: Option<&str>) -> Option<String> {
     ((2..=3).contains(&l.len()) && l.chars().all(|c| c.is_ascii_lowercase())).then_some(l)
 }
 
+/// A short style hint per language, sent as the transcription `prompt` so that spoken maths is
+/// written as symbols (`y = x + 10`) rather than words. Unknown or missing languages use English.
+pub fn hint_for(language: Option<&str>) -> &'static str {
+    match language.unwrap_or("") {
+        "it" => "La matematica si scrive con i simboli: y = x + 10, x^2, radice(2), 1/2.",
+        "fr" => "Les mathématiques s'écrivent avec des symboles : y = x + 10, x^2, racine(2), 1/2.",
+        "es" => "Las matemáticas se escriben con símbolos: y = x + 10, x^2, raíz(2), 1/2.",
+        "de" => "Mathematik wird mit Symbolen geschrieben: y = x + 10, x^2, Wurzel(2), 1/2.",
+        "pt" => "A matemática escreve-se com símbolos: y = x + 10, x^2, raiz(2), 1/2.",
+        "ja" => "数学は記号で書きます: y = x + 10, x^2, √2, 1/2。",
+        "zh" => "数学用符号书写：y = x + 10，x^2，√2，1/2。",
+        _ => "Mathematics is written in symbols: y = x + 10, x^2, sqrt(2), 1/2.",
+    }
+}
+
+/// Whether the service accepts the OpenAI `prompt` field. Mistral's Voxtral transcription
+/// endpoint documents no `prompt` parameter, so it is not sent there (unverified; revisit if
+/// Mistral adds one).
+fn accepts_prompt(spec: &SpeechSpec) -> bool {
+    spec.id != "mistral"
+}
+
 /// Sends one recording to `{base}/audio/transcriptions` and returns the trimmed text.
 ///
 /// `base_url` is the address setting (empty = the service default; ignored where the service does
@@ -217,6 +239,7 @@ pub fn transcribe(
     }
     let model = effective_model(spec, model);
     let language = language_code(language);
+    let prompt = accepts_prompt(spec).then(|| hint_for(language.as_deref()));
     let form = || -> Result<Form, AiError> {
         let file = Part::bytes(bytes.clone())
             .file_name(file_name_for(mime))
@@ -225,6 +248,9 @@ pub fn transcribe(
         let mut form = Form::new().part("file", file).text("model", model.clone()).text("response_format", "json");
         if let Some(lang) = &language {
             form = form.text("language", lang.clone());
+        }
+        if let Some(prompt) = prompt {
+            form = form.text("prompt", prompt);
         }
         Ok(form)
     };
@@ -345,6 +371,17 @@ mod tests {
         assert_eq!(language_code(Some("system")), None);
         assert_eq!(language_code(Some("")), None);
         assert_eq!(language_code(None), None);
+    }
+
+    #[test]
+    fn every_language_has_a_hint_and_unknown_ones_use_english() {
+        for l in ["en", "it", "fr", "es", "de", "pt", "ja", "zh"] {
+            assert!(!hint_for(Some(l)).is_empty(), "{l}");
+        }
+        assert_eq!(hint_for(None), hint_for(Some("en")));
+        assert_eq!(hint_for(Some("xx")), hint_for(Some("en")));
+        assert_ne!(hint_for(Some("it")), hint_for(Some("en")));
+        assert!(accepts_prompt(spec("openai").unwrap()) && !accepts_prompt(spec("mistral").unwrap()));
     }
 
     #[test]
