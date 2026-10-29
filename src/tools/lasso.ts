@@ -126,7 +126,7 @@ export function withBoxRect(el: Element, r: Rect): Element {
   const dy = r.y - a.y;
   const out = mapPoints(el, (p) => ({ x: p.x + dx, y: p.y + dy }));
   if (out.points.length === 0) out.points = [{ x: r.x, y: r.y, pressure: 0.5, timestamp: 0 }];
-  if (el.type === "image") {
+  if (el.type === "image" || el.type === "media") {
     out.width = r.width;
     out.height = r.height;
   } else {

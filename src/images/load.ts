@@ -134,6 +134,56 @@ export const naturalSize = (img: DecodedImage): { width: number; height: number 
   height: img.naturalHeight ?? img.height ?? 0,
 });
 
+/** Width given to an SVG that has a `viewBox` but no intrinsic size; 400×300 without a viewBox. */
+export const SVG_FALLBACK_WIDTH = 400;
+export const SVG_FALLBACK_HEIGHT = 300;
+
+const svgLength = (v: string | undefined): number | null => {
+  const m = v === undefined ? null : /^\s*(\d*\.?\d+)\s*(px)?\s*$/i.exec(v);
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/**
+ * Size of the SVG document `text` (null when it is not SVG markup): its root `width`/`height` in
+ * px when both are given, else the `viewBox` aspect at `SVG_FALLBACK_WIDTH` (or at the given
+ * width), else 400×300.
+ */
+export function svgIntrinsicSize(text: string): { width: number; height: number } | null {
+  const root = /<svg\b([^>]*)>/i.exec(text);
+  if (!root) return null;
+  const attrs = new Map<string, string>();
+  for (const m of (root[1] ?? "").matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) attrs.set(m[1].toLowerCase(), m[2] ?? m[3]);
+  const w = svgLength(attrs.get("width"));
+  const h = svgLength(attrs.get("height"));
+  if (w && h) return { width: w, height: h };
+  const vb = (attrs.get("viewbox") ?? "").trim().split(/[\s,]+/).map(Number);
+  if (vb.length === 4 && vb[2] > 0 && vb[3] > 0) {
+    if (h && !w) return { width: (h * vb[2]) / vb[3], height: h };
+    const width = w ?? SVG_FALLBACK_WIDTH;
+    return { width, height: (width * vb[3]) / vb[2] };
+  }
+  return { width: SVG_FALLBACK_WIDTH, height: SVG_FALLBACK_HEIGHT };
+}
+
+/**
+ * Natural size of asset `id` decoded as `img`. An SVG (or any image reporting 0×0) is sized from
+ * its markup (`svgIntrinsicSize`): browsers report no, or a made-up, intrinsic size for an SVG
+ * that only has a viewBox.
+ */
+export async function intrinsicSize(id: string, img: DecodedImage, mime?: string): Promise<{ width: number; height: number }> {
+  const n = naturalSize(img);
+  const known = n.width > 0 && n.height > 0;
+  if (known && mime !== "image/svg+xml") return n;
+  try {
+    const svg = svgIntrinsicSize(new TextDecoder().decode(await bytesReader(id)));
+    if (svg) return svg;
+  } catch {
+    /* fall through */
+  }
+  return known ? n : { width: SVG_FALLBACK_WIDTH, height: SVG_FALLBACK_HEIGHT };
+}
+
 // ---- SVG export: images embedded as data URLs ----
 
 const dataUrls = new Map<string, string>();

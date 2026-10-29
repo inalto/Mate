@@ -1,4 +1,4 @@
-//! Asset store: images and PDFs inserted into notes are written once to `<dir>/<uuid>.<ext>` and
+//! Asset store: images, PDFs, audio and video inserted into notes are written once to `<dir>/<uuid>.<ext>` and
 //! referenced from elements by id. Binary data never enters SQLite.
 
 use std::collections::HashSet;
@@ -15,6 +15,10 @@ use crate::storage::StorageError;
 pub const MAX_IMAGE_BYTES: usize = 25 * 1024 * 1024;
 /// Largest accepted PDF.
 pub const MAX_PDF_BYTES: usize = 50 * 1024 * 1024;
+/// Largest accepted audio or video file (MP3, M4A, WAV, OGG, MP4, WebM).
+pub const MAX_MEDIA_BYTES: usize = 256 * 1024 * 1024;
+/// Largest asset of any kind.
+pub const MAX_ASSET_BYTES: usize = MAX_MEDIA_BYTES;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetKind {
@@ -24,6 +28,12 @@ pub enum AssetKind {
     Gif,
     Svg,
     Pdf,
+    Mp3,
+    M4a,
+    Wav,
+    Ogg,
+    Mp4,
+    Webm,
 }
 
 impl AssetKind {
@@ -35,6 +45,12 @@ impl AssetKind {
             AssetKind::Gif => "gif",
             AssetKind::Svg => "svg",
             AssetKind::Pdf => "pdf",
+            AssetKind::Mp3 => "mp3",
+            AssetKind::M4a => "m4a",
+            AssetKind::Wav => "wav",
+            AssetKind::Ogg => "ogg",
+            AssetKind::Mp4 => "mp4",
+            AssetKind::Webm => "webm",
         }
     }
 
@@ -46,11 +62,36 @@ impl AssetKind {
             AssetKind::Gif => "image/gif",
             AssetKind::Svg => "image/svg+xml",
             AssetKind::Pdf => "application/pdf",
+            AssetKind::Mp3 => "audio/mpeg",
+            AssetKind::M4a => "audio/mp4",
+            AssetKind::Wav => "audio/wav",
+            AssetKind::Ogg => "audio/ogg",
+            AssetKind::Mp4 => "video/mp4",
+            AssetKind::Webm => "video/webm",
         }
     }
 
+    /// Audio or video (played by the media element, never drawn as an image).
+    pub fn is_media(self) -> bool {
+        matches!(
+            self,
+            AssetKind::Mp3
+                | AssetKind::M4a
+                | AssetKind::Wav
+                | AssetKind::Ogg
+                | AssetKind::Mp4
+                | AssetKind::Webm
+        )
+    }
+
     pub fn max_bytes(self) -> usize {
-        if self == AssetKind::Pdf { MAX_PDF_BYTES } else { MAX_IMAGE_BYTES }
+        if self.is_media() {
+            MAX_MEDIA_BYTES
+        } else if self == AssetKind::Pdf {
+            MAX_PDF_BYTES
+        } else {
+            MAX_IMAGE_BYTES
+        }
     }
 
     fn from_ext(ext: &str) -> Option<AssetKind> {
@@ -61,6 +102,12 @@ impl AssetKind {
             "gif" => AssetKind::Gif,
             "svg" => AssetKind::Svg,
             "pdf" => AssetKind::Pdf,
+            "mp3" => AssetKind::Mp3,
+            "m4a" => AssetKind::M4a,
+            "wav" => AssetKind::Wav,
+            "ogg" => AssetKind::Ogg,
+            "mp4" => AssetKind::Mp4,
+            "webm" => AssetKind::Webm,
             _ => return None,
         })
     }
@@ -85,6 +132,13 @@ pub fn sniff(bytes: &[u8]) -> Option<AssetKind> {
             "image/webp" => Some(AssetKind::Webp),
             "image/gif" => Some(AssetKind::Gif),
             "application/pdf" => Some(AssetKind::Pdf),
+            "audio/mpeg" => Some(AssetKind::Mp3),
+            // ISO BMFF: `infer` reports the `M4A ` brand as audio, every other brand as video.
+            "audio/m4a" => Some(AssetKind::M4a),
+            "audio/x-wav" => Some(AssetKind::Wav),
+            "audio/ogg" | "audio/opus" => Some(AssetKind::Ogg),
+            "video/mp4" | "video/x-m4v" => Some(AssetKind::Mp4),
+            "video/webm" => Some(AssetKind::Webm),
             _ => None,
         };
     }
@@ -201,6 +255,40 @@ mod tests {
         assert_eq!(sniff(b"%PDF-1.7\n"), Some(AssetKind::Pdf));
         assert_eq!(sniff(b"\xEF\xBB\xBF  <svg xmlns=\"x\"/>"), Some(AssetKind::Svg));
         assert_eq!(sniff(b"GIF89a\x01\x00\x01\x00"), Some(AssetKind::Gif));
+    }
+
+    const MP3: &[u8] = &[0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, 0xFF, 0xFB, 0x90, 0x00];
+
+    #[test]
+    fn sniffs_media() {
+        assert_eq!(sniff(MP3), Some(AssetKind::Mp3));
+        assert_eq!(sniff(b"RIFF\x24\0\0\0WAVEfmt \x10\0\0\0"), Some(AssetKind::Wav));
+        assert_eq!(sniff(b"OggS\0\x02\0\0\0\0\0\0"), Some(AssetKind::Ogg));
+        assert_eq!(sniff(b"\0\0\0\x20ftypM4A \0\0\0\0"), Some(AssetKind::M4a));
+        assert_eq!(sniff(b"\0\0\0\x20ftypisom\0\0\x02\0"), Some(AssetKind::Mp4));
+        assert_eq!(sniff(b"\x1A\x45\xDF\xA3\x9F\x42\x86\x81"), Some(AssetKind::Webm));
+        for k in [AssetKind::Mp3, AssetKind::M4a, AssetKind::Wav, AssetKind::Ogg, AssetKind::Mp4, AssetKind::Webm] {
+            assert!(k.is_media());
+            assert_eq!(k.max_bytes(), MAX_MEDIA_BYTES);
+            assert_eq!(AssetKind::from_ext(k.ext()), Some(k));
+        }
+        assert!(!AssetKind::Png.is_media());
+        assert_eq!(AssetKind::Png.max_bytes(), MAX_IMAGE_BYTES);
+        assert_eq!(AssetKind::Pdf.max_bytes(), MAX_PDF_BYTES);
+        assert_eq!(AssetKind::Mp3.mime(), "audio/mpeg");
+        assert_eq!(AssetKind::Mp4.mime(), "video/mp4");
+    }
+
+    #[test]
+    fn media_limit_is_separate_from_images() {
+        let dir = tmp("media-limit");
+        let mut big = MP3.to_vec();
+        big.resize(MAX_IMAGE_BYTES + 1, 0);
+        let info = save_sniffed(&dir, &big).unwrap();
+        assert_eq!(info.mime, "audio/mpeg");
+        assert!(info.path.extension().is_some_and(|x| x == "mp3"));
+        assert_eq!(asset_info(&dir, &info.id).unwrap().mime, "audio/mpeg");
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

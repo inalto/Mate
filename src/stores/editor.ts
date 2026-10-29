@@ -10,6 +10,7 @@ import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "..
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
+import { MEDIA_DEFAULT_SIZE, mediaElement, type MediaKind } from "../media/element";
 import { defaultGraphData, graphElement, inferGraphKind, presetFor } from "../graph/data";
 import { lastGraphKind } from "../graph/presets";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
@@ -113,6 +114,11 @@ export interface EditorState {
    * page units), scaled to fit 80 % of the visible viewport; one history entry. Its id, or null.
    */
   addImage(assetId: string, natural: { width: number; height: number }, at?: Vec2): string | null;
+  /**
+   * Insert a media asset (audio or video player) at the viewport centre (or centred on `at`), with
+   * `size` or the kind's default box, fitted like an image; one history entry "Media". Its id, or null.
+   */
+  addMedia(assetId: string, kind: MediaKind, size?: { width: number; height: number }, at?: Vec2, title?: string): string | null;
   /**
    * End of a text edit session: persist `after` (HTML sanitised, plain text derived) as one history
    * entry; nothing when unchanged. A new box's creation and first session are one entry; a box
@@ -509,6 +515,23 @@ export function createEditorStore(): EditorStore {
       const img = imageElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), assetId, box);
       const el = top > 0 ? withMeta(img, { zIndex: top }) : img;
       if (!record("Image", [{ type: "add", el }])) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      return el.id;
+    },
+
+    addMedia(assetId, kind, size, at, title) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+      const tl = screenToWorld(s.camera, { x: 0, y: 0 });
+      const br = screenToWorld(s.camera, { x: vp.width, y: vp.height });
+      const box = fitImage(size ?? MEDIA_DEFAULT_SIZE[kind], { x: tl.x, y: tl.y, width: br.x - tl.x, height: br.y - tl.y }, at);
+      const top = topZ(s.elements.values());
+      const content = title ? { kind, title } : { kind };
+      const media = mediaElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), assetId, box, content);
+      const el = top > 0 ? withMeta(media, { zIndex: top }) : media;
+      if (!record("Media", [{ type: "add", el }])) return null;
       set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
       return el.id;
     },

@@ -71,6 +71,12 @@ export interface ShapeContent extends ContentMeta {
   fillOpacity: number;
 }
 
+/** media (`imageUrl` asset id, `width/height` box like images): an audio or video player. */
+export interface MediaContent extends ContentMeta {
+  kind: "audio" | "video";
+  title?: string;
+}
+
 /** `el.content` as a partial `T` when it is a JSON object, else `{}`. Never throws. */
 export function contentOf<T>(el: Pick<Element, "content">): Partial<T> {
   const c = el.content;
@@ -88,6 +94,6 @@ export const isPdfPlacement = (el: Pick<Element, "type" | "content">): boolean =
   el.type === "image" && typeof contentOf<ImageContent>(el).pdfSourceKey === "string";
 
 /** Element types laid out as a box: `points[0]` is the top-left anchor (page units). */
-export const BOXED_TYPES: readonly ElementType[] = ["text-box", "table", "codespace", "graph", "image"];
+export const BOXED_TYPES: readonly ElementType[] = ["text-box", "table", "codespace", "graph", "image", "media"];
 
 export const isBoxedType = (t: ElementType): boolean => BOXED_TYPES.includes(t);

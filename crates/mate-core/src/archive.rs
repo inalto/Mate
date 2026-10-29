@@ -24,8 +24,8 @@ pub const ARCHIVE_FORMAT: &str = "mate-archive";
 pub const ARCHIVE_SCHEMA_VERSION: u32 = 1;
 /// Largest archive accepted for import.
 pub const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
-/// Largest single (uncompressed) entry accepted for import.
-pub const MAX_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
+/// Largest single (uncompressed) entry accepted for import (the largest asset, a media file).
+pub const MAX_ENTRY_BYTES: u64 = assets::MAX_ASSET_BYTES as u64;
 /// Most `assets/` entries an archive may carry.
 pub const MAX_ARCHIVE_ASSETS: usize = 2000;
 
@@ -363,7 +363,7 @@ struct AssetImport<'a> {
     total: u64,
 }
 
-/// What a reference may point at: `image_url` an image, `pdfSourceKey` a PDF.
+/// What a reference may point at: `image_url` an image or a media file, `pdfSourceKey` a PDF.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Want {
     Image,

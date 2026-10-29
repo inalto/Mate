@@ -612,6 +612,14 @@
     "insertImageFailed": "Impossibile inserire quell'immagine.",
     "imagesFilter": "Immagini"
   },
+  "media": {
+    "insert": "Inserisci media",
+    "filter": "Audio e video",
+    "insertFailed": "Impossibile inserire quel file multimediale.",
+    "tooLarge": "Il file è troppo grande (il limite è {{max}} MB).",
+    "audio": "Audio",
+    "video": "Video"
+  },
   "whatsNew": {
     "title": "Novità",
     "gotIt": "Ho capito"

@@ -16,6 +16,7 @@ import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } 
 import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
+import MediaLayer from "../media/MediaLayer";
 import { paintBackground, type SurfaceColors } from "./background";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
@@ -568,6 +569,7 @@ export default function CanvasView({ pageId, store = useEditorStore }: { pageId:
         <canvas ref={staticRef} className="canvas-layer" />
         <canvas ref={liveRef} className="canvas-layer canvas-live" />
       </div>
+      <MediaLayer store={store} />
       <ZoomIndicator store={store} />
     </>
   );

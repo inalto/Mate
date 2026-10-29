@@ -17,6 +17,7 @@ import { htmlBoxRenderer } from "./htmlBox";
 import "./shape";
 import "./image";
 import "./graph";
+import { mediaRenderer } from "./media";
 
 export { PLACEHOLDER_COLOR };
 
@@ -44,3 +45,5 @@ export const boxedRenderer: ElementRenderer = {
 
 for (const t of BOXED_TYPES) if (t !== "image" && t !== "graph") registerRenderer(t, boxedRenderer);
 for (const t of ["text-box", "table", "codespace"] as const) registerRenderer(t, htmlBoxRenderer);
+// Media placeholders (after the boxed loop above, which would otherwise replace them).
+registerRenderer("media", mediaRenderer);

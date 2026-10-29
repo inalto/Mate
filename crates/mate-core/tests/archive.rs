@@ -440,3 +440,44 @@ fn import_skips_asset_kind_mismatch() {
     let _ = fs::remove_dir_all(&src_dir);
     let _ = fs::remove_dir_all(&dst_dir);
 }
+
+#[test]
+fn archive_round_trips_media_assets() {
+    // ID3v2 header + an MPEG frame sync: enough for the content sniffer.
+    const MP3: &[u8] = &[0x49, 0x44, 0x33, 0x04, 0, 0, 0, 0, 0, 0, 0xFF, 0xFB, 0x90, 0x00];
+    let src_dir = tmp("media-src");
+    let audio = assets::save_sniffed(&src_dir, MP3).unwrap();
+    assert_eq!(audio.mime, "audio/mpeg");
+    let mut src = Storage::open_in_memory().unwrap();
+    src.upsert_unit(&unit("u1", None)).unwrap();
+    src.upsert_section(&section("s", "u1")).unwrap();
+    src.upsert_page(&page("p", "s", None)).unwrap();
+    let mut media = stroke("m", "p", 1);
+    media.r#type = mate_core::model::ElementType::Media;
+    media.image_url = Some(audio.id.clone());
+    media.content = Some(serde_json::json!({ "kind": "audio", "title": "Lecture" }));
+    src.upsert_elements(&[media]).unwrap();
+    assert!(src.referenced_asset_ids().unwrap().contains(&audio.id), "media stays GC-safe");
+
+    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
+    assert!(
+        zip.file_names().any(|n| n == format!("assets/{}.mp3", audio.id)),
+        "media asset is archived"
+    );
+
+    let dst_dir = tmp("media-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    let els = imported_elements(&dst, &report.unit_id);
+    assert_eq!(els.len(), 1);
+    assert_eq!(els[0].r#type, mate_core::model::ElementType::Media);
+    let new_id = els[0].image_url.clone().unwrap();
+    assert_ne!(new_id, audio.id);
+    let info = assets::asset_info(&dst_dir, &new_id).unwrap();
+    assert_eq!(info.mime, "audio/mpeg");
+    assert_eq!(fs::read(info.path).unwrap(), MP3);
+    assert_eq!(els[0].content.as_ref().unwrap()["kind"], "audio");
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}

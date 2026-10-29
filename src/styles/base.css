@@ -1979,3 +1979,35 @@ html.mobile .sb-resize {
 .graph-presets-row > .graph-grid-toggle {
   line-height: 1.3;
 }
+
+/* Media layer: live audio/video players over their canvas placeholders, in screen pixels
+   (media/MediaLayer). Only the native players take pointer events (cursor tool); the top grip strip
+   and everything around them pass through to the canvas. */
+.media-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.media-player {
+  position: absolute;
+  box-sizing: border-box;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+
+.media-native {
+  position: absolute;
+  top: var(--media-grip, 0px);
+  left: 0;
+  width: 100%;
+  height: calc(100% - var(--media-grip, 0px));
+  box-sizing: border-box;
+}
+
+.media-player[data-media-kind="video"] .media-native {
+  object-fit: contain;
+  background: #000;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}

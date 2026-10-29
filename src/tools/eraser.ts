@@ -32,6 +32,8 @@ function erasable(el: Element, opts: EraseOptions): boolean {
       return opts.eraseShapes;
     case "image":
       return opts.eraseImages && !isPdfPlacement(el); // PDF pages are locked
+    case "media":
+      return opts.eraseImages;
     default:
       return false; // text-box, table, codespace, graph and other structured content are never erased
   }

@@ -14,7 +14,8 @@ export type ElementType =
   | "codespace"
   | "graph"
   | "slide"
-  | "table";
+  | "table"
+  | "media";
 export type BackgroundType =
   | "blank"
   | "ruled"
