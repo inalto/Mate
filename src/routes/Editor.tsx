@@ -125,6 +125,7 @@ export default function Editor() {
       <div className={leftHanded ? "editor-row reverse" : "editor-row"}>
         {!pageWindow && <Sidebar />}
         <div className="editor" data-dock={dock}>
+          <Toolbar />
           <div className="editor-canvas">
           <div className={tab.panes.length === 2 ? "panes split" : "panes"}>
             {tab.panes.map((pane, i) => (
@@ -144,7 +145,6 @@ export default function Editor() {
           </div>
           <SelectionBar />
           </div>
-          <Toolbar />
         </div>
       </div>
       {settingsPage && (
