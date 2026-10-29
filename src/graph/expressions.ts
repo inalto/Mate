@@ -9,6 +9,7 @@
 // The engine is lazy (./engine): `parseExpressionSync` answers `{ pending: true }` until it loaded.
 import type { ComputeEngine } from "@cortex-js/compute-engine";
 import i18n, { type TKey } from "../i18n";
+import { normalizeLatex } from "../math/normalizeLatex";
 import { engineSync, loadEngine, type Engine } from "./engine";
 import { toLatex } from "./plain";
 
@@ -220,7 +221,7 @@ function classify(eng: Engine, e: Expr): ParsedExpr {
 
 function parseUncached(eng: Engine, input: string): ParseResult {
   try {
-    const e = eng.ce.parse(toLatex(input));
+    const e = eng.ce.parse(normalizeLatex(toLatex(input)));
     if (!e) return { error: i18n.t("graph.errors.empty") };
     const json = e.json;
     const err = firstError(json);

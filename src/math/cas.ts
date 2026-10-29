@@ -10,6 +10,7 @@ import type { ComputeEngine } from "@cortex-js/compute-engine";
 import { engineSync, loadEngine, type Engine } from "../graph/engine";
 import { firstError } from "../graph/expressions";
 import i18n from "../i18n";
+import { normalizeLatex } from "./normalizeLatex";
 
 export type Op = "evaluate" | "simplify" | "expand" | "solve" | "numeric";
 export type ComputeResult = { latex: string } | { error: string };
@@ -140,7 +141,7 @@ export async function compute(latex: string, op: Op): Promise<ComputeResult> {
     return { error: i18n.t("math.errors.engine") };
   }
   try {
-    const e = eng.ce.parse(latex);
+    const e = eng.ce.parse(normalizeLatex(latex));
     const problem = parseProblem(e);
     if (problem) return { error: problem };
     if (op === "solve") return solve(eng, e);
@@ -284,7 +285,7 @@ export async function localCheck(latex: string, rand: () => number = Math.random
     return { kind: "undecided", reason: i18n.t("math.check.reasons.engine") };
   }
   try {
-    const e = eng.ce.parse(latex);
+    const e = eng.ce.parse(normalizeLatex(latex));
     const problem = parseProblem(e);
     if (problem) return { kind: "undecided", reason: problem.charAt(0).toLowerCase() + problem.slice(1) };
     const sides = sidesOf(eng, e);
@@ -355,7 +356,7 @@ const wrap = (s: string): string => (/^[\w.√π]+$/.test(s) ? s : `(${s})`);
 export async function latexToPlain(latex: string): Promise<string> {
   try {
     const { ce } = await engine();
-    const e = ce.parse(latex);
+    const e = ce.parse(normalizeLatex(latex));
     if (!e.isValid) return latex.trim();
     return e.toString().replace(/ == /g, " = ");
   } catch {
