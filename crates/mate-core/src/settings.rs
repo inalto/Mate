@@ -163,6 +163,14 @@ pub struct Settings {
     pub ai_model: String,
     /// Overrides the provider's address (local and custom providers only). Empty = the default.
     pub ai_base_url: String,
+    /// Dictation service: a speech catalog id (`ai::speech`); unknown ids fall back to `"openai"`.
+    pub speech_provider: String,
+    /// Empty means the speech service's default model.
+    pub speech_model: String,
+    /// Overrides the speech service's address (local and custom only). Empty = the default.
+    pub speech_base_url: String,
+    /// Recordings may be sent to the speech service. `None` until the user is asked.
+    pub speech_consent: Option<bool>,
     /// Wolfram|Alpha may be asked (the typed maths is sent to it). Off until the user turns it on.
     pub wolfram_consent: bool,
     /// Interface language: `"system"` (follow the OS) or a supported code (`"en"`, `"it"`, …).
@@ -249,6 +257,10 @@ impl Default for Settings {
             ai_provider: s("anthropic"),
             ai_model: String::new(),
             ai_base_url: String::new(),
+            speech_provider: s("openai"),
+            speech_model: String::new(),
+            speech_base_url: String::new(),
+            speech_consent: None,
             wolfram_consent: false,
             language: s("system"),
             trash_retention_days: 30,

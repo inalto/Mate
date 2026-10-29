@@ -394,6 +394,14 @@ export interface Settings {
   aiModel: string;
   /** Empty means the provider's default address; only used by local and custom providers. */
   aiBaseUrl: string;
+  /** Dictation service (a speech catalog id from Rust). */
+  speechProvider: string;
+  /** Empty means the speech service's default model. */
+  speechModel: string;
+  /** Empty means the speech service's default address; only used by local and custom services. */
+  speechBaseUrl: string;
+  /** Recordings may be sent to the speech service; null until the user is asked. */
+  speechConsent: boolean | null;
   /** Wolfram|Alpha may be sent typed maths when the user asks. */
   wolframConsent: boolean;
   /** Interface language: "system" (follow the OS) or a supported code ("en", "it", …). */

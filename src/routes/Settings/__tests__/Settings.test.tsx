@@ -13,6 +13,13 @@ vi.mock("../../../ipc/ai", () => ({
   listAiModels: vi.fn(async () => []),
 }));
 vi.mock("../../../ipc/math", () => ({ wolframStatus: vi.fn(async () => ({ configured: false, consent: false })) }));
+vi.mock("../../../ipc/speech", () => ({
+  listSpeechProviders: vi.fn(async () => [{ id: "openai", label: "OpenAI", needsKey: true, editableBaseUrl: false, defaultBaseUrl: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini-transcribe", keyUrl: "", local: false }]),
+  getSpeechStatus: vi.fn(async () => ({ configured: false, hasKey: false, provider: "openai", model: "gpt-4o-mini-transcribe", baseUrl: "", consent: false, needsKey: true, local: false })),
+  setSpeechKey: vi.fn(),
+  clearSpeechKey: vi.fn(),
+  transcribeAudio: vi.fn(),
+}));
 vi.mock("../../../ipc/backup", () => ({
   exportBackup: vi.fn(async () => "C:/tmp/mate-backup-2026-10-23.zip"),
   resetLocalData: vi.fn(async () => {}),
@@ -157,7 +164,9 @@ describe("Settings rows", () => {
     vi.useRealTimers();
     renderPane();
     expect(((await screen.findByLabelText(/Nothing is sent until you turn this on/)) as HTMLInputElement).checked).toBe(false);
-    expect(await screen.findByText("No key")).toBeTruthy();
+    // The tutor's key status (Dictation shows its own).
+    const tutor = document.getElementById("set-sec-tutor") as HTMLElement;
+    expect(await within(tutor).findByText("No key")).toBeTruthy();
   });
 });
 
@@ -194,6 +203,15 @@ describe("sliders", () => {
 });
 
 describe("search", () => {
+  it("finds_the_dictation_section", async () => {
+    renderPane();
+    await screen.findByLabelText("Speech service");
+    fireEvent.change(screen.getByLabelText("Search settings"), { target: { value: "Dictation" } });
+    const results = screen.getByRole("list", { name: "Search results" });
+    expect(within(results).getAllByRole("button").some((b) => b.textContent?.includes("Dictation"))).toBe(true);
+    expect(screen.getByRole("button", { name: "Dictation" })).toBeTruthy();
+  });
+
   it("fuzzy_scoring_prefers_substrings_and_rejects_non_subsequences", () => {
     expect(fuzzyScore("palm", "Palm rejection")).toBeGreaterThan(fuzzyScore("pmr", "Palm rejection"));
     expect(fuzzyScore("pmrj", "Palm rejection")).toBeGreaterThan(0);

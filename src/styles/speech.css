@@ -1,0 +1,33 @@
+/* Dictation: the toolbar button while recording or transcribing. */
+.tb-btn.dictate-recording {
+  color: var(--color-danger, #e5484d);
+  animation: dictate-pulse 1.2s ease-in-out infinite;
+}
+
+.dictate-elapsed {
+  margin-inline-start: 2px;
+  font-size: 0.75rem;
+}
+
+.dictate-spin {
+  animation: dictate-spin 0.9s linear infinite;
+}
+
+@keyframes dictate-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes dictate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-btn.dictate-recording,
+  .dictate-spin {
+    animation: none;
+  }
+}

@@ -1038,6 +1038,43 @@
     },
     "getKey": "Get a key"
   },
+  "speech": {
+    "dictate": "Dictate",
+    "stop": "Stop dictating",
+    "recording": "Recording, {{time}}",
+    "transcribing": "Transcribing…",
+    "noMicrophone": "No microphone was found.",
+    "permissionDenied": "Mate is not allowed to use the microphone. Allow it in the system settings.",
+    "failed": "Dictation failed: {{message}}",
+    "nothingHeard": "Nothing was heard. Try again a little closer to the microphone.",
+    "off": "Dictation is off. Turn it on in Settings, Dictation.",
+    "notConfigured": "Choose a speech service in Settings, Dictation.",
+    "openSettings": "Settings",
+    "limitReached": "Recording stopped after 5 minutes.",
+    "noPage": "Open a page to dictate into.",
+    "settings": {
+      "title": "Dictation",
+      "provider": "Speech service",
+      "key": "API key",
+      "keyOptional": "API key (optional)",
+      "model": "Model",
+      "address": "Address",
+      "consent": "Send recordings to the speech service",
+      "consentHint": "Each dictation is recorded on this device and sent to {{provider}} to be turned into text. Nothing is kept by Mate.",
+      "consentHintLocal": "Each dictation is sent to the program at {{address}}, on this computer or network.",
+      "test": "Test",
+      "status": "Status",
+      "ready": "Ready to dictate.",
+      "notReady": "Not set up yet: save a key or enter an address.",
+      "loadFailed": "The list of speech services could not be loaded."
+    },
+    "consent": {
+      "title": "Send recordings to {{provider}}?",
+      "body": "Dictation records your voice on this device and sends the recording to {{provider}}, which turns it into text. You can change this in Settings, Dictation.",
+      "allow": "Allow",
+      "deny": "Not now"
+    }
+  },
   "home": {
     "firstNotebook": "My Notebook",
     "recovery": "Mate restarted while this page was open",

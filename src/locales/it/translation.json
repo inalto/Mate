@@ -1038,6 +1038,43 @@
     },
     "getKey": "Ottieni una chiave"
   },
+  "speech": {
+    "dictate": "Detta",
+    "stop": "Interrompi la dettatura",
+    "recording": "Registrazione, {{time}}",
+    "transcribing": "Trascrizione…",
+    "noMicrophone": "Nessun microfono trovato.",
+    "permissionDenied": "Mate non ha il permesso di usare il microfono. Consentilo nelle impostazioni di sistema.",
+    "failed": "Dettatura non riuscita: {{message}}",
+    "nothingHeard": "Non si è sentito nulla. Riprova un po' più vicino al microfono.",
+    "off": "La dettatura è disattivata. Attivala in Impostazioni, Dettatura.",
+    "notConfigured": "Scegli un servizio vocale in Impostazioni, Dettatura.",
+    "openSettings": "Impostazioni",
+    "limitReached": "Registrazione interrotta dopo 5 minuti.",
+    "noPage": "Apri una pagina in cui dettare.",
+    "settings": {
+      "title": "Dettatura",
+      "provider": "Servizio vocale",
+      "key": "Chiave API",
+      "keyOptional": "Chiave API (facoltativa)",
+      "model": "Modello",
+      "address": "Indirizzo",
+      "consent": "Invia le registrazioni al servizio vocale",
+      "consentHint": "Ogni dettatura viene registrata su questo dispositivo e inviata a {{provider}} per essere trasformata in testo. Mate non conserva nulla.",
+      "consentHintLocal": "Ogni dettatura viene inviata al programma all'indirizzo {{address}}, su questo computer o in rete.",
+      "test": "Prova",
+      "status": "Stato",
+      "ready": "Pronto per la dettatura.",
+      "notReady": "Non ancora configurato: salva una chiave o inserisci un indirizzo.",
+      "loadFailed": "Non è stato possibile caricare l'elenco dei servizi vocali."
+    },
+    "consent": {
+      "title": "Inviare le registrazioni a {{provider}}?",
+      "body": "La dettatura registra la tua voce su questo dispositivo e invia la registrazione a {{provider}}, che la trasforma in testo. Puoi cambiare idea in Impostazioni, Dettatura.",
+      "allow": "Consenti",
+      "deny": "Non ora"
+    }
+  },
   "home": {
     "firstNotebook": "Il mio quaderno",
     "recovery": "Mate si è riavviato mentre questa pagina era aperta",

@@ -17,6 +17,7 @@ import PenSection from "./sections/PenSection";
 import ThemeSection from "./sections/ThemeSection";
 import TrashSection from "./sections/TrashSection";
 import MathEnginesSection from "./sections/MathEnginesSection";
+import DictationSection from "./sections/DictationSection";
 import TutorInteractionsSection from "./sections/TutorInteractionsSection";
 import TutorSection from "./sections/TutorSection";
 import UpdatesSection from "./sections/UpdatesSection";
@@ -173,6 +174,7 @@ export default function Settings() {
           <TutorSection />
           <TutorInteractionsSection />
           <MathEnginesSection />
+          <DictationSection />
           <KeyboardShortcutsSection />
           <TrashSection />
           <BackupSection />

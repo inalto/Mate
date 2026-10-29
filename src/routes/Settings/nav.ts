@@ -40,6 +40,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: "tutor", titleKey: "settings.nav.sections.tutor" },
       { id: "tutor-interactions", titleKey: "settings.nav.sections.tutorInteractions" },
       { id: "math-engines", titleKey: "settings.nav.sections.mathEngines" },
+      { id: "dictation", titleKey: "speech.settings.title" },
     ],
   },
   {

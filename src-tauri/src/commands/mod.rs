@@ -20,6 +20,7 @@ pub mod practice;
 pub mod semantics;
 pub mod settings;
 pub mod share;
+pub mod speech;
 pub mod thumbnails;
 #[cfg(desktop)]
 pub mod updater;
