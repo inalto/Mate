@@ -370,6 +370,19 @@ describe("about and backup", () => {
     expect(resetLocalData).toHaveBeenCalledTimes(1);
   });
 
+  it("reset_refused_for_a_too_large_book_shows_why", async () => {
+    const why =
+      "Nothing was reset: “Films” could not be included in the recovery backup (left out of the backup: larger than 512 MiB). Export or delete these books first, then reset again.";
+    vi.mocked(resetLocalData).mockRejectedValueOnce(why);
+    renderPane();
+    fireEvent.click(screen.getByRole("button", { name: "Reset local data" }));
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reset" }));
+    });
+    expect(screen.getByRole("alert").textContent).toBe(why);
+    expect((screen.getByRole("button", { name: "Reset local data" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("reset_on_mobile_says_mate_will_close", () => {
     setPlatformForTests(true);
     renderPane();

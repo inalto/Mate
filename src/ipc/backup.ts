@@ -22,17 +22,15 @@ export const skippedLines = (skipped: readonly SkippedBook[]): string =>
 
 /**
  * Write a recovery zip next to the database, delete all books, pages, assets and settings, and
- * restart the app. Resolves only on failure (the process restarts on success).
+ * restart the app. Resolves only on failure (the process restarts on success); refused, with
+ * nothing deleted, when a book is too large for the recovery zip (the error names it).
  */
 export const resetLocalData = (): Promise<void> => invoke("reset_local_data", { confirm: "RESET" });
 
-/** Set when a reset could not delete everything or left books out of its recovery zip (the app restarted anyway). */
+/** Set when a reset could not delete everything (the app restarted anyway). */
 export interface ResetIncomplete {
   recoveryPath: string;
-  /** Why deleting local data failed; null when it succeeded. */
-  error: string | null;
-  /** Books too large for the recovery zip (absent in markers from older versions). */
-  skipped?: SkippedBook[];
+  error: string;
 }
 
 /** Returns and clears the marker a half-finished reset left behind, if any. */

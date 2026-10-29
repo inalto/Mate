@@ -5,7 +5,7 @@ use std::sync::Mutex;
 
 use mate_core::archive::{
     BackupReport, ImportReport, MAX_ARCHIVE_BYTES, SkippedBook, export_unit, import_archive,
-    wipe_local_data, write_backup,
+    wipe_local_data, write_backup_capped,
 };
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
@@ -92,14 +92,17 @@ fn backup_filename() -> String {
     format!("mate-backup-{}.zip", &mate_core::model::now_iso()[..10])
 }
 
-/// Streams a backup of every book into `file` (buffered); see [`write_backup`].
+/// Streams a backup of every book into `file` (buffered), leaving out books whose archive would
+/// exceed `max_book_bytes`; see [`mate_core::archive::write_backup`].
 fn write_backup_file(
     storage: &Storage,
     assets_dir: &Path,
     file: &mut fs::File,
+    max_book_bytes: u64,
 ) -> Result<BackupReport, String> {
-    let (out, report) = write_backup(storage, assets_dir, io::BufWriter::new(file))
-        .map_err(|e| e.to_string())?;
+    let (out, report) =
+        write_backup_capped(storage, assets_dir, io::BufWriter::new(file), max_book_bytes)
+            .map_err(|e| e.to_string())?;
     out.into_inner().map_err(|e| e.to_string())?;
     Ok(report)
 }
@@ -127,7 +130,9 @@ pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String
         let state = handle.state::<AppState>();
         let storage = state.storage.lock().map_err(|e| e.to_string())?;
         let assets_dir = state.data_dir.join("assets");
-        write_atomically_with(&target, |f| write_backup_file(&storage, &assets_dir, f))
+        write_atomically_with(&target, |f| {
+            write_backup_file(&storage, &assets_dir, f, MAX_ARCHIVE_BYTES as u64)
+        })
     })
     .await
     .map_err(|e| e.to_string())??;
@@ -141,8 +146,8 @@ pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String
     }))
 }
 
-/// Left in the data directory when a reset could not delete everything or had to leave books out
-/// of the recovery zip; the next launch tells the user where their backup is and what it lacks.
+/// Left in the data directory when a reset could not delete everything; the next launch tells
+/// the user where their backup is.
 pub const RESET_MARKER: &str = "reset-incomplete.json";
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -150,13 +155,7 @@ pub const RESET_MARKER: &str = "reset-incomplete.json";
 pub struct ResetIncomplete {
     /// The recovery zip written before anything was deleted.
     pub recovery_path: String,
-    /// Why deleting local data failed; `None` when it succeeded (the marker is only there for
-    /// `skipped`).
-    #[serde(default)]
-    pub error: Option<String>,
-    /// Books too large for the recovery zip (deleted with the rest).
-    #[serde(default)]
-    pub skipped: Vec<SkippedBook>,
+    pub error: String,
 }
 
 /// What [`run_reset`] did once it passed the point of no return.
@@ -164,8 +163,17 @@ pub struct ResetIncomplete {
 pub struct ResetOutcome {
     pub recovery: PathBuf,
     pub wipe_error: Option<String>,
-    /// Books left out of the recovery zip for being too large.
-    pub skipped: Vec<SkippedBook>,
+}
+
+/// Why a reset is refused when books could not be written to the recovery zip.
+fn refuse_reset(skipped: &[SkippedBook]) -> String {
+    let books: Vec<String> = skipped.iter().map(|b| format!("\u{201c}{}\u{201d}", b.title)).collect();
+    format!(
+        "Nothing was reset: {} could not be included in the recovery backup ({}). \
+         Export or delete these books first, then reset again.",
+        books.join(", "),
+        skipped.first().map_or("", |b| b.reason.as_str()),
+    )
 }
 
 /// The reset itself, with the deleter injectable. Errors (nothing deleted, app keeps running on
@@ -179,7 +187,7 @@ pub fn run_reset(
     settings: &Mutex<Settings>,
     wipe: &dyn Fn(&Path) -> io::Result<()>,
 ) -> Result<ResetOutcome, String> {
-    run_reset_with(data_dir, storage, settings, wipe, &|| {}, &|_| {})
+    run_reset_with(data_dir, storage, settings, wipe, &|| {}, &|_| {}, MAX_ARCHIVE_BYTES as u64)
 }
 
 /// [`run_reset`] with a hook that runs before the wipe, once the recovery zip is written and the
@@ -192,11 +200,11 @@ pub fn run_reset_sharing(
     wipe: &dyn Fn(&Path) -> io::Result<()>,
     before_wipe: &dyn Fn(&Path),
 ) -> Result<ResetOutcome, String> {
-    run_reset_with(data_dir, storage, settings, wipe, &|| {}, before_wipe)
+    run_reset_with(data_dir, storage, settings, wipe, &|| {}, before_wipe, MAX_ARCHIVE_BYTES as u64)
 }
 
 /// [`run_reset`] with a hook that runs while the zip is being built (tests use it to probe the
-/// storage lock) and one that gets the recovery path just before the wipe.
+/// storage lock), one that gets the recovery path just before the wipe, and the per-book cap.
 fn run_reset_with(
     data_dir: &Path,
     storage: &Mutex<Storage>,
@@ -204,20 +212,23 @@ fn run_reset_with(
     wipe: &dyn Fn(&Path) -> io::Result<()>,
     during_zip: &dyn Fn(),
     before_wipe: &dyn Fn(&Path),
+    max_book_bytes: u64,
 ) -> Result<ResetOutcome, String> {
     // The storage lock is held from the snapshot through the swap, so no write can land after the
-    // snapshot and then be deleted without being in the recovery zip.
-    // A book too large for an archive does not block the reset: it is left out of the zip and
-    // reported (on the next launch, through the marker).
+    // snapshot and then be deleted without being in the recovery zip. A book that cannot go into
+    // the zip (too large) refuses the whole reset: nothing is deleted and the zip is removed.
     let mut guard = storage.lock().map_err(|e| e.to_string())?;
     let stamp = mate_core::model::now_iso().replace([':', '.'], "-");
     let recovery = data_dir.join(format!("mate-recovery-{stamp}.zip"));
     let assets_dir = data_dir.join("assets");
     let report = write_atomically_with(&recovery, |f| {
         during_zip();
-        write_backup_file(&guard, &assets_dir, f)
+        write_backup_file(&guard, &assets_dir, f, max_book_bytes)
     })?;
-    let skipped = report.skipped;
+    if !report.skipped.is_empty() {
+        let _ = fs::remove_file(&recovery);
+        return Err(refuse_reset(&report.skipped));
+    }
     // Drop the file connection so the database can be deleted (Windows keeps it locked).
     *guard = Storage::open_in_memory().map_err(|e| e.to_string())?;
     drop(guard);
@@ -233,21 +244,16 @@ fn run_reset_with(
     if let Ok(mut s) = settings.lock() {
         *s = Settings::default();
     }
-    if wipe_error.is_some() || !skipped.is_empty() {
+    if let Some(error) = &wipe_error {
         let marker = ResetIncomplete {
             recovery_path: recovery.to_string_lossy().into_owned(),
-            error: wipe_error.clone(),
-            skipped: skipped.clone(),
+            error: error.clone(),
         };
         if let Ok(json) = serde_json::to_vec_pretty(&marker) {
             let _ = write_atomically(&data_dir.join(RESET_MARKER), &json);
         }
     }
-    Ok(ResetOutcome {
-        recovery,
-        wipe_error,
-        skipped,
-    })
+    Ok(ResetOutcome { recovery, wipe_error })
 }
 
 /// Deletes all local data (books, pages, assets, settings) and restarts the app into the
@@ -393,16 +399,35 @@ mod tests {
         let marker: ResetIncomplete =
             serde_json::from_slice(&fs::read(dir.join(RESET_MARKER)).unwrap()).unwrap();
         assert_eq!(marker.recovery_path, out.recovery.to_string_lossy());
-        assert_eq!(marker.error.as_deref(), Some("asset is locked"));
-        assert!(marker.skipped.is_empty());
+        assert_eq!(marker.error, "asset is locked");
     }
 
     #[test]
-    fn an_old_marker_without_skipped_books_still_reads() {
-        let marker: ResetIncomplete =
-            serde_json::from_str(r#"{"recoveryPath":"r.zip","error":"locked"}"#).unwrap();
-        assert_eq!(marker.error.as_deref(), Some("locked"));
-        assert!(marker.skipped.is_empty());
+    fn a_book_too_large_for_the_recovery_zip_refuses_the_reset() {
+        let dir = tmp("toolarge");
+        let (st, se) = fixture(&dir);
+        let wiped = Mutex::new(false);
+        let wipe = |_: &Path| -> io::Result<()> {
+            *wiped.lock().unwrap() = true;
+            Ok(())
+        };
+        // Any archive is larger than 1 byte: the one book cannot be backed up.
+        let err = run_reset_with(&dir, &st, &se, &wipe, &|| {}, &|_| {}, 1).unwrap_err();
+        assert!(err.contains("\u{201c}Maths\u{201d}"), "{err}");
+        assert!(err.contains("larger than 512 MiB"), "{err}");
+        assert!(err.contains("Export or delete these books first, then reset again."), "{err}");
+        assert!(!*wiped.lock().unwrap(), "nothing wiped");
+        assert!(dir.join("mate.db").exists());
+        assert_eq!(se.lock().unwrap().theme, "dark");
+        assert_eq!(st.lock().unwrap().list_tree().unwrap().units.len(), 1, "database untouched");
+        let leftovers: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with("mate-recovery-"))
+            .collect();
+        assert!(leftovers.is_empty(), "no recovery zip left: {leftovers:?}");
+        assert!(!dir.join(RESET_MARKER).exists());
     }
 
     #[test]
@@ -410,7 +435,6 @@ mod tests {
         let dir = tmp("zip");
         let (st, se) = fixture(&dir);
         let out = run_reset(&dir, &st, &se, &wipe_local_data).unwrap();
-        assert!(out.skipped.is_empty());
         let zip = zip::ZipArchive::new(fs::File::open(&out.recovery).unwrap()).unwrap();
         let names: Vec<&str> = zip.file_names().collect();
         assert!(names.contains(&"backup.json"), "{names:?}");
@@ -444,7 +468,8 @@ mod tests {
                 "storage must stay locked while the zip is built"
             );
         };
-        run_reset_with(&dir, &st, &se, &wipe_local_data, &probe, &|_| {}).unwrap();
+        run_reset_with(&dir, &st, &se, &wipe_local_data, &probe, &|_| {}, MAX_ARCHIVE_BYTES as u64)
+            .unwrap();
     }
 
     #[test]
