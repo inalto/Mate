@@ -1155,7 +1155,22 @@
   "code": {
     "label": "Codice",
     "language": "Linguaggio",
-    "plain": "Testo semplice"
+    "plain": "Testo semplice",
+    "run": "Esegui",
+    "runHint": "Esegui (Ctrl+Invio)",
+    "stop": "Interrompi",
+    "clearOutput": "Cancella output",
+    "resetRuntime": "Reimposta runtime",
+    "noRuntime": "Il codice {{language}} non può essere eseguito qui",
+    "status": "Stato del runtime",
+    "idle": "Inattivo",
+    "running": "In esecuzione…",
+    "loadingPython": "Caricamento di Python…",
+    "output": "Output",
+    "timedOut": "Tempo scaduto dopo {{seconds}} s",
+    "stopped": "Interrotto",
+    "moreLines_one": "… (ancora {{count}} riga)",
+    "moreLines_other": "… (altre {{count}} righe)"
   },
   "paperPicker": {
     "title": "Carta",

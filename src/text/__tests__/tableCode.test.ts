@@ -8,7 +8,10 @@ import {
   codespaceElement,
   deleteColumn,
   deleteRow,
+  MAX_OUTPUT_LINES,
   MAX_TABLE_CELLS,
+  outputLines,
+  RUNNABLE_LANGUAGES,
   tableElement,
   tableRowsOf,
 } from "../tableCode";
@@ -120,6 +123,51 @@ describe("tableCode", () => {
     };
     const fx = boxAppearance(tb, "light")!.foreignObject(R(400, 200));
     expect(fx).not.toContain("url(");
+  });
+
+  it("runnable_languages", () => expect([...RUNNABLE_LANGUAGES]).toEqual(["javascript", "typescript", "python"]));
+
+  it("code_output_is_read_and_repaired", () => {
+    const output = { stdout: "2\n", stderr: "", status: "ok", durationMs: 4, ranAt: NOW };
+    expect(codeOf({ content: { code: "1+1", language: "python", output } })).toEqual({ code: "1+1", language: "python", output });
+    expect(codeOf({ content: { code: "x", language: "python" } }).output).toBeUndefined();
+    expect(codeOf({ content: { code: "x", language: "python", output: "junk" } }).output).toBeUndefined();
+    const fixed = codeOf({ content: { code: "x", language: "python", output: { stdout: 3, stderr: "a\x00b", status: "weird", durationMs: "x" } } }).output;
+    expect(fixed).toEqual({ stdout: "", stderr: "ab", status: "error", durationMs: 0, ranAt: "" });
+  });
+
+  it("output_lines_keep_the_last_200_with_a_header", () => {
+    const stdout = Array.from({ length: 250 }, (_, i) => `l${i}`).join("\n") + "\n";
+    const { dropped, lines } = outputLines({ stdout, stderr: "oops\n" });
+    expect(MAX_OUTPUT_LINES).toBe(200);
+    expect(lines).toHaveLength(200);
+    expect(dropped).toBe(51);
+    expect(lines.at(-1)).toEqual({ text: "oops", err: true });
+    expect(lines.at(-2)).toEqual({ text: "l249", err: false });
+    expect(outputLines({ stdout: "a\n", stderr: "" })).toEqual({ dropped: 0, lines: [{ text: "a", err: false }] });
+  });
+
+  it("output_pane_renders_under_the_code", () => {
+    const c = codespaceElement("pg", "c", NOW, { x: 0, y: 0 }, "#000000");
+    const base = { subtype: "codespace", code: "print(1)", language: "python" };
+    c.content = base;
+    const plain = boxAppearance(c, "light")!;
+    expect(plain.foreignObject(R(480, 200))).not.toContain("code-output");
+    c.content = {
+      ...base,
+      output: { stdout: "<b>1</b>\n", stderr: "Traceback & co\x01\n", status: "error", durationMs: 3, ranAt: NOW },
+    };
+    const withOut = boxAppearance(c, "light")!;
+    expect(withOut.key).not.toBe(plain.key);
+    const fo = withOut.foreignObject(R(480, 200));
+    expect(fo).toContain('<pre class="code-output"');
+    expect(fo).toContain("&lt;b&gt;1&lt;/b&gt;");
+    expect(fo).not.toContain("<b>");
+    expect(fo).toMatch(/<span class="err"[^>]*>Traceback &amp; co<\/span>/);
+    expect(fo).not.toContain("\x01");
+    const many = { stdout: Array.from({ length: 205 }, (_, i) => `${i}`).join("\n"), stderr: "", status: "ok", durationMs: 1, ranAt: NOW };
+    c.content = { ...base, output: many };
+    expect(boxAppearance(c, "light")!.foreignObject(R(480, 200))).toContain("… (5 more lines)");
   });
 
   it("limit_constant", () => expect(MAX_TABLE_CELLS).toBe(50000));

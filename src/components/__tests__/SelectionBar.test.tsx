@@ -12,6 +12,8 @@ import { shapeFromDrag } from "../../shapes/geometry";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import SelectionBar from "../SelectionBar";
+import { disposeAll, setWorkerFactory, type WorkerLike } from "../../code/runtime";
+import { codeOf } from "../../text/tableCode";
 
 describe("SelectionBar", () => {
   afterEach(cleanup);
@@ -134,5 +136,35 @@ describe("SelectionBar align and math", () => {
     s().select([a, b]);
     render(<SelectionBar />);
     expect(screen.queryByRole("button", { name: /Compute/ })).toBeNull();
+  });
+
+  it("runs_a_selected_runnable_code_block", async () => {
+    const s = await setup();
+    const posted: { type: string; id?: number; code?: string }[] = [];
+    let worker: WorkerLike | null = null;
+    setWorkerFactory(() => {
+      worker = { onmessage: null, onerror: null, postMessage: (m: never) => void posted.push(m), terminate: () => {} };
+      return worker;
+    });
+    try {
+      const id = s().addCodespace()!;
+      s().endEdit();
+      const el = s().elements.get(id)!;
+      s().updateElements([{ ...el, content: { subtype: "codespace", code: "6 * 7", language: "javascript" } }]);
+      s().select([id]);
+      const { unmount } = render(<SelectionBar />);
+      fireEvent.click(screen.getByRole("button", { name: "Run" }));
+      expect(posted[0]).toMatchObject({ type: "run", code: "6 * 7" });
+      await act(async () => worker!.onmessage!({ data: { type: "result", id: posted[0].id, stdout: "42\n", stderr: "", status: "ok" } } as MessageEvent));
+      expect(codeOf(s().elements.get(id)!).output).toMatchObject({ stdout: "42\n", status: "ok" });
+      unmount();
+      // Plain text blocks have nothing to run.
+      s().updateElements([{ ...s().elements.get(id)!, content: { subtype: "codespace", code: "x", language: "plain" } }]);
+      render(<SelectionBar />);
+      expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
+    } finally {
+      disposeAll();
+      setWorkerFactory(null);
+    }
   });
 });

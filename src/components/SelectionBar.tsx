@@ -1,9 +1,9 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
 // (when shapes are selected), width; a single text box gets box-wide text formatting instead of
-// colour and width; a single math box also gets Graph and Compute. Hidden while a text box is
+// colour and width; a single math box also gets Graph and Compute; a single runnable code block gets Run. Hidden while a text box is
 // being edited (its editor has its own bar).
-import { AlignLeft, ChartLine, Copy, CopySimple, Function as FunctionIcon, Stack, Trash } from "@phosphor-icons/react";
-import { useRef, useState } from "react";
+import { AlignLeft, ChartLine, Copy, CopySimple, Function as FunctionIcon, Play, Stack, Trash } from "@phosphor-icons/react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
@@ -11,6 +11,10 @@ import { selectionBounds } from "../tools/lasso";
 import { hasFill } from "../shapes/geometry";
 import { isMathBox, latexOf } from "../math/mathBox";
 import { textAttrsOf } from "../text/textBox";
+import { codeOf, isRunnable, type RunnableLanguage } from "../text/tableCode";
+import { getRuntime } from "../code/runtime";
+import { runCodeElement } from "../code/runElement";
+import type { EditorStore } from "../stores/editor";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import { useWolframItem } from "../math/useWolframItem";
 import ComputeMenu, { type ComputeMenuProps } from "./ComputeMenu";
@@ -34,6 +38,20 @@ const TOP_RESERVED = 64;
 /** The Compute menu with its remote-engine entries (read only when a math box is selected). */
 function MathCompute(props: Omit<ComputeMenuProps, "extraItems">) {
   return <ComputeMenu {...props} extraItems={useWolframItem()} />;
+}
+
+/** Run a selected code block without entering edit mode (disabled while its runtime is busy). */
+function RunCodeButton({ store, id, language, pageId }: { store: EditorStore; id: string; language: RunnableLanguage; pageId: string }) {
+  const { t } = useTranslation();
+  const rt = getRuntime(language, pageId);
+  const subscribe = useCallback((fn: () => void) => rt.subscribe(fn), [rt]);
+  const state = useSyncExternalStore(subscribe, () => rt.state);
+  const title = state === "loading" ? t("code.loadingPython") : state === "running" ? t("code.running") : t("code.run");
+  return (
+    <button type="button" className="tb-btn" aria-label={t("code.run")} title={title} disabled={state !== "idle"} onClick={() => void runCodeElement(store, id)}>
+      <Play size={16} /> {t("code.run")}
+    </button>
+  );
 }
 
 function ArrangeMenu() {
@@ -169,6 +187,7 @@ export default function SelectionBar() {
   const camera = ed((s) => s.camera);
   const viewport = ed((s) => s.viewport);
   const editingText = ed((s) => s.editingId !== null && s.elements.get(s.editingId)?.type === "text-box");
+  const editingId = ed((s) => s.editingId);
   const b = selection.size > 0 && !editingText ? selectionBounds(elements, selection) : null;
   if (!b) return null;
   const s = ed.getState;
@@ -188,6 +207,9 @@ export default function SelectionBar() {
   const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
   const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
   const textBox = selected.length === 1 && selected[0]?.type === "text-box" ? selected[0] : undefined;
+  // The code editor has its own Run: offered here only for a block that is not being edited.
+  const codeBlock = selected.length === 1 && selected[0]?.type === "codespace" && selected[0].id !== editingId ? selected[0] : undefined;
+  const codeLanguage = codeBlock ? codeOf(codeBlock).language : undefined;
 
   return (
     <div className="selection-bar" role="toolbar" aria-label={t("selection.label")} style={{ left, top }}>
@@ -212,6 +234,7 @@ export default function SelectionBar() {
         </button>
       )}
       {math && math.length === 1 && <MathCompute store={ed} source={math[0]} />}
+      {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} />}
       <span className="tb-sep" />
       {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
