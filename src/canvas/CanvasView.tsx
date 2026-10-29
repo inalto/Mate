@@ -433,11 +433,15 @@ function createEngine(
         const last = swipe.samples[swipe.samples.length - 1];
         swipe.samples.push({ x: last.x + dx, y: last.y + dy, t: info.timeStamp });
       },
-      onPanEnd() {
+      onPanEnd(end) {
         const g = swipe;
         swipe = null;
         const s = st();
-        if (!g?.oneFinger || !s.page) return;
+        // A cancelled contact or one that rested while the pen wrote is never a page turn.
+        if (!g?.oneFinger || end.cancelled || end.drewMeanwhile || !s.page) return;
+        // The lift time closes the gesture: a flick followed by a hold fails the time window.
+        const last = g.samples[g.samples.length - 1];
+        g.samples.push({ x: last.x, y: last.y, t: end.timeStamp });
         // A leftward swipe (-1) turns to the next page, a rightward one to the previous page.
         const dir = detectSwipe(g.samples);
         if (dir !== null && canSwipeAt(g.camera, s.page, s.viewport, dir, sheetStack(s))) void turnPage(dir === -1 ? 1 : -1);

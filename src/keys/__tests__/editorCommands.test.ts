@@ -174,6 +174,47 @@ describe("turnPage", () => {
     expect(createPage).not.toHaveBeenCalled();
   });
 
+  it("a_second_turn_while_creating_does_nothing", async () => {
+    let resolve!: (p: Page) => void;
+    const createPage = vi.fn(() => new Promise<Page>((r) => (resolve = r)));
+    useNotebookStore.setState({ createPage } as never);
+    const first = turnPage(1);
+    await turnPage(1); // swipe again while the first create is in flight
+    await turnPage(-1);
+    expect(createPage).toHaveBeenCalledTimes(1);
+    expect(focused()).toBe("b");
+    resolve(page("new", 2));
+    await first;
+    expect(focused()).toBe("new");
+    // The guard is released afterwards ("new" is not in the mocked tree: go back to "b" first).
+    useTabsStore.getState().openPage("b");
+    await turnPage(-1);
+    expect(focused()).toBe("a1");
+  });
+
+  it("created_page_not_opened_when_focus_moved", async () => {
+    let resolve!: (p: Page) => void;
+    const createPage = vi.fn(() => new Promise<Page>((r) => (resolve = r)));
+    useNotebookStore.setState({ createPage } as never);
+    const pending = turnPage(1);
+    useTabsStore.getState().openPage("x"); // the user went elsewhere meanwhile
+    resolve(page("new", 2));
+    await pending;
+    expect(focused()).toBe("x");
+  });
+
+  it("failed_create_is_ignored", async () => {
+    const createPage = vi.fn(async () => {
+      throw new Error("disk full");
+    });
+    useNotebookStore.setState({ createPage } as never);
+    await expect(turnPage(1)).resolves.toBeUndefined();
+    expect(focused()).toBe("b");
+    // Not stuck: the next turn still runs.
+    await turnPage(-1);
+    expect(focused()).toBe("a1");
+  });
+
   it("at_the_start_backwards_does_nothing", async () => {
     const createPage = vi.fn();
     useNotebookStore.setState({ createPage } as never);

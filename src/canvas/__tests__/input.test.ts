@@ -284,10 +284,58 @@ describe("fingerMayDraw", () => {
     at("pointerup", { ...finger, buttons: 0, clientX: 150, clientY: 52 }, 60);
     at("pointerup", { ...finger, pointerId: 8, buttons: 0, clientX: 300, clientY: 50 }, 60);
     expect(h.onPanEnd).toHaveBeenCalledTimes(1);
+    expect(h.onPanEnd).toHaveBeenCalledWith({ cancelled: false, timeStamp: 60, drewMeanwhile: false });
     // Pen input never reports a pan.
     at("pointerdown", { pointerId: 9, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 0, clientY: 0 }, 70);
     at("pointermove", { pointerId: 9, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 90, clientY: 0 }, 80);
     expect(h.onPanStart).toHaveBeenCalledTimes(1);
     expect(h.onDown).toHaveBeenCalledTimes(1);
+  });
+
+  const gesture = () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const h = { onDown: vi.fn(), onMove: vi.fn(), onUp: vi.fn(), onCancel: vi.fn(), onPanStart: vi.fn(), onPan: vi.fn(), onPanEnd: vi.fn() };
+    createPointerAdapter(el, h, { palmRejection: "high", fingerAction: "pan", getCamera: camera });
+    const at = (type: string, init: PointerEventInit, t: number) => {
+      const ev = new PointerEvent(type, { bubbles: true, cancelable: true, ...init });
+      Object.defineProperty(ev, "timeStamp", { value: t });
+      el.dispatchEvent(ev);
+    };
+    return { h, at };
+  };
+  const touch = { pointerId: 7, pointerType: "touch", width: 8, height: 8, buttons: 1 };
+  const pen = { pointerId: 9, pointerType: "pen", buttons: 1, pressure: 0.5 };
+
+  it("pan_while_the_pen_writes_is_not_swipe_eligible", () => {
+    const { h, at } = gesture();
+    at("pointerdown", { ...touch, clientX: 400, clientY: 50 }, 10);
+    at("pointerdown", { ...pen, clientX: 100, clientY: 100 }, 20); // the hand rests, the pen writes
+    at("pointermove", { ...touch, clientX: 200, clientY: 52 }, 60); // the palm flings
+    at("pointerup", { ...pen, buttons: 0, clientX: 120, clientY: 100 }, 70);
+    at("pointerup", { ...touch, buttons: 0, clientX: 200, clientY: 52 }, 80);
+    expect(h.onPanEnd).toHaveBeenCalledWith({ cancelled: false, timeStamp: 80, drewMeanwhile: true });
+    // The next gesture starts clean.
+    at("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, clientX: 0, clientY: 0 }, 5000);
+    at("pointerup", { pointerId: 1, pointerType: "mouse", button: 0, buttons: 0, clientX: 0, clientY: 0 }, 5010);
+    at("pointerdown", { ...touch, clientX: 400, clientY: 50 }, 5020);
+    at("pointerup", { ...touch, buttons: 0, clientX: 200, clientY: 50 }, 5100);
+    expect(h.onPanEnd).toHaveBeenLastCalledWith({ cancelled: false, timeStamp: 5100, drewMeanwhile: false });
+  });
+
+  it("pen_still_down_when_the_pan_ends_is_not_swipe_eligible", () => {
+    const { h, at } = gesture();
+    at("pointerdown", { ...touch, clientX: 400, clientY: 50 }, 10);
+    at("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, clientX: 0, clientY: 0 }, 20);
+    at("pointerup", { ...touch, buttons: 0, clientX: 200, clientY: 50 }, 80);
+    expect(h.onPanEnd).toHaveBeenCalledWith(expect.objectContaining({ drewMeanwhile: true }));
+  });
+
+  it("cancelled_pan_reports_cancelled", () => {
+    const { h, at } = gesture();
+    at("pointerdown", { ...touch, clientX: 400, clientY: 50 }, 10);
+    at("pointermove", { ...touch, clientX: 200, clientY: 50 }, 60);
+    at("pointercancel", { ...touch, buttons: 0, clientX: 200, clientY: 50 }, 90);
+    expect(h.onPanEnd).toHaveBeenCalledWith({ cancelled: true, timeStamp: 90, drewMeanwhile: false });
   });
 });

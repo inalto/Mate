@@ -46,8 +46,28 @@ describe("lasso", () => {
     expect(lassoDirection(cw)).toBe("cw");
     expect(lassoDirection(ccw)).toBe("ccw");
     expect(lassoDirection(cw.slice(0, 2))).toBeNull();
-    expect(lassoDirection([{ x: 0, y: 0 }, { x: 50, y: 1 }, { x: 100, y: 0 }])).toBeNull();
+    expect(lassoDirection([{ x: 0, y: 0 }, { x: 50, y: 0.2 }, { x: 100, y: 0 }])).toBeNull();
     expect(lassoDirection([{ x: 5, y: 5 }, { x: 5, y: 5 }, { x: 5, y: 5 }])).toBeNull();
+  });
+
+  const ellipse = (rx: number, ry: number, sign: 1 | -1) =>
+    Array.from({ length: 64 }, (_, i) => {
+      const a = (sign * i * 2 * Math.PI) / 64;
+      return { x: 600 + rx * Math.cos(a), y: 15 + ry * Math.sin(a) };
+    });
+
+  it("thin_loop_around_a_line_of_text_has_a_direction", () => {
+    // A 1200×30 loop around one line of handwriting: area/P² ≈ 0.005, still a deliberate loop.
+    expect(lassoDirection(ellipse(600, 15, -1))).toBe("ccw");
+    expect(lassoMode(ellipse(600, 15, -1))).toBe("touch");
+    expect(lassoDirection(ellipse(600, 15, 1))).toBe("cw");
+  });
+
+  it("zero_area_scribbles_have_no_direction", () => {
+    const backAndForth = [0, 100, 200, 100, 0, 100, 200].map((x, i) => ({ x, y: i % 2 }));
+    expect(lassoDirection(backAndForth)).toBeNull();
+    const line = [{ x: 0, y: 0 }, { x: 600, y: 0 }, { x: 1200, y: 0 }, { x: 600, y: 0 }];
+    expect(lassoDirection(line)).toBeNull();
   });
 
   it("mode_mapping", () => {
@@ -80,10 +100,28 @@ describe("lasso", () => {
   });
 
   it("touch_selects_crossed_shape_outline", () => {
-    const ring = el("ring", [[-50, -50], [150, 150]], { type: "shape", shapeType: "rectangle" });
+    // An unfilled shape around the lasso is a ring: drawing inside it touches nothing.
+    const ring = el("ring", [[-50, -50], [150, 150]], { type: "shape", shapeType: "rectangle", fillColor: "none" });
     expect(lassoSelect(mapOf([ring]), indexOf([ring]), ccw, "touch")).toEqual([]);
+    const clear = el("clear", [[-50, -50], [150, 150]], {
+      type: "shape",
+      shapeType: "rectangle",
+      fillColor: "#ff0000",
+      content: { fillOpacity: 0 },
+    });
+    expect(lassoSelect(mapOf([clear]), indexOf([clear]), ccw, "touch")).toEqual([]);
     const edge = el("edge", [[50, 50], [200, 200]], { type: "shape", shapeType: "ellipse" });
     expect(lassoSelect(mapOf([edge]), indexOf([edge]), ccw, "touch")).toEqual(["edge"]);
+  });
+
+  it("touch_selects_filled_shape_drawn_inside", () => {
+    const filled = el("filled", [[-50, -50], [150, 150]], { type: "shape", shapeType: "rectangle", fillColor: "#ff0000" });
+    expect(lassoSelect(mapOf([filled, far]), indexOf([filled, far]), ccw, "touch")).toEqual(["filled"]);
+    const disc = el("disc", [[-100, -100], [200, 200]], { type: "shape", shapeType: "ellipse", fillColor: "#00ff00" });
+    expect(lassoSelect(mapOf([disc]), indexOf([disc]), ccw, "touch")).toEqual(["disc"]);
+    // Not when the lasso sits outside the filled shape (inside its bbox corner).
+    const corner = [{ x: -95, y: -95 }, { x: -95, y: -85 }, { x: -85, y: -85 }, { x: -85, y: -95 }];
+    expect(lassoSelect(mapOf([disc]), indexOf([disc]), corner, "touch")).toEqual([]);
   });
 
   it("inside_ignores_touched_elements", () => {

@@ -42,6 +42,15 @@ export interface PanInfo {
   timeStamp: number;
 }
 
+export interface PanEndInfo {
+  /** A gesture touch ended in pointercancel (the system took the contact): never a swipe. */
+  cancelled: boolean;
+  /** Event timeStamp (ms) of the last lift. */
+  timeStamp: number;
+  /** A pen/mouse pointer was drawing at some point during the gesture (a resting palm). */
+  drewMeanwhile: boolean;
+}
+
 export interface PointerHandlers {
   onDown(p: Point, info: PointerInfo): void;
   /** Coalesced points since the last move (world units) and predicted points (live draw only). */
@@ -52,7 +61,8 @@ export interface PointerHandlers {
   onPanStart?(at: Vec2, timeStamp: number): void;
   /** One-finger pan for touches that may not draw (screen px deltas). */
   onPan?(dx: number, dy: number, info: PanInfo): void;
-  onPanEnd?(): void;
+  /** Last gesture touch lifted or cancelled. */
+  onPanEnd?(info: PanEndInfo): void;
   onPinch?(g: PinchGesture): void;
 }
 
@@ -134,6 +144,9 @@ export function createPointerAdapter(
   const expectedRelease = new Set<number>();
   const touches = new Map<number, Vec2>();
   let pinching = false;
+  /** Current gesture: a touch was cancelled / a pen or mouse stroke was open at some point. */
+  let panCancelled = false;
+  let drewMeanwhile = false;
 
   const local = (e: PointerEvent): Vec2 => {
     const r = el.getBoundingClientRect();
@@ -185,7 +198,11 @@ export function createPointerAdapter(
   };
 
   const addGestureTouch = (e: PointerEvent) => {
-    if (touches.size === 0) handlers.onPanStart?.(local(e), e.timeStamp);
+    if (touches.size === 0) {
+      panCancelled = false;
+      drewMeanwhile = drawId !== null && drawType !== "touch";
+      handlers.onPanStart?.(local(e), e.timeStamp);
+    }
     touches.set(e.pointerId, local(e));
     capture(e.pointerId);
     if (touches.size === 2 && pinchEnabled()) {
@@ -238,6 +255,8 @@ export function createPointerAdapter(
     // A new pen/mouse down while a stroke is open means its up/cancel was lost (or it was a
     // finger stroke, which the pen overrides): cancel the stale stroke and start fresh.
     if (drawId !== null) cancelDraw();
+    // A pen writing while a touch pans: that touch is a resting hand, so the pan is no swipe.
+    if (touches.size > 0) drewMeanwhile = true;
     drawId = e.pointerId;
     drawType = t;
     capture(e.pointerId);
@@ -294,7 +313,11 @@ export function createPointerAdapter(
       pinching = false;
     }
     touches.delete(e.pointerId);
-    if (touches.size === 0) handlers.onPanEnd?.();
+    if (cancelled) panCancelled = true;
+    if (touches.size === 0) {
+      if (drawId !== null && drawType !== "touch") drewMeanwhile = true;
+      handlers.onPanEnd?.({ cancelled: panCancelled, timeStamp: e.timeStamp, drewMeanwhile });
+    }
   }
   const onUp = (e: PointerEvent) => end(e, false);
   const onCancelEv = (e: PointerEvent) => end(e, true);

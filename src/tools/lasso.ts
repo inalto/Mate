@@ -4,7 +4,7 @@
 import { isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
-import { isClosedShape, normalizeShape, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
+import { fillOpacityOf, hasFill, isClosedShape, normalizeShape, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
 import { boxRect, contentMeta, elementBounds, isBoxed, withMeta, type Rect, type SpatialIndex } from "./spatialIndex";
 
 /** Even-odd ray-casting point-in-polygon test. */
@@ -37,7 +37,8 @@ export type LassoMode = "inside" | "touch";
 /**
  * Winding of a lasso loop as seen on screen (y-down): "cw" or "ccw", from the shoelace signed area
  * (positive = clockwise in y-down coordinates). Null for fewer than 3 points or a loop whose area is
- * negligible against its perimeter (a scribble, a line, a figure-eight).
+ * negligible against its perimeter (|area| < 0.0005·P²: a scribble, a back-and-forth line, a
+ * balanced figure-eight). A long thin loop around one line of text (1200×30) still counts.
  */
 export function lassoDirection(polygon: readonly Vec2[]): "cw" | "ccw" | null {
   const n = polygon.length;
@@ -51,7 +52,7 @@ export function lassoDirection(polygon: readonly Vec2[]): "cw" | "ccw" | null {
     perimeter += Math.hypot(b.x - a.x, b.y - a.y);
   }
   const area = twice / 2;
-  if (perimeter === 0 || Math.abs(area) < 0.005 * perimeter * perimeter) return null;
+  if (perimeter === 0 || Math.abs(area) < 0.0005 * perimeter * perimeter) return null;
   return area > 0 ? "cw" : "ccw";
 }
 
@@ -112,8 +113,22 @@ function touchPolylines(el: Element): readonly (readonly Vec2[])[] {
   return [el.points];
 }
 
-/** Any point inside, any segment crossing the (closed) lasso, or the lasso inside a boxed element's rect. */
-function touches(el: Element, polygon: readonly Vec2[]): boolean {
+/** A closed shape painted with a visible fill (as the renderer would fill it). */
+const isFilledShape = (el: Element): boolean =>
+  el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle") && hasFill(el.fillColor) && fillOpacityOf(el) > 0;
+
+/** Bounds of a polyline segment miss `r` (cheap rejection before the exact crossing test). */
+const segmentMisses = (a: Vec2, b: Vec2, r: Rect): boolean =>
+  Math.max(a.x, b.x) < r.x ||
+  Math.min(a.x, b.x) > r.x + r.width ||
+  Math.max(a.y, b.y) < r.y ||
+  Math.min(a.y, b.y) > r.y + r.height;
+
+/**
+ * Any point inside, any segment crossing the (closed) lasso, or the lasso drawn inside a boxed
+ * element's rect or a filled shape. `bounds` is the lasso's bbox (segments missing it are skipped).
+ */
+function touches(el: Element, polygon: readonly Vec2[], bounds: Rect): boolean {
   const lines = touchPolylines(el);
   for (const line of lines) for (const p of line) if (pointInPolygon(p, polygon)) return true;
   const n = polygon.length;
@@ -121,18 +136,20 @@ function touches(el: Element, polygon: readonly Vec2[]): boolean {
     for (let i = 0; i + 1 < line.length; i++) {
       const a = line[i];
       const b = line[i + 1];
+      if (segmentMisses(a, b, bounds)) continue;
       for (let j = 0; j < n; j++) if (segmentsIntersect(a, b, polygon[j], polygon[(j + 1) % n])) return true;
     }
   }
-  // No crossing and no corner inside: the lasso is either wholly outside or wholly inside the box.
-  return isBoxed(el) && pointInPolygon(polygon[0], lines[0]);
+  // No crossing and no vertex inside: the lasso is either wholly outside or wholly inside the
+  // element's outline, which counts for a box or a filled shape (not for an empty ring).
+  return (isBoxed(el) || isFilledShape(el)) && lines.length > 0 && pointInPolygon(polygon[0], lines[0]);
 }
 
 /**
  * Ids of the elements the lasso picks. "inside" (clockwise loop): bbox centre inside `polygon` or
  * ≥ 50 % of the points inside. "touch" (anticlockwise loop): any point inside, any segment of the
  * element's polyline (strokes: points; shapes: outline; boxed elements: box edges) crossing the
- * lasso, or the lasso drawn entirely within a boxed element. PDF placements are never selected.
+ * lasso, or the lasso drawn entirely within a boxed element or a filled shape. PDF placements are never selected.
  */
 export function lassoSelect(
   elements: ReadonlyMap<string, Element>,
@@ -148,7 +165,7 @@ export function lassoSelect(
     const el = elements.get(id);
     if (!el || el.points.length === 0 || isPdfPlacement(el)) continue;
     if (mode === "touch") {
-      if (touches(el, polygon)) out.push(id);
+      if (touches(el, polygon, bounds)) out.push(id);
       continue;
     }
     const b = elementBounds(el);

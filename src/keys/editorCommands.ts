@@ -70,9 +70,14 @@ export function stepPage(dir: -1 | 1): void {
 /**
  * Page turn from a swipe: 1 opens the next page of the section, or, on its last page, creates a new
  * page at the end of the section (named like the sidebar's "new page") and opens it in the focused
- * pane; -1 opens the previous page and does nothing on the first.
+ * pane; -1 opens the previous page and does nothing on the first. While a page is being created
+ * further turns do nothing; the created page opens only if the focus is still on the page the swipe
+ * started from, and a failed create is ignored.
  */
+let turning = false;
+
 export async function turnPage(dir: -1 | 1): Promise<void> {
+  if (turning) return;
   const id = focusedPageId(useTabsStore.getState());
   const nb = useNotebookStore.getState();
   const cur = nb.tree.pages.find((p) => p.id === id);
@@ -85,8 +90,15 @@ export async function turnPage(dir: -1 | 1): Promise<void> {
   }
   if (dir === -1) return;
   const count = nb.tree.pages.filter((p) => p.sectionId === cur.sectionId).length;
-  const created = await nb.createPage(cur.sectionId, i18n.t("common.pageName", { n: count + 1 }));
-  useTabsStore.getState().openPage(created.id);
+  turning = true;
+  try {
+    const created = await nb.createPage(cur.sectionId, i18n.t("common.pageName", { n: count + 1 }));
+    if (focusedPageId(useTabsStore.getState()) === cur.id) useTabsStore.getState().openPage(created.id);
+  } catch {
+    /* create failed (store reports it); the swipe just does nothing */
+  } finally {
+    turning = false;
+  }
 }
 
 /** Tab, sidebar and page-tree shortcuts. `tab.new` needs the router: see Editor (startNewTab). */

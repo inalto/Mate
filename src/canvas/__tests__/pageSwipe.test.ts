@@ -53,6 +53,20 @@ describe("detectSwipe", () => {
   });
 });
 
+describe("detectSwipe_lift_time", () => {
+  it("a_flick_then_a_hold_before_lifting_is_no_swipe", () => {
+    const flick = [
+      { x: 400, y: 50, t: 0 },
+      { x: 300, y: 50, t: 50 },
+      { x: 200, y: 50, t: 100 },
+    ];
+    expect(detectSwipe(flick)).toBe(-1);
+    // The pan end pushes a final sample at the lift time: held 2 s, the gesture spans > 600 ms.
+    expect(detectSwipe([...flick, { x: 200, y: 50, t: 2100 }])).toBeNull();
+    expect(detectSwipe([...flick, { x: 200, y: 50, t: 150 }])).toBe(-1);
+  });
+});
+
 describe("canSwipeAt", () => {
   const vp = { width: 800, height: 600 };
   // The sheet is 1080 world units wide (PAGE_WIDTH).
