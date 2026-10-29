@@ -97,6 +97,19 @@ describe("renderToPdf", () => {
     expect(height).toBeGreaterThan(250 * PT_PER_UNIT);
   });
 
+  it("paints line caps", async () => {
+    const ln = (content: unknown): Element => ({
+      ...stroke("ln", [{ x: 10, y: 10, pressure: 0.5, timestamp: 0 }, { x: 200, y: 120, pressure: 0.5, timestamp: 1 }]),
+      type: "shape",
+      shapeType: "line",
+      fillColor: "transparent",
+      content,
+    });
+    const plain = await renderToPdf([ln({ fillOpacity: 1 })], page(), OPTS, deps());
+    const capped = await renderToPdf([ln({ fillOpacity: 1, caps: { start: "bar", end: "dot" } })], page(), OPTS, deps());
+    expect(capped.length).toBeGreaterThan(plain.length);
+  });
+
   it("caps a tall canvas page at the PDF size limit", async () => {
     const bytes = await renderToPdf([stroke("a", line(0, 0, 100, 40_000))], page(), OPTS, deps());
     const { width, height } = (await PDFDocument.load(bytes)).getPage(0).getSize();

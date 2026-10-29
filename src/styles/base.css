@@ -2011,3 +2011,36 @@ html.mobile .sb-resize {
   background: #000;
   border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
+
+/* Line ends popover (after a stroke snaps to a line/arrow) and the selection bar's Line ends menu. */
+.line-caps {
+  position: absolute;
+  z-index: 4;
+  padding: var(--space-2);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.line-caps-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.line-caps-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.line-caps-label {
+  min-width: 3.5em;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.line-caps-menu {
+  min-width: 0;
+}

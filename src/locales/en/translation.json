@@ -366,6 +366,17 @@
     "star": "Star",
     "polygon": "Polygon"
   },
+  "lineCaps": {
+    "title": "Line ends",
+    "start": "Start",
+    "end": "End",
+    "none": "None",
+    "arrow": "Arrow",
+    "dot": "Dot",
+    "bar": "Bar",
+    "settingsToggle": "Offer line ends after snapping",
+    "settingsHint": "Show a small picker for arrow, dot or bar ends when a stroke becomes a line or arrow."
+  },
   "keys": {
     "title": "Keyboard shortcuts",
     "resetAll": "Reset all",

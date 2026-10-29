@@ -29,6 +29,7 @@ export default function PenSection() {
       <SubTitle>{t("settings.pen.inkToShapeTitle")}</SubTitle>
       <ToggleRow k="inkToShape" label={t("settings.pen.inkToShape.label")} hint={t("settings.pen.inkToShape.hint")} />
       <ToggleRow k="inkToShapeSnapsOnRelease" label={t("settings.pen.snapOnRelease")} />
+      <ToggleRow k="lineCapsPopover" label={t("lineCaps.settingsToggle")} hint={t("lineCaps.settingsHint")} />
       <SliderRow
         k="inkToShapeDwellMs"
         label={t("settings.pen.holdTime")}

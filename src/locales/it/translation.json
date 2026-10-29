@@ -366,6 +366,17 @@
     "star": "Stella",
     "polygon": "Poligono"
   },
+  "lineCaps": {
+    "title": "Estremità",
+    "start": "Inizio",
+    "end": "Fine",
+    "none": "Nessuna",
+    "arrow": "Freccia",
+    "dot": "Punto",
+    "bar": "Barra",
+    "settingsToggle": "Proponi le estremità delle linee riconosciute",
+    "settingsHint": "Mostra un piccolo selettore di estremità a freccia, punto o barra quando un tratto diventa una linea o una freccia."
+  },
   "keys": {
     "title": "Scorciatoie da tastiera",
     "resetAll": "Reimposta tutte",

@@ -366,6 +366,8 @@ export interface Settings {
   inkToShape: boolean;
   inkToShapeSnapsOnRelease: boolean;
   inkToShapeDwellMs: number;
+  /** Offer the line ends popover after a stroke snaps to a line or arrow. */
+  lineCapsPopover: boolean;
   scribbleToErase: boolean;
   scribbleEraseSensitivity: string;
   strokeStabilization: number;

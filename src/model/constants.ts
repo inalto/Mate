@@ -58,6 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inkToShape: true,
   inkToShapeSnapsOnRelease: false,
   inkToShapeDwellMs: 750,
+  lineCapsPopover: true,
   scribbleToErase: true,
   scribbleEraseSensitivity: "standard",
   strokeStabilization: 35,

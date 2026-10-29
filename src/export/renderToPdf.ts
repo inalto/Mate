@@ -34,7 +34,7 @@ import { preparePdfPages, type PdfTileSet } from "../pdf/render";
 import { PLACEHOLDER_COLOR } from "../renderers/boxDraw";
 import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
-import { fillOpacityOf, hasFill, isClosedShape, shapeElementOutline } from "../shapes/geometry";
+import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline } from "../shapes/geometry";
 import { useSettingsStore } from "../stores/settings";
 import { LINE_HEIGHT } from "../text/style";
 import { textContentOf } from "../text/textBox";
@@ -342,7 +342,7 @@ function paintStroke(p: Painter, el: Element, theme: ThemeName): void {
 }
 
 function paintShape(p: Painter, el: Element, theme: ThemeName): void {
-  const [main, head] = shapeElementOutline(el);
+  const [main, ...caps] = shapeElementOutline(el);
   if (!main || main.length === 0) return;
   const closed = isClosedShape(el.shapeType ?? "rectangle");
   const stroke = mapInkColor(el.color, theme);
@@ -358,10 +358,16 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
   p.colour(stroke, "draw");
   p.polyline(main, closed);
   p.pdf.stroke();
-  if (head) {
-    p.colour(stroke, "fill");
-    p.polyline(head, true);
-    p.pdf.fillStroke();
+  // Line caps: arrow heads and dots filled with the stroke colour, bars stroked.
+  for (const cap of caps) {
+    if (isFilledCap(cap)) {
+      p.colour(stroke, "fill");
+      p.polyline(cap, true);
+      p.pdf.fillStroke();
+    } else {
+      p.polyline(cap, false);
+      p.pdf.stroke();
+    }
   }
 }
 

@@ -4,7 +4,16 @@ import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
 import { DEFAULT_SETTINGS, LIMITS, PAGE_GAP } from "../model/constants";
-import { contentOf, isPdfPlacement, type TableContent, type TextAttributes, type TextBoxContent } from "../model/content";
+import {
+  contentOf,
+  effectiveCaps,
+  isPdfPlacement,
+  type LineCaps,
+  type ShapeContent,
+  type TableContent,
+  type TextAttributes,
+  type TextBoxContent,
+} from "../model/content";
 import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
@@ -94,6 +103,8 @@ export interface EditorState {
    * shape". Undo removes the shape and restores the original stroke; redo swaps them back.
    */
   replaceStrokeWithShape(stroke: Element, shape: Element): boolean;
+  /** Set the end caps of line/arrow shape `id` as one "Line ends" entry; false when not applicable. */
+  setLineCaps(id: string, caps: LineCaps): boolean;
   /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
   scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
@@ -445,6 +456,15 @@ export function createEditorStore(): EditorStore {
       // shape is applied now.
       const actions: Action[] = [{ type: "delete", el: onTop(stroke) }, { type: "add", el: added }];
       return record("Ink to shape", actions, undefined, [{ type: "add", el: added }]);
+    },
+
+    setLineCaps(id, caps) {
+      const cur = get().elements.get(id);
+      if (!cur || cur.type !== "shape" || (cur.shapeType !== "line" && cur.shapeType !== "arrow")) return false;
+      const was = effectiveCaps(cur);
+      if (was.start === caps.start && was.end === caps.end) return false;
+      const after = stamp({ ...cur, content: { ...contentOf<ShapeContent>(cur), caps: { start: caps.start, end: caps.end } } });
+      return record("Line ends", [{ type: "update", before: cur, after }]);
     },
 
     scribbleErase(ids) {
