@@ -369,6 +369,17 @@
     "star": "Stern",
     "polygon": "Vieleck"
   },
+  "lineCaps": {
+    "title": "Linienenden",
+    "start": "Anfang",
+    "end": "Ende",
+    "none": "Keine",
+    "arrow": "Pfeil",
+    "dot": "Punkt",
+    "bar": "Strich",
+    "settingsToggle": "Linienenden nach dem Einrasten anbieten",
+    "settingsHint": "Beim Umwandeln eines Strichs in eine Linie oder einen Pfeil eine kleine Auswahl für Pfeil-, Punkt- oder Strichenden zeigen."
+  },
   "keys": {
     "title": "Tastenkürzel",
     "resetAll": "Alle zurücksetzen",
@@ -561,7 +572,16 @@
     "insertEquation": "Gleichung einfügen",
     "insertGraph": "Graph einfügen",
     "select": "Auswählen",
-    "lasso": "Lasso"
+    "lasso": "Lasso",
+    "paper": "Papier"
+  },
+  "dock": {
+    "position": "Position der Werkzeugleiste",
+    "top": "Oben",
+    "bottom": "Unten",
+    "left": "Links",
+    "right": "Rechts",
+    "menu": "Werkzeugleiste verschieben"
   },
   "topbar": {
     "more": "Weitere Aktionen",
@@ -570,7 +590,6 @@
     "exportPage": "Seite exportieren…",
     "importNotes": "Notizen importieren…",
     "pageSettings": "Seiteneinstellungen",
-    "paper": "Paper",
     "searchActions": "Suche und Aktionen…",
     "about": "Über Mate",
     "pageTitle": "Seitentitel"
@@ -588,6 +607,14 @@
     "tableLimit": "Die Tabelle hat ihre Größengrenze erreicht ({{max}} Zellen)",
     "insertImageFailed": "Dieses Bild konnte nicht eingefügt werden.",
     "imagesFilter": "Bilder"
+  },
+  "media": {
+    "insert": "Medien einfügen",
+    "filter": "Audio und Video",
+    "insertFailed": "Diese Mediendatei konnte nicht eingefügt werden.",
+    "tooLarge": "Diese Datei ist zu groß (das Limit beträgt {{max}} MB).",
+    "audio": "Audio",
+    "video": "Video"
   },
   "whatsNew": {
     "title": "Neuigkeiten",
@@ -1006,6 +1033,43 @@
       "custom": "Geprüfte Notizen werden an die Adresse gesendet, die du eingibst."
     },
     "getKey": "Schlüssel holen"
+  },
+  "speech": {
+    "dictate": "Diktieren",
+    "stop": "Diktat beenden",
+    "recording": "Aufnahme, {{time}}",
+    "transcribing": "Wird transkribiert…",
+    "noMicrophone": "Es wurde kein Mikrofon gefunden.",
+    "permissionDenied": "Mate darf das Mikrofon nicht verwenden. Erlaube es in den Systemeinstellungen.",
+    "failed": "Diktat fehlgeschlagen: {{message}}",
+    "nothingHeard": "Es wurde nichts gehört. Versuche es noch einmal näher am Mikrofon.",
+    "off": "Diktat ist aus. Schalte es unter Einstellungen, Diktat ein.",
+    "notConfigured": "Wähle unter Einstellungen, Diktat einen Sprachdienst.",
+    "openSettings": "Einstellungen",
+    "limitReached": "Die Aufnahme wurde nach 5 Minuten beendet.",
+    "noPage": "Öffne eine Seite, in die diktiert werden soll.",
+    "settings": {
+      "title": "Diktat",
+      "provider": "Sprachdienst",
+      "key": "API-Schlüssel",
+      "keyOptional": "API-Schlüssel (optional)",
+      "model": "Modell",
+      "address": "Adresse",
+      "consent": "Aufnahmen an den Sprachdienst senden",
+      "consentHint": "Jedes Diktat wird auf diesem Gerät aufgenommen und an {{provider}} gesendet, um in Text umgewandelt zu werden. Mate speichert nichts.",
+      "consentHintLocal": "Jedes Diktat wird an das Programm unter {{address}} auf diesem Computer oder in diesem Netzwerk gesendet.",
+      "test": "Testen",
+      "status": "Status",
+      "ready": "Bereit zum Diktieren.",
+      "notReady": "Noch nicht eingerichtet: Speichere einen Schlüssel oder gib eine Adresse ein.",
+      "loadFailed": "Die Liste der Sprachdienste konnte nicht geladen werden."
+    },
+    "consent": {
+      "title": "Aufnahmen an {{provider}} senden?",
+      "body": "Beim Diktieren wird deine Stimme auf diesem Gerät aufgenommen und die Aufnahme an {{provider}} gesendet, das sie in Text umwandelt. Du kannst das unter Einstellungen, Diktat ändern.",
+      "allow": "Erlauben",
+      "deny": "Nicht jetzt"
+    }
   },
   "home": {
     "firstNotebook": "Mein Notizbuch",

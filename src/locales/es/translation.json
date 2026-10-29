@@ -369,6 +369,17 @@
     "star": "Estrella",
     "polygon": "Polígono"
   },
+  "lineCaps": {
+    "title": "Extremos de línea",
+    "start": "Inicio",
+    "end": "Final",
+    "none": "Ninguno",
+    "arrow": "Flecha",
+    "dot": "Punto",
+    "bar": "Barra",
+    "settingsToggle": "Ofrecer extremos de línea tras ajustar",
+    "settingsHint": "Mostrar un pequeño selector de extremos de flecha, punto o barra cuando un trazo se convierte en línea o flecha."
+  },
   "keys": {
     "title": "Atajos de teclado",
     "resetAll": "Restablecer todo",
@@ -561,7 +572,16 @@
     "insertEquation": "Insertar ecuación",
     "insertGraph": "Insertar gráfico",
     "select": "Seleccionar",
-    "lasso": "Lazo"
+    "lasso": "Lazo",
+    "paper": "Papel"
+  },
+  "dock": {
+    "position": "Posición de la barra de herramientas",
+    "top": "Arriba",
+    "bottom": "Abajo",
+    "left": "Izquierda",
+    "right": "Derecha",
+    "menu": "Mover la barra de herramientas"
   },
   "topbar": {
     "more": "Más acciones",
@@ -570,7 +590,6 @@
     "exportPage": "Exportar página…",
     "importNotes": "Importar notas…",
     "pageSettings": "Ajustes de la página",
-    "paper": "Paper",
     "searchActions": "Buscar y acciones…",
     "about": "Acerca de Mate",
     "pageTitle": "Título de la página"
@@ -588,6 +607,14 @@
     "tableLimit": "La tabla ha llegado a su límite de tamaño ({{max}} celdas)",
     "insertImageFailed": "No se pudo insertar esa imagen.",
     "imagesFilter": "Imágenes"
+  },
+  "media": {
+    "insert": "Insertar multimedia",
+    "filter": "Audio y vídeo",
+    "insertFailed": "No se pudo insertar ese archivo multimedia.",
+    "tooLarge": "Ese archivo es demasiado grande (el límite es {{max}} MB).",
+    "audio": "Audio",
+    "video": "Vídeo"
   },
   "whatsNew": {
     "title": "Novedades",
@@ -1006,6 +1033,43 @@
       "custom": "Las notas que se revisan se envían a la dirección que escribas."
     },
     "getKey": "Obtener una clave"
+  },
+  "speech": {
+    "dictate": "Dictar",
+    "stop": "Dejar de dictar",
+    "recording": "Grabando, {{time}}",
+    "transcribing": "Transcribiendo…",
+    "noMicrophone": "No se encontró ningún micrófono.",
+    "permissionDenied": "Mate no tiene permiso para usar el micrófono. Permítelo en los ajustes del sistema.",
+    "failed": "Error al dictar: {{message}}",
+    "nothingHeard": "No se oyó nada. Inténtalo de nuevo más cerca del micrófono.",
+    "off": "El dictado está desactivado. Actívalo en Ajustes, Dictado.",
+    "notConfigured": "Elige un servicio de voz en Ajustes, Dictado.",
+    "openSettings": "Ajustes",
+    "limitReached": "La grabación se detuvo a los 5 minutos.",
+    "noPage": "Abre una página donde dictar.",
+    "settings": {
+      "title": "Dictado",
+      "provider": "Servicio de voz",
+      "key": "Clave de API",
+      "keyOptional": "Clave de API (opcional)",
+      "model": "Modelo",
+      "address": "Dirección",
+      "consent": "Enviar las grabaciones al servicio de voz",
+      "consentHint": "Cada dictado se graba en este dispositivo y se envía a {{provider}} para convertirlo en texto. Mate no guarda nada.",
+      "consentHintLocal": "Cada dictado se envía al programa en {{address}}, en este equipo o red.",
+      "test": "Probar",
+      "status": "Estado",
+      "ready": "Listo para dictar.",
+      "notReady": "Aún no está configurado: guarda una clave o introduce una dirección.",
+      "loadFailed": "No se pudo cargar la lista de servicios de voz."
+    },
+    "consent": {
+      "title": "¿Enviar las grabaciones a {{provider}}?",
+      "body": "El dictado graba tu voz en este dispositivo y envía la grabación a {{provider}}, que la convierte en texto. Puedes cambiarlo en Ajustes, Dictado.",
+      "allow": "Permitir",
+      "deny": "Ahora no"
+    }
   },
   "home": {
     "firstNotebook": "Mi cuaderno",
