@@ -1,16 +1,17 @@
 // Dictation: idle → starting → recording → transcribing → idle. Nothing is recorded or sent unless
 // `speechConsent` is true and a speech service is configured; the first use asks for consent.
 // The text goes into the text box being edited when dictation started, else into a new text box
-// at the centre of the view.
+// at the centre of the view. A dictated expression ("y equals x plus ten") becomes an equation box
+// instead (`shapeDictation`: optional AI tidy-up, then the offline spoken-maths rewriter).
 import { create } from "zustand";
 import { screenToWorld } from "../canvas/camera";
 import { showToast } from "../components/Toast";
 import i18n from "../i18n";
 import { isRecognizeError } from "../ipc/recognize";
-import { getSpeechStatus, listSpeechProviders, transcribeAudio } from "../ipc/speech";
+import { getSpeechStatus, listSpeechProviders, tidyDictation, transcribeAudio } from "../ipc/speech";
 import { isMathBox } from "../math/mathBox";
 import { contentOf, type TextBoxContent } from "../model/content";
-import type { Element } from "../model/types";
+import type { Element, Settings } from "../model/types";
 import type { EditorStore } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { navigateTo } from "../stores/navigation";
@@ -21,7 +22,9 @@ import { defaultTextAttributes, textAttrsOf, textBoxElement } from "../text/text
 import { withMeta } from "../tools/spatialIndex";
 import { topZ } from "../tools/zorder";
 import { speechErrorText } from "./errors";
+import { checkLatex, insertMathBox, latexForPlain } from "./mathInsert";
 import { RecorderError, startRecording, type Recorder } from "./recorder";
+import { rewriteSpokenMath, supportsSpokenMath } from "./spokenMath";
 
 /** `starting`: checking the setup and opening the microphone; the button is disabled meanwhile. */
 export type DictationPhase = "idle" | "starting" | "recording" | "transcribing";
@@ -143,8 +146,70 @@ export function insertDictation(
 /** The language hint for the service: the interface language, unless it follows the system. */
 function languageHint(): string | undefined {
   if (useSettingsStore.getState().settings.language === "system") return undefined;
+  return uiLanguage();
+}
+
+/** The interface language as a 2-letter code (also when it follows the system), if any. */
+function uiLanguage(): string | undefined {
   const code = (i18n.language || "").slice(0, 2).toLowerCase();
   return /^[a-z]{2}$/.test(code) ? code : undefined;
+}
+
+/** Longest passage sent for the AI tidy-up (as Rust's `MAX_TIDY_CHARS`); longer text skips it. */
+export const MAX_TIDY_CHARS = 1000;
+
+/** What a dictation becomes: words for a text box, or an equation (with its plain form). */
+export type ShapedDictation = { kind: "text"; text: string } | { kind: "math"; latex: string; plain: string };
+
+/**
+ * Turns transcribed `text` into what is inserted. With `dictationTidy`, the AI assistant first
+ * tidies it (a valid LaTeX answer is an equation; any error falls back silently to the text as
+ * transcribed). Then, with `dictationMath` and a supported `lang`, the spoken-maths rewriter:
+ * an expression the engine accepts is an equation, one it rejects stays text in its plain form
+ * (`y = x + 10`). `into` (appending to a text box being edited) always gives text, maths in
+ * its plain form.
+ */
+export async function shapeDictation(
+  text: string,
+  lang: string | undefined,
+  into: boolean,
+  settings: Pick<Settings, "dictationMath" | "dictationTidy">,
+): Promise<ShapedDictation> {
+  let words = text;
+  if (settings.dictationTidy && text.length <= MAX_TIDY_CHARS) {
+    try {
+      const r = await tidyDictation(text, lang);
+      const tidied = typeof r.text === "string" ? r.text.trim() : "";
+      if (r.kind === "math" && typeof r.latex === "string" && r.latex.trim() !== "") {
+        if (into) return { kind: "text", text: tidied || text };
+        const latex = await checkLatex(r.latex);
+        if (latex) return { kind: "math", latex, plain: tidied || text };
+      }
+      if (tidied !== "") words = tidied;
+    } catch {
+      // AI off, no key, offline, a refusal: the offline path below
+    }
+  }
+  if (settings.dictationMath && lang && supportsSpokenMath(lang)) {
+    let r: ReturnType<typeof rewriteSpokenMath>;
+    try {
+      r = rewriteSpokenMath(words, lang);
+    } catch {
+      r = { kind: "text", text: words }; // a rewriter bug never loses the dictation
+    }
+    if (r.kind === "math") {
+      if (into) return { kind: "text", text: r.plain };
+      const latex = await latexForPlain(r.plain);
+      return latex ? { kind: "math", latex, plain: r.plain } : { kind: "text", text: r.plain };
+    }
+  }
+  return { kind: "text", text: words };
+}
+
+/** Inserts a shaped dictation: an equation box in `pane`, else text as `insertDictation` does. */
+function insertShaped(shaped: ShapedDictation, into: { store: EditorStore; id: string } | null, pane?: EditorStore): boolean {
+  if (shaped.kind === "math" && !into && insertMathBox(pane ?? getFocusedEditor(), shaped.latex)) return true;
+  return insertDictation(shaped.kind === "math" ? shaped.plain : shaped.text, into, pane);
 }
 
 const failure = (e: unknown): string => {
@@ -251,8 +316,15 @@ async function finish(): Promise<void> {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const text = (await transcribeAudio(bytes, mime, languageHint())).trim();
     if (mine !== session || !originOpen(from)) return;
-    if (text === "") showToast(i18n.t("speech.nothingHeard"));
-    else insertDictation(text, into, from?.store);
+    if (text === "") {
+      showToast(i18n.t("speech.nothingHeard"));
+      return;
+    }
+    const { settings } = useSettingsStore.getState();
+    // The language spoken: the interface language, also when it follows the system (no hint was sent).
+    const shaped = await shapeDictation(text, uiLanguage(), into !== null, settings);
+    if (mine !== session || !originOpen(from)) return;
+    insertShaped(shaped, into, from?.store);
   } catch (e) {
     if (mine !== session) return;
     if (e instanceof RecorderError && e.kind === "cancelled") return;
