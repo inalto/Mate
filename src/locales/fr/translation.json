@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "Affichage de la bibliothèque",
         "recent": "Récents",
-        "shelves": "Étagères",
+        "shelves": "Folders",
         "az": "De A à Z"
       },
       "sidebarLayout": {
@@ -68,7 +68,8 @@
         "backup": "Sauvegarde",
         "sharing": "Partage",
         "updates": "Mises à jour",
-        "about": "À propos"
+        "about": "À propos",
+        "graphs": "Graphs"
       }
     },
     "resetIncomplete": "Les données locales n'ont pas pu être entièrement réinitialisées. Ta sauvegarde se trouve dans {{path}}.",
@@ -285,6 +286,12 @@
       "welcome": "Accueil",
       "showWelcome": "Afficher à nouveau l'accueil",
       "unknownVersion": "inconnue"
+    },
+    "graphs": {
+      "empty": "No graph presets yet. Save one from a graph's Presets row.",
+      "rename": "Rename",
+      "delete": "Delete",
+      "name": "Preset name"
     }
   },
   "common": {
@@ -621,18 +628,11 @@
     "changeColour": "Changer la couleur",
     "favourite": "Ajouter aux favoris",
     "unfavourite": "Retirer des favoris",
-    "moveToShelf": "Déplacer vers une étagère",
     "practice": "S'entraîner avec ce cahier…",
     "exportBook": "Exporter le cahier…",
     "share": "Partager…",
     "importInto": "Importer dans ce cahier…",
     "colour": "Couleur {{color}}",
-    "noShelf": "Aucune étagère",
-    "shelfName": "Nom de l'étagère",
-    "unshelved": "Hors étagère",
-    "renameShelf": "Renommer l'étagère",
-    "deleteShelf": "Supprimer l'étagère",
-    "emptyShelf": "Aucun cahier sur cette étagère",
     "imported": "Cahier importé : {{pages}} pages, {{elements}} éléments.",
     "importedSkipped": "Cahier importé : {{pages}} pages, {{elements}} éléments, {{skipped}} ignorés (limites dépassées).",
     "importFailed": "Échec de l'import : {{message}}",
@@ -643,8 +643,18 @@
     "emptyHint": "Crée ton premier cahier pour commencer à organiser tes notes, équations et idées",
     "noneFound": "Aucun cahier trouvé",
     "clearSearch": "Effacer la recherche",
-    "newShelf": "Nouvelle étagère",
-    "newShelfName": "Nom de la nouvelle étagère"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "Échec de l'export : {{message}}",
@@ -1017,7 +1027,7 @@
     "emptyHint": "Les pages, chapitres et cahiers supprimés apparaîtront ici pour être récupérés.",
     "deleted": "{{kind}} : supprimé le {{date}}",
     "kinds": {
-      "bookshelf": "étagère",
+      "bookshelf": "folder",
       "unit": "unité",
       "section": "section",
       "page": "page"
@@ -1078,6 +1088,25 @@
       "yMax": "y max",
       "grid": "Quadrillage",
       "plot": "Tracé du graphe"
+    },
+    "presets": {
+      "label": "Presets",
+      "select": "Preset",
+      "none": "No saved presets",
+      "choose": "Choose a preset",
+      "default": "default",
+      "apply": "Apply",
+      "delete": "Delete",
+      "name": "Preset name",
+      "namePlaceholder": "Save current as…",
+      "save": "Save",
+      "includeExpressions": "Include expressions",
+      "setDefault": "Default for new graphs of this kind"
+    },
+    "kinds": {
+      "2d-function": "Function graphs",
+      "2d-polar": "Polar graphs",
+      "2d-parametric": "Parametric graphs"
     }
   },
   "welcome": {
@@ -1129,7 +1158,22 @@
   "code": {
     "label": "Code",
     "language": "Langage",
-    "plain": "Texte brut"
+    "plain": "Texte brut",
+    "run": "Run",
+    "runHint": "Run (Ctrl+Enter)",
+    "stop": "Stop",
+    "clearOutput": "Clear output",
+    "resetRuntime": "Reset runtime",
+    "noRuntime": "{{language}} code cannot run here",
+    "status": "Runtime status",
+    "idle": "Idle",
+    "running": "Running…",
+    "loadingPython": "Loading Python…",
+    "output": "Output",
+    "timedOut": "Timed out after {{seconds}} s",
+    "stopped": "Stopped",
+    "moreLines_one": "… ({{count}} more line)",
+    "moreLines_other": "… ({{count}} more lines)"
   },
   "paperPicker": {
     "title": "Paper",

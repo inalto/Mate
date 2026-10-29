@@ -2,6 +2,8 @@ node_modules/
 dist/
 # Copied from pdfjs-dist by scripts/copy-pdfjs-assets.mjs (predev / prebuild).
 public/pdfjs/
+# Copied from pyodide by scripts/copy-pyodide-assets.mjs (predev / prebuild).
+public/pyodide/
 target/
 src-tauri/gen/schemas/
 src-tauri/gen/android/**/build/

@@ -10,14 +10,14 @@ Write with a pen on an endless canvas or on paged sheets, organise pages into bo
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **v0.8.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). Version 0.8.0 adds finger drawing and six more paper templates. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.8.0.md).
+> Status: **v0.9.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). Version 0.8.0 adds finger drawing and six more paper templates. Version 0.9.0 adds nested library folders, graph presets and running code in code blocks. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.9.0.md).
 
 ## Features
 
 - **Ink** — pen, highlighter and fountain pen (pressure, tilt, nib flatness), toolbar presets, palettes, recent colours, stroke stabilisation, palm rejection, pen barrel/eraser-end actions
 - **Canvas** — infinite canvas or paper mode (A4, Letter, 16:9, 4:3, square; ruled, grid, dot, blank, plus isometric, hex, Cornell, handwriting, columns and music templates from the **Paper** button in the editor top bar), zoom 0.1×–10×, pinch, wheel, overscroll
 - **Editing** — whole/partial eraser, lasso select, move, scale, arrange, duplicate, undo/redo (100 entries / 50 MiB), keyboard shortcuts
-- **Organisation** — shelves → books → sections → nestable pages; favourites; recent; trash with retention; thumbnails
+- **Organisation** — folders and subfolders → books → sections → nestable pages; favourites; recent; trash with retention; thumbnails
 - **Workspace** — sidebar (tree or split layout, left- or right-handed), tabs, split view, page settings
 - **Export / import** — PNG, SVG, and `.mate` archives (a whole book, round-trippable); `.mate` files open with a double-click
 - **Never lose ink** — strokes are written to SQLite 150 ms after you lift the pen; closing the window waits for pending writes and writes a recovery file if it can't; a restart-recovery card reopens the page you were on
@@ -79,6 +79,18 @@ The interface comes in English, Italian, Spanish, French, German, Portuguese (Br
 ## Sharing
 
 Book menu → **Share…**. Mate can save a `.mate` copy into a Dropbox, Google Drive, OneDrive, iCloud Drive or Nextcloud folder that it finds on your computer (`<Folder>/Mate/<title>.mate`), so your sync app sends it. If you have a Nextcloud, sign in once under Settings → Sharing, and Mate can upload the book and give you a link, with an optional expiry. The password for that stays in the system keychain (desktop) or the app's private key file (Android). Double-clicking a `.mate` file imports it. Direct Google Drive, Dropbox and OneDrive APIs and OS share sheets are not built yet. See [Sharing](https://github.com/inalto/Mate/wiki/Sharing).
+
+## Library folders
+
+Books can live in folders, and folders can hold other folders. A folder view shows a breadcrumb, the subfolders and the books inside; **Move to...** on a book or folder opens a picker (a folder cannot be moved into itself or its own subfolders). Deleting a folder sends it and its subfolders to the trash; its books are kept and become unfiled. Folders replace the old flat shelves, and existing shelves become top-level folders.
+
+## Graph presets
+
+A graph can save its settings (kind, axes range, grid and similar options, and optionally its expressions) as a named preset. Presets are kept per graph kind, so a polar preset never appears for a function graph. Mark one preset per kind as the default and new graphs of that kind start from it. Rename or delete presets under Settings → Graphs.
+
+## Running code
+
+Code blocks in JavaScript, TypeScript and Python have a **Run** button (Ctrl/Cmd+Enter in the editor). The output appears under the code and is saved with the block (the last 200 lines). Each run has a 10 second limit; a run that takes longer is stopped. A language keeps its state between runs on a page until you press **Reset runtime**; JavaScript top-level `let` and `const` carry over too. Python runs on [Pyodide](https://pyodide.org), a Python interpreter compiled to WebAssembly and bundled with the app (about 14 MB), with the standard library only. It loads the first time you run Python. Everything runs on your device, in the background, with no network access. See [Code](https://github.com/inalto/Mate/wiki/Code).
 
 ## Maths engines
 

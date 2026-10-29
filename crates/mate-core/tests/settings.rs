@@ -1,4 +1,4 @@
-use mate_core::settings::Settings;
+use mate_core::settings::{GraphDomain, GraphPreset, Settings};
 
 #[test]
 fn defaults_match_spec() {
@@ -64,7 +64,8 @@ fn phase5_defaults() {
 /// The TS defaults (`npm run dump:settings-defaults`) must equal the Rust defaults.
 #[test]
 fn settings_defaults_match_between_rust_and_ts() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/settings-defaults.json");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/settings-defaults.json");
     let ts: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
     let rust = serde_json::to_value(Settings::default()).unwrap();
@@ -78,7 +79,11 @@ fn settings_defaults_match_between_rust_and_ts() {
             other => other,
         }
     }
-    assert_eq!(norm(rust), norm(ts), "regenerate with `npm run dump:settings-defaults` after changing defaults");
+    assert_eq!(
+        norm(rust),
+        norm(ts),
+        "regenerate with `npm run dump:settings-defaults` after changing defaults"
+    );
 }
 
 #[test]
@@ -140,4 +145,38 @@ fn unknown_finger_action_loads_as_auto() {
         assert_eq!(s.finger_action, "auto", "{bad}");
         assert_eq!(s.theme, "dark");
     }
+}
+
+#[test]
+fn graph_presets_default_empty_and_round_trip_camel_case() {
+    assert!(Settings::default().graph_presets.is_empty());
+    let dir = tempdir();
+    let p = dir.join("settings.json");
+    let preset = GraphPreset {
+        id: "g1".into(),
+        name: "Spiral".into(),
+        kind: "2d-polar".into(),
+        domain: GraphDomain {
+            x_min: -3.0,
+            x_max: 3.0,
+            y_min: -2.0,
+            y_max: 2.0,
+        },
+        grid: false,
+        expressions: None,
+        is_default: true,
+    };
+    let s = Settings {
+        graph_presets: vec![preset],
+        ..Settings::default()
+    };
+    s.save(&p).unwrap();
+    let text = std::fs::read_to_string(&p).unwrap();
+    assert!(
+        text.contains("\"graphPresets\"")
+            && text.contains("\"isDefault\"")
+            && text.contains("\"xMin\"")
+    );
+    assert!(!text.contains("\"expressions\""));
+    assert_eq!(Settings::load(&p), s);
 }

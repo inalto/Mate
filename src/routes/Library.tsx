@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
 import { importUnitArchive } from "../ipc/archive";
 import type { Unit } from "../model/types";
-import ShelfSection from "../components/ShelfSection";
+import FolderView from "../components/FolderView";
 import { useImportStore } from "../stores/importStore";
 import { pickAndImportPdf } from "../pdf/import";
 import { useNotebookStore } from "../stores/notebook";
@@ -20,7 +20,6 @@ export default function Library() {
   const libraryView = useSettingsStore((s) => s.settings.libraryView);
   const view: View = libraryView === "az" || libraryView === "shelves" ? libraryView : "recent";
   const setView = (v: View) => void useSettingsStore.getState().update({ libraryView: v });
-  const [newShelf, setNewShelf] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   // Reading `tree` above subscribes us; selectors read the same state.
@@ -103,38 +102,8 @@ export default function Library() {
 
       {view === "recent" && grid(store.unitsByRecent())}
       {view === "az" && grid(store.unitsAZ())}
-      {view === "shelves" && (
-        <>
-          {store.unitsByShelf().map((g) => (
-            <ShelfSection key={g.shelf?.id ?? "none"} shelf={g.shelf} units={g.units.filter(match)} />
-          ))}
-          {newShelf === null ? (
-            <div>
-              <button type="button" className="btn" onClick={() => setNewShelf("")}>
-                {t("library.newShelf")}
-              </button>
-            </div>
-          ) : (
-            <input
-              className="input"
-              aria-label={t("library.newShelfName")}
-              placeholder={t("library.shelfName")}
-              autoFocus
-              value={newShelf}
-              onChange={(e) => setNewShelf(e.target.value)}
-              onBlur={() => setNewShelf(null)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setNewShelf(null);
-                if (e.key === "Enter" && newShelf.trim()) {
-                  void store.createBookshelf(newShelf.trim());
-                  setNewShelf(null);
-                }
-              }}
-            />
-          )}
-          <div className="grid">{tile}</div>
-        </>
-      )}
+      {/* The stored view key stays "shelves" (settings compatibility); the view shows folders. */}
+      {view === "shelves" && <FolderView query={query} />}
     </div>
   );
 }

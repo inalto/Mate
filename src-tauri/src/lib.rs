@@ -96,6 +96,7 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
       notebook::get_notebook_tree,
       notebook::upsert_bookshelf,
+      notebook::move_bookshelf,
       notebook::upsert_unit,
       notebook::upsert_section,
       notebook::upsert_page,

@@ -1,6 +1,8 @@
 // Hand-written mirror of crates/mate-core model.rs, storage/notebook.rs and settings.rs.
 // Keep field names and enum strings identical to the Rust serde output.
 
+import type { GraphDomain, GraphExpression, GraphKind } from "../graph/data";
+
 export type PageMode = "canvas" | "page";
 export type PenStyle = "pen" | "highlighter" | "fountain-pen" | "pencil";
 export type ElementType =
@@ -73,6 +75,8 @@ export interface Bookshelf {
   updatedAt: string;
   deletedAt?: string;
   version: number;
+  /** The folder this one sits in; absent at the Library root. */
+  parentId?: string;
 }
 
 export interface Unit {
@@ -174,6 +178,19 @@ export interface PenPreset {
   color: string;
   width: number;
   sharpness?: number;
+}
+
+/** A named graph setup for one kind: domain, grid and optionally the expressions (with colours). */
+export interface GraphPreset {
+  id: string;
+  name: string;
+  kind: GraphKind;
+  domain: GraphDomain;
+  grid: boolean;
+  /** When present, applying the preset replaces the graph's expressions. */
+  expressions?: GraphExpression[];
+  /** The preset new graphs of this kind start from (at most one per kind). */
+  isDefault: boolean;
 }
 
 /** A catalog id from Rust (`ai::catalog`), e.g. "anthropic", "ollama" or "custom". */
@@ -382,6 +399,8 @@ export interface Settings {
   defaultExportFormat: string;
   recentColors: string[];
   toolbarPresets: PenPreset[];
+  /** Named graph presets, all kinds (filtered per kind where shown). */
+  graphPresets: GraphPreset[];
   /** Per-action key overrides; empty means all defaults. */
   keybindings: KeybindingOverride[];
   onboardingDone: boolean;

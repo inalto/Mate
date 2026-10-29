@@ -1,13 +1,13 @@
 {
   "name": "mate",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "type": "module",
   "scripts": {
     "icons:android": "node scripts/copy-android-icons.mjs",
-    "predev": "node scripts/copy-pdfjs-assets.mjs",
+    "predev": "node scripts/copy-pdfjs-assets.mjs && node scripts/copy-pyodide-assets.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/copy-pdfjs-assets.mjs",
+    "prebuild": "node scripts/copy-pdfjs-assets.mjs && node scripts/copy-pyodide-assets.mjs",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run",
@@ -47,10 +47,12 @@
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
     "perfect-freehand": "^1.2.3",
+    "pyodide": "^314.0.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-i18next": "^17.1.8",
     "react-router": "^8.5.0",
+    "sucrase": "^3.35.1",
     "zustand": "^5.0.16"
   },
   "devDependencies": {

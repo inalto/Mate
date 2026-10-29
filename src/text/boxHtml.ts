@@ -4,13 +4,15 @@
 import { esc, n } from "../export/svgUtil";
 import { mapInkColor } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
+import i18n from "../i18n";
+import type { CodeOutput } from "../model/content";
 import type { Element } from "../model/types";
 import type { Rect } from "../tools/spatialIndex";
 import { isMathBox } from "../math/mathBox";
 import { mathForeignObject, textBoxForeignObject } from "./foreignObject";
 import { safeColor } from "./sanitize";
 import { FONT_STACKS, LINE_HEIGHT } from "./style";
-import { codeOf, tableRowsOf } from "./tableCode";
+import { codeOf, outputLines, tableRowsOf } from "./tableCode";
 import { textContentOf } from "./textBox";
 
 /** Types drawn from an HTML bitmap. */
@@ -46,9 +48,21 @@ function tableFo(rows: string[][], color: string, r: Rect): string {
   return wrap(r, style, `<table style="border-collapse: collapse; width: 100%; table-layout: fixed;"><tbody>${body}</tbody></table>`);
 }
 
-function codeFo(code: string, color: string, r: Rect): string {
+/** Colour of stderr lines in a code block's output pane (reads on light and dark paper). */
+export const CODE_ERR_COLOR = "#e5484d";
+const PRE = "margin: 0; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit;";
+
+/** The output pane under a code block: the kept lines, stderr ones in `<span class="err">`, escaped. */
+function outputPane(output: CodeOutput): string {
+  const { dropped, lines } = outputLines(output);
+  const head = dropped > 0 ? `<span class="more" style="opacity: 0.7;">${esc(i18n.t("code.moreLines", { count: dropped }))}</span>\n` : "";
+  const body = lines.map((l) => (l.err ? `<span class="err" style="color: ${CODE_ERR_COLOR};">${esc(l.text)}</span>` : esc(l.text))).join("\n");
+  return `<pre class="code-output" style="${PRE} border-top: 1px solid rgba(128,128,128,0.4);">${head}${body}</pre>`;
+}
+
+function codeFo(code: string, output: CodeOutput | undefined, color: string, r: Rect): string {
   const style = `font-family: ${FONT_STACKS.mono}; font-size: ${CODE_FONT_SIZE}px; line-height: ${LINE_HEIGHT}; color: ${color}; background: rgba(128,128,128,0.12); border-radius: 4px;`;
-  return wrap(r, style, `<pre style="margin: 0; padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit;">${esc(code)}</pre>`);
+  return wrap(r, style, `<pre style="${PRE}">${esc(code)}</pre>${output ? outputPane(output) : ""}`);
 }
 
 /** Ink colour used when a stored colour is not a safe CSS colour. */
@@ -86,9 +100,14 @@ export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | nu
       return { key: JSON.stringify(["table", rows, width, height, color]), width, height, foreignObject: (r) => tableFo(rows, color, r) };
     }
     case "codespace": {
-      const { code, language } = codeOf(el);
+      const { code, language, output } = codeOf(el);
       const color = mapInkColor(inkOf(el), theme);
-      return { key: JSON.stringify(["code", code, language, width, height, color]), width, height, foreignObject: (r) => codeFo(code, color, r) };
+      return {
+        key: JSON.stringify(["code", code, language, output ?? null, width, height, color, output ? i18n.language : null]),
+        width,
+        height,
+        foreignObject: (r) => codeFo(code, output, color, r),
+      };
     }
     default:
       return null;

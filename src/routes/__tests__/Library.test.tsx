@@ -82,7 +82,7 @@ describe("Library", () => {
     expect(screen.getByText("Chemistry")).toBeTruthy();
   });
 
-  it("shows empty shelves and creates a new shelf in Shelves view", async () => {
+  it("shows empty folders and creates a new folder in Folders view", async () => {
     useNotebookStore.setState({
       tree: {
         bookshelves: [
@@ -95,10 +95,10 @@ describe("Library", () => {
       loaded: true,
     });
     renderLibrary();
-    fireEvent.click(screen.getByText("Shelves"));
+    fireEvent.click(screen.getByRole("button", { name: "Folders" }));
     expect(await screen.findByText("Empty shelf")).toBeTruthy();
-    fireEvent.click(screen.getByText("New shelf"));
-    const input = screen.getByLabelText("New shelf name");
+    fireEvent.click(screen.getByText("New folder"));
+    const input = screen.getByLabelText("New folder name");
     fireEvent.change(input, { target: { value: "Maths" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(await screen.findByText("Maths")).toBeTruthy();

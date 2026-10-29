@@ -20,7 +20,13 @@ pub fn shelf(id: &str) -> Bookshelf {
         updated_at: now,
         deleted_at: None,
         version: 0,
+        parent_id: None,
     }
+}
+
+/// A folder (bookshelf) nested under `parent`.
+pub fn folder(id: &str, parent: Option<&str>) -> Bookshelf {
+    Bookshelf { parent_id: parent.map(Into::into), ..shelf(id) }
 }
 
 pub fn unit(id: &str, bookshelf_id: Option<&str>) -> Unit {

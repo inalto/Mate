@@ -8,6 +8,7 @@ import type { Unit } from "../model/types";
 import { isMobile } from "../platform";
 import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
+import MoveToFolderDialog from "./MoveToFolderDialog";
 import PracticeDialog from "./PracticeDialog";
 import ShareDialog from "./ShareDialog";
 import { showToast } from "./Toast";
@@ -31,7 +32,7 @@ export function coverColor(unit: Unit): string {
   return COVER_PALETTE[hash % COVER_PALETTE.length];
 }
 
-type MenuMode = "closed" | "main" | "colour" | "shelf";
+type MenuMode = "closed" | "main" | "colour";
 
 export default function BookCard({ unit }: { unit: Unit }) {
   const { t } = useTranslation();
@@ -43,6 +44,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
   const [renaming, setRenaming] = useState(false);
   const [practising, setPractising] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [draft, setDraft] = useState(unit.title);
 
   // The cover shows the thumbnail of the book's first page that has one.
@@ -138,7 +140,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
               <button role="menuitem" onClick={act(() => toggleFavourite("unit", unit.id))}>
                 {unit.isFavourite ? t("library.unfavourite") : t("library.favourite")}
               </button>
-              <button role="menuitem" onClick={() => setMenu("shelf")}>{t("library.moveToShelf")}</button>
+              <button role="menuitem" onClick={act(async () => setMoving(true))}>{t("library.moveTo")}</button>
               <button role="menuitem" onClick={act(async () => setPractising(true))}>{t("library.practice")}</button>
               <button role="menuitem" onClick={act(exportBook)}>{t("library.exportBook")}</button>
               <button role="menuitem" onClick={act(async () => setSharing(true))}>{t("library.share")}</button>
@@ -162,20 +164,18 @@ export default function BookCard({ unit }: { unit: Unit }) {
               ))}
             </div>
           )}
-          {menu === "shelf" && (
-            <>
-              <button role="menuitem" onClick={act(() => moveUnitToBookshelf(unit.id, null))}>{t("library.noShelf")}</button>
-              {tree.bookshelves.map((b) => (
-                <button key={b.id} role="menuitem" onClick={act(() => moveUnitToBookshelf(unit.id, b.id))}>
-                  {b.title}
-                </button>
-              ))}
-            </>
-          )}
         </div>
       )}
       {practising && <PracticeDialog unit={unit} onClose={() => setPractising(false)} />}
       {sharing && <ShareDialog unit={unit} onClose={() => setSharing(false)} />}
+      {moving && (
+        <MoveToFolderDialog
+          title={t("library.moveItemTo", { title: unit.title })}
+          currentId={unit.bookshelfId && tree.bookshelves.some((b) => b.id === unit.bookshelfId) ? unit.bookshelfId : null}
+          onPick={(folderId) => moveUnitToBookshelf(unit.id, folderId)}
+          onClose={() => setMoving(false)}
+        />
+      )}
     </div>
   );
 }

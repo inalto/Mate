@@ -14,6 +14,7 @@ import { graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphDat
 import { loadEngine, engineSync } from "../graph/engine";
 import { expressionError, parseExpressionSync } from "../graph/expressions";
 import { toLatex } from "../graph/plain";
+import { applyPreset, rememberGraphKind } from "../graph/presets";
 import { buildPlotScene, type PlotScene } from "../graph/plot";
 import { mapInkColor } from "../ink/theme";
 import { renderLatex } from "../math/katex";
@@ -22,6 +23,7 @@ import type { Element } from "../model/types";
 import { drawPlotScene } from "../renderers/graph";
 import { useSettingsStore } from "../stores/settings";
 import type { BoxEditorProps } from "./editorRegistry";
+import GraphPresets from "./GraphPresets";
 import { useEditSession } from "./useEditSession";
 
 /** Wheel zoom: domain scale per pixel of wheel delta. */
@@ -88,6 +90,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     const d = latest.current;
     const stored = graphDataOf(cur);
     const next: GraphData = { ...d, kind: kindOf(d.expressions, stored.kind) };
+    rememberGraphKind(next.kind);
     if (JSON.stringify(next) === JSON.stringify(stored)) return cur;
     return { ...cur, content: { ...contentOf<GraphContent>(cur), subtype: "graph", graphData: next } };
   });
@@ -211,6 +214,8 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     }
   };
 
+  const currentKind = kindOf(data.expressions, data.kind);
+
   return (
     <div ref={rootRef} className="graph-editor" onKeyDown={onKeyDown}>
       <div className="graph-panel" role="group" aria-label={t("graph.editor.settings")}>
@@ -278,6 +283,7 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
           <DomainInput label={t("graph.editor.yMin")} value={data.domain.yMin} onValue={(v) => setDomain("yMin", v)} />
           <DomainInput label={t("graph.editor.yMax")} value={data.domain.yMax} onValue={(v) => setDomain("yMax", v)} />
         </div>
+        <GraphPresets kind={currentKind} data={data} onApply={(p) => update((d) => applyPreset(d, p))} />
         <label className="graph-grid-toggle">
           <input type="checkbox" aria-label={t("graph.editor.grid")} checked={data.grid} onChange={(e) => update((d) => ({ ...d, grid: e.target.checked }))} />
           {t("graph.editor.grid")}

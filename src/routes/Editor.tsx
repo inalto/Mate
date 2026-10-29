@@ -23,6 +23,7 @@ import { useSettingsStore } from "../stores/settings";
 import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
 import TutorController from "../tutor/TutorController";
+import { disposeAll, disposeClosedPages } from "../code/runtime";
 
 const closePaperPicker = () => useChromeStore.getState().setPaperPickerOpen(false);
 
@@ -98,6 +99,14 @@ export default function Editor() {
     [navigate, pageWindow],
   );
   useEffect(() => watchThumbnails(), []);
+  // Code runtimes live as long as their page is open in a tab; leaving the editor ends them all.
+  useEffect(() => {
+    const unsub = useTabsStore.subscribe((s) => disposeClosedPages(new Set(s.tabs.flatMap((t) => t.panes.map((p) => p.pageId)))));
+    return () => {
+      unsub();
+      disposeAll();
+    };
+  }, []);
   // Box editors are separate chunks: fetch them once the editor is up, ahead of the first edit.
   useEffect(() => preloadBoxEditors(), []);
   // "This page is full" toast when the pen is refused at the element limit (each pane's store).

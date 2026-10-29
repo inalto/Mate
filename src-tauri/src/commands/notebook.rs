@@ -93,6 +93,27 @@ pub fn upsert_bookshelf(window: Window, state: State<'_, AppState>, b: Bookshelf
     mutate(&state.storage, &window, NotebookChange::tree, |s| s.upsert_bookshelf(&b))
 }
 
+/// Moves folder `id` into `parent_id` (`None`: the Library root). A move into the folder itself
+/// or one of its subfolders fails with the readable message of `StorageError::FolderCycle`.
+#[tauri::command]
+pub fn move_bookshelf(
+    window: Window,
+    state: State<'_, AppState>,
+    id: String,
+    parent_id: Option<String>,
+) -> Res<()> {
+    move_bookshelf_op(&state.storage, &window, &id, parent_id.as_deref())
+}
+
+fn move_bookshelf_op(
+    storage: &Mutex<Storage>,
+    sink: &impl NotebookSink,
+    id: &str,
+    parent_id: Option<&str>,
+) -> Res<()> {
+    mutate(storage, sink, NotebookChange::tree, |s| s.move_bookshelf(id, parent_id))
+}
+
 #[tauri::command]
 pub fn upsert_unit(window: Window, state: State<'_, AppState>, u: Unit) -> Res<()> {
     mutate(&state.storage, &window, NotebookChange::tree, |s| s.upsert_unit(&u))
@@ -240,6 +261,39 @@ mod tests {
         let json = serde_json::to_value(&sink.0.borrow()[2]).unwrap();
         assert_eq!(json["pageId"], "p1");
         assert_eq!(json["kind"], "page-updated");
+    }
+
+    fn folder(id: &str, parent: Option<&str>) -> Bookshelf {
+        Bookshelf {
+            id: id.into(),
+            title: id.into(),
+            icon: None,
+            color: None,
+            order: 0,
+            is_expanded: true,
+            created_at: now_iso(),
+            updated_at: now_iso(),
+            deleted_at: None,
+            version: 0,
+            parent_id: parent.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn move_bookshelf_moves_and_refuses_a_cycle_with_a_readable_message() {
+        let storage = Mutex::new(Storage::open_in_memory().unwrap());
+        let sink = Recorder(RefCell::new(Vec::new()));
+        storage.lock().unwrap().upsert_bookshelf(&folder("a", None)).unwrap();
+        storage.lock().unwrap().upsert_bookshelf(&folder("b", None)).unwrap();
+
+        move_bookshelf_op(&storage, &sink, "b", Some("a")).unwrap();
+        let tree = storage.lock().unwrap().list_tree().unwrap();
+        assert_eq!(tree.bookshelves[1].parent_id.as_deref(), Some("a"));
+        assert_eq!(sink.0.borrow().len(), 1);
+
+        let err = move_bookshelf_op(&storage, &sink, "a", Some("b")).unwrap_err();
+        assert_eq!(err, "Cannot move a folder into itself");
+        assert_eq!(sink.0.borrow().len(), 1, "a refused move notifies nobody");
     }
 
     #[test]

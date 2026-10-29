@@ -17,7 +17,7 @@
       "libraryView": {
         "label": "Vista de la biblioteca",
         "recent": "Recientes",
-        "shelves": "Estantes",
+        "shelves": "Folders",
         "az": "De la A a la Z"
       },
       "sidebarLayout": {
@@ -68,7 +68,8 @@
         "backup": "Copia de seguridad",
         "sharing": "Compartir",
         "updates": "Actualizaciones",
-        "about": "Acerca de"
+        "about": "Acerca de",
+        "graphs": "Graphs"
       }
     },
     "resetIncomplete": "No se pudieron borrar del todo los datos locales. Tu copia de seguridad está en {{path}}.",
@@ -285,6 +286,12 @@
       "welcome": "Bienvenida",
       "showWelcome": "Mostrar la bienvenida otra vez",
       "unknownVersion": "desconocida"
+    },
+    "graphs": {
+      "empty": "No graph presets yet. Save one from a graph's Presets row.",
+      "rename": "Rename",
+      "delete": "Delete",
+      "name": "Preset name"
     }
   },
   "common": {
@@ -621,18 +628,11 @@
     "changeColour": "Cambiar color",
     "favourite": "Marcar como favorito",
     "unfavourite": "Quitar de favoritos",
-    "moveToShelf": "Mover a estante",
     "practice": "Practicar con este cuaderno…",
     "exportBook": "Exportar cuaderno…",
     "share": "Compartir…",
     "importInto": "Importar en este cuaderno…",
     "colour": "Color {{color}}",
-    "noShelf": "Sin estante",
-    "shelfName": "Nombre del estante",
-    "unshelved": "Sin estante",
-    "renameShelf": "Renombrar estante",
-    "deleteShelf": "Eliminar estante",
-    "emptyShelf": "No hay cuadernos en este estante",
     "imported": "Cuaderno importado: {{pages}} páginas, {{elements}} elementos.",
     "importedSkipped": "Cuaderno importado: {{pages}} páginas, {{elements}} elementos, {{skipped}} omitidos (superan los límites).",
     "importFailed": "La importación falló: {{message}}",
@@ -643,8 +643,18 @@
     "emptyHint": "Crea tu primer cuaderno para empezar a organizar tus notas, ecuaciones e ideas",
     "noneFound": "No se encontraron cuadernos",
     "clearSearch": "Borrar búsqueda",
-    "newShelf": "Nuevo estante",
-    "newShelfName": "Nombre del nuevo estante"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "La exportación falló: {{message}}",
@@ -1017,7 +1027,7 @@
     "emptyHint": "Las páginas, capítulos y cuadernos eliminados aparecerán aquí para recuperarlos.",
     "deleted": "{{kind}}: eliminado el {{date}}",
     "kinds": {
-      "bookshelf": "estante de cuadernos",
+      "bookshelf": "folder",
       "unit": "unidad",
       "section": "sección",
       "page": "página"
@@ -1078,6 +1088,25 @@
       "yMax": "y máx",
       "grid": "Cuadrícula",
       "plot": "Gráfico"
+    },
+    "presets": {
+      "label": "Presets",
+      "select": "Preset",
+      "none": "No saved presets",
+      "choose": "Choose a preset",
+      "default": "default",
+      "apply": "Apply",
+      "delete": "Delete",
+      "name": "Preset name",
+      "namePlaceholder": "Save current as…",
+      "save": "Save",
+      "includeExpressions": "Include expressions",
+      "setDefault": "Default for new graphs of this kind"
+    },
+    "kinds": {
+      "2d-function": "Function graphs",
+      "2d-polar": "Polar graphs",
+      "2d-parametric": "Parametric graphs"
     }
   },
   "welcome": {
@@ -1129,7 +1158,22 @@
   "code": {
     "label": "Código",
     "language": "Lenguaje",
-    "plain": "Texto sin formato"
+    "plain": "Texto sin formato",
+    "run": "Run",
+    "runHint": "Run (Ctrl+Enter)",
+    "stop": "Stop",
+    "clearOutput": "Clear output",
+    "resetRuntime": "Reset runtime",
+    "noRuntime": "{{language}} code cannot run here",
+    "status": "Runtime status",
+    "idle": "Idle",
+    "running": "Running…",
+    "loadingPython": "Loading Python…",
+    "output": "Output",
+    "timedOut": "Timed out after {{seconds}} s",
+    "stopped": "Stopped",
+    "moreLines_one": "… ({{count}} more line)",
+    "moreLines_other": "… ({{count}} more lines)"
   },
   "paperPicker": {
     "title": "Paper",

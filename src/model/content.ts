@@ -31,10 +31,21 @@ export interface TableContent extends ContentMeta {
   tableData: { rows: string[][] };
 }
 
+/** The last run of a code block (read through text/tableCode `codeOf`). */
+export interface CodeOutput {
+  stdout: string;
+  stderr: string;
+  status: "ok" | "error" | "timeout";
+  durationMs: number;
+  /** ISO time of the run. */
+  ranAt: string;
+}
+
 export interface CodespaceContent extends ContentMeta {
   subtype: "codespace";
   code: string;
   language: string;
+  output?: CodeOutput;
 }
 
 /** graph (`boxWidth/boxHeight` top-level). Read `graphData` through graph/data `graphDataOf`. */

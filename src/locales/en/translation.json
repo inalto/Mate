@@ -14,7 +14,7 @@
       "libraryView": {
         "label": "Library view",
         "recent": "Recent",
-        "shelves": "Shelves",
+        "shelves": "Folders",
         "az": "A to Z"
       },
       "sidebarLayout": {
@@ -65,7 +65,8 @@
         "backup": "Backup",
         "sharing": "Sharing",
         "updates": "Updates",
-        "about": "About"
+        "about": "About",
+        "graphs": "Graphs"
       }
     },
     "resetIncomplete": "Local data could not be fully reset. Your backup is at {{path}}.",
@@ -282,6 +283,12 @@
       "welcome": "Welcome",
       "showWelcome": "Show welcome again",
       "unknownVersion": "unknown"
+    },
+    "graphs": {
+      "empty": "No graph presets yet. Save one from a graph's Presets row.",
+      "rename": "Rename",
+      "delete": "Delete",
+      "name": "Preset name"
     }
   },
   "common": {
@@ -618,18 +625,11 @@
     "changeColour": "Change colour",
     "favourite": "Favourite",
     "unfavourite": "Unfavourite",
-    "moveToShelf": "Move to shelf",
     "practice": "Practice from this book…",
     "exportBook": "Export book…",
     "share": "Share…",
     "importInto": "Import into this book…",
     "colour": "Colour {{color}}",
-    "noShelf": "No shelf",
-    "shelfName": "Shelf name",
-    "unshelved": "Unshelved",
-    "renameShelf": "Rename shelf",
-    "deleteShelf": "Delete shelf",
-    "emptyShelf": "No books on this shelf",
     "imported": "Imported book: {{pages}} pages, {{elements}} elements.",
     "importedSkipped": "Imported book: {{pages}} pages, {{elements}} elements, {{skipped}} skipped (over limits).",
     "importFailed": "Import failed: {{message}}",
@@ -640,8 +640,18 @@
     "emptyHint": "Create your first book to start organizing your notes, equations, and ideas",
     "noneFound": "No books found",
     "clearSearch": "Clear search",
-    "newShelf": "New shelf",
-    "newShelfName": "New shelf name"
+    "folders": "Folders",
+    "unfiled": "Unfiled",
+    "newFolder": "New folder",
+    "newFolderName": "New folder name",
+    "folderName": "Folder name",
+    "moveTo": "Move to…",
+    "moveItemTo": "Move {{title}} to…",
+    "folderCycle": "Cannot move a folder into itself",
+    "openFolder": "Open folder {{title}}",
+    "folderActions": "Actions for folder {{title}}",
+    "emptyFolder": "This folder is empty",
+    "breadcrumb": "Folder path"
   },
   "export": {
     "failed": "Export failed: {{message}}",
@@ -1014,7 +1024,7 @@
     "emptyHint": "Deleted pages, chapters, and notebooks will appear here for recovery.",
     "deleted": "{{kind}} - deleted {{date}}",
     "kinds": {
-      "bookshelf": "bookshelf",
+      "bookshelf": "folder",
       "unit": "unit",
       "section": "section",
       "page": "page"
@@ -1075,6 +1085,25 @@
       "yMax": "y max",
       "grid": "Grid",
       "plot": "Graph plot"
+    },
+    "presets": {
+      "label": "Presets",
+      "select": "Preset",
+      "none": "No saved presets",
+      "choose": "Choose a preset",
+      "default": "default",
+      "apply": "Apply",
+      "delete": "Delete",
+      "name": "Preset name",
+      "namePlaceholder": "Save current as…",
+      "save": "Save",
+      "includeExpressions": "Include expressions",
+      "setDefault": "Default for new graphs of this kind"
+    },
+    "kinds": {
+      "2d-function": "Function graphs",
+      "2d-polar": "Polar graphs",
+      "2d-parametric": "Parametric graphs"
     }
   },
   "welcome": {
@@ -1126,7 +1155,22 @@
   "code": {
     "label": "Code",
     "language": "Language",
-    "plain": "Plain text"
+    "plain": "Plain text",
+    "run": "Run",
+    "runHint": "Run (Ctrl+Enter)",
+    "stop": "Stop",
+    "clearOutput": "Clear output",
+    "resetRuntime": "Reset runtime",
+    "noRuntime": "{{language}} code cannot run here",
+    "status": "Runtime status",
+    "idle": "Idle",
+    "running": "Running…",
+    "loadingPython": "Loading Python…",
+    "output": "Output",
+    "timedOut": "Timed out after {{seconds}} s",
+    "stopped": "Stopped",
+    "moreLines_one": "… ({{count}} more line)",
+    "moreLines_other": "… ({{count}} more lines)"
   },
   "paperPicker": {
     "title": "Paper",

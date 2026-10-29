@@ -107,6 +107,15 @@ describe("GraphEditor", () => {
 
   it("is_registered_for_graphs", () => expect(hasEditor("graph")).toBe(true));
 
+  it("new_graphs_start_from_the_default_preset_of_the_kind", () => {
+    const fn = { id: "p1", name: "Wide", kind: "2d-function" as const, domain: { xMin: -50, xMax: 50, yMin: -5, yMax: 5 }, grid: false, isDefault: true };
+    const polar = { ...fn, id: "p2", kind: "2d-polar" as const, domain: { xMin: -1, xMax: 1, yMin: -1, yMax: 1 } };
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, graphPresets: [fn, polar] } });
+    const { id } = insert();
+    expect(data(id)).toMatchObject({ kind: "2d-function", grid: false, domain: fn.domain });
+    expect(data(id).expressions).toHaveLength(1); // the preset has no expressions: the blank row stays
+  });
+
   it("insert_places_default_graph_at_viewport_centre_and_edits", () => {
     const { id } = insert();
     const el = s().elements.get(id)!;

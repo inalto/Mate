@@ -2,8 +2,9 @@
 // palette, a never-throwing reader for stored content and the factory for a new graph element.
 import type { Vec2 } from "../canvas/camera";
 import { contentOf, type GraphContent } from "../model/content";
-import type { Element } from "../model/types";
+import type { Element, GraphPreset, Settings } from "../model/types";
 import { safeColor } from "../text/sanitize";
+import { applyPreset, defaultPresetFor } from "./presets";
 
 export type GraphKind = "2d-function" | "2d-polar" | "2d-parametric";
 
@@ -123,8 +124,13 @@ export function graphDataOf(el: Pick<Element, "content">): GraphData {
   };
 }
 
-/** A new graph (default data) with its top-left at `at`. */
-export const graphElement = (pageId: string, id: string, now: string, at: Vec2, color: string): Element => ({
+/** The default preset of `kind` in the settings, or null. */
+export function presetFor(kind: GraphKind, settings: Pick<Settings, "graphPresets">): GraphPreset | null {
+  return defaultPresetFor(kind, settings.graphPresets ?? []);
+}
+
+/** A new graph with its top-left at `at`: the default data, shaped by `preset` when given. */
+export const graphElement = (pageId: string, id: string, now: string, at: Vec2, color: string, preset?: GraphPreset | null): Element => ({
   id,
   pageId,
   type: "graph",
@@ -134,7 +140,7 @@ export const graphElement = (pageId: string, id: string, now: string, at: Vec2, 
   isHighlighter: false,
   boxWidth: DEFAULT_GRAPH_SIZE.width,
   boxHeight: DEFAULT_GRAPH_SIZE.height,
-  content: { subtype: "graph", graphData: defaultGraphData() } satisfies GraphContent,
+  content: { subtype: "graph", graphData: preset ? applyPreset({ ...defaultGraphData(), kind: preset.kind }, preset) : defaultGraphData() } satisfies GraphContent,
   createdAt: now,
   updatedAt: now,
   version: 0,

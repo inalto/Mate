@@ -16,10 +16,8 @@ import { gcAssets } from "../ipc/assets";
 import { useSettingsStore } from "./settings";
 import { sheetSizeFor } from "../canvas/camera";
 
-export interface ShelfGroup {
-  shelf: Bookshelf | null;
-  units: Unit[];
-}
+/** The backend's message when a folder would move into itself or one of its subfolders. */
+export const FOLDER_CYCLE = "Cannot move a folder into itself";
 
 interface NotebookState {
   tree: NotebookTree;
@@ -27,7 +25,10 @@ interface NotebookState {
   trashItems: TrashItem[];
   load: () => Promise<void>;
   loadTrash: () => Promise<void>;
-  createBookshelf: (title: string) => Promise<Bookshelf>;
+  /** Create a folder, inside `parentId` when given (else at the Library root). */
+  createBookshelf: (title: string, parentId?: string) => Promise<Bookshelf>;
+  /** Move a folder into `parentId` (null: the root). Rejects, readably, a move into itself. */
+  moveBookshelf: (id: string, parentId: string | null) => Promise<void>;
   createUnit: (title: string, bookshelfId?: string) => Promise<Unit>;
   createSection: (unitId: string, title: string) => Promise<Section>;
   /** Create a page with mode/background from settings; `overrides` replace those defaults. */
@@ -55,7 +56,14 @@ interface NotebookState {
   emptyTrash: () => Promise<void>;
   unitsByRecent: () => Unit[];
   unitsAZ: () => Unit[];
-  unitsByShelf: () => ShelfGroup[];
+  /** Direct subfolders of `parentId` (null: top level, including folders whose parent is gone). */
+  childFolders: (parentId: string | null) => Bookshelf[];
+  /** Folders from the root down to `id` (inclusive); empty for the root or an unknown id. */
+  folderPath: (id: string | null) => Bookshelf[];
+  /** `id` and every folder below it. */
+  folderSubtree: (id: string) => Set<string>;
+  /** Books in folder `id`; null gives the unfiled ones (no folder, or a folder that is gone). */
+  unitsInFolder: (id: string | null) => Unit[];
   recentPages: (n: number) => Page[];
   favouritePages: () => Page[];
 }
@@ -169,7 +177,7 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
       set({ trashItems: await ipc.listTrash() });
     },
 
-    createBookshelf: async (title) => {
+    createBookshelf: async (title, parentId) => {
       const stamp = now();
       const shelf: Bookshelf = {
         id: crypto.randomUUID(),
@@ -179,9 +187,25 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
         createdAt: stamp,
         updatedAt: stamp,
         version: 0,
+        parentId,
       };
       await saveShelf(shelf);
       return shelf;
+    },
+
+    moveBookshelf: async (id, parentId) => {
+      try {
+        await ipc.moveBookshelf(id, parentId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(message === FOLDER_CYCLE ? i18n.t("library.folderCycle") : message);
+      }
+      const b = tree().bookshelves.find((x) => x.id === id);
+      if (b) {
+        setTree({
+          bookshelves: upsertById(tree().bookshelves, { ...b, parentId: parentId ?? undefined, updatedAt: now() }),
+        });
+      }
     },
 
     createUnit: async (title, bookshelfId) => {
@@ -399,22 +423,47 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
       [...tree().units].sort((a, b) =>
         a.title.localeCompare(b.title, undefined, { sensitivity: "base" }),
       ),
-    unitsByShelf: () => {
-      const { bookshelves, units } = tree();
-      const groups: ShelfGroup[] = [...bookshelves]
-        .sort((a, b) => a.order - b.order)
-        .map((shelf) => ({
-          shelf,
-          units: units
-            .filter((u) => u.bookshelfId === shelf.id)
-            .sort((a, b) => a.orderIndex - b.orderIndex),
-        }));
+    childFolders: (parentId) => {
+      const { bookshelves } = tree();
       const known = new Set(bookshelves.map((b) => b.id));
-      const loose = units
-        .filter((u) => !u.bookshelfId || !known.has(u.bookshelfId))
+      return bookshelves
+        .filter((b) =>
+          parentId === null ? !b.parentId || !known.has(b.parentId) : b.parentId === parentId,
+        )
+        .sort((a, b) => a.order - b.order);
+    },
+    folderPath: (id) => {
+      const byId = new Map(tree().bookshelves.map((b) => [b.id, b]));
+      const path: Bookshelf[] = [];
+      const seen = new Set<string>();
+      // `seen` guards against a cycle in stale or corrupt data; the backend refuses new ones.
+      for (let b = id ? byId.get(id) : undefined; b && !seen.has(b.id); b = b.parentId ? byId.get(b.parentId) : undefined) {
+        seen.add(b.id);
+        path.unshift(b);
+      }
+      return path;
+    },
+    folderSubtree: (id) => {
+      const out = new Set([id]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const b of tree().bookshelves) {
+          if (b.parentId && out.has(b.parentId) && !out.has(b.id)) {
+            out.add(b.id);
+            grew = true;
+          }
+        }
+      }
+      return out;
+    },
+    unitsInFolder: (id) => {
+      const { bookshelves, units } = tree();
+      const known = new Set(bookshelves.map((b) => b.id));
+      return units
+        .filter((u) =>
+          id === null ? !u.bookshelfId || !known.has(u.bookshelfId) : u.bookshelfId === id,
+        )
         .sort((a, b) => a.orderIndex - b.orderIndex);
-      if (loose.length > 0) groups.push({ shelf: null, units: loose });
-      return groups;
     },
     recentPages: (n) =>
       [...tree().pages].sort((a, b) => byDateDesc(a.updatedAt, b.updatedAt)).slice(0, n),
