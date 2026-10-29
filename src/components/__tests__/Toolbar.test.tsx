@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
@@ -17,6 +17,7 @@ import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
 import { flushSettings, useSettingsStore } from "../../stores/settings";
 import { setPlatformForTests } from "../../platform";
+import { wheelToScroll } from "../DockPopover";
 import Toolbar from "../Toolbar";
 
 const renderBar = () =>
@@ -175,6 +176,12 @@ describe("Toolbar", () => {
     const dlg = screen.getByRole("dialog", { name: /paper/i });
     expect(dlg.closest(".tb-portal")).not.toBeNull();
     expect(within(dlg).getByRole("button", { name: "Ruled" })).toBeTruthy();
+    expect(dlg.contains(document.activeElement)).toBe(true); // focus moved in although placement is pending
+    // A dialog opening on top closes the popover.
+    act(() => useChromeStore.getState().pushModal());
+    expect(useChromeStore.getState().paperPickerOpen).toBe(false);
+    act(() => useChromeStore.getState().popModal());
+    fireEvent.click(btn());
     fireEvent.click(btn());
     expect(useChromeStore.getState().paperPickerOpen).toBe(false);
     expect(screen.queryByRole("dialog", { name: /paper/i })).toBeNull();
@@ -215,5 +222,11 @@ describe("Toolbar", () => {
     expect(screen.queryByRole("dialog", { name: "Shape options" })).toBeNull();
     await flushSettings();
     expect(patchSettings).toHaveBeenCalledWith(expect.objectContaining({ defaultShapeType: "star", defaultShapeStrokeWidth: 6.5 }));
+  });
+
+  it("wheel_to_scroll_maps_vertical_wheels_only", () => {
+    expect(wheelToScroll({ deltaX: 0, deltaY: 40, deltaMode: 0 })).toBe(40);
+    expect(wheelToScroll({ deltaX: 0, deltaY: 3, deltaMode: 1 })).toBe(48);
+    expect(wheelToScroll({ deltaX: 30, deltaY: 5, deltaMode: 0 })).toBe(0);
   });
 });

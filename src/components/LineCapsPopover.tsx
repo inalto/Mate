@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, Circle, LineVertical, Minus } from "@phosphor-ic
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
+import { shapeElementOutline } from "../shapes/geometry";
 import { effectiveCaps, LINE_CAPS, type LineCap, type LineCaps } from "../model/content";
 import type { EditorStore } from "../stores/editor";
 import { closeLineCaps, touchLineCaps, useLineCapsStore } from "../stores/lineCaps";
@@ -107,9 +108,21 @@ export default function LineCapsPopover({ store }: { store: EditorStore }) {
     if (r && r.width > 0) setSize((cur) => (cur.width === r.width && cur.height === r.height ? cur : { width: r.width, height: r.height }));
   }, [shown]);
 
-  if (!target || !valid || !el) return null;
-  const end = el.points[1] ?? el.points[0];
-  const start = el.points[0];
+  const off = (() => {
+    if (!el || !valid) return false;
+    const e = shapeElementOutline(el)[0]?.[1] ?? el.points[1] ?? el.points[0];
+    const s = worldToScreen(camera, e);
+    return s.x < 0 || s.y < 0 || s.x > viewport.width || s.y > viewport.height;
+  })();
+  // Panned or zoomed so the end point left the pane: the popover has nothing to point at.
+  useEffect(() => {
+    if (target && off) closeLineCaps();
+  }, [target, off]);
+
+  if (!target || !valid || !el || off) return null;
+  const shaft = shapeElementOutline(el)[0];
+  const start = shaft?.[0] ?? el.points[0];
+  const end = shaft?.[1] ?? el.points[1] ?? el.points[0];
   const at = worldToScreen(camera, end);
   // Open on the far side of the end point, away from the line.
   const dx = end.x - start.x;
@@ -123,11 +136,13 @@ export default function LineCapsPopover({ store }: { store: EditorStore }) {
     <div
       ref={ref}
       className="line-caps"
-      role="dialog"
+      role="toolbar"
       aria-label={t("lineCaps.title")}
       style={{ left, top }}
       onPointerMove={touchLineCaps}
       onPointerDown={touchLineCaps}
+      onFocus={touchLineCaps}
+      onKeyDown={touchLineCaps}
     >
       <LineCapsPicker
         caps={effectiveCaps(el)}

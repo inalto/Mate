@@ -34,9 +34,9 @@ describe("LineCapsPopover", () => {
   it("renders_8_options_and_sets_caps", async () => {
     const id = await addLine();
     render(<LineCapsPopover store={useEditorStore} />);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "Line ends" })).toBeNull();
     act(() => openLineCaps(useEditorStore, id));
-    const dialog = screen.getByRole("dialog", { name: "Line ends" });
+    const dialog = screen.getByRole("toolbar", { name: "Line ends" });
     expect(within(dialog).getAllByRole("button")).toHaveLength(8);
     // Anchored past the end point (300, 300) in pane space.
     expect(parseFloat(dialog.style.left)).toBeGreaterThan(300);
@@ -57,7 +57,7 @@ describe("LineCapsPopover", () => {
     act(() => openLineCaps(useEditorStore, id));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(useLineCapsStore.getState().target).toBeNull();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "Line ends" })).toBeNull();
 
     act(() => openLineCaps(useEditorStore, id));
     fireEvent.pointerDown(screen.getByRole("button", { name: "End: Arrow" }));
@@ -68,7 +68,17 @@ describe("LineCapsPopover", () => {
     vi.useFakeTimers();
     act(() => openLineCaps(useEditorStore, id));
     act(() => vi.advanceTimersByTime(LINE_CAPS_IDLE_MS + 10));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("toolbar", { name: "Line ends" })).toBeNull();
+  });
+
+  it("is_a_toolbar_and_closes_when_the_end_leaves_the_pane", async () => {
+    const id = await addLine();
+    render(<LineCapsPopover store={useEditorStore} />);
+    act(() => openLineCaps(useEditorStore, id));
+    expect(screen.getByRole("toolbar", { name: "Line ends" })).toBeTruthy();
+    act(() => useEditorStore.setState({ camera: { x: 5000, y: 0, z: 1 } }));
+    expect(screen.queryByRole("toolbar", { name: "Line ends" })).toBeNull();
+    expect(useLineCapsStore.getState().target).toBeNull();
   });
 
   it("selection_bar_offers_line_ends_for_one_line", async () => {

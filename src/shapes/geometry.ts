@@ -310,6 +310,8 @@ export function shapeHit(el: Element, p: Vec2, tol: number, interior = true): bo
   const polys = shapeElementOutline(el);
   const r2 = (tol + el.width / 2) ** 2;
   for (const poly of polys) for (let i = 0; i + 1 < poly.length; i++) if (segDist2(poly[i], poly[i + 1], p) <= r2) return true;
+  // Filled line caps (arrow head, dot) are solid: hit anywhere inside, not only on the rim.
+  for (let k = 1; k < polys.length; k++) if (isFilledCap(polys[k]) && inside(p, polys[k])) return true;
   return interior && isClosedShape(el.shapeType ?? "rectangle") && polys.length > 0 && inside(p, polys[0]);
 }
 

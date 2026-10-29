@@ -16,6 +16,16 @@ export function useDock(): Dock {
   return "top";
 }
 
+/**
+ * Sideways scroll amount for a wheel gesture over a horizontal bar, or 0 to leave it alone: only
+ * vertical-dominant wheels count (trackpad horizontal gestures scroll natively) and line-mode
+ * deltas are scaled to pixels.
+ */
+export function wheelToScroll(e: { deltaX: number; deltaY: number; deltaMode: number }): number {
+  if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return 0;
+  return e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+}
+
 const GAP = 8;
 const MARGIN = 4;
 
@@ -77,7 +87,7 @@ export default function DockPopover({ anchorRef, children }: { anchorRef: RefObj
       ref={ref}
       className="tb-portal"
       data-dock={dock}
-      style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: "hidden" }}
+      style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, opacity: 0, pointerEvents: "none" }}
     >
       {children}
     </div>,

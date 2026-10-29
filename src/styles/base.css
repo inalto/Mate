@@ -1111,7 +1111,7 @@ button.card:hover {
 /* Toolbar popovers live on <body> (see DockPopover) and are placed from the anchor's rectangle. */
 .tb-portal {
   position: fixed;
-  z-index: 50;
+  z-index: 40; /* below .backdrop (50): dialogs always cover toolbar popovers */
   max-width: calc(100vw - 8px);
   max-height: calc(100vh - 8px);
   overflow: auto;

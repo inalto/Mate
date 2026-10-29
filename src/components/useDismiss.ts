@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
+import { useChromeStore } from "../stores/chrome";
 import { isInsidePortal } from "./DockPopover";
 import { useModal } from "./useModal";
 
@@ -18,9 +19,17 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, on
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") cb.current();
     };
+    // A dialog opening on top (modal count rises above ours) closes the popover beneath it.
+    const base = useChromeStore.getState().modalDepth;
+    const unsub = useChromeStore.subscribe((s) => {
+      if (s.modalDepth <= base) return;
+      unsub(); // once: closing writes to this store again
+      cb.current();
+    });
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey);
     return () => {
+      unsub();
       document.removeEventListener("pointerdown", onDown, true);
       document.removeEventListener("keydown", onKey);
     };

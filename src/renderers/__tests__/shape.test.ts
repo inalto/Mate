@@ -154,6 +154,9 @@ describe("shape renderer", () => {
     expect(dot).toMatch(/fill="#000000"/);
     // A plain line has no cap paths; a legacy arrow keeps its head.
     expect(elementSvg({ ...ln, content: { fillOpacity: 1 } }, opts)).not.toContain("<path");
+    const legacy = elementSvg({ ...ln, shapeType: "arrow", content: { fillOpacity: 1 } }, opts);
+    expect((legacy.match(/<path /g) ?? []).length).toBe(1);
+    expect(legacy).toMatch(/<path d="M100 0L[^"]+Z" fill="#000000"/);
   });
 
   it("unsafe_colours_fall_back", () => {

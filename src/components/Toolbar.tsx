@@ -42,7 +42,7 @@ import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 import { useSettingsStore } from "../stores/settings";
 import { isMobile } from "../platform";
-import DockPopover, { useDock, type Dock } from "./DockPopover";
+import DockPopover, { useDock, wheelToScroll, type Dock } from "./DockPopover";
 import PaperPicker from "./PaperPicker";
 import PresetMenu from "./PresetMenu";
 import { SHAPE_LABEL_KEY } from "../shapes/catalog";
@@ -458,8 +458,10 @@ export default function Toolbar() {
   const vertical = dock === "left" || dock === "right";
   // A mouse wheel has no horizontal axis: turn it into sideways scrolling of a horizontal bar.
   const onWheel = (e: WheelEvent<HTMLDivElement>) => {
-    if (vertical || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-    e.currentTarget.scrollLeft += e.deltaY;
+    // React events bubble through portals: ignore wheels over a popover rendered outside the bar.
+    if (vertical || !e.currentTarget.contains(e.target as Node)) return;
+    const dx = wheelToScroll(e);
+    if (dx) e.currentTarget.scrollLeft += dx;
   };
 
   const toolBtn = (id: "cursor" | "lasso" | "text", action: ShortcutAction, label: string, icon: ReactNode) => (

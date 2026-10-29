@@ -108,6 +108,18 @@ describe("renderToPdf", () => {
     const plain = await renderToPdf([ln({ fillOpacity: 1 })], page(), OPTS, deps());
     const capped = await renderToPdf([ln({ fillOpacity: 1, caps: { start: "bar", end: "dot" } })], page(), OPTS, deps());
     expect(capped.length).toBeGreaterThan(plain.length);
+    // Uncompressed streams: count the paint operators (S stroke, B fill+stroke).
+    const ops = async (c: unknown) => {
+      const txt = new TextDecoder("latin1").decode(await renderToPdf([ln(c)], page(), { ...OPTS, compress: false }, deps()));
+      return { B: (txt.match(/^B$/gm) ?? []).length, S: (txt.match(/^S$/gm) ?? []).length };
+    };
+    const base = await ops({ fillOpacity: 1 });
+    const dot = await ops({ fillOpacity: 1, caps: { start: "none", end: "dot" } });
+    const bar = await ops({ fillOpacity: 1, caps: { start: "bar", end: "none" } });
+    expect(dot.B).toBe(base.B + 1); // filled dot
+    expect(dot.S).toBe(base.S);
+    expect(bar.S).toBe(base.S + 1); // stroked bar
+    expect(bar.B).toBe(base.B);
   });
 
   it("caps a tall canvas page at the PDF size limit", async () => {

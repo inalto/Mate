@@ -81,7 +81,7 @@ export default function PaperPicker({ page, onClose, anchorRef }: { page: Page; 
         e.stopImmediatePropagation(); // closes the picker only, nothing behind it
         draftRef.current(); // a typed spacing still in the field is applied first
         close.current();
-      } else if (e.key === "Tab" && !popover) {
+      } else if (e.key === "Tab") {
         const items = [...(ref.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
         e.preventDefault();
         if (items.length === 0) return;
@@ -94,7 +94,7 @@ export default function PaperPicker({ page, onClose, anchorRef }: { page: Page; 
       window.removeEventListener("keydown", onKey, true);
       before?.focus?.();
     };
-  }, [popover]);
+  }, []);
 
   const apply = (next: BackgroundConfig) => {
     setCfg(next);

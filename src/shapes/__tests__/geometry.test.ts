@@ -139,6 +139,14 @@ describe("shape geometry", () => {
 });
 
 describe("line caps", () => {
+  it("filled_caps_are_solid_for_hit_testing", () => {
+    const content = { fillOpacity: 1, caps: { start: "none", end: "dot" } } as const;
+    const ln = shape("line", [[0, 0], [100, 0]], { width: 10, content });
+    expect(shapeHit(ln, { x: 100, y: 0 }, 0)).toBe(true); // dot centre
+    expect(shapeHit(ln, { x: 100, y: 12 }, 0)).toBe(true); // inside the dot (r = 15), off the shaft
+    expect(shapeHit(ln, { x: 100, y: 30 }, 0)).toBe(false);
+  });
+
   const seg = { x: 0, y: 0, width: 100, height: 0 };
 
   it("legacy_arrow_without_caps_keeps_its_head", () => {

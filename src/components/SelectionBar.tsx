@@ -35,8 +35,8 @@ function copyText(text: string): void {
 
 const BAR_GAP = 12;
 const BAR_HEIGHT = 44;
-/** Keep clear of the top toolbar. */
-const TOP_RESERVED = 64;
+/** Margin kept to the top of the pane (the toolbar is docked outside the canvas). */
+const TOP_RESERVED = 8;
 
 /** The Compute menu with its remote-engine entries (read only when a math box is selected). */
 function MathCompute(props: Omit<ComputeMenuProps, "extraItems">) {
