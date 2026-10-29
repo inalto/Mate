@@ -10,12 +10,16 @@ Write with a pen on an endless canvas or on paged sheets, organise pages into bo
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **v0.9.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). Version 0.8.0 adds finger drawing and six more paper templates. Version 0.9.0 adds nested library folders, graph presets and running code in code blocks. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/0.9.0.md).
+> Status: **v1.0.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). Version 0.8.0 adds finger drawing and six more paper templates. Version 0.9.0 adds nested library folders, graph presets and running code in code blocks. Version 1.0.0 adds line ends (arrow, dot, bar), a toolbar that docks to any edge with the paper picker inside it, SVG, audio and video on the page, and dictation. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/1.0.0.md).
 
 ## Features
 
 - **Ink** — pen, highlighter and fountain pen (pressure, tilt, nib flatness), toolbar presets, palettes, recent colours, stroke stabilisation, palm rejection, pen barrel/eraser-end actions
-- **Canvas** — infinite canvas or paper mode (A4, Letter, 16:9, 4:3, square; ruled, grid, dot, blank, plus isometric, hex, Cornell, handwriting, columns and music templates from the **Paper** button in the editor top bar), zoom 0.1×–10×, pinch, wheel, overscroll
+- **Canvas** — infinite canvas or paper mode (A4, Letter, 16:9, 4:3, square; ruled, grid, dot, blank, plus isometric, hex, Cornell, handwriting, columns and music templates from the **Paper** button in the toolbar), zoom 0.1×–10×, pinch, wheel, overscroll
+- **Line ends** — arrow, dot or bar at either end of a straightened line or arrow, from a small panel after the snap
+- **Toolbar** — docks to the top, bottom, left or right of the page, with the paper picker inside it
+- **Media** — SVG images, audio (mp3, m4a, wav, ogg) and video (mp4, webm) on the page with built-in players
+- **Dictation** — record your voice and get text in a text box, through OpenAI, Groq, Mistral or a speech server of your own
 - **Editing** — whole/partial eraser, lasso select, move, scale, arrange, duplicate, undo/redo (100 entries / 50 MiB), keyboard shortcuts
 - **Organisation** — folders and subfolders → books → sections → nestable pages; favourites; recent; trash with retention; thumbnails
 - **Workspace** — sidebar (tree or split layout, left- or right-handed), tabs, split view, page settings
@@ -91,6 +95,27 @@ A graph can save its settings (kind, axes range, grid and similar options, and o
 ## Running code
 
 Code blocks in JavaScript, TypeScript and Python have a **Run** button (Ctrl/Cmd+Enter in the editor). The output appears under the code and is saved with the block (the last 200 lines). Each run has a 10 second limit; a run that takes longer is stopped. A language keeps its state between runs on a page until you press **Reset runtime**; JavaScript top-level `let` and `const` carry over too. Python runs on [Pyodide](https://pyodide.org), a Python interpreter compiled to WebAssembly and bundled with the app (about 14 MB), with the standard library only. It loads the first time you run Python. Everything runs on your device, in the background, with no network access. See [Code](https://github.com/inalto/Mate/wiki/Code).
+
+## Line ends
+
+When a stroke snaps to a straight line or an arrow, a small **Line ends** panel opens next to the end point. Choose None, Arrow, Dot or Bar for the start and for the end. It closes when you touch the canvas, press Escape or after 5 seconds. To change the ends later, select the line and use **Line ends** in the selection bar. Each change is one undo step, and old arrows keep their head. Turn the automatic panel off under Settings → Writing (**Offer line ends after snapping**). Details: [Ink engine](https://github.com/inalto/Mate/wiki/Ink-Engine).
+
+## Toolbar docking
+
+The toolbar can sit at the top, bottom, left or right of the page. Use **Move toolbar** at the end of the bar or Settings → Appearance. The page area is laid out beside the bar, so it never covers ink; a bar that does not fit scrolls. On mobile only top and bottom are offered. The **Paper** button (templates, page size) lives in the bar, and its menu opens away from the edge.
+
+## Media (SVG, audio, video)
+
+**Insert media** adds mp3, m4a, wav, ogg, mp4 or webm files (up to 256 MB each); drop or paste works too. Players sit on the page with their own controls. With the cursor tool the player takes the pointer; a 10 px strip along its top edge selects it so it can be moved or resized. A video keeps a 480 by 270 box and is letterboxed inside it. SVG images without a width and height use their view box, and pasted SVG text is inserted as an image. Exports and thumbnails draw a placeholder for media, and `.mate` archives carry the files. See [Media](https://github.com/inalto/Mate/wiki/Media).
+
+## Dictation
+
+The **Dictate** button records your voice (up to 5 minutes) and turns it into a text box at the centre of the view, or adds it to the text box you are editing. Choose the service under Settings → Dictation:
+
+- **OpenAI**, **Groq** and **Mistral** (need an API key, stored in the system keychain), or
+- **Local server**: any OpenAI-compatible speech server on this computer or network (for example whisper.cpp or speaches), no key needed, or **Custom** for any other address.
+
+Audio is sent to the chosen service only after you allow it; answering **Not now** means Mate asks again next time. Mate keeps no recording. Microphone access on macOS and Linux and on Android needs the system's permission; see [Dictation](https://github.com/inalto/Mate/wiki/Dictation).
 
 ## Maths engines
 
