@@ -263,4 +263,31 @@ describe("fingerMayDraw", () => {
     expect(fingerMayDraw(tip, "standard", "draw", now - 500, now)).toBe(true);
     expect(fingerMayDraw({ width: 8, height: 8 }, "high", "draw", now - 500, now)).toBe(true);
   });
+
+  it("one_finger_pan_reports_start_fingers_and_time", () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const h = { onDown: vi.fn(), onMove: vi.fn(), onUp: vi.fn(), onCancel: vi.fn(), onPanStart: vi.fn(), onPan: vi.fn(), onPanEnd: vi.fn() };
+    createPointerAdapter(el, h, { palmRejection: "high", fingerAction: "pan", getCamera: camera });
+    const at = (type: string, init: PointerEventInit, t: number) => {
+      const ev = new PointerEvent(type, { bubbles: true, cancelable: true, ...init });
+      Object.defineProperty(ev, "timeStamp", { value: t });
+      el.dispatchEvent(ev);
+    };
+    const finger = { pointerId: 7, pointerType: "touch", width: 8, height: 8, buttons: 1 };
+    at("pointerdown", { ...finger, clientX: 200, clientY: 50 }, 10);
+    expect(h.onPanStart).toHaveBeenCalledWith({ x: 200, y: 50 }, 10);
+    at("pointermove", { ...finger, clientX: 150, clientY: 52 }, 40);
+    expect(h.onPan).toHaveBeenLastCalledWith(-50, 2, { fingers: 1, timeStamp: 40 });
+    at("pointerdown", { ...finger, pointerId: 8, clientX: 300, clientY: 50 }, 50);
+    expect(h.onPanStart).toHaveBeenCalledTimes(1); // a second finger does not restart the pan
+    at("pointerup", { ...finger, buttons: 0, clientX: 150, clientY: 52 }, 60);
+    at("pointerup", { ...finger, pointerId: 8, buttons: 0, clientX: 300, clientY: 50 }, 60);
+    expect(h.onPanEnd).toHaveBeenCalledTimes(1);
+    // Pen input never reports a pan.
+    at("pointerdown", { pointerId: 9, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 0, clientY: 0 }, 70);
+    at("pointermove", { pointerId: 9, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 90, clientY: 0 }, 80);
+    expect(h.onPanStart).toHaveBeenCalledTimes(1);
+    expect(h.onDown).toHaveBeenCalledTimes(1);
+  });
 });

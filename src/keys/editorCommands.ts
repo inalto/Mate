@@ -11,6 +11,7 @@ import type { ShortcutDispatch } from "./shortcuts";
 import { openPageInWindow } from "./windowBridge";
 import { noteShortcutUse } from "../components/shortcutHints";
 import { modalAllows } from "./modalGuard";
+import i18n from "../i18n";
 
 export const ZOOM_STEP = 1.2;
 
@@ -64,6 +65,28 @@ export function stepPage(dir: -1 | 1): void {
   const order = sectionPageOrder(pages, cur.sectionId);
   const next = order[order.indexOf(cur.id) + dir];
   if (next) tabs.openPage(next);
+}
+
+/**
+ * Page turn from a swipe: 1 opens the next page of the section, or, on its last page, creates a new
+ * page at the end of the section (named like the sidebar's "new page") and opens it in the focused
+ * pane; -1 opens the previous page and does nothing on the first.
+ */
+export async function turnPage(dir: -1 | 1): Promise<void> {
+  const id = focusedPageId(useTabsStore.getState());
+  const nb = useNotebookStore.getState();
+  const cur = nb.tree.pages.find((p) => p.id === id);
+  if (!cur) return;
+  const order = sectionPageOrder(nb.tree.pages, cur.sectionId);
+  const next = order[order.indexOf(cur.id) + dir];
+  if (next) {
+    useTabsStore.getState().openPage(next);
+    return;
+  }
+  if (dir === -1) return;
+  const count = nb.tree.pages.filter((p) => p.sectionId === cur.sectionId).length;
+  const created = await nb.createPage(cur.sectionId, i18n.t("common.pageName", { n: count + 1 }));
+  useTabsStore.getState().openPage(created.id);
 }
 
 /** Tab, sidebar and page-tree shortcuts. `tab.new` needs the router: see Editor (startNewTab). */

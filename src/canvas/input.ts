@@ -35,14 +35,23 @@ export interface PinchGesture {
   dist: number;
 }
 
+export interface PanInfo {
+  /** Contacts down (the delta is averaged over them). */
+  fingers: number;
+  /** Event timeStamp (ms). */
+  timeStamp: number;
+}
+
 export interface PointerHandlers {
   onDown(p: Point, info: PointerInfo): void;
   /** Coalesced points since the last move (world units) and predicted points (live draw only). */
   onMove(points: Point[], predicted: Point[]): void;
   onUp(p: Point): void;
   onCancel(): void;
+  /** First gesture touch landed (element-relative screen px, event timeStamp ms). */
+  onPanStart?(at: Vec2, timeStamp: number): void;
   /** One-finger pan for touches that may not draw (screen px deltas). */
-  onPan?(dx: number, dy: number): void;
+  onPan?(dx: number, dy: number, info: PanInfo): void;
   onPanEnd?(): void;
   onPinch?(g: PinchGesture): void;
 }
@@ -176,6 +185,7 @@ export function createPointerAdapter(
   };
 
   const addGestureTouch = (e: PointerEvent) => {
+    if (touches.size === 0) handlers.onPanStart?.(local(e), e.timeStamp);
     touches.set(e.pointerId, local(e));
     capture(e.pointerId);
     if (touches.size === 2 && pinchEnabled()) {
@@ -259,7 +269,10 @@ export function createPointerAdapter(
       if (g) handlers.onPinch!(g);
     } else {
       // One finger (or two with pinch disabled): pan by this contact's delta, averaged over contacts.
-      handlers.onPan?.((next.x - prev.x) / touches.size, (next.y - prev.y) / touches.size);
+      handlers.onPan?.((next.x - prev.x) / touches.size, (next.y - prev.y) / touches.size, {
+        fingers: touches.size,
+        timeStamp: e.timeStamp,
+      });
     }
   };
 

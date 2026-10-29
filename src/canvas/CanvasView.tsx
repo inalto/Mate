@@ -23,6 +23,8 @@ import { paintBackground, type SurfaceColors } from "./background";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
+import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
+import { turnPage } from "../keys/editorCommands";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
@@ -93,6 +95,9 @@ function createEngine(
   let flashTimer: ReturnType<typeof setTimeout> | null = null;
   let lastPan: Vec2 = { x: 0, y: 0 };
   let pinchStart: PinchStart | null = null;
+  /** The current touch pan, for swipe-to-turn: screen samples, camera at its start, and whether it
+   * stayed a one-finger pan (a pinch or second finger rules it out). */
+  let swipe: { samples: SwipeSample[]; camera: Camera; oneFinger: boolean } | null = null;
   /** True while our own commit updates the store (the element is already in the snapshot). */
   let committing = false;
   let sheetCount = 0;
@@ -417,11 +422,28 @@ function createEngine(
         mode = "none";
         setLive(null);
       },
-      onPan(dx, dy) {
+      onPanStart(at, timeStamp) {
+        swipe = { samples: [{ x: at.x, y: at.y, t: timeStamp }], camera: st().camera, oneFinger: true };
+      },
+      onPan(dx, dy, info) {
         const s = st();
         s.setCamera(dragPan(s.camera, dx, dy, clamp));
+        if (!swipe) return;
+        if (info.fingers > 1) swipe.oneFinger = false;
+        const last = swipe.samples[swipe.samples.length - 1];
+        swipe.samples.push({ x: last.x + dx, y: last.y + dy, t: info.timeStamp });
+      },
+      onPanEnd() {
+        const g = swipe;
+        swipe = null;
+        const s = st();
+        if (!g?.oneFinger || !s.page) return;
+        // A leftward swipe (-1) turns to the next page, a rightward one to the previous page.
+        const dir = detectSwipe(g.samples);
+        if (dir !== null && canSwipeAt(g.camera, s.page, s.viewport, dir, sheetStack(s))) void turnPage(dir === -1 ? 1 : -1);
       },
       onPinch(g) {
+        if (swipe) swipe.oneFinger = false;
         const s = st();
         if (g.phase === "start") pinchStart = { camera: s.camera, mid: g.mid, dist: g.dist };
         else if (g.phase === "end") pinchStart = null;
