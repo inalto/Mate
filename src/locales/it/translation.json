@@ -578,24 +578,6 @@
     "bottom": "In basso",
     "left": "A sinistra",
     "right": "A destra",
-    "menu": "Sposta la barra",
-    "paper": "Carta"
-  },
-  "dock": {
-    "position": "Posizione della barra",
-    "top": "In alto",
-    "bottom": "In basso",
-    "left": "A sinistra",
-    "right": "A destra",
-    "menu": "Sposta la barra",
-    "paper": "Carta"
-  },
-  "dock": {
-    "position": "Posizione della barra",
-    "top": "In alto",
-    "bottom": "In basso",
-    "left": "A sinistra",
-    "right": "A destra",
     "menu": "Sposta la barra"
   },
   "topbar": {

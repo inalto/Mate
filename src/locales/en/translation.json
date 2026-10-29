@@ -578,24 +578,6 @@
     "bottom": "Bottom",
     "left": "Left",
     "right": "Right",
-    "menu": "Move toolbar",
-    "paper": "Paper"
-  },
-  "dock": {
-    "position": "Toolbar position",
-    "top": "Top",
-    "bottom": "Bottom",
-    "left": "Left",
-    "right": "Right",
-    "menu": "Move toolbar",
-    "paper": "Paper"
-  },
-  "dock": {
-    "position": "Toolbar position",
-    "top": "Top",
-    "bottom": "Bottom",
-    "left": "Left",
-    "right": "Right",
     "menu": "Move toolbar"
   },
   "topbar": {
