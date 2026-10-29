@@ -1041,6 +1041,7 @@
     "transcribing": "Transcription…",
     "noMicrophone": "Aucun microphone n'a été trouvé.",
     "permissionDenied": "Mate n'est pas autorisé à utiliser le microphone. Autorisez-le dans les réglages du système.",
+    "unsupported": "L'enregistrement n'est pas disponible sur cet appareil.",
     "failed": "Échec de la dictée : {{message}}",
     "nothingHeard": "Rien n'a été entendu. Réessayez un peu plus près du microphone.",
     "off": "La dictée est désactivée. Activez-la dans Réglages, Dictée.",
@@ -1048,6 +1049,16 @@
     "openSettings": "Réglages",
     "limitReached": "L'enregistrement s'est arrêté après 5 minutes.",
     "noPage": "Ouvrez une page pour y dicter.",
+    "errors": {
+      "disabled": "La dictée est désactivée. Activez-la dans Réglages, Dictée.",
+      "network": "Impossible de joindre le service vocal ({{detail}}).",
+      "rejected": "Le service vocal a refusé l'enregistrement ({{detail}}).",
+      "invalidResponse": "Le service vocal a envoyé une réponse illisible ({{detail}}).",
+      "auth": "Le service vocal n'a pas accepté la clé API. Vérifiez-la dans Réglages, Dictée.",
+      "noKey": "Enregistrez une clé API pour le service vocal dans Réglages, Dictée.",
+      "noAddress": "Saisissez l'adresse du service vocal dans Réglages, Dictée.",
+      "tooLarge": "L'enregistrement est trop volumineux pour être envoyé (plus de 25 Mo). Dictez en parties plus courtes."
+    },
     "settings": {
       "title": "Dictée",
       "provider": "Service vocal",
@@ -1062,7 +1073,12 @@
       "status": "État",
       "ready": "Prêt à dicter.",
       "notReady": "Pas encore configuré : enregistrez une clé ou saisissez une adresse.",
-      "loadFailed": "La liste des services vocaux n'a pas pu être chargée."
+      "loadFailed": "La liste des services vocaux n'a pas pu être chargée.",
+      "testLabel": "Connexion",
+      "testing": "Test en cours…",
+      "testOk": "Le service vocal a répondu. La dictée est prête.",
+      "testHint": "Envoie une demi-seconde de silence à {{provider}} pour vérifier la clé, le modèle et l'adresse. Cet audio quitte l'appareil : le consentement ci-dessous doit être activé.",
+      "testHintLocal": "Envoie une demi-seconde de silence au programme à l'adresse {{address}} pour vérifier qu'il répond. Le consentement ci-dessous doit être activé."
     },
     "consent": {
       "title": "Envoyer les enregistrements à {{provider}} ?",

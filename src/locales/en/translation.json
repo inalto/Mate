@@ -1038,6 +1038,7 @@
     "transcribing": "Transcribing…",
     "noMicrophone": "No microphone was found.",
     "permissionDenied": "Mate is not allowed to use the microphone. Allow it in the system settings.",
+    "unsupported": "Recording is not available on this device.",
     "failed": "Dictation failed: {{message}}",
     "nothingHeard": "Nothing was heard. Try again a little closer to the microphone.",
     "off": "Dictation is off. Turn it on in Settings, Dictation.",
@@ -1045,6 +1046,16 @@
     "openSettings": "Settings",
     "limitReached": "Recording stopped after 5 minutes.",
     "noPage": "Open a page to dictate into.",
+    "errors": {
+      "disabled": "Dictation is off. Turn it on in Settings, Dictation.",
+      "network": "Could not reach the speech service ({{detail}}).",
+      "rejected": "The speech service refused the recording ({{detail}}).",
+      "invalidResponse": "The speech service sent a reply that could not be read ({{detail}}).",
+      "auth": "The speech service did not accept the API key. Check it in Settings, Dictation.",
+      "noKey": "Save an API key for the speech service in Settings, Dictation.",
+      "noAddress": "Enter the speech service's address in Settings, Dictation.",
+      "tooLarge": "The recording is too large to send (over 25 MB). Dictate in shorter parts."
+    },
     "settings": {
       "title": "Dictation",
       "provider": "Speech service",
@@ -1059,7 +1070,12 @@
       "status": "Status",
       "ready": "Ready to dictate.",
       "notReady": "Not set up yet: save a key or enter an address.",
-      "loadFailed": "The list of speech services could not be loaded."
+      "loadFailed": "The list of speech services could not be loaded.",
+      "testLabel": "Connection",
+      "testing": "Testing…",
+      "testOk": "The speech service answered. Dictation is ready.",
+      "testHint": "Sends half a second of silence to {{provider}} to check the key, model and address. This audio leaves the device, so the consent below must be on.",
+      "testHintLocal": "Sends half a second of silence to the program at {{address}} to check that it answers. The consent below must be on."
     },
     "consent": {
       "title": "Send recordings to {{provider}}?",

@@ -43,3 +43,9 @@ export const transcribeAudio = (bytes: Uint8Array, mime: string, language?: stri
   invoke<string>("transcribe_audio", bytes, {
     headers: { "x-speech-mime": mime, ...(language ? { "x-speech-language": language } : {}) },
   });
+
+/**
+ * Sends half a second of silence to the configured service (with the same consent, key and
+ * address checks as a dictation) and resolves when it answered; rejects like `transcribeAudio`.
+ */
+export const testSpeechKey = (): Promise<void> => invoke("test_speech_key");

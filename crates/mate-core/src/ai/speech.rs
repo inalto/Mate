@@ -4,6 +4,7 @@
 //! Callers check `settings.speechConsent` and the key before calling [`transcribe`]; the key is
 //! sent only in the `Authorization: Bearer` header (not at all when empty) and never logged.
 
+use std::thread;
 use std::time::Duration;
 
 use reqwest::blocking::multipart::{Form, Part};
@@ -14,6 +15,39 @@ use super::provider::AiError;
 
 /// One recording can take a while to upload and transcribe.
 const TIMEOUT: Duration = Duration::from_secs(120);
+/// A program on this computer or network may run on a CPU: up to 5 minutes for a long recording.
+const LOCAL_TIMEOUT: Duration = Duration::from_secs(300);
+/// Wait before the single retry after a 429 or 5xx (as the tutor's OpenAI client).
+const RETRY_BACKOFF: Duration = Duration::from_millis(800);
+
+/// The `InvalidResponse` detail of a reply that holds no text (silence, or nothing recognised).
+pub const NO_TEXT: &str = "no text was recognised";
+
+/// The request timeout for an address: longer for a local server.
+pub fn timeout_for(base: &str) -> Duration {
+    if is_local_host(base) { LOCAL_TIMEOUT } else { TIMEOUT }
+}
+
+/// `ms` milliseconds of silence as a 16 kHz, 16-bit mono WAV file (the settings' test call).
+pub fn silent_wav(ms: u32) -> Vec<u8> {
+    const RATE: u32 = 16_000;
+    let data_len = RATE * ms / 1000 * 2;
+    let mut out = Vec::with_capacity(44 + data_len as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data_len).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
+    out.extend_from_slice(&1u16.to_le_bytes()); // PCM
+    out.extend_from_slice(&1u16.to_le_bytes()); // mono
+    out.extend_from_slice(&RATE.to_le_bytes());
+    out.extend_from_slice(&(RATE * 2).to_le_bytes()); // byte rate
+    out.extend_from_slice(&2u16.to_le_bytes()); // block align
+    out.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data_len.to_le_bytes());
+    out.resize(44 + data_len as usize, 0);
+    out
+}
 
 /// Largest recording sent (OpenAI's own limit).
 pub const MAX_AUDIO_BYTES: usize = 25 * 1024 * 1024;
@@ -181,31 +215,48 @@ pub fn transcribe(
     if bytes.len() > MAX_AUDIO_BYTES {
         return Err(AiError::Rejected("the recording is larger than 25 MB".into()));
     }
-    let file = Part::bytes(bytes)
-        .file_name(file_name_for(mime))
-        .mime_str(&part_mime(mime))
-        .map_err(|_| AiError::Rejected("unknown recording type".into()))?;
-    let mut form = Form::new()
-        .part("file", file)
-        .text("model", effective_model(spec, model))
-        .text("response_format", "json");
-    if let Some(lang) = language_code(language) {
-        form = form.text("language", lang);
-    }
+    let model = effective_model(spec, model);
+    let language = language_code(language);
+    let form = || -> Result<Form, AiError> {
+        let file = Part::bytes(bytes.clone())
+            .file_name(file_name_for(mime))
+            .mime_str(&part_mime(mime))
+            .map_err(|_| AiError::Rejected("unknown recording type".into()))?;
+        let mut form = Form::new().part("file", file).text("model", model.clone()).text("response_format", "json");
+        if let Some(lang) = &language {
+            form = form.text("language", lang.clone());
+        }
+        Ok(form)
+    };
     let client = reqwest::blocking::Client::builder()
-        .timeout(TIMEOUT)
+        .timeout(timeout_for(&base))
         .connect_timeout(Duration::from_secs(10))
         .build()
         .map_err(|_| AiError::Network("the request failed".into()))?;
-    let mut req = client.post(format!("{base}/audio/transcriptions")).multipart(form);
     let key = key.trim();
-    if !key.is_empty() {
-        req = req.bearer_auth(key);
-    }
-    let res = req.send().map_err(|e| network_error(&e))?;
-    let status = res.status().as_u16();
-    let text = res.text().map_err(|e| network_error(&e))?;
+    let send = || -> Result<(u16, String), AiError> {
+        let mut req = client.post(format!("{base}/audio/transcriptions")).multipart(form()?);
+        if !key.is_empty() {
+            req = req.bearer_auth(key);
+        }
+        let res = req.send().map_err(|e| network_error(&e))?;
+        let status = res.status().as_u16();
+        let text = res.text().map_err(|e| network_error(&e))?;
+        Ok((status, text))
+    };
+    let (status, text) = send()?;
+    // One retry when the service is busy or failing for a moment (not when the quota is spent).
+    let (status, text) = if is_transient(status, &text) {
+        thread::sleep(RETRY_BACKOFF);
+        send()?
+    } else {
+        (status, text)
+    };
     reply(status, &text)
+}
+
+fn is_transient(status: u16, body: &str) -> bool {
+    matches!(status, 500..=599) || (status == 429 && !is_quota_exhausted(body))
 }
 
 /// Maps a transcription reply (the status rules of the tutor's OpenAI client).
@@ -216,7 +267,7 @@ pub fn reply(status: u16, body: &str) -> Result<String, AiError> {
                 serde_json::from_str(body).map_err(|_| AiError::InvalidResponse("the reply was not JSON".into()))?;
             let text = v["text"].as_str().map(str::trim).unwrap_or("");
             if text.is_empty() {
-                Err(AiError::InvalidResponse("no text was recognised".into()))
+                Err(AiError::InvalidResponse(NO_TEXT.into()))
             } else {
                 Ok(text.to_string())
             }
@@ -294,6 +345,37 @@ mod tests {
         assert_eq!(language_code(Some("system")), None);
         assert_eq!(language_code(Some("")), None);
         assert_eq!(language_code(None), None);
+    }
+
+    #[test]
+    fn local_servers_get_a_longer_timeout() {
+        assert_eq!(timeout_for("https://api.openai.com/v1"), Duration::from_secs(120));
+        assert_eq!(timeout_for("https://stt.example.com/v1"), Duration::from_secs(120));
+        assert_eq!(timeout_for("http://127.0.0.1:8000/v1"), Duration::from_secs(300));
+        assert_eq!(timeout_for("http://localhost:9000/v1"), Duration::from_secs(300));
+        assert_eq!(timeout_for("http://192.168.1.5:9000/v1"), Duration::from_secs(300));
+    }
+
+    #[test]
+    fn silence_is_a_valid_wav() {
+        let w = silent_wav(500);
+        assert_eq!(w.len(), 44 + 16_000);
+        assert_eq!(&w[0..4], b"RIFF");
+        assert_eq!(u32::from_le_bytes(w[4..8].try_into().unwrap()), 36 + 16_000);
+        assert_eq!(&w[8..16], b"WAVEfmt ");
+        assert_eq!(u32::from_le_bytes(w[24..28].try_into().unwrap()), 16_000);
+        assert_eq!(&w[36..40], b"data");
+        assert_eq!(u32::from_le_bytes(w[40..44].try_into().unwrap()), 16_000);
+        assert!(w[44..].iter().all(|&b| b == 0));
+    }
+
+    #[test]
+    fn only_busy_or_failing_replies_are_retried() {
+        assert!(is_transient(503, ""));
+        assert!(is_transient(429, "{}"));
+        assert!(!is_transient(429, r#"{"error":{"code":"insufficient_quota"}}"#));
+        assert!(!is_transient(401, ""));
+        assert!(!is_transient(200, ""));
     }
 
     #[test]

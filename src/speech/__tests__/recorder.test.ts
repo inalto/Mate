@@ -9,6 +9,9 @@ class FakeRecorder {
   mimeType: string;
   ondataavailable: ((ev: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
+  onerror: ((ev: Event) => void) | null = null;
+  /** When false, `stop()` leaves the stop event for the test to fire. */
+  static stopsAtOnce = true;
   constructor(_stream: unknown, opts?: { mimeType?: string }) {
     this.mimeType = opts?.mimeType ?? "";
     FakeRecorder.last = this;
@@ -18,6 +21,7 @@ class FakeRecorder {
   }
   stop() {
     this.state = "inactive";
+    if (!FakeRecorder.stopsAtOnce) return;
     this.ondataavailable?.({ data: new Blob(["abc"], { type: this.mimeType }) });
     this.onstop?.();
   }
@@ -37,6 +41,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   FakeRecorder.supported = new Set(MIME_PREFERENCE);
+  FakeRecorder.stopsAtOnce = true;
 });
 
 describe("pickMime", () => {
@@ -94,5 +99,36 @@ describe("startRecording", () => {
     const err = await startRecording().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(RecorderError);
     expect((err as RecorderError).kind).toBe("noMicrophone");
+  });
+
+  it("cancel after stop settles the pending stop", async () => {
+    const { track, stream } = fakeStream();
+    install(async () => stream);
+    FakeRecorder.stopsAtOnce = false;
+    const rec = await startRecording();
+    const stopped = rec.stop();
+    rec.cancel();
+    await expect(stopped).rejects.toMatchObject({ kind: "cancelled" });
+    expect(track.stop).toHaveBeenCalled();
+  });
+
+  it("a recorder error releases the microphone and rejects the stop", async () => {
+    const { track, stream } = fakeStream();
+    install(async () => stream);
+    FakeRecorder.stopsAtOnce = false;
+    const onError = vi.fn();
+    const rec = await startRecording({ onError });
+    const stopped = rec.stop();
+    const ev = Object.assign(new Event("error"), { error: new DOMException("gone", "NotReadableError") });
+    FakeRecorder.last?.onerror?.(ev);
+    await expect(stopped).rejects.toMatchObject({ kind: "failed", message: "NotReadableError" });
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ kind: "failed" }));
+    expect(track.stop).toHaveBeenCalled();
+    await expect(rec.stop()).rejects.toMatchObject({ kind: "failed" });
+  });
+
+  it("reports an engine without MediaRecorder as unsupported", async () => {
+    vi.stubGlobal("MediaRecorder", undefined);
+    await expect(startRecording()).rejects.toMatchObject({ kind: "unsupported" });
   });
 });

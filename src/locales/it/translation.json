@@ -1038,6 +1038,7 @@
     "transcribing": "Trascrizione…",
     "noMicrophone": "Nessun microfono trovato.",
     "permissionDenied": "Mate non ha il permesso di usare il microfono. Consentilo nelle impostazioni di sistema.",
+    "unsupported": "La registrazione non è disponibile su questo dispositivo.",
     "failed": "Dettatura non riuscita: {{message}}",
     "nothingHeard": "Non si è sentito nulla. Riprova un po' più vicino al microfono.",
     "off": "La dettatura è disattivata. Attivala in Impostazioni, Dettatura.",
@@ -1045,6 +1046,16 @@
     "openSettings": "Impostazioni",
     "limitReached": "Registrazione interrotta dopo 5 minuti.",
     "noPage": "Apri una pagina in cui dettare.",
+    "errors": {
+      "disabled": "La dettatura è disattivata. Attivala in Impostazioni, Dettatura.",
+      "network": "Impossibile raggiungere il servizio vocale ({{detail}}).",
+      "rejected": "Il servizio vocale ha rifiutato la registrazione ({{detail}}).",
+      "invalidResponse": "Il servizio vocale ha inviato una risposta illeggibile ({{detail}}).",
+      "auth": "Il servizio vocale non ha accettato la chiave API. Controllala in Impostazioni, Dettatura.",
+      "noKey": "Salva una chiave API per il servizio vocale in Impostazioni, Dettatura.",
+      "noAddress": "Inserisci l'indirizzo del servizio vocale in Impostazioni, Dettatura.",
+      "tooLarge": "La registrazione è troppo grande per essere inviata (oltre 25 MB). Detta in parti più brevi."
+    },
     "settings": {
       "title": "Dettatura",
       "provider": "Servizio vocale",
@@ -1059,7 +1070,12 @@
       "status": "Stato",
       "ready": "Pronto per la dettatura.",
       "notReady": "Non ancora configurato: salva una chiave o inserisci un indirizzo.",
-      "loadFailed": "Non è stato possibile caricare l'elenco dei servizi vocali."
+      "loadFailed": "Non è stato possibile caricare l'elenco dei servizi vocali.",
+      "testLabel": "Connessione",
+      "testing": "Prova in corso…",
+      "testOk": "Il servizio vocale ha risposto. La dettatura è pronta.",
+      "testHint": "Invia mezzo secondo di silenzio a {{provider}} per verificare chiave, modello e indirizzo. Questo audio esce dal dispositivo, quindi serve il consenso qui sotto.",
+      "testHintLocal": "Invia mezzo secondo di silenzio al programma all'indirizzo {{address}} per verificare che risponda. Serve il consenso qui sotto."
     },
     "consent": {
       "title": "Inviare le registrazioni a {{provider}}?",

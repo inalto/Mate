@@ -40,4 +40,26 @@ describe("DictateButton", () => {
     act(() => useDictation.setState({ phase: "transcribing", startedAt: null }));
     expect((screen.getByRole("button", { name: "Transcribing…" }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("is disabled while starting, and unmounting cancels dictation", () => {
+    const { unmount } = render(<DictateButton />);
+    act(() => useDictation.setState({ phase: "starting", startedAt: null }));
+    expect((screen.getByRole("button", { name: "Dictate" }) as HTMLButtonElement).disabled).toBe(true);
+    act(() => useDictation.setState({ phase: "recording", startedAt: Date.now() }));
+    unmount();
+    expect(useDictation.getState().phase).toBe("idle");
+  });
+
+  it("renders the consent question on <body>, outside the toolbar", async () => {
+    render(
+      <div className="toolbar">
+        <DictateButton />
+      </div>,
+    );
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Dictate" })));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.closest(".toolbar")).toBeNull();
+    expect(dialog.closest(".backdrop")?.parentElement).toBe(document.body);
+    expect(document.activeElement?.textContent).toBe("Not now");
+  });
 });

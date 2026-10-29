@@ -1,12 +1,12 @@
-// Dictation: idle → recording → transcribing → idle. Nothing is recorded or sent unless
+// Dictation: idle → starting → recording → transcribing → idle. Nothing is recorded or sent unless
 // `speechConsent` is true and a speech service is configured; the first use asks for consent.
 // The text goes into the text box being edited when dictation started, else into a new text box
 // at the centre of the view.
 import { create } from "zustand";
 import { screenToWorld } from "../canvas/camera";
 import { showToast } from "../components/Toast";
-import i18n, { errorMessage } from "../i18n";
-import { isRecognizeError, recognizeErrorText } from "../ipc/recognize";
+import i18n from "../i18n";
+import { isRecognizeError } from "../ipc/recognize";
 import { getSpeechStatus, listSpeechProviders, transcribeAudio } from "../ipc/speech";
 import { isMathBox } from "../math/mathBox";
 import { contentOf, type TextBoxContent } from "../model/content";
@@ -20,9 +20,14 @@ import { sanitizeHtml } from "../text/sanitize";
 import { defaultTextAttributes, textAttrsOf, textBoxElement } from "../text/textBox";
 import { withMeta } from "../tools/spatialIndex";
 import { topZ } from "../tools/zorder";
+import { speechErrorText } from "./errors";
 import { RecorderError, startRecording, type Recorder } from "./recorder";
 
-export type DictationPhase = "idle" | "recording" | "transcribing";
+/** `starting`: checking the setup and opening the microphone; the button is disabled meanwhile. */
+export type DictationPhase = "idle" | "starting" | "recording" | "transcribing";
+
+/** Largest recording sent (the services' limit, as Rust's `MAX_AUDIO_BYTES`). */
+export const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 interface DictationState {
   phase: DictationPhase;
@@ -45,6 +50,10 @@ let recorder: Recorder | null = null;
 let target: { store: EditorStore; id: string } | null = null;
 /** Set by the button's early pointer listener, before a click outside ends the text edit. */
 let pending: { store: EditorStore; id: string } | null = null;
+/** The pane and page dictation started on; the audio is dropped if that page is no longer open. */
+let origin: { store: EditorStore; pageId: string } | null = null;
+/** Bumped by `cancelDictation`: a start or transcription still in flight then drops its result. */
+let session = 0;
 
 const settingsAction = () => ({ label: i18n.t("speech.openSettings"), onClick: () => navigateTo("/settings#dictation") });
 
@@ -60,7 +69,8 @@ function editedTextBox(store: EditorStore = getFocusedEditor()): { store: Editor
  * ahead of the canvas's own listener that ends the edit when something outside the box is pressed.
  */
 export function noteEditTarget(): void {
-  pending = editedTextBox();
+  const { phase, askConsent } = useDictation.getState();
+  if (phase === "idle" && !askConsent) pending = editedTextBox();
 }
 
 const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -118,10 +128,14 @@ export function insertTextBox(store: EditorStore, text: string): string | null {
   return el.id;
 }
 
-/** Puts dictated text where it belongs: the remembered text box, else a new one. */
-export function insertDictation(text: string, into: { store: EditorStore; id: string } | null = null): boolean {
+/** Puts dictated text where it belongs: the remembered text box, else a new one in `pane`. */
+export function insertDictation(
+  text: string,
+  into: { store: EditorStore; id: string } | null = null,
+  pane: EditorStore = into?.store ?? getFocusedEditor(),
+): boolean {
   if (into && appendToBox(into.store, into.id, text)) return true;
-  if (insertTextBox(into?.store ?? getFocusedEditor(), text)) return true;
+  if (insertTextBox(pane, text)) return true;
   showToast(i18n.t("speech.noPage"));
   return false;
 }
@@ -137,61 +151,114 @@ const failure = (e: unknown): string => {
   if (e instanceof RecorderError) {
     if (e.kind === "noMicrophone") return i18n.t("speech.noMicrophone");
     if (e.kind === "permissionDenied") return i18n.t("speech.permissionDenied");
+    if (e.kind === "unsupported") return i18n.t("speech.unsupported");
     return i18n.t("speech.failed", { message: e.message });
   }
-  return i18n.t("speech.failed", { message: isRecognizeError(e) ? recognizeErrorText(e) : errorMessage(e) });
+  return speechErrorText(e);
 };
 
+const toIdle = () => useDictation.setState({ phase: "idle", startedAt: null });
+
+/** The recorder failed mid-way (it has already released the microphone). */
+function recorderFailed(rec: () => Recorder | null, e: RecorderError): void {
+  if (recorder === null || recorder !== rec()) return;
+  recorder = null;
+  target = null;
+  origin = null;
+  toIdle();
+  showToast(failure(e));
+}
+
 async function begin(): Promise<void> {
+  if (useDictation.getState().phase !== "idle") return;
   const into = pending ?? editedTextBox();
   pending = null;
+  // Synchronous, so a second press while the setup is checked or the microphone opens is ignored.
+  useDictation.setState({ phase: "starting", startedAt: null });
+  const mine = ++session;
   try {
     const status = await getSpeechStatus();
+    if (mine !== session) return;
     if (!status.configured) {
+      toIdle();
       showToast(i18n.t("speech.notConfigured"), settingsAction());
       return;
     }
   } catch (e) {
+    if (mine !== session) return;
+    toIdle();
     showToast(failure(e));
     return;
   }
+  const store = into?.store ?? getFocusedEditor();
+  const pageId = store.getState().pageId;
+  if (!pageId) {
+    toIdle();
+    showToast(i18n.t("speech.noPage"));
+    return;
+  }
+  let rec: Recorder | null = null;
   try {
-    recorder = await startRecording({
+    rec = await startRecording({
       onLimit: () => {
         showToast(i18n.t("speech.limitReached"));
         void finish();
       },
+      onError: (e) => recorderFailed(() => rec, e),
     });
   } catch (e) {
-    recorder = null;
+    if (mine !== session) return;
+    toIdle();
     showToast(failure(e));
     return;
   }
+  if (mine !== session || useDictation.getState().phase !== "starting") {
+    rec.cancel(); // cancelled while the microphone opened
+    return;
+  }
+  recorder?.cancel(); // never leave a live recorder behind
+  recorder = rec;
   target = into;
-  useDictation.setState({ phase: "recording", startedAt: recorder.startedAt });
+  origin = { store, pageId };
+  useDictation.setState({ phase: "recording", startedAt: rec.startedAt });
 }
+
+/** The page dictation started on is still open in its pane. */
+const originOpen = (o: typeof origin): boolean => !!o && o.store.getState().pageId === o.pageId;
 
 async function finish(): Promise<void> {
   const rec = recorder;
   if (!rec || useDictation.getState().phase !== "recording") return;
   recorder = null;
   const into = target;
+  const from = origin;
   target = null;
+  origin = null;
+  pending = null;
+  const mine = session;
   useDictation.setState({ phase: "transcribing", startedAt: null });
   try {
     const { blob, mime } = await rec.stop();
+    if (mine !== session || !originOpen(from)) return; // cancelled, or the page closed: drop the audio
     if (blob.size === 0) {
       showToast(i18n.t("speech.nothingHeard"));
       return;
     }
+    if (blob.size > MAX_AUDIO_BYTES) {
+      showToast(i18n.t("speech.errors.tooLarge"));
+      return;
+    }
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const text = (await transcribeAudio(bytes, mime, languageHint())).trim();
+    if (mine !== session || !originOpen(from)) return;
     if (text === "") showToast(i18n.t("speech.nothingHeard"));
-    else insertDictation(text, into);
+    else insertDictation(text, into, from?.store);
   } catch (e) {
+    if (mine !== session) return;
+    if (e instanceof RecorderError && e.kind === "cancelled") return;
     showToast(isRecognizeError(e) && e.kind === "invalidResponse" ? i18n.t("speech.nothingHeard") : failure(e));
   } finally {
-    useDictation.setState({ phase: "idle", startedAt: null });
+    if (mine === session) toIdle();
   }
 }
 
@@ -208,7 +275,7 @@ async function providerLabel(): Promise<string> {
 /** The dictate button: start (asking for consent the first time), or stop and transcribe. */
 export async function toggleDictation(): Promise<void> {
   const { phase, askConsent } = useDictation.getState();
-  if (phase === "transcribing" || askConsent) return;
+  if (phase === "starting" || phase === "transcribing" || askConsent) return;
   if (phase === "recording") return finish();
   const consent = useSettingsStore.getState().settings.speechConsent;
   if (consent === false) {
@@ -236,11 +303,16 @@ export async function answerConsent(allow: boolean): Promise<void> {
   return begin();
 }
 
-/** Drops a recording in progress (e.g. the page closes). */
+/**
+ * Drops dictation in progress: releases the microphone, forgets the targets and makes a start or
+ * transcription still in flight drop its result (the toolbar unmounts, the page closes).
+ */
 export function cancelDictation(): void {
+  session++;
   recorder?.cancel();
   recorder = null;
   target = null;
+  origin = null;
   pending = null;
   useDictation.setState({ phase: "idle", startedAt: null, askConsent: null });
 }

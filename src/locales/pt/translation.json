@@ -1041,6 +1041,7 @@
     "transcribing": "A transcrever…",
     "noMicrophone": "Não foi encontrado nenhum microfone.",
     "permissionDenied": "O Mate não tem permissão para usar o microfone. Permita-o nas definições do sistema.",
+    "unsupported": "A gravação não está disponível neste dispositivo.",
     "failed": "O ditado falhou: {{message}}",
     "nothingHeard": "Não se ouviu nada. Tente novamente mais perto do microfone.",
     "off": "O ditado está desligado. Ative-o em Definições, Ditado.",
@@ -1048,6 +1049,16 @@
     "openSettings": "Definições",
     "limitReached": "A gravação parou após 5 minutos.",
     "noPage": "Abra uma página onde ditar.",
+    "errors": {
+      "disabled": "O ditado está desligado. Ative-o em Definições, Ditado.",
+      "network": "Não foi possível acessar o serviço de voz ({{detail}}).",
+      "rejected": "O serviço de voz recusou a gravação ({{detail}}).",
+      "invalidResponse": "O serviço de voz enviou uma resposta que não pôde ser lida ({{detail}}).",
+      "auth": "O serviço de voz não aceitou a chave de API. Verifique-a em Definições, Ditado.",
+      "noKey": "Guarde uma chave de API para o serviço de voz em Definições, Ditado.",
+      "noAddress": "Introduza o endereço do serviço de voz em Definições, Ditado.",
+      "tooLarge": "A gravação é grande demais para ser enviada (mais de 25 MB). Dite em partes mais curtas."
+    },
     "settings": {
       "title": "Ditado",
       "provider": "Serviço de voz",
@@ -1062,7 +1073,12 @@
       "status": "Estado",
       "ready": "Pronto para ditar.",
       "notReady": "Ainda não configurado: guarde uma chave ou introduza um endereço.",
-      "loadFailed": "Não foi possível carregar a lista de serviços de voz."
+      "loadFailed": "Não foi possível carregar a lista de serviços de voz.",
+      "testLabel": "Ligação",
+      "testing": "A testar…",
+      "testOk": "O serviço de voz respondeu. O ditado está pronto.",
+      "testHint": "Envia meio segundo de silêncio para {{provider}} para verificar a chave, o modelo e o endereço. Este áudio sai do dispositivo, por isso o consentimento abaixo tem de estar ativado.",
+      "testHintLocal": "Envia meio segundo de silêncio para o programa em {{address}} para verificar se responde. O consentimento abaixo tem de estar ativado."
     },
     "consent": {
       "title": "Enviar as gravações para {{provider}}?",

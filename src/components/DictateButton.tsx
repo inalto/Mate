@@ -1,7 +1,8 @@
 import { CircleNotch, Microphone, MicrophoneSlash } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { answerConsent, formatElapsed, noteEditTarget, toggleDictation, useDictation } from "../speech/dictate";
+import { answerConsent, cancelDictation, formatElapsed, noteEditTarget, toggleDictation, useDictation } from "../speech/dictate";
 import "../styles/speech.css";
 import SpeechConsentDialog from "./speech/SpeechConsentDialog";
 
@@ -20,6 +21,9 @@ export function DictateButton() {
     return () => clearInterval(timer);
   }, [phase]);
 
+  // The toolbar going away (the editor closes) releases the microphone and drops the recording.
+  useEffect(() => () => cancelDictation(), []);
+
   // Runs before the canvas's own capture listener ends the text edit, so the text box being
   // edited is still known when the button is pressed.
   useEffect(() => {
@@ -32,6 +36,7 @@ export function DictateButton() {
 
   const recording = phase === "recording";
   const busy = phase === "transcribing";
+  const starting = phase === "starting";
   const elapsed = recording && startedAt !== null ? formatElapsed(Math.max(now, startedAt) - startedAt) : "";
   const label = recording ? t("speech.stop") : busy ? t("speech.transcribing") : t("speech.dictate");
   return (
@@ -44,7 +49,7 @@ export function DictateButton() {
         aria-busy={busy || undefined}
         aria-label={label}
         title={recording ? t("speech.recording", { time: elapsed }) : label}
-        disabled={busy}
+        disabled={busy || starting}
         onClick={() => void toggleDictation()}
       >
         {busy ? (
@@ -60,7 +65,12 @@ export function DictateButton() {
           </span>
         )}
       </button>
-      {ask && <SpeechConsentDialog provider={ask.provider} onAnswer={(allow) => void answerConsent(allow)} />}
+      {/* On <body>: the toolbar's stacking context would let the canvas overlays paint over the backdrop. */}
+      {ask &&
+        createPortal(
+          <SpeechConsentDialog provider={ask.provider} onAnswer={(allow) => void answerConsent(allow)} />,
+          document.body,
+        )}
     </>
   );
 }

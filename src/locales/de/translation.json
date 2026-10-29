@@ -1041,6 +1041,7 @@
     "transcribing": "Wird transkribiert…",
     "noMicrophone": "Es wurde kein Mikrofon gefunden.",
     "permissionDenied": "Mate darf das Mikrofon nicht verwenden. Erlaube es in den Systemeinstellungen.",
+    "unsupported": "Aufnehmen ist auf diesem Gerät nicht möglich.",
     "failed": "Diktat fehlgeschlagen: {{message}}",
     "nothingHeard": "Es wurde nichts gehört. Versuche es noch einmal näher am Mikrofon.",
     "off": "Diktat ist aus. Schalte es unter Einstellungen, Diktat ein.",
@@ -1048,6 +1049,16 @@
     "openSettings": "Einstellungen",
     "limitReached": "Die Aufnahme wurde nach 5 Minuten beendet.",
     "noPage": "Öffne eine Seite, in die diktiert werden soll.",
+    "errors": {
+      "disabled": "Diktat ist aus. Schalte es unter Einstellungen, Diktat ein.",
+      "network": "Der Sprachdienst ist nicht erreichbar ({{detail}}).",
+      "rejected": "Der Sprachdienst hat die Aufnahme abgelehnt ({{detail}}).",
+      "invalidResponse": "Der Sprachdienst hat eine unlesbare Antwort gesendet ({{detail}}).",
+      "auth": "Der Sprachdienst hat den API-Schlüssel nicht akzeptiert. Prüfe ihn unter Einstellungen, Diktat.",
+      "noKey": "Speichere unter Einstellungen, Diktat einen API-Schlüssel für den Sprachdienst.",
+      "noAddress": "Gib unter Einstellungen, Diktat die Adresse des Sprachdienstes ein.",
+      "tooLarge": "Die Aufnahme ist zu groß zum Senden (über 25 MB). Diktiere in kürzeren Abschnitten."
+    },
     "settings": {
       "title": "Diktat",
       "provider": "Sprachdienst",
@@ -1062,7 +1073,12 @@
       "status": "Status",
       "ready": "Bereit zum Diktieren.",
       "notReady": "Noch nicht eingerichtet: Speichere einen Schlüssel oder gib eine Adresse ein.",
-      "loadFailed": "Die Liste der Sprachdienste konnte nicht geladen werden."
+      "loadFailed": "Die Liste der Sprachdienste konnte nicht geladen werden.",
+      "testLabel": "Verbindung",
+      "testing": "Wird getestet…",
+      "testOk": "Der Sprachdienst hat geantwortet. Diktat ist bereit.",
+      "testHint": "Sendet eine halbe Sekunde Stille an {{provider}}, um Schlüssel, Modell und Adresse zu prüfen. Dieser Ton verlässt das Gerät, daher muss die Zustimmung unten aktiviert sein.",
+      "testHintLocal": "Sendet eine halbe Sekunde Stille an das Programm unter {{address}}, um zu prüfen, ob es antwortet. Die Zustimmung unten muss aktiviert sein."
     },
     "consent": {
       "title": "Aufnahmen an {{provider}} senden?",

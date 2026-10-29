@@ -139,8 +139,116 @@ describe("dictation", () => {
     vi.mocked(transcribeAudio).mockRejectedValueOnce({ kind: "auth", message: "The API key was not accepted." });
     await toggleDictation();
     await toggleDictation();
-    expect(showToast).toHaveBeenLastCalledWith(expect.stringContaining("API key was not accepted"));
+    expect(showToast).toHaveBeenLastCalledWith(expect.stringContaining("speech service did not accept the API key"));
     expect(useDictation.getState().phase).toBe("idle");
     expect(boxes()).toHaveLength(0);
+  });
+
+  it("errors are worded for dictation, not the tutor", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    vi.mocked(transcribeAudio).mockRejectedValueOnce({ kind: "disabled", message: "AI checking is off." });
+    await toggleDictation();
+    await toggleDictation();
+    expect(showToast).toHaveBeenLastCalledWith("Dictation is off. Turn it on in Settings, Dictation.");
+    vi.mocked(transcribeAudio).mockRejectedValueOnce({ kind: "network", message: "Could not reach the AI service (no connection)." });
+    await toggleDictation();
+    await toggleDictation();
+    expect(showToast).toHaveBeenLastCalledWith("Could not reach the speech service (no connection).");
+    vi.mocked(startRecording).mockRejectedValueOnce(new RecorderError("unsupported", "MediaRecorder is not available"));
+    await toggleDictation();
+    expect(showToast).toHaveBeenLastCalledWith("Recording is not available on this device.");
+  });
+
+  it("a second press while starting is ignored and never opens a second microphone", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    const first = toggleDictation();
+    expect(useDictation.getState().phase).toBe("starting");
+    await toggleDictation();
+    await first;
+    expect(startRecording).toHaveBeenCalledTimes(1);
+    expect(useDictation.getState().phase).toBe("recording");
+  });
+
+  it("cancelling while the microphone opens releases it", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    let open: () => void = () => {};
+    vi.mocked(getSpeechStatus).mockImplementationOnce(async () => ({ configured: true }) as never);
+    const cancel = vi.fn();
+    vi.mocked(startRecording).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          open = () => resolve({ startedAt: Date.now(), stop: vi.fn(), cancel });
+        }),
+    );
+    const start = toggleDictation();
+    await vi.waitFor(() => expect(startRecording).toHaveBeenCalled());
+    cancelDictation();
+    open();
+    await start;
+    expect(cancel).toHaveBeenCalled();
+    expect(useDictation.getState().phase).toBe("idle");
+  });
+
+  it("drops the audio when the page closed meanwhile", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    await toggleDictation();
+    store.setState({ pageId: "p2" } as never);
+    await toggleDictation();
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(boxes()).toHaveLength(0);
+    expect(useDictation.getState().phase).toBe("idle");
+  });
+
+  it("a cancel during transcription inserts nothing", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    let answer: (t: string) => void = () => {};
+    vi.mocked(transcribeAudio).mockImplementationOnce(() => new Promise<string>((r) => (answer = r)));
+    await toggleDictation();
+    const done = toggleDictation();
+    await vi.waitFor(() => expect(transcribeAudio).toHaveBeenCalled());
+    cancelDictation();
+    answer("late");
+    await done;
+    expect(boxes()).toHaveLength(0);
+    expect(useDictation.getState().phase).toBe("idle");
+  });
+
+  it("the edit target is noted only while idle, and forgotten after use", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    const el = textBoxElement(page, "t1", new Date().toISOString(), { x: 0, y: 0 }, defaultTextAttributes());
+    store.getState().addElements("Text", [el]);
+    await toggleDictation();
+    store.setState({ editingId: "t1" });
+    noteEditTarget(); // recording: ignored
+    store.setState({ editingId: null });
+    await toggleDictation();
+    expect(boxes()).toHaveLength(2); // a new box, not appended to t1
+    expect(textOf(store.getState().elements.get("t1")!)).not.toContain("hello");
+  });
+
+  it("refuses a recording over 25 MiB before reading it", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    const arrayBuffer = vi.fn();
+    vi.mocked(startRecording).mockResolvedValueOnce({
+      startedAt: Date.now(),
+      stop: vi.fn(async () => ({ blob: { size: 25 * 1024 * 1024 + 1, arrayBuffer } as unknown as Blob, mime: "audio/webm", durationMs: 1 })),
+      cancel: vi.fn(),
+    });
+    await toggleDictation();
+    await toggleDictation();
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenLastCalledWith(expect.stringContaining("too large"));
+  });
+
+  it("a recorder failure mid-way returns to idle with a message", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    await toggleDictation();
+    const opts = vi.mocked(startRecording).mock.calls[0][0]!;
+    opts.onError?.(new RecorderError("failed", "NotReadableError"));
+    expect(useDictation.getState().phase).toBe("idle");
+    expect(showToast).toHaveBeenLastCalledWith(expect.stringContaining("NotReadableError"));
+    await toggleDictation(); // a fresh start, not a stop of the failed recorder
+    expect(startRecording).toHaveBeenCalledTimes(2);
   });
 });

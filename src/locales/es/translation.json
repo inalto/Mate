@@ -1041,6 +1041,7 @@
     "transcribing": "Transcribiendo…",
     "noMicrophone": "No se encontró ningún micrófono.",
     "permissionDenied": "Mate no tiene permiso para usar el micrófono. Permítelo en los ajustes del sistema.",
+    "unsupported": "La grabación no está disponible en este dispositivo.",
     "failed": "Error al dictar: {{message}}",
     "nothingHeard": "No se oyó nada. Inténtalo de nuevo más cerca del micrófono.",
     "off": "El dictado está desactivado. Actívalo en Ajustes, Dictado.",
@@ -1048,6 +1049,16 @@
     "openSettings": "Ajustes",
     "limitReached": "La grabación se detuvo a los 5 minutos.",
     "noPage": "Abre una página donde dictar.",
+    "errors": {
+      "disabled": "El dictado está desactivado. Actívalo en Ajustes, Dictado.",
+      "network": "No se pudo conectar con el servicio de voz ({{detail}}).",
+      "rejected": "El servicio de voz rechazó la grabación ({{detail}}).",
+      "invalidResponse": "El servicio de voz envió una respuesta que no se pudo leer ({{detail}}).",
+      "auth": "El servicio de voz no aceptó la clave de API. Revísala en Ajustes, Dictado.",
+      "noKey": "Guarda una clave de API para el servicio de voz en Ajustes, Dictado.",
+      "noAddress": "Introduce la dirección del servicio de voz en Ajustes, Dictado.",
+      "tooLarge": "La grabación es demasiado grande para enviarla (más de 25 MB). Dicta en partes más cortas."
+    },
     "settings": {
       "title": "Dictado",
       "provider": "Servicio de voz",
@@ -1062,7 +1073,12 @@
       "status": "Estado",
       "ready": "Listo para dictar.",
       "notReady": "Aún no está configurado: guarda una clave o introduce una dirección.",
-      "loadFailed": "No se pudo cargar la lista de servicios de voz."
+      "loadFailed": "No se pudo cargar la lista de servicios de voz.",
+      "testLabel": "Conexión",
+      "testing": "Probando…",
+      "testOk": "El servicio de voz respondió. El dictado está listo.",
+      "testHint": "Envía medio segundo de silencio a {{provider}} para comprobar la clave, el modelo y la dirección. Este audio sale del dispositivo, así que el consentimiento de abajo debe estar activado.",
+      "testHintLocal": "Envía medio segundo de silencio al programa en {{address}} para comprobar que responde. El consentimiento de abajo debe estar activado."
     },
     "consent": {
       "title": "¿Enviar las grabaciones a {{provider}}?",

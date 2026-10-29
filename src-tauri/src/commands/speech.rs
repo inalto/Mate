@@ -8,7 +8,8 @@ use mate_core::ai::catalog::is_local_host;
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::provider::AiError;
 use mate_core::ai::speech::{
-    MAX_AUDIO_BYTES, catalog, effective_base_url, effective_model, key_account, spec, spec_or_default, transcribe,
+    MAX_AUDIO_BYTES, NO_TEXT, SpeechSpec, catalog, effective_base_url, effective_model, key_account, silent_wav, spec,
+    spec_or_default, transcribe,
 };
 use mate_core::settings::Settings;
 use serde::Serialize;
@@ -53,6 +54,12 @@ pub struct SpeechStatus {
 fn setup_error(kind: &'static str, message: &str) -> AiSetupError {
     AiSetupError { kind, message: message.to_string(), detail: None }
 }
+
+/// The transcription call: `(spec, key, model, base_url, bytes, mime, language)`.
+type SendFn<'a> = dyn FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>) -> Result<String, AiError> + 'a;
+
+/// Length of the settings' test recording (silence).
+const TEST_CLIP_MS: u32 = 500;
 
 pub fn providers() -> Vec<SpeechProviderInfo> {
     catalog()
@@ -119,10 +126,10 @@ pub fn run(
     bytes: Vec<u8>,
     mime: &str,
     language: Option<&str>,
-    send: impl FnOnce(&mate_core::ai::speech::SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>) -> Result<String, AiError>,
+    send: impl FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>) -> Result<String, AiError>,
 ) -> Result<String, AiSetupError> {
     if settings.speech_consent != Some(true) {
-        return Err(AiError::Disabled.into());
+        return Err(setup_error("disabled", "Dictation is off. Turn it on in Settings, Dictation."));
     }
     if bytes.is_empty() {
         return Err(AiError::Rejected("the recording is empty".into()).into());
@@ -140,6 +147,18 @@ pub fn run(
         return Err(setup_error("noAddress", "Enter the service address first."));
     }
     Ok(send(s, &key, &settings.speech_model, &settings.speech_base_url, bytes, mime, language)?)
+}
+
+/// The settings' test: half a second of silence through the same checks and call as a dictation.
+/// Any transcript, or a reply that holds no text, means the service took the key and the audio.
+pub fn test_key(store: &dyn KeyStore, settings: &Settings, send: Box<SendFn<'_>>) -> Result<(), AiSetupError> {
+    run(store, settings, silent_wav(TEST_CLIP_MS), "audio/wav", None, |s, key, model, base, bytes, mime, lang| {
+        match send(s, key, model, base, bytes, mime, lang) {
+            Err(AiError::InvalidResponse(m)) if m == NO_TEXT => Ok(String::new()),
+            other => other,
+        }
+    })
+    .map(|_| ())
 }
 
 /// Runs a keychain operation off the async runtime (keychain calls can block on OS prompts).
@@ -195,13 +214,24 @@ pub async fn transcribe_audio(state: State<'_, AppState>, request: Request<'_>) 
     .map_err(|e| AiSetupError::from(e.to_string()))?
 }
 
+/// Sends a short silent recording to the configured service (needs consent, like dictation) and
+/// reports whether it answered.
+#[tauri::command]
+pub async fn test_speech_key(state: State<'_, AppState>) -> Result<(), AiSetupError> {
+    let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
+    let store: Arc<dyn KeyStore> = state.keys.clone();
+    tauri::async_runtime::spawn_blocking(move || test_key(store.as_ref(), &settings, Box::new(transcribe)))
+        .await
+        .map_err(|e| AiSetupError::from(e.to_string()))?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use mate_core::ai::keystore::MemoryStore;
 
     fn never(
-        _: &mate_core::ai::speech::SpeechSpec,
+        _: &SpeechSpec,
         _: &str,
         _: &str,
         _: &str,
@@ -280,6 +310,75 @@ mod tests {
         assert_eq!(text, "ciao");
         let err = run(&store, &settings, vec![9], "audio/mp4", None, |_, _, _, _, _, _, _| Err(AiError::Auth)).unwrap_err();
         assert_eq!(err.kind, "auth");
+    }
+
+    #[test]
+    fn consent_error_is_worded_for_dictation() {
+        let err = run(&MemoryStore::default(), &Settings::default(), vec![1], "audio/webm", None, never).unwrap_err();
+        assert_eq!(err.kind, "disabled");
+        assert!(err.message.contains("Dictation is off"), "{}", err.message);
+    }
+
+    #[test]
+    fn the_test_sends_silence_and_accepts_an_empty_transcript() {
+        let store = MemoryStore::default();
+        let mut settings = Settings { speech_provider: "local".into(), ..Settings::default() };
+        assert_eq!(test_key(&store, &settings, Box::new(never)).unwrap_err().kind, "disabled");
+        settings.speech_consent = Some(true);
+        let sent = std::cell::Cell::new(0usize);
+        test_key(
+            &store,
+            &settings,
+            Box::new(|s, _, _, _, bytes, mime, lang| {
+                assert_eq!((s.id, mime, lang), ("local", "audio/wav", None));
+                assert_eq!(&bytes[0..4], b"RIFF");
+                sent.set(bytes.len());
+                Err(AiError::InvalidResponse(NO_TEXT.into()))
+            }),
+        )
+        .unwrap();
+        assert_eq!(sent.get(), 44 + 16_000);
+        test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _| Ok("you".into()))).unwrap();
+        let err = test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _| Err(AiError::Auth))).unwrap_err();
+        assert_eq!(err.kind, "auth");
+        let err = test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _| Err(AiError::InvalidResponse("the reply was not JSON".into()))))
+            .unwrap_err();
+        assert_eq!(err.kind, "invalidResponse");
+    }
+
+    #[test]
+    fn the_test_reaches_a_real_server() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}/v1", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 4096];
+            // Read until the multipart body's closing boundary arrives.
+            while !String::from_utf8_lossy(&buf).trim_end().ends_with("--") {
+                let n = stream.read(&mut chunk).unwrap();
+                if n == 0 {
+                    break;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+            }
+            let body = r#"{"text":""}"#;
+            let reply = format!("HTTP/1.1 200 OK
+content-type: application/json
+content-length: {}
+connection: close
+
+{body}", body.len());
+            stream.write_all(reply.as_bytes()).unwrap();
+            String::from_utf8_lossy(&buf).into_owned()
+        });
+        let settings =
+            Settings { speech_provider: "local".into(), speech_base_url: base, speech_consent: Some(true), ..Settings::default() };
+        test_key(&MemoryStore::default(), &settings, Box::new(transcribe)).unwrap();
+        let request = server.join().unwrap();
+        assert!(request.starts_with("POST /v1/audio/transcriptions"), "{request}");
+        assert!(request.contains(r#"filename="audio.wav""#), "{request}");
     }
 
     #[test]

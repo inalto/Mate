@@ -1,14 +1,13 @@
 import { ArrowSquareOut, FloppyDisk, PlugsConnected, Trash } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { errorMessage } from "../../i18n";
 import { openExternal } from "../../ipc/app";
-import { isRecognizeError, recognizeErrorText } from "../../ipc/recognize";
 import {
   clearSpeechKey,
   getSpeechStatus,
   listSpeechProviders,
   setSpeechKey,
+  testSpeechKey,
   type SpeechProviderInfo,
   type SpeechStatus,
 } from "../../ipc/speech";
@@ -16,9 +15,8 @@ import type { Settings } from "../../model/types";
 import { flushSettings, useSettingsStore } from "../../stores/settings";
 import { isAllowedAddress, isLocalHost } from "../ai/address";
 import { AiIcon } from "../ai/AiField";
+import { speechErrorText } from "../../speech/errors";
 import "../ai/ai.css";
-
-const message = (err: unknown): string => (isRecognizeError(err) ? recognizeErrorText(err) : errorMessage(err));
 
 interface FieldProps {
   /** Search index id (`data-row-id`) and the setting the field edits, when there is one. */
@@ -56,6 +54,8 @@ export default function SpeechSetup() {
   const [draft, setDraft] = useState("");
   const [result, setResult] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
   const mounted = useRef(true);
 
   const refresh = useCallback(async (): Promise<SpeechStatus | null> => {
@@ -90,6 +90,7 @@ export default function SpeechSetup() {
 
   const select = async (id: string) => {
     setResult(null);
+    setTestResult(null);
     setDraft("");
     await update({ speechProvider: id, speechModel: "", speechBaseUrl: "" }).catch(() => {});
     await refresh();
@@ -101,7 +102,7 @@ export default function SpeechSetup() {
     try {
       await action();
     } catch (err) {
-      setResult(message(err));
+      setResult(speechErrorText(err));
     } finally {
       setBusy(false);
       await refresh();
@@ -109,13 +110,21 @@ export default function SpeechSetup() {
   };
 
   const test = async () => {
-    setBusy(true);
-    setResult(null);
-    // The status reads the persisted settings: write a just-typed address or model first.
+    setTesting(true);
+    setTestResult(null);
+    // The command reads the persisted settings: write a just-typed address or model first.
     await flushSettings().catch(() => {});
-    const next = await refresh();
-    setBusy(false);
-    setResult(next?.configured ? t("speech.settings.ready") : t("speech.settings.notReady"));
+    let next: { ok: boolean; text: string };
+    try {
+      await testSpeechKey();
+      next = { ok: true, text: t("speech.settings.testOk") };
+    } catch (err) {
+      next = { ok: false, text: speechErrorText(err) };
+    }
+    if (!mounted.current) return;
+    setTesting(false);
+    setTestResult(next);
+    await refresh();
   };
 
   const keyStatus = info?.needsKey
@@ -124,6 +133,8 @@ export default function SpeechSetup() {
       ? hasKey ? t("ai.keySaved") : t("ai.noKeyOptional")
       : t("ai.noKeyNeeded");
   const hasKeyField = !!info && (info.needsKey || info.id === "custom");
+  const consented = settings.speechConsent === true;
+  const readiness = current ? (current.configured ? t("speech.settings.ready") : t("speech.settings.notReady")) : null;
 
   return (
     <div className="ai-setup speech-setup">
@@ -229,12 +240,33 @@ export default function SpeechSetup() {
           <span className="muted ai-row-text" role="status">
             {keyStatus}
           </span>
-          <button type="button" className="btn" disabled={busy || !addressOk} onClick={() => void test()}>
-            <AiIcon icon={PlugsConnected} />
-            {t("speech.settings.test")}
-          </button>
         </div>
+        {readiness && <p className="muted">{readiness}</p>}
         {result && <p className="muted">{result}</p>}
+      </Field>
+      <Field rowId="set-speechTest" label={t("speech.settings.testLabel")}>
+        <div className="ai-row">
+          <button
+            type="button"
+            className="btn"
+            disabled={busy || testing || !addressOk || !consented}
+            aria-describedby="set-speech-test-hint"
+            onClick={() => void test()}
+          >
+            <AiIcon icon={PlugsConnected} />
+            {testing ? t("speech.settings.testing") : t("speech.settings.test")}
+          </button>
+          {testResult && (
+            <span className={testResult.ok ? "muted ai-row-text" : "form-error ai-row-text"} role="status">
+              {testResult.text}
+            </span>
+          )}
+        </div>
+        <p id="set-speech-test-hint" className="muted">
+          {local
+            ? t("speech.settings.testHintLocal", { address })
+            : t("speech.settings.testHint", { provider: info?.label ?? settings.speechProvider })}
+        </p>
       </Field>
       <Field rowId="set-speechConsent" settingKey="speechConsent" label={t("speech.settings.consent")}>
         <label className="ai-consent">

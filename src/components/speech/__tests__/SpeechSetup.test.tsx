@@ -11,9 +11,10 @@ vi.mock("../../../ipc/speech", () => ({
   setSpeechKey: vi.fn(async () => {}),
   clearSpeechKey: vi.fn(async () => {}),
   transcribeAudio: vi.fn(),
+  testSpeechKey: vi.fn(async () => {}),
 }));
 
-import { clearSpeechKey, getSpeechStatus, listSpeechProviders, setSpeechKey } from "../../../ipc/speech";
+import { clearSpeechKey, getSpeechStatus, listSpeechProviders, setSpeechKey, testSpeechKey } from "../../../ipc/speech";
 import { useSettingsStore } from "../../../stores/settings";
 import { collectEntries } from "../../../routes/Settings/search";
 import SpeechSetup from "../SpeechSetup";
@@ -77,15 +78,37 @@ describe("SpeechSetup", () => {
     expect(address.getAttribute("aria-invalid")).toBe("false");
   });
 
-  it("the consent box and the test button", async () => {
+  it("the status row needs no network; Test waits for consent", async () => {
     render(<SpeechSetup />);
     await screen.findByText("No key");
+    expect(await screen.findByText(/Not set up yet/)).toBeTruthy();
+    const test = screen.getByRole("button", { name: "Test" }) as HTMLButtonElement;
+    expect(test.disabled).toBe(true);
+    expect(screen.getByText(/half a second of silence to OpenAI/)).toBeTruthy();
     const consent = screen.getByRole("checkbox", { name: /Send recordings/ }) as HTMLInputElement;
     expect(consent.checked).toBe(false);
     fireEvent.click(consent);
     expect(useSettingsStore.getState().settings.speechConsent).toBe(true);
+    expect(test.disabled).toBe(false);
+    expect(testSpeechKey).not.toHaveBeenCalled();
+  });
+
+  it("Test calls the service and shows its answer", async () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, speechConsent: true } });
+    let finish: () => void = () => {};
+    vi.mocked(testSpeechKey).mockImplementationOnce(() => new Promise<void>((r) => (finish = r)));
+    render(<SpeechSetup />);
+    await screen.findByText("No key");
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Test" })));
-    expect(await screen.findByText(/Not set up yet/)).toBeTruthy();
+    const busy = screen.getByRole("button", { name: "Testing…" }) as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+    await act(async () => finish());
+    expect(await screen.findByText("The speech service answered. Dictation is ready.")).toBeTruthy();
+    expect(testSpeechKey).toHaveBeenCalledTimes(1);
+
+    vi.mocked(testSpeechKey).mockRejectedValueOnce({ kind: "auth", message: "The API key was not accepted." });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Test" })));
+    expect(await screen.findByText(/speech service did not accept the API key/)).toBeTruthy();
   });
 
   it("indexes its rows for the settings search", async () => {

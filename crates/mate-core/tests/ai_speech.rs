@@ -25,43 +25,56 @@ impl Seen {
 }
 
 /// Serves one scripted `(status, body)` reply, recording the request.
-fn stub(status: u16, body: &'static str) -> (String, Arc<Mutex<Option<Seen>>>) {
+fn stub(status: u16, body: &'static str) -> (String, Arc<Mutex<Vec<Seen>>>) {
+    stub_seq(vec![(status, body)])
+}
+
+/// Serves the scripted `(status, body)` replies in order, one per connection, recording each
+/// request (before its reply is written, so it is there once the call returns).
+fn stub_seq(replies: Vec<(u16, &'static str)>) -> (String, Arc<Mutex<Vec<Seen>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
-    let seen = Arc::new(Mutex::new(None));
+    let seen = Arc::new(Mutex::new(Vec::new()));
     let log = seen.clone();
     thread::spawn(move || {
-        let Ok((stream, _)) = listener.accept() else { return };
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
-        let mut line = String::new();
-        reader.read_line(&mut line).unwrap();
-        let path = line.split_whitespace().nth(1).unwrap_or("").to_string();
-        let mut headers = Vec::new();
-        let mut len = 0usize;
-        loop {
-            let mut h = String::new();
-            reader.read_line(&mut h).unwrap();
-            let h = h.trim_end();
-            if h.is_empty() {
-                break;
-            }
-            if let Some((k, v)) = h.split_once(':') {
-                if k.eq_ignore_ascii_case("content-length") {
-                    len = v.trim().parse().unwrap();
+        for (status, body) in replies {
+            let Ok((stream, _)) = listener.accept() else { return };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            reader.read_line(&mut line).unwrap();
+            let path = line.split_whitespace().nth(1).unwrap_or("").to_string();
+            let mut headers = Vec::new();
+            let mut len = 0usize;
+            loop {
+                let mut h = String::new();
+                reader.read_line(&mut h).unwrap();
+                let h = h.trim_end();
+                if h.is_empty() {
+                    break;
                 }
-                headers.push((k.trim().to_string(), v.trim().to_string()));
+                if let Some((k, v)) = h.split_once(':') {
+                    if k.eq_ignore_ascii_case("content-length") {
+                        len = v.trim().parse().unwrap();
+                    }
+                    headers.push((k.trim().to_string(), v.trim().to_string()));
+                }
             }
+            let mut buf = vec![0; len];
+            reader.read_exact(&mut buf).unwrap();
+            log.lock().unwrap().push(Seen { path, headers, body: buf });
+            let mut stream = stream;
+            let reply = format!(
+                "HTTP/1.1 {status} X
+content-type: application/json
+content-length: {}
+connection: close
+
+{body}",
+                body.len()
+            );
+            let _ = stream.write_all(reply.as_bytes());
+            let _ = stream.flush();
         }
-        let mut buf = vec![0; len];
-        reader.read_exact(&mut buf).unwrap();
-        *log.lock().unwrap() = Some(Seen { path, headers, body: buf });
-        let mut stream = stream;
-        let reply = format!(
-            "HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
-            body.len()
-        );
-        let _ = stream.write_all(reply.as_bytes());
-        let _ = stream.flush();
     });
     (base, seen)
 }
@@ -81,7 +94,7 @@ fn sends_a_multipart_form_and_reads_the_text() {
     )
     .unwrap();
     assert_eq!(text, "Ciao a tutti.");
-    let seen = seen.lock().unwrap().clone().unwrap();
+    let seen = seen.lock().unwrap()[0].clone();
     assert_eq!(seen.path, "/v1/audio/transcriptions");
     assert!(seen.header("authorization").is_none(), "no key, no header");
     assert!(seen.header("content-type").unwrap().starts_with("multipart/form-data; boundary="));
@@ -100,7 +113,7 @@ fn sends_the_key_model_and_no_language_when_none() {
     let custom = spec("custom").unwrap();
     let text = transcribe(custom, " sk-test ", "my-model", &base, vec![1, 2, 3], "audio/mp4", None).unwrap();
     assert_eq!(text, "hello");
-    let seen = seen.lock().unwrap().clone().unwrap();
+    let seen = seen.lock().unwrap()[0].clone();
     assert_eq!(seen.path, "/audio/transcriptions");
     assert_eq!(seen.header("authorization"), Some("Bearer sk-test"));
     let body = seen.body_text();
@@ -140,4 +153,30 @@ fn refuses_bad_addresses_before_sending() {
 fn refuses_oversized_recordings() {
     let r = transcribe(spec("local").unwrap(), "", "", "", vec![0; MAX_AUDIO_BYTES + 1], "audio/webm", None);
     assert!(matches!(r, Err(AiError::Rejected(_))), "{r:?}");
+}
+
+#[test]
+fn retries_once_when_the_service_fails_for_a_moment() {
+    let (base, seen) = stub_seq(vec![(503, r#"{"error":{"message":"busy"}}"#), (200, r#"{"text":"again"}"#)]);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, b"AUDIO".to_vec(), "audio/webm", None);
+    assert_eq!(r.unwrap(), "again");
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 2);
+    assert!(seen[1].body_text().contains("AUDIO"), "the retry sends the recording again");
+}
+
+#[test]
+fn a_second_failure_is_reported() {
+    let (base, seen) = stub_seq(vec![(503, "{}"), (502, "{}"), (200, r#"{"text":"never"}"#)]);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None);
+    assert!(matches!(r, Err(AiError::Network(_))), "{r:?}");
+    assert_eq!(seen.lock().unwrap().len(), 2, "only one retry");
+}
+
+#[test]
+fn a_spent_quota_is_not_retried() {
+    let (base, seen) = stub_seq(vec![(429, r#"{"error":{"code":"insufficient_quota"}}"#), (200, r#"{"text":"x"}"#)]);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None);
+    assert!(matches!(r, Err(AiError::Billing)), "{r:?}");
+    assert_eq!(seen.lock().unwrap().len(), 1);
 }
