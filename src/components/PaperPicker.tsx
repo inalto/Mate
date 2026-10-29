@@ -1,6 +1,6 @@
 // Paper picker: a preview tile per page template, spacing presets and "Use for new pages".
 // Every choice applies to the page at once (same updatePage path as the Page settings dialog).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TKey } from "../i18n";
 import type { BackgroundConfig, BackgroundType, Page } from "../model/types";
@@ -8,6 +8,8 @@ import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 import { PAPER_TEMPLATES } from "../model/paperTemplates";
 import { paperPreview } from "./paperPreview";
+import DockPopover from "./DockPopover";
+import { useDismiss } from "./useDismiss";
 import { useModal } from "./useModal";
 
 const PRESETS: [number, TKey][] = [
@@ -40,8 +42,12 @@ function PaperTile({ cfg, label, selected, onPick }: { cfg: BackgroundConfig; la
   );
 }
 
-export default function PaperPicker({ page, onClose }: { page: Page; onClose(): void }) {
-  useModal();
+/**
+ * Without `anchorRef`: a modal dialog. With it: a popover anchored to the dock bar's Paper button
+ * (placed on the side away from the docked edge); pointer-downs outside it close it.
+ */
+export default function PaperPicker({ page, onClose, anchorRef }: { page: Page; onClose(): void; anchorRef?: RefObject<HTMLElement | null> }) {
+  useModal(!anchorRef);
   const { t } = useTranslation();
   const [cfg, setCfg] = useState<BackgroundConfig>(page.backgroundConfig);
   const [draft, setDraft] = useState<string | null>(null);
@@ -49,6 +55,11 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   const draftRef = useRef<() => void>(() => {});
+  const popover = !!anchorRef;
+  useDismiss(anchorRef ?? ref, popover, () => {
+    draftRef.current();
+    close.current();
+  });
   useEffect(() => {
     close.current = onClose;
   });
@@ -108,14 +119,14 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
     if (on && cfg.type !== "custom") void useSettingsStore.getState().update({ defaultBackground: cfg.type });
   };
 
-  return (
-    <div
-      className="backdrop"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div ref={ref} className="card dialog paper-picker" role="dialog" aria-modal="true" aria-label={t("paperPicker.title")}>
+  const card = (
+      <div
+        ref={ref}
+        className={popover ? "tb-popover paper-picker" : "card dialog paper-picker"}
+        role="dialog"
+        aria-modal={popover ? undefined : true}
+        aria-label={t("paperPicker.title")}
+      >
         <h2>{t("paperPicker.title")}</h2>
         <div className="paper-tiles" role="group" aria-label={t("paperPicker.templates")}>
           {PAPER_TEMPLATES.map(([type, label]) => (
@@ -152,6 +163,16 @@ export default function PaperPicker({ page, onClose }: { page: Page; onClose(): 
           <button type="button" className="btn btn-primary" onClick={onClose}>{t("paperPicker.done")}</button>
         </div>
       </div>
+  );
+  if (anchorRef) return <DockPopover anchorRef={anchorRef}>{card}</DockPopover>;
+  return (
+    <div
+      className="backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {card}
     </div>
   );
 }

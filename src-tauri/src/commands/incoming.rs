@@ -13,8 +13,9 @@ use std::time::Duration;
 
 use super::open_files::is_import_path;
 
-/// Largest file accepted from another app. PDFs are bounded again by the PDF import limit.
-pub const MAX_INCOMING_BYTES: usize = 200 * 1024 * 1024;
+/// Largest file accepted from another app: the largest asset (a media file). PDFs and images are
+/// bounded again by their own import limits.
+pub const MAX_INCOMING_BYTES: usize = mate_core::assets::MAX_ASSET_BYTES;
 
 /// Folder under the data dir holding received files until they are imported.
 pub const INCOMING_DIR: &str = "incoming";
@@ -52,9 +53,13 @@ pub fn sanitize_name(name: &str) -> String {
     if out.is_empty() { "file".to_owned() } else { out }
 }
 
-/// The error for a file over [`MAX_INCOMING_BYTES`].
+/// The error for a file over [`MAX_INCOMING_BYTES`]. Ends in `(max N)` like the asset store's
+/// size refusal, which the media insert flow recognises.
 fn too_large() -> String {
-    format!("files over {} MiB are not opened", MAX_INCOMING_BYTES / (1024 * 1024))
+    format!(
+        "files over {} MiB are not opened (max {MAX_INCOMING_BYTES})",
+        MAX_INCOMING_BYTES / (1024 * 1024)
+    )
 }
 
 /// Writes `bytes` to `dir/<uuid>/<sanitised name>` (creating the folders) and returns that path.
@@ -275,6 +280,11 @@ fn read_content_uri(app: &tauri::AppHandle, url: &tauri::Url) -> Result<Vec<u8>,
     let mut opts = OpenOptions::new();
     opts.read(true);
     let file = app.fs().open(FilePath::Url(url.clone()), opts).map_err(|e| e.to_string())?;
+    // The content resolver usually hands back a real file descriptor with a size: refuse an
+    // oversized file before reading it. A pipe reports 0 and is bounded by `take` below.
+    if file.metadata().is_ok_and(|m| m.len() > MAX_INCOMING_BYTES as u64) {
+        return Err(too_large());
+    }
     let mut bytes = Vec::new();
     file.take(MAX_INCOMING_BYTES as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
     if bytes.len() > MAX_INCOMING_BYTES {
@@ -430,7 +440,8 @@ mod tests {
         let err = materialize_with(&d, "content://x/y", |_| Err("denied".into())).unwrap_err();
         assert!(err.contains("denied"), "{err}");
         let big = materialize_with(&d, "content://x/big", |_| Ok(vec![0; MAX_INCOMING_BYTES + 1]));
-        assert!(big.is_err());
+        let err = big.unwrap_err();
+        assert!(err.ends_with(&format!("(max {})", mate_core::assets::MAX_ASSET_BYTES)), "{err}");
         let _ = fs::remove_dir_all(&d);
     }
 

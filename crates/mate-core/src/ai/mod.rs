@@ -11,6 +11,7 @@ pub mod openai;
 pub mod practice;
 pub mod prompts;
 pub mod provider;
+pub mod speech;
 pub mod verdict;
 
 use provider::{AiError, Provider};

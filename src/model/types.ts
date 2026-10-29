@@ -14,7 +14,8 @@ export type ElementType =
   | "codespace"
   | "graph"
   | "slide"
-  | "table";
+  | "table"
+  | "media";
 export type BackgroundType =
   | "blank"
   | "ruled"
@@ -333,6 +334,8 @@ export interface Settings {
   settingsVersion: number;
   theme: Theme;
   handedness: string;
+  /** Pane edge the editor toolbar is docked to. */
+  toolbarDock: "top" | "bottom" | "left" | "right";
   libraryView: string;
   sidebarLayout: string;
   shortcutHintMode: string;
@@ -363,6 +366,8 @@ export interface Settings {
   inkToShape: boolean;
   inkToShapeSnapsOnRelease: boolean;
   inkToShapeDwellMs: number;
+  /** Offer the line ends popover after a stroke snaps to a line or arrow. */
+  lineCapsPopover: boolean;
   scribbleToErase: boolean;
   scribbleEraseSensitivity: string;
   strokeStabilization: number;
@@ -391,6 +396,14 @@ export interface Settings {
   aiModel: string;
   /** Empty means the provider's default address; only used by local and custom providers. */
   aiBaseUrl: string;
+  /** Dictation service (a speech catalog id from Rust). */
+  speechProvider: string;
+  /** Empty means the speech service's default model. */
+  speechModel: string;
+  /** Empty means the speech service's default address; only used by local and custom services. */
+  speechBaseUrl: string;
+  /** Recordings may be sent to the speech service; null until the user is asked. */
+  speechConsent: boolean | null;
   /** Wolfram|Alpha may be sent typed maths when the user asks. */
   wolframConsent: boolean;
   /** Interface language: "system" (follow the OS) or a supported code ("en", "it", …). */

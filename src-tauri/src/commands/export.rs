@@ -108,20 +108,33 @@ fn filter_for(name: &str) -> Option<(&'static str, &'static str)> {
 /// Writes `bytes` to `path` via a sibling temp file and a rename, so a failed write never
 /// leaves a truncated file behind.
 pub fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    write_atomically_with(path, |f| f.write_all(bytes).map_err(|e| e.to_string()))
+}
+
+/// [`write_atomically`] with the content streamed by `write` into the temp file (a large file
+/// never has to be held in memory). An error from `write` leaves nothing behind.
+pub fn write_atomically_with<T>(
+    path: &Path,
+    write: impl FnOnce(&mut fs::File) -> Result<T, String>,
+) -> Result<T, String> {
     let file_name = path
         .file_name()
         .ok_or_else(|| "invalid export path".to_string())?
         .to_string_lossy();
     let tmp = path.with_file_name(format!("{file_name}.tmp"));
     let written = (|| {
-        let mut f = fs::File::create(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all() // data on disk before the rename makes it visible
+        let mut f = fs::File::create(&tmp).map_err(|e| e.to_string())?;
+        let out = write(&mut f)?;
+        f.sync_all().map_err(|e| e.to_string())?; // data on disk before the rename makes it visible
+        Ok(out)
     })();
-    if let Err(e) = written {
-        let _ = fs::remove_file(&tmp);
-        return Err(e.to_string());
-    }
+    let out = match written {
+        Ok(out) => out,
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            return Err(e);
+        }
+    };
     fs::rename(&tmp, path).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         e.to_string()
@@ -133,7 +146,7 @@ pub fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
     {
         let _ = d.sync_all();
     }
-    Ok(())
+    Ok(out)
 }
 
 /// Shows a native save dialog (off the async runtime) and returns the chosen path.

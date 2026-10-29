@@ -37,10 +37,10 @@ function rotatedBox(r: Rect, rad: number): Rect {
   return { x: cx - hw, y: cy - hh, width: 2 * hw, height: 2 * hh };
 }
 
-/** Unrotated box of a boxed element: `points[0]` anchor, `boxWidth/boxHeight` (images: `width/height`). */
+/** Unrotated box of a boxed element: `points[0]` anchor, `boxWidth/boxHeight` (images, media: `width/height`). */
 export function boxRect(el: Element): Rect {
   const a = el.points[0] ?? { x: 0, y: 0 };
-  const image = el.type === "image";
+  const image = el.type === "image" || el.type === "media";
   return {
     x: a.x,
     y: a.y,

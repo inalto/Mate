@@ -366,6 +366,17 @@
     "star": "Star",
     "polygon": "Polygon"
   },
+  "lineCaps": {
+    "title": "Line ends",
+    "start": "Start",
+    "end": "End",
+    "none": "None",
+    "arrow": "Arrow",
+    "dot": "Dot",
+    "bar": "Bar",
+    "settingsToggle": "Offer line ends after snapping",
+    "settingsHint": "Show a small picker for arrow, dot or bar ends when a stroke becomes a line or arrow."
+  },
   "keys": {
     "title": "Keyboard shortcuts",
     "resetAll": "Reset all",
@@ -558,7 +569,16 @@
     "insertEquation": "Insert equation",
     "insertGraph": "Insert graph",
     "select": "Select",
-    "lasso": "Lasso"
+    "lasso": "Lasso",
+    "paper": "Paper"
+  },
+  "dock": {
+    "position": "Toolbar position",
+    "top": "Top",
+    "bottom": "Bottom",
+    "left": "Left",
+    "right": "Right",
+    "menu": "Move toolbar"
   },
   "topbar": {
     "more": "More actions",
@@ -567,7 +587,6 @@
     "exportPage": "Export page…",
     "importNotes": "Import notes…",
     "pageSettings": "Page settings",
-    "paper": "Paper",
     "searchActions": "Search and actions…",
     "about": "About Mate",
     "pageTitle": "Page title"
@@ -585,6 +604,14 @@
     "tableLimit": "Table is at its size limit ({{max}} cells)",
     "insertImageFailed": "Could not insert that image.",
     "imagesFilter": "Images"
+  },
+  "media": {
+    "insert": "Insert media",
+    "filter": "Audio and video",
+    "insertFailed": "Could not insert that media file.",
+    "tooLarge": "That file is too large (the limit is {{max}} MB).",
+    "audio": "Audio",
+    "video": "Video"
   },
   "whatsNew": {
     "title": "What's new",
@@ -1003,6 +1030,59 @@
       "custom": "Checked notes are sent to the address you enter."
     },
     "getKey": "Get a key"
+  },
+  "speech": {
+    "dictate": "Dictate",
+    "stop": "Stop dictating",
+    "recording": "Recording, {{time}}",
+    "transcribing": "Transcribing…",
+    "noMicrophone": "No microphone was found.",
+    "permissionDenied": "Mate is not allowed to use the microphone. Allow it in the system settings.",
+    "unsupported": "Recording is not available on this device.",
+    "failed": "Dictation failed: {{message}}",
+    "nothingHeard": "Nothing was heard. Try again a little closer to the microphone.",
+    "off": "Dictation is off. Turn it on in Settings, Dictation.",
+    "notConfigured": "Choose a speech service in Settings, Dictation.",
+    "openSettings": "Settings",
+    "limitReached": "Recording stopped after 5 minutes.",
+    "noPage": "Open a page to dictate into.",
+    "errors": {
+      "disabled": "Dictation is off. Turn it on in Settings, Dictation.",
+      "network": "Could not reach the speech service ({{detail}}).",
+      "rejected": "The speech service refused the recording ({{detail}}).",
+      "invalidResponse": "The speech service sent a reply that could not be read ({{detail}}).",
+      "auth": "The speech service did not accept the API key. Check it in Settings, Dictation.",
+      "noKey": "Save an API key for the speech service in Settings, Dictation.",
+      "noAddress": "Enter the speech service's address in Settings, Dictation.",
+      "tooLarge": "The recording is too large to send (over 25 MB). Dictate in shorter parts."
+    },
+    "settings": {
+      "title": "Dictation",
+      "provider": "Speech service",
+      "key": "API key",
+      "keyOptional": "API key (optional)",
+      "model": "Model",
+      "address": "Address",
+      "consent": "Send recordings to the speech service",
+      "consentHint": "Each dictation is recorded on this device and sent to {{provider}} to be turned into text. Nothing is kept by Mate.",
+      "consentHintLocal": "Each dictation is sent to the program at {{address}}, on this computer or network.",
+      "test": "Test",
+      "status": "Status",
+      "ready": "Ready to dictate.",
+      "notReady": "Not set up yet: save a key or enter an address.",
+      "loadFailed": "The list of speech services could not be loaded.",
+      "testLabel": "Connection",
+      "testing": "Testing…",
+      "testOk": "The speech service answered. Dictation is ready.",
+      "testHint": "Sends half a second of silence to {{provider}} to check the key, model and address. This audio leaves the device, so the consent below must be on.",
+      "testHintLocal": "Sends half a second of silence to the program at {{address}} to check that it answers. The consent below must be on."
+    },
+    "consent": {
+      "title": "Send recordings to {{provider}}?",
+      "body": "Dictation records your voice on this device and sends the recording to {{provider}}, which turns it into text. You can change this in Settings, Dictation.",
+      "allow": "Allow",
+      "deny": "Not now"
+    }
   },
   "home": {
     "firstNotebook": "My Notebook",

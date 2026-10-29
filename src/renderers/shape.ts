@@ -1,13 +1,14 @@
 // Shape renderer: canvas, SVG and bounds for `type: "shape"` elements, from the pure outline in
 // shapes/geometry. Fill (`fillColor` at `content.fillOpacity`) is painted under the stroke (`color`
-// at `width`, round joins); an arrow's head is filled with the stroke colour. Ink colours remap in
+// at `width`, round joins); line caps follow the shaft: arrow heads and dots are filled with the
+// stroke colour, bars stroked. Ink colours remap in
 // dark themes like strokes do.
 import { esc, n } from "../export/svgUtil";
 import { mapInkColor } from "../ink/theme";
 import type { Vec2 } from "../canvas/camera";
 import type { Element } from "../model/types";
 import { contentMeta } from "../tools/spatialIndex";
-import { fillOpacityOf, hasFill, isClosedShape, shapeBounds, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
+import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeBounds, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
 import { FALLBACK_INK } from "../text/boxHtml";
 import { isSafeColor, safeColor } from "../text/sanitize";
 import { registerRenderer, type RenderOptions } from "./registry";
@@ -34,7 +35,7 @@ function trace(ctx: CanvasRenderingContext2D, poly: Vec2[], closed: boolean): vo
 }
 
 function draw(ctx: CanvasRenderingContext2D, el: Element, o: RenderOptions): void {
-  const [main, head] = shapeElementOutline(el);
+  const [main, ...caps] = shapeElementOutline(el);
   if (!main || main.length === 0) return;
   const p = paintOf(el, o);
   const closed = isClosedShape(el.shapeType ?? "rectangle");
@@ -51,10 +52,13 @@ function draw(ctx: CanvasRenderingContext2D, el: Element, o: RenderOptions): voi
     ctx.globalAlpha = 1;
   }
   ctx.stroke();
-  if (head) {
-    trace(ctx, head, true);
-    ctx.fillStyle = p.stroke;
-    ctx.fill();
+  for (const cap of caps) {
+    const filled = isFilledCap(cap);
+    trace(ctx, cap, filled);
+    if (filled) {
+      ctx.fillStyle = p.stroke;
+      ctx.fill();
+    }
     ctx.stroke();
   }
   ctx.restore();
@@ -82,9 +86,16 @@ function svg(el: Element, o: RenderOptions): string {
     return `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(Math.abs(r.width) / 2)}" ry="${n(Math.abs(r.height) / 2)}"${transform} ${fillAttrs} ${strokeAttrs}/>`;
   }
   if (!isClosedShape(type)) {
-    const [[a, b], head] = outline;
+    const [[a, b], ...caps] = outline;
     const line = `<line x1="${n(a.x)}" y1="${n(a.y)}" x2="${n(b.x)}" y2="${n(b.y)}" ${strokeAttrs}/>`;
-    return head ? `${line}<path d="${pathD(head, true)}" fill="${stroke}" ${strokeAttrs}/>` : line;
+    return (
+      line +
+      caps
+        .map((cap) =>
+          isFilledCap(cap) ? `<path d="${pathD(cap, true)}" fill="${stroke}" ${strokeAttrs}/>` : `<path d="${pathD(cap, false)}" fill="none" ${strokeAttrs}/>`,
+        )
+        .join("")
+    );
   }
   return `<path d="${pathD(outline[0], true)}" ${fillAttrs} ${strokeAttrs}/>`;
 }

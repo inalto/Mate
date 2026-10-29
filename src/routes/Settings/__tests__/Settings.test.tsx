@@ -13,8 +13,16 @@ vi.mock("../../../ipc/ai", () => ({
   listAiModels: vi.fn(async () => []),
 }));
 vi.mock("../../../ipc/math", () => ({ wolframStatus: vi.fn(async () => ({ configured: false, consent: false })) }));
-vi.mock("../../../ipc/backup", () => ({
-  exportBackup: vi.fn(async () => "C:/tmp/mate-backup-2026-10-23.zip"),
+vi.mock("../../../ipc/speech", () => ({
+  listSpeechProviders: vi.fn(async () => [{ id: "openai", label: "OpenAI", needsKey: true, editableBaseUrl: false, defaultBaseUrl: "https://api.openai.com/v1", defaultModel: "gpt-4o-mini-transcribe", keyUrl: "", local: false }]),
+  getSpeechStatus: vi.fn(async () => ({ configured: false, hasKey: false, provider: "openai", model: "gpt-4o-mini-transcribe", baseUrl: "", consent: false, needsKey: true, local: false })),
+  setSpeechKey: vi.fn(),
+  clearSpeechKey: vi.fn(),
+  transcribeAudio: vi.fn(),
+}));
+vi.mock("../../../ipc/backup", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../ipc/backup")>()),
+  exportBackup: vi.fn(async () => ({ path: "C:/tmp/mate-backup-2026-10-23.zip", skipped: [] })),
   resetLocalData: vi.fn(async () => {}),
 }));
 vi.mock("../../../ipc/share", () => ({
@@ -157,7 +165,9 @@ describe("Settings rows", () => {
     vi.useRealTimers();
     renderPane();
     expect(((await screen.findByLabelText(/Nothing is sent until you turn this on/)) as HTMLInputElement).checked).toBe(false);
-    expect(await screen.findByText("No key")).toBeTruthy();
+    // The tutor's key status (Dictation shows its own).
+    const tutor = document.getElementById("set-sec-tutor") as HTMLElement;
+    expect(await within(tutor).findByText("No key")).toBeTruthy();
   });
 });
 
@@ -194,6 +204,15 @@ describe("sliders", () => {
 });
 
 describe("search", () => {
+  it("finds_the_dictation_section", async () => {
+    renderPane();
+    await screen.findByLabelText("Speech service");
+    fireEvent.change(screen.getByLabelText("Search settings"), { target: { value: "Dictation" } });
+    const results = screen.getByRole("list", { name: "Search results" });
+    expect(within(results).getAllByRole("button").some((b) => b.textContent?.includes("Dictation"))).toBe(true);
+    expect(screen.getByRole("button", { name: "Dictation" })).toBeTruthy();
+  });
+
   it("fuzzy_scoring_prefers_substrings_and_rejects_non_subsequences", () => {
     expect(fuzzyScore("palm", "Palm rejection")).toBeGreaterThan(fuzzyScore("pmr", "Palm rejection"));
     expect(fuzzyScore("pmrj", "Palm rejection")).toBeGreaterThan(0);
@@ -320,6 +339,17 @@ describe("about and backup", () => {
     expect(exportBackup).toHaveBeenCalledTimes(1);
   });
 
+  it("download_backup_names_the_books_it_left_out", async () => {
+    vi.mocked(exportBackup).mockResolvedValueOnce({
+      path: "C:/tmp/mate-backup-2026-10-24.zip",
+      skipped: [{ unitId: "u9", title: "Films", reason: "left out of the backup: larger than 512 MiB" }],
+    });
+    renderPane();
+    fireEvent.click(screen.getByRole("button", { name: "Download backup" }));
+    expect(await screen.findByText(/mate-backup-2026-10-24\.zip/)).toBeTruthy();
+    expect(screen.getByText("Films: left out of the backup: larger than 512 MiB")).toBeTruthy();
+  });
+
   it("reset_local_data_requires_confirmation", async () => {
     renderPane();
     fireEvent.click(screen.getByRole("button", { name: "Reset local data" }));
@@ -338,6 +368,19 @@ describe("about and backup", () => {
       fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reset" }));
     });
     expect(resetLocalData).toHaveBeenCalledTimes(1);
+  });
+
+  it("reset_refused_for_a_too_large_book_shows_why", async () => {
+    const why =
+      "Nothing was reset: “Films” could not be included in the recovery backup (left out of the backup: larger than 512 MiB). Export or delete these books first, then reset again.";
+    vi.mocked(resetLocalData).mockRejectedValueOnce(why);
+    renderPane();
+    fireEvent.click(screen.getByRole("button", { name: "Reset local data" }));
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reset" }));
+    });
+    expect(screen.getByRole("alert").textContent).toBe(why);
+    expect((screen.getByRole("button", { name: "Reset local data" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("reset_on_mobile_says_mate_will_close", () => {

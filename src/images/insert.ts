@@ -7,7 +7,7 @@ import i18n from "../i18n";
 import { saveAssetFromPath, type AssetInfo } from "../ipc/assets";
 import type { EditorStore } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
-import { loadImage, naturalSize } from "./load";
+import { intrinsicSize, loadImage } from "./load";
 
 export const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "gif", "svg"] as const;
 
@@ -26,7 +26,7 @@ export async function insertAsset(store: EditorStore, info: AssetInfo, at?: Vec2
     showToast(insertFailed());
     return null;
   }
-  return store.getState().addImage(info.id, naturalSize(img), at);
+  return store.getState().addImage(info.id, await intrinsicSize(info.id, img, info.mime), at);
 }
 
 /** Store the file at `path` and insert it; failures show a toast. */

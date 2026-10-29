@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use mate_core::assets::{self, AssetInfo, MAX_PDF_BYTES};
+use mate_core::assets::{self, AssetInfo, MAX_ASSET_BYTES};
 use tauri::{AppHandle, Manager, State};
 use tauri::ipc::{Request, Response};
 
@@ -18,17 +18,21 @@ fn assets_dir(state: &AppState) -> PathBuf {
     state.data_dir.join("assets")
 }
 
-/// Reads `path` (refusing anything over the PDF limit before loading it) and stores it.
+/// Reads `path` (refusing anything over the largest asset limit, the media one, before loading
+/// it) and stores it; the per-kind limit is enforced after sniffing.
 fn save_from_path(dir: &Path, path: &Path) -> Result<AssetInfo, String> {
     let meta = fs::metadata(path).map_err(|e| e.to_string())?;
-    if !meta.is_file() || meta.len() as usize > MAX_PDF_BYTES {
+    if !meta.is_file() {
         return Err("not a supported file".into());
+    }
+    if meta.len() > MAX_ASSET_BYTES as u64 {
+        return Err(format!("asset is {} bytes (max {MAX_ASSET_BYTES})", meta.len()));
     }
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
     assets::save_sniffed(dir, &bytes).map_err(|e| e.to_string())
 }
 
-/// Stores an image or PDF sent as the raw request body; the type is sniffed from the content
+/// Stores an image, PDF or media file sent as the raw request body; the type is sniffed from the content
 /// (the optional `x-asset-kind-hint` header is advisory only and ignored).
 #[tauri::command]
 pub fn save_asset(state: State<'_, AppState>, request: Request<'_>) -> Result<AssetInfo, String> {

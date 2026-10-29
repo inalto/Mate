@@ -368,6 +368,17 @@
     "star": "星形",
     "polygon": "多边形"
   },
+  "lineCaps": {
+    "title": "线条端点",
+    "start": "起点",
+    "end": "终点",
+    "none": "无",
+    "arrow": "箭头",
+    "dot": "圆点",
+    "bar": "竖线",
+    "settingsToggle": "吸附后提供线条端点选项",
+    "settingsHint": "笔画变为直线或箭头时,显示一个可选择箭头、圆点或竖线端点的小面板。"
+  },
   "keys": {
     "title": "键盘快捷键",
     "resetAll": "全部重置",
@@ -560,7 +571,16 @@
     "insertEquation": "插入公式",
     "insertGraph": "插入图形",
     "select": "选择",
-    "lasso": "套索"
+    "lasso": "套索",
+    "paper": "纸张"
+  },
+  "dock": {
+    "position": "工具栏位置",
+    "top": "顶部",
+    "bottom": "底部",
+    "left": "左侧",
+    "right": "右侧",
+    "menu": "移动工具栏"
   },
   "topbar": {
     "more": "更多操作",
@@ -569,7 +589,6 @@
     "exportPage": "导出页面…",
     "importNotes": "导入笔记…",
     "pageSettings": "页面设置",
-    "paper": "Paper",
     "searchActions": "搜索与操作…",
     "about": "关于 Mate",
     "pageTitle": "页面标题"
@@ -587,6 +606,14 @@
     "tableLimit": "表格已达到大小上限（{{max}} 个单元格）",
     "insertImageFailed": "无法插入该图片。",
     "imagesFilter": "图片"
+  },
+  "media": {
+    "insert": "插入媒体",
+    "filter": "音频和视频",
+    "insertFailed": "无法插入该媒体文件。",
+    "tooLarge": "该文件过大(上限为 {{max}} MB)。",
+    "audio": "音频",
+    "video": "视频"
   },
   "whatsNew": {
     "title": "新功能",
@@ -996,6 +1023,59 @@
       "custom": "要检查的笔记会发送到你输入的地址。"
     },
     "getKey": "获取密钥"
+  },
+  "speech": {
+    "dictate": "听写",
+    "stop": "停止听写",
+    "recording": "正在录音,{{time}}",
+    "transcribing": "正在转写…",
+    "noMicrophone": "未找到麦克风。",
+    "permissionDenied": "Mate 无权使用麦克风。请在系统设置中允许。",
+    "unsupported": "此设备无法录音。",
+    "failed": "听写失败:{{message}}",
+    "nothingHeard": "没有听到声音。请靠近麦克风再试一次。",
+    "off": "听写已关闭。请在设置“听写”中开启。",
+    "notConfigured": "请在设置“听写”中选择语音服务。",
+    "openSettings": "设置",
+    "limitReached": "录音在 5 分钟后停止。",
+    "noPage": "请打开一个页面以进行听写。",
+    "errors": {
+      "disabled": "听写已关闭。请在设置“听写”中开启。",
+      "network": "无法连接语音服务（{{detail}}）。",
+      "rejected": "语音服务拒绝了录音（{{detail}}）。",
+      "invalidResponse": "语音服务返回了无法读取的回复（{{detail}}）。",
+      "auth": "语音服务未接受 API 密钥。请在设置“听写”中检查。",
+      "noKey": "请在设置“听写”中保存语音服务的 API 密钥。",
+      "noAddress": "请在设置“听写”中输入语音服务的地址。",
+      "tooLarge": "录音太大，无法发送（超过 25 MB）。请分成较短的段落听写。"
+    },
+    "settings": {
+      "title": "听写",
+      "provider": "语音服务",
+      "key": "API 密钥",
+      "keyOptional": "API 密钥(可选)",
+      "model": "模型",
+      "address": "地址",
+      "consent": "将录音发送到语音服务",
+      "consentHint": "每次听写都会在此设备上录音,并发送到 {{provider}} 转换为文字。Mate 不保留任何内容。",
+      "consentHintLocal": "每次听写都会发送到此计算机或网络上 {{address}} 处的程序。",
+      "test": "测试",
+      "status": "状态",
+      "ready": "可以开始听写。",
+      "notReady": "尚未设置:请保存密钥或输入地址。",
+      "loadFailed": "无法加载语音服务列表。",
+      "testLabel": "连接",
+      "testing": "正在测试…",
+      "testOk": "语音服务已响应。可以开始听写。",
+      "testHint": "向 {{provider}} 发送半秒静音，以检查密钥、模型和地址。此音频会离开设备，因此必须开启下方的同意选项。",
+      "testHintLocal": "向 {{address}} 处的程序发送半秒静音，以检查它是否响应。必须开启下方的同意选项。"
+    },
+    "consent": {
+      "title": "将录音发送到 {{provider}}?",
+      "body": "听写会在此设备上录下你的声音,并将录音发送到 {{provider}} 转换为文字。你可以在设置“听写”中更改。",
+      "allow": "允许",
+      "deny": "暂不"
+    }
   },
   "home": {
     "firstNotebook": "我的笔记本",

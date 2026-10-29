@@ -366,6 +366,17 @@
     "star": "Stella",
     "polygon": "Poligono"
   },
+  "lineCaps": {
+    "title": "Estremità",
+    "start": "Inizio",
+    "end": "Fine",
+    "none": "Nessuna",
+    "arrow": "Freccia",
+    "dot": "Punto",
+    "bar": "Barra",
+    "settingsToggle": "Proponi le estremità delle linee riconosciute",
+    "settingsHint": "Mostra un piccolo selettore di estremità a freccia, punto o barra quando un tratto diventa una linea o una freccia."
+  },
   "keys": {
     "title": "Scorciatoie da tastiera",
     "resetAll": "Reimposta tutte",
@@ -558,7 +569,16 @@
     "insertEquation": "Inserisci un'equazione",
     "insertGraph": "Inserisci un grafico",
     "select": "Seleziona",
-    "lasso": "Lazo"
+    "lasso": "Lazo",
+    "paper": "Carta"
+  },
+  "dock": {
+    "position": "Posizione della barra",
+    "top": "In alto",
+    "bottom": "In basso",
+    "left": "A sinistra",
+    "right": "A destra",
+    "menu": "Sposta la barra"
   },
   "topbar": {
     "more": "Altre azioni",
@@ -567,7 +587,6 @@
     "exportPage": "Esporta la pagina…",
     "importNotes": "Importa appunti…",
     "pageSettings": "Impostazioni della pagina",
-    "paper": "Carta",
     "searchActions": "Cerca e azioni…",
     "about": "Informazioni su Mate",
     "pageTitle": "Titolo della pagina"
@@ -585,6 +604,14 @@
     "tableLimit": "La tabella ha raggiunto il limite di dimensione ({{max}} celle)",
     "insertImageFailed": "Impossibile inserire quell'immagine.",
     "imagesFilter": "Immagini"
+  },
+  "media": {
+    "insert": "Inserisci media",
+    "filter": "Audio e video",
+    "insertFailed": "Impossibile inserire quel file multimediale.",
+    "tooLarge": "Il file è troppo grande (il limite è {{max}} MB).",
+    "audio": "Audio",
+    "video": "Video"
   },
   "whatsNew": {
     "title": "Novità",
@@ -1003,6 +1030,59 @@
       "custom": "Gli appunti da controllare vengono inviati all'indirizzo che inserisci."
     },
     "getKey": "Ottieni una chiave"
+  },
+  "speech": {
+    "dictate": "Detta",
+    "stop": "Interrompi la dettatura",
+    "recording": "Registrazione, {{time}}",
+    "transcribing": "Trascrizione…",
+    "noMicrophone": "Nessun microfono trovato.",
+    "permissionDenied": "Mate non ha il permesso di usare il microfono. Consentilo nelle impostazioni di sistema.",
+    "unsupported": "La registrazione non è disponibile su questo dispositivo.",
+    "failed": "Dettatura non riuscita: {{message}}",
+    "nothingHeard": "Non si è sentito nulla. Riprova un po' più vicino al microfono.",
+    "off": "La dettatura è disattivata. Attivala in Impostazioni, Dettatura.",
+    "notConfigured": "Scegli un servizio vocale in Impostazioni, Dettatura.",
+    "openSettings": "Impostazioni",
+    "limitReached": "Registrazione interrotta dopo 5 minuti.",
+    "noPage": "Apri una pagina in cui dettare.",
+    "errors": {
+      "disabled": "La dettatura è disattivata. Attivala in Impostazioni, Dettatura.",
+      "network": "Impossibile raggiungere il servizio vocale ({{detail}}).",
+      "rejected": "Il servizio vocale ha rifiutato la registrazione ({{detail}}).",
+      "invalidResponse": "Il servizio vocale ha inviato una risposta illeggibile ({{detail}}).",
+      "auth": "Il servizio vocale non ha accettato la chiave API. Controllala in Impostazioni, Dettatura.",
+      "noKey": "Salva una chiave API per il servizio vocale in Impostazioni, Dettatura.",
+      "noAddress": "Inserisci l'indirizzo del servizio vocale in Impostazioni, Dettatura.",
+      "tooLarge": "La registrazione è troppo grande per essere inviata (oltre 25 MB). Detta in parti più brevi."
+    },
+    "settings": {
+      "title": "Dettatura",
+      "provider": "Servizio vocale",
+      "key": "Chiave API",
+      "keyOptional": "Chiave API (facoltativa)",
+      "model": "Modello",
+      "address": "Indirizzo",
+      "consent": "Invia le registrazioni al servizio vocale",
+      "consentHint": "Ogni dettatura viene registrata su questo dispositivo e inviata a {{provider}} per essere trasformata in testo. Mate non conserva nulla.",
+      "consentHintLocal": "Ogni dettatura viene inviata al programma all'indirizzo {{address}}, su questo computer o in rete.",
+      "test": "Prova",
+      "status": "Stato",
+      "ready": "Pronto per la dettatura.",
+      "notReady": "Non ancora configurato: salva una chiave o inserisci un indirizzo.",
+      "loadFailed": "Non è stato possibile caricare l'elenco dei servizi vocali.",
+      "testLabel": "Connessione",
+      "testing": "Prova in corso…",
+      "testOk": "Il servizio vocale ha risposto. La dettatura è pronta.",
+      "testHint": "Invia mezzo secondo di silenzio a {{provider}} per verificare chiave, modello e indirizzo. Questo audio esce dal dispositivo, quindi serve il consenso qui sotto.",
+      "testHintLocal": "Invia mezzo secondo di silenzio al programma all'indirizzo {{address}} per verificare che risponda. Serve il consenso qui sotto."
+    },
+    "consent": {
+      "title": "Inviare le registrazioni a {{provider}}?",
+      "body": "La dettatura registra la tua voce su questo dispositivo e invia la registrazione a {{provider}}, che la trasforma in testo. Puoi cambiare idea in Impostazioni, Dettatura.",
+      "allow": "Consenti",
+      "deny": "Non ora"
+    }
   },
   "home": {
     "firstNotebook": "Il mio quaderno",

@@ -91,6 +91,8 @@ pub struct Settings {
     /// `"light" | "dark" | "sepia" | "high-contrast"`.
     pub theme: String,
     pub handedness: String,
+    /// `"top" | "bottom" | "left" | "right"`.
+    pub toolbar_dock: String,
     pub library_view: String,
     pub sidebar_layout: String,
     pub shortcut_hint_mode: String,
@@ -127,6 +129,7 @@ pub struct Settings {
     pub ink_to_shape: bool,
     pub ink_to_shape_snaps_on_release: bool,
     pub ink_to_shape_dwell_ms: u32,
+    pub line_caps_popover: bool,
     pub scribble_to_erase: bool,
     pub scribble_erase_sensitivity: String,
     pub stroke_stabilization: f64,
@@ -161,6 +164,14 @@ pub struct Settings {
     pub ai_model: String,
     /// Overrides the provider's address (local and custom providers only). Empty = the default.
     pub ai_base_url: String,
+    /// Dictation service: a speech catalog id (`ai::speech`); unknown ids fall back to `"openai"`.
+    pub speech_provider: String,
+    /// Empty means the speech service's default model.
+    pub speech_model: String,
+    /// Overrides the speech service's address (local and custom only). Empty = the default.
+    pub speech_base_url: String,
+    /// Recordings may be sent to the speech service. `None` until the user is asked.
+    pub speech_consent: Option<bool>,
     /// Wolfram|Alpha may be asked (the typed maths is sent to it). Off until the user turns it on.
     pub wolfram_consent: bool,
     /// Interface language: `"system"` (follow the OS) or a supported code (`"en"`, `"it"`, …).
@@ -192,6 +203,7 @@ impl Default for Settings {
             settings_version: 1,
             theme: s("light"),
             handedness: s("right"),
+            toolbar_dock: s("top"),
             library_view: s("recent"),
             sidebar_layout: s("split"),
             shortcut_hint_mode: s("always"),
@@ -222,6 +234,7 @@ impl Default for Settings {
             ink_to_shape: true,
             ink_to_shape_snaps_on_release: false,
             ink_to_shape_dwell_ms: 750,
+            line_caps_popover: true,
             scribble_to_erase: true,
             scribble_erase_sensitivity: s("standard"),
             stroke_stabilization: 35.0,
@@ -246,6 +259,10 @@ impl Default for Settings {
             ai_provider: s("anthropic"),
             ai_model: String::new(),
             ai_base_url: String::new(),
+            speech_provider: s("openai"),
+            speech_model: String::new(),
+            speech_base_url: String::new(),
+            speech_consent: None,
             wolfram_consent: false,
             language: s("system"),
             trash_retention_days: 30,

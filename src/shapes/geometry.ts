@@ -3,7 +3,7 @@
 // `points[1]` bottom-right of their box; line/arrow the start and end. `boxWidth/boxHeight` are the
 // box size, `content.rotation` turns the outline about the box centre.
 import type { Vec2 } from "../canvas/camera";
-import { contentOf, type ShapeContent } from "../model/content";
+import { contentOf, effectiveCaps, type LineCap, type LineCaps, type ShapeContent } from "../model/content";
 import type { Element, Point, Settings, ShapeType } from "../model/types";
 
 export interface ShapeRect {
@@ -18,6 +18,10 @@ export interface OutlineOptions {
   sides?: number;
   /** Arrow head length (default 12). */
   headLength?: number;
+  /** Line/arrow end caps (default: an arrow ends in a head, a line has none). */
+  caps?: LineCaps;
+  /** Stroke width that sizes dot and bar caps (default 1). */
+  capWidth?: number;
 }
 
 /** Anchor points and box size of a shape (see `shapeFromDrag`). */
@@ -117,6 +121,49 @@ export function arrowHead(start: Vec2, end: Vec2, length: number): Vec2[] {
   ]);
 }
 
+const DOT_SEGMENTS = 16;
+
+/** Dot cap radius for a stroke width. */
+export const dotCapRadius = (strokeWidth: number): number => Math.max(3, 1.5 * strokeWidth);
+
+/** Bar cap length for a stroke width. */
+export const barCapLength = (strokeWidth: number): number => Math.max(10, 3 * strokeWidth);
+
+/**
+ * Outline of one line cap at `at`, `dir` the unit direction pointing out of the line there: arrow
+ * is a closed triangle (tip first), dot a closed 16-segment circle, bar an open two-point segment
+ * across the line. Empty for `none`, and for arrow/bar without a direction (zero-length line).
+ */
+export function capOutline(kind: LineCap, at: Vec2, dir: Vec2, width: number, headLength = arrowHeadLength(width)): Vec2[] {
+  const hasDir = dir.x !== 0 || dir.y !== 0;
+  switch (kind) {
+    case "arrow":
+      return hasDir ? arrowHead({ x: at.x - dir.x, y: at.y - dir.y }, at, headLength) : [];
+    case "dot": {
+      const r = dotCapRadius(width);
+      const pts: Vec2[] = [];
+      for (let i = 0; i < DOT_SEGMENTS; i++) {
+        const a = (i * 2 * Math.PI) / DOT_SEGMENTS;
+        pts.push({ x: at.x + r * Math.cos(a), y: at.y + r * Math.sin(a) });
+      }
+      return close(pts);
+    }
+    case "bar": {
+      if (!hasDir) return [];
+      const h = barCapLength(width) / 2;
+      return [
+        { x: at.x - dir.y * h, y: at.y + dir.x * h },
+        { x: at.x + dir.y * h, y: at.y - dir.x * h },
+      ];
+    }
+    default:
+      return [];
+  }
+}
+
+/** True for cap polylines painted as a filled area (arrow, dot), false for stroked ones (bar). */
+export const isFilledCap = (poly: readonly Vec2[]): boolean => poly.length > 2;
+
 function rotate(polys: Vec2[][], c: Vec2, rad: number): Vec2[][] {
   if (!rad) return polys;
   const cos = Math.cos(rad);
@@ -133,7 +180,8 @@ function rotate(polys: Vec2[][], c: Vec2, rad: number): Vec2[][] {
 /**
  * Outline polylines of a shape. Closed types give one closed polyline (first point repeated) that
  * fills `rect`; circle and ellipse are 64-segment polygons. Line/arrow read `rect` as signed: start
- * (x, y), end (x + width, y + height); an arrow adds its head as a second, closed polyline.
+ * (x, y), end (x + width, y + height); after the shaft come the start then the end cap outlines
+ * (`opts.caps`, see `capOutline`; by default an arrow gets its head as a closed polyline).
  * `rotation` (radians) turns everything about the rect centre.
  */
 export function shapeOutline(type: ShapeType, rect: ShapeRect, rotation = 0, opts: OutlineOptions = {}): Vec2[][] {
@@ -143,10 +191,16 @@ export function shapeOutline(type: ShapeType, rect: ShapeRect, rotation = 0, opt
     const start = { x: rect.x, y: rect.y };
     const end = { x: rect.x + rect.width, y: rect.y + rect.height };
     polys = [[start, end]];
-    if (type === "arrow") {
-      const head = arrowHead(start, end, opts.headLength ?? 12);
-      if (head.length > 0) polys.push(head);
-    }
+    const caps = opts.caps ?? { start: "none", end: type === "arrow" ? "arrow" : "none" };
+    const len = Math.hypot(rect.width, rect.height);
+    const dir = len > 0 ? { x: rect.width / len, y: rect.height / len } : { x: 0, y: 0 };
+    const width = opts.capWidth ?? 1;
+    const head = opts.headLength ?? 12;
+    for (const cap of [
+      capOutline(caps.start, start, { x: -dir.x, y: -dir.y }, width, head),
+      capOutline(caps.end, end, dir, width, head),
+    ])
+      if (cap.length > 0) polys.push(cap);
   } else {
     const r = normalize(rect);
     const { x, y, width: w, height: h } = r;
@@ -195,12 +249,14 @@ export function shapeRectOf(el: Element): ShapeRect {
 
 type ShapeMeta = ShapeContent & { sides: number };
 
-/** Outline of a shape element, including its rotation and arrow head. */
+/** Outline of a shape element, including its rotation and line caps. */
 export function shapeElementOutline(el: Element, withRotation = true): Vec2[][] {
   const c = contentOf<ShapeMeta>(el);
   return shapeOutline(el.shapeType ?? "rectangle", shapeRectOf(el), withRotation ? (c.rotation ?? 0) : 0, {
     sides: c.sides,
     headLength: arrowHeadLength(el.width),
+    caps: effectiveCaps(el),
+    capWidth: el.width,
   });
 }
 
@@ -254,6 +310,8 @@ export function shapeHit(el: Element, p: Vec2, tol: number, interior = true): bo
   const polys = shapeElementOutline(el);
   const r2 = (tol + el.width / 2) ** 2;
   for (const poly of polys) for (let i = 0; i + 1 < poly.length; i++) if (segDist2(poly[i], poly[i + 1], p) <= r2) return true;
+  // Filled line caps (arrow head, dot) are solid: hit anywhere inside, not only on the rim.
+  for (let k = 1; k < polys.length; k++) if (isFilledCap(polys[k]) && inside(p, polys[k])) return true;
   return interior && isClosedShape(el.shapeType ?? "rectangle") && polys.length > 0 && inside(p, polys[0]);
 }
 

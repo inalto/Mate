@@ -33,6 +33,7 @@ pub enum ElementType {
     Graph,
     Slide,
     Table,
+    Media,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

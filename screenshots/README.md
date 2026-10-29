@@ -19,3 +19,11 @@ npm run tauri dev
 | `italian.png` | Settings → General in Italian (Language set to Italiano). |
 
 After saving them, the README's screenshot block (between `<!-- screenshots:start -->` and `<!-- screenshots:end -->`) already references these paths; copy the same images into the wiki checkout's `images/` folder for the Home page.
+
+## Captures still to take
+
+These are not referenced by the README yet. Take them on a build of v1.0.0 and add them next to the others:
+
+- `dock-positions.png`: the editor with the toolbar docked at the top, and again at the left (one image each, or a side-by-side montage).
+- `media-player.png`: a page with an audio player and a video player.
+- `dictate-button.png`: the toolbar with the Dictate button recording (elapsed time visible).

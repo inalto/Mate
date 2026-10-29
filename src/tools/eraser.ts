@@ -5,7 +5,7 @@
 import { isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
-import { hasFill, isClosedShape, shapeElementOutline, shapeHit } from "../shapes/geometry";
+import { hasFill, isClosedShape, isFilledCap, shapeElementOutline, shapeHit } from "../shapes/geometry";
 import { contentMeta, elementBounds, type SpatialIndex } from "./spatialIndex";
 
 export type EraseMode = "stroke" | "partial";
@@ -32,6 +32,8 @@ function erasable(el: Element, opts: EraseOptions): boolean {
       return opts.eraseShapes;
     case "image":
       return opts.eraseImages && !isPdfPlacement(el); // PDF pages are locked
+    case "media":
+      return opts.eraseImages;
     default:
       return false; // text-box, table, codespace, graph and other structured content are never erased
   }
@@ -151,8 +153,8 @@ function splitShape(el: Element, c: Vec2, reach: number): Point[][] | null {
   const out: Point[][] = [];
   shapeElementOutline(el).forEach((poly, i) => {
     const pts = poly.map((v, k): Point => ({ x: v.x, y: v.y, pressure: 0.5, timestamp: k }));
-    // The main outline of closed shapes and every arrow head are closed polylines.
-    const frags = closed || i > 0 ? splitClosed(pts, c, reach) : splitPolyline(pts, c, reach);
+    // The main outline of closed shapes and filled line caps (arrow heads, dots) are closed polylines.
+    const frags = closed || (i > 0 && isFilledCap(poly)) ? splitClosed(pts, c, reach) : splitPolyline(pts, c, reach);
     if (frags) touched = true;
     out.push(...(frags ?? [pts]));
   });

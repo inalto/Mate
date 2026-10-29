@@ -128,6 +128,37 @@ describe("shape renderer", () => {
     expect(calls.filter((c) => c[0] === "stroke").length).toBeGreaterThanOrEqual(1);
   });
 
+  it("canvas_caps_fill_dots_and_stroke_bars", () => {
+    const ln = shape("line", [
+      [0, 0],
+      [100, 0],
+    ], { color: "#1565C0", content: { fillOpacity: 1, caps: { start: "bar", end: "dot" } } });
+    const { ctx, calls } = stubCtx();
+    drawElement(ctx, ln, opts);
+    // One fill (the dot); strokes for the shaft, the bar and the dot's rim.
+    expect(calls.filter((c) => c[0] === "fill")).toEqual([["fill", "#1565C0", 1]]);
+    expect(calls.filter((c) => c[0] === "stroke")).toHaveLength(3);
+  });
+
+  it("svg_draws_cap_paths", () => {
+    const ln = shape("line", [
+      [0, 0],
+      [100, 0],
+    ], { content: { fillOpacity: 1, caps: { start: "arrow", end: "bar" } } });
+    const svg = elementSvg(ln, opts);
+    expect(svg).toContain('<line x1="0" y1="0" x2="100" y2="0"');
+    expect(svg).toMatch(/<path d="M0 0L[^"]+Z" fill="#000000"/);
+    expect(svg).toMatch(/<path d="M100 [^"]+L100 [^"Z]+" fill="none"/);
+    const dot = elementSvg({ ...ln, content: { fillOpacity: 1, caps: { start: "none", end: "dot" } } }, opts);
+    expect((dot.match(/<path /g) ?? []).length).toBe(1);
+    expect(dot).toMatch(/fill="#000000"/);
+    // A plain line has no cap paths; a legacy arrow keeps its head.
+    expect(elementSvg({ ...ln, content: { fillOpacity: 1 } }, opts)).not.toContain("<path");
+    const legacy = elementSvg({ ...ln, shapeType: "arrow", content: { fillOpacity: 1 } }, opts);
+    expect((legacy.match(/<path /g) ?? []).length).toBe(1);
+    expect(legacy).toMatch(/<path d="M100 0L[^"]+Z" fill="#000000"/);
+  });
+
   it("unsafe_colours_fall_back", () => {
     const bad = "red; background: url(http://x/)";
     const svg = elementSvg(shape("rectangle", [[0, 0], [10, 10]], { color: bad, fillColor: "url(#x)" }), { theme: "light", zoomBucket: 1 });

@@ -16,6 +16,9 @@ import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } 
 import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
+import LineCapsPopover from "../components/LineCapsPopover";
+import { openLineCaps } from "../stores/lineCaps";
+import MediaLayer from "../media/MediaLayer";
 import { paintBackground, type SurfaceColors } from "./background";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
@@ -383,7 +386,12 @@ function createEngine(
           if (stroke && t === "commit") {
             if (shape) {
               const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());
-              commit(el, () => st().replaceStrokeWithShape(stroke, el));
+              let added = false;
+              commit(el, () => {
+                added = st().replaceStrokeWithShape(stroke, el);
+              });
+              // A straightened line/arrow offers its end caps next to the end point.
+              if (added && (el.shapeType === "line" || el.shapeType === "arrow") && getSettings().lineCapsPopover) openLineCaps(store, el.id);
             } else if (!scribbleErased(raw)) commit(stroke);
           }
         } else if (mode === "tool") tools.up();
@@ -568,7 +576,9 @@ export default function CanvasView({ pageId, store = useEditorStore }: { pageId:
         <canvas ref={staticRef} className="canvas-layer" />
         <canvas ref={liveRef} className="canvas-layer canvas-live" />
       </div>
+      <MediaLayer store={store} />
       <ZoomIndicator store={store} />
+      <LineCapsPopover store={store} />
     </>
   );
 }

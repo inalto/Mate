@@ -550,7 +550,31 @@ button.card:hover {
 /* Editor */
 .editor {
   position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  overflow: hidden;
+}
+
+/* The toolbar is a non-growing child; the canvas pane takes the rest, so the dock never covers ink.
+   The bar comes first in the DOM (tab order); the direction puts it on the chosen edge. */
+.editor[data-dock="bottom"] {
+  flex-direction: column-reverse;
+}
+
+.editor[data-dock="left"] {
+  flex-direction: row;
+}
+
+.editor[data-dock="right"] {
+  flex-direction: row-reverse;
+}
+
+.editor-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -815,6 +839,7 @@ button.card:hover {
   right: 100%;
   top: 0;
   width: 260px;
+  box-sizing: border-box;
   transform-origin: 100% 0;
   transform: scale(var(--overlay-inv-z, 1)) translateX(-8px);
   display: flex;
@@ -902,10 +927,11 @@ button.card:hover {
 }
 .graph-domain {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-1);
 }
 .graph-domain-field {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -913,8 +939,10 @@ button.card:hover {
   font-size: 12px;
 }
 .graph-domain-field input {
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
-  height: 26px;
+  height: 28px;
   padding: 0 var(--space-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -1003,7 +1031,6 @@ button.card:hover {
 
 .toolbar,
 .selection-bar {
-  position: absolute;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -1014,18 +1041,86 @@ button.card:hover {
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
 }
 
+/* Dock bar: spans the pane edge, one track that scrolls (wheel on top/bottom) instead of wrapping.
+   Popovers are portaled out (DockPopover), so the overflow never clips them. */
 .toolbar {
-  top: var(--space-3);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: calc(100% - var(--space-6));
-  flex-wrap: wrap;
-  justify-content: center;
+  position: relative;
+  z-index: 2;
+  flex: none;
+  gap: var(--space-1);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  scrollbar-width: none;
+}
+
+.toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbar > * {
+  flex: none;
+}
+
+.toolbar[data-dock="top"],
+.toolbar[data-dock="bottom"] {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.toolbar[data-dock="top"] {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="bottom"] {
+  border-top: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="left"],
+.toolbar[data-dock="right"] {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-1);
+}
+
+.toolbar[data-dock="left"] {
+  border-right: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="right"] {
+  border-left: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="left"] .tb-sep,
+.toolbar[data-dock="right"] .tb-sep {
+  width: 20px;
+  height: 1px;
+  margin: var(--space-1) 0;
 }
 
 .selection-bar {
+  position: absolute;
   transform: translateX(-50%);
   z-index: 1;
+}
+
+/* Toolbar popovers live on <body> (see DockPopover) and are placed from the anchor's rectangle. */
+.tb-portal {
+  position: fixed;
+  z-index: 40; /* below .backdrop (50): dialogs always cover toolbar popovers */
+  max-width: calc(100vw - 8px);
+  max-height: calc(100vh - 8px);
+  overflow: auto;
+}
+
+.tb-portal > .tb-popover {
+  position: static;
+  top: auto;
+  left: auto;
 }
 
 .tb-anchor {
@@ -1165,7 +1260,8 @@ button.card:hover {
   cursor: pointer;
 }
 
-.tb-menu-item:hover {
+.tb-menu-item:hover,
+.tb-menu-item.active {
   background: var(--color-surface-2);
 }
 
@@ -1777,17 +1873,6 @@ html.mobile .graph-plot {
   -webkit-touch-callout: none;
 }
 
-html.mobile .toolbar {
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-html.mobile .toolbar::-webkit-scrollbar {
-  display: none;
-}
-
 html.mobile .toolbar .tb-btn {
   min-width: 40px;
   min-height: 40px;
@@ -1803,6 +1888,10 @@ html.mobile .sb-resize {
   width: min(640px, 94vw);
   max-height: 90vh;
   overflow-y: auto;
+}
+
+.tb-popover.paper-picker {
+  width: min(560px, calc(100vw - 16px));
 }
 
 .paper-tiles {
@@ -1852,7 +1941,9 @@ html.mobile .sb-resize {
 .graph-presets {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
 }
 .graph-presets-row {
   display: flex;
@@ -1861,6 +1952,95 @@ html.mobile .sb-resize {
 }
 .graph-presets-row > select,
 .graph-presets-row > input {
+  box-sizing: border-box;
   flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: 13px var(--font-ui);
+}
+.graph-presets-row > select {
+  text-overflow: ellipsis;
+}
+.graph-presets-row > .graph-add {
+  flex: none;
+  height: 28px;
+  padding: 0 var(--space-2);
+}
+.graph-presets-row > .graph-grid-toggle {
+  flex: 1;
+  min-width: 0;
+}
+.graph-presets > .graph-grid-toggle,
+.graph-presets-row > .graph-grid-toggle {
+  line-height: 1.3;
+}
+
+/* Media layer: live audio/video players over their canvas placeholders, in screen pixels
+   (media/MediaLayer). Only the native players take pointer events (cursor tool); the top grip strip
+   and everything around them pass through to the canvas. */
+.media-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.media-player {
+  position: absolute;
+  box-sizing: border-box;
+  transform-origin: 50% 50%;
+  pointer-events: none;
+}
+
+.media-native {
+  position: absolute;
+  top: var(--media-grip, 0px);
+  left: 0;
+  width: 100%;
+  height: calc(100% - var(--media-grip, 0px));
+  box-sizing: border-box;
+}
+
+.media-player[data-media-kind="video"] .media-native {
+  object-fit: contain;
+  background: #000;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+/* Line ends popover (after a stroke snaps to a line/arrow) and the selection bar's Line ends menu. */
+.line-caps {
+  position: absolute;
+  z-index: 4;
+  padding: var(--space-2);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.line-caps-picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.line-caps-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.line-caps-label {
+  min-width: 3.5em;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.line-caps-menu {
   min-width: 0;
 }

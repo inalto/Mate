@@ -1,8 +1,8 @@
-// Floating actions above the current selection: copy, duplicate, delete, arrange, colour, fill
-// (when shapes are selected), width; a single text box gets box-wide text formatting instead of
+// Floating actions above the current selection: copy, duplicate, delete, arrange, line ends (one
+// line/arrow), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width; a single math box also gets Graph and Compute; a single runnable code block gets Run. Hidden while a text box is
 // being edited (its editor has its own bar).
-import { AlignLeft, ChartLine, Copy, CopySimple, Function as FunctionIcon, Play, Stack, Trash } from "@phosphor-icons/react";
+import { AlignLeft, ArrowRight, ChartLine, Copy, CopySimple, Function as FunctionIcon, Play, Stack, Trash } from "@phosphor-icons/react";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
@@ -15,6 +15,9 @@ import { codeOf, isRunnable, type RunnableLanguage } from "../text/tableCode";
 import { getRuntime } from "../code/runtime";
 import { runCodeElement } from "../code/runElement";
 import type { EditorStore } from "../stores/editor";
+import type { Element } from "../model/types";
+import { effectiveCaps } from "../model/content";
+import { LineCapsPicker } from "./LineCapsPopover";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import { useWolframItem } from "../math/useWolframItem";
 import ComputeMenu, { type ComputeMenuProps } from "./ComputeMenu";
@@ -32,8 +35,8 @@ function copyText(text: string): void {
 
 const BAR_GAP = 12;
 const BAR_HEIGHT = 44;
-/** Keep clear of the top toolbar. */
-const TOP_RESERVED = 64;
+/** Margin kept to the top of the pane (the toolbar is docked outside the canvas). */
+const TOP_RESERVED = 8;
 
 /** The Compute menu with its remote-engine entries (read only when a math box is selected). */
 function MathCompute(props: Omit<ComputeMenuProps, "extraItems">) {
@@ -85,6 +88,27 @@ function ArrangeMenu() {
           {item(t("keys.actions.bringForward"), () => s().bringForward())}
           {item(t("keys.actions.sendBackward"), () => s().sendBackward())}
           {item(t("keys.actions.sendToBack"), () => s().toBack())}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** End caps of the single selected line/arrow. */
+function LineEndsMenu({ shape }: { shape: Element }) {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button type="button" className="tb-btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <ArrowRight size={16} /> {t("lineCaps.title")}
+      </button>
+      {open && (
+        <div className="tb-popover line-caps-menu" role="dialog" aria-label={t("lineCaps.title")}>
+          <LineCapsPicker caps={effectiveCaps(shape)} onPick={(caps) => ed.getState().setLineCaps(shape.id, caps)} />
         </div>
       )}
     </div>
@@ -210,6 +234,8 @@ export default function SelectionBar() {
   // The code editor has its own Run: offered here only for a block that is not being edited.
   const codeBlock = selected.length === 1 && selected[0]?.type === "codespace" && selected[0].id !== editingId ? selected[0] : undefined;
   const codeLanguage = codeBlock ? codeOf(codeBlock).language : undefined;
+  const lineShape =
+    selected.length === 1 && selected[0]?.type === "shape" && (selected[0].shapeType === "line" || selected[0].shapeType === "arrow") ? selected[0] : undefined;
 
   return (
     <div className="selection-bar" role="toolbar" aria-label={t("selection.label")} style={{ left, top }}>
@@ -235,6 +261,7 @@ export default function SelectionBar() {
       )}
       {math && math.length === 1 && <MathCompute store={ed} source={math[0]} />}
       {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} />}
+      {lineShape && <LineEndsMenu shape={lineShape} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} />}
       <span className="tb-sep" />
       {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}

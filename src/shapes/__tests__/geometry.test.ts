@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Element, ShapeType } from "../../model/types";
+import { effectiveCaps } from "../../model/content";
 import { shapeBounds, shapeElementOutline, shapeFromDrag, shapeHit, shapeOutline } from "../geometry";
 
 const rect = { x: 10, y: 20, width: 100, height: 50 };
@@ -134,5 +135,78 @@ describe("shape geometry", () => {
     ]);
     expect(shapeHit(ln, { x: 50, y: 50 }, 1)).toBe(true);
     expect(shapeHit(ln, { x: 90, y: 10 }, 1)).toBe(false);
+  });
+});
+
+describe("line caps", () => {
+  it("filled_caps_are_solid_for_hit_testing", () => {
+    const content = { fillOpacity: 1, caps: { start: "none", end: "dot" } } as const;
+    const ln = shape("line", [[0, 0], [100, 0]], { width: 10, content });
+    expect(shapeHit(ln, { x: 100, y: 0 }, 0)).toBe(true); // dot centre
+    expect(shapeHit(ln, { x: 100, y: 12 }, 0)).toBe(true); // inside the dot (r = 15), off the shaft
+    expect(shapeHit(ln, { x: 100, y: 30 }, 0)).toBe(false);
+  });
+
+  const seg = { x: 0, y: 0, width: 100, height: 0 };
+
+  it("legacy_arrow_without_caps_keeps_its_head", () => {
+    const el = shape("arrow", [
+      [0, 0],
+      [100, 0],
+    ]);
+    const [shaft, head, ...rest] = shapeElementOutline(el);
+    expect(shaft).toEqual([{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    expect(head[0]).toEqual({ x: 100, y: 0 });
+    expect(head).toHaveLength(4);
+    expect(rest).toHaveLength(0);
+    expect(effectiveCaps(el)).toEqual({ start: "none", end: "arrow" });
+    expect(effectiveCaps(shape("line", [[0, 0], [1, 1]]))).toEqual({ start: "none", end: "none" });
+    expect(effectiveCaps(shape("rectangle", [[0, 0], [1, 1]], { content: { fillOpacity: 1, caps: { start: "dot", end: "dot" } } }))).toEqual({
+      start: "none",
+      end: "none",
+    });
+  });
+
+  it("dot_cap_is_a_16_segment_circle_on_the_end_point", () => {
+    const [, dot] = shapeOutline("line", seg, 0, { caps: { start: "none", end: "dot" }, capWidth: 4 });
+    expect(dot).toHaveLength(17); // closed
+    expect(dot[16]).toEqual(dot[0]);
+    const r = Math.max(3, 1.5 * 4);
+    for (const p of dot) expect(Math.hypot(p.x - 100, p.y)).toBeCloseTo(r);
+    // Thin lines keep a visible dot.
+    const [, small] = shapeOutline("line", seg, 0, { caps: { start: "none", end: "dot" }, capWidth: 0.5 });
+    expect(Math.hypot(small[0].x - 100, small[0].y)).toBeCloseTo(3);
+  });
+
+  it("bar_cap_is_perpendicular_and_centred", () => {
+    const [, bar] = shapeOutline("line", seg, 0, { caps: { start: "bar", end: "none" }, capWidth: 2 });
+    expect(bar).toHaveLength(2);
+    const len = Math.max(10, 3 * 2);
+    expect(bar[0].x).toBeCloseTo(0);
+    expect(bar[1].x).toBeCloseTo(0);
+    expect(Math.abs(bar[0].y - bar[1].y)).toBeCloseTo(len);
+    expect(bar[0].y + bar[1].y).toBeCloseTo(0);
+  });
+
+  it("start_arrow_points_backwards_and_caps_come_start_then_end", () => {
+    const polys = shapeOutline("line", seg, 0, { caps: { start: "arrow", end: "bar" }, headLength: 12, capWidth: 2 });
+    expect(polys).toHaveLength(3);
+    const [, head, bar] = polys;
+    expect(head[0]).toEqual({ x: 0, y: 0 });
+    for (const p of head.slice(1, 3)) expect(p.x).toBeCloseTo(12 * Math.cos(Math.PI / 6));
+    expect(bar[0].x).toBeCloseTo(100);
+    // An arrow element with caps none/none is a plain shaft.
+    expect(shapeOutline("arrow", seg, 0, { caps: { start: "none", end: "none" } })).toHaveLength(1);
+  });
+
+  it("caps_extend_bounds_and_hit_testing", () => {
+    const el = shape("line", [
+      [0, 0],
+      [100, 0],
+    ], { content: { fillOpacity: 1, caps: { start: "none", end: "bar" } } });
+    const b = shapeBounds(el);
+    expect(b.height).toBeCloseTo(10 + 2);
+    expect(shapeHit(el, { x: 100, y: 4.5 }, 0)).toBe(true);
+    expect(shapeHit({ ...el, content: { fillOpacity: 1 } }, { x: 100, y: 4.5 }, 0)).toBe(false);
   });
 });

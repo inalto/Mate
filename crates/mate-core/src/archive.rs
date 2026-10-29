@@ -2,13 +2,13 @@
 //!
 //! Layout: `manifest.json` (format marker + schema version), `unit.json`
 //! (`{unit, sections, pages}`), `pages/<pageId>.json` (that page's live elements) and
-//! `assets/<assetId>.<ext>` (every stored image/PDF those elements reference through `image_url`
+//! `assets/<assetId>.<ext>` (every stored image, PDF or media file those elements reference through `image_url`
 //! or `content.pdfSourceKey`). Importing re-mints every id, asset ids included, so an archive can
 //! be imported any number of times; a referenced asset missing from the archive leaves the
 //! element's id dangling (the element renders its placeholder).
 
 use std::collections::{HashMap, HashSet};
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read, Seek, Write};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::assets;
-use crate::model::{Element, Page, Section, Unit, new_id, now_iso};
+use crate::model::{Element, ElementType, Page, Section, Unit, new_id, now_iso};
 use crate::storage::elements::{MAX_ELEMENTS_PER_PAGE, MAX_POINTS_PER_STROKE};
 use crate::storage::{EntityKind, Result, Storage, StorageError};
 
@@ -24,8 +24,15 @@ pub const ARCHIVE_FORMAT: &str = "mate-archive";
 pub const ARCHIVE_SCHEMA_VERSION: u32 = 1;
 /// Largest archive accepted for import.
 pub const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
-/// Largest single (uncompressed) entry accepted for import.
-pub const MAX_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
+/// Largest single (uncompressed) `assets/` entry accepted for import (the largest asset, a media
+/// file).
+pub const MAX_ENTRY_BYTES: u64 = assets::MAX_ASSET_BYTES as u64;
+/// Largest JSON entry (`manifest.json`, `unit.json`, `pages/*.json`) accepted for import.
+pub const MAX_JSON_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
+/// Why [`export_unit`] refuses a book.
+const TOO_LARGE: &str = "archive would be larger than 512 MiB";
+/// Why a backup leaves a book out ([`SkippedBook::reason`]).
+pub const BOOK_TOO_LARGE: &str = "left out of the backup: larger than 512 MiB";
 /// Most `assets/` entries an archive may carry.
 pub const MAX_ARCHIVE_ASSETS: usize = 2000;
 
@@ -100,6 +107,19 @@ fn asset_refs(e: &Element) -> impl Iterator<Item = &str> {
 /// (from `assets_dir`) those elements reference to a zip. Referenced assets that are not stored
 /// are left out; the whole archive is capped at [`MAX_ARCHIVE_BYTES`].
 pub fn export_unit(storage: &Storage, unit_id: &str, assets_dir: &Path) -> Result<Vec<u8>> {
+    export_unit_capped(storage, unit_id, assets_dir, MAX_ARCHIVE_BYTES as u64)?
+        .ok_or_else(|| limit(TOO_LARGE))
+}
+
+/// [`export_unit`] with the size cap passed in; `Ok(None)` when the archive would be larger than
+/// `cap`. The asset files' sizes are checked before any of them is read, and each one is copied
+/// into the zip from disk rather than loaded whole.
+fn export_unit_capped(
+    storage: &Storage,
+    unit_id: &str,
+    assets_dir: &Path,
+    cap: u64,
+) -> Result<Option<Vec<u8>>> {
     let tree = storage.list_tree()?;
     let unit = tree
         .units
@@ -151,22 +171,29 @@ pub fn export_unit(storage: &Storage, unit_id: &str, assets_dir: &Path) -> Resul
     }
     // Images and PDFs are already compressed: store them as-is.
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
+    let mut files = Vec::with_capacity(asset_ids.len());
     let mut total: u64 = 0;
     for id in &asset_ids {
         let Some(path) = assets::asset_path(assets_dir, id) else {
             continue;
         };
-        let Ok(data) = std::fs::read(&path) else {
+        let Ok(meta) = std::fs::metadata(&path) else {
             continue;
         };
-        total += data.len() as u64;
-        if total > MAX_ARCHIVE_BYTES as u64 {
-            return Err(limit("archive would be larger than 512 MiB"));
+        total += meta.len();
+        if total > cap {
+            return Ok(None);
         }
+        files.push((id, path));
+    }
+    for (id, path) in files {
+        let Ok(mut file) = std::fs::File::open(&path) else {
+            continue;
+        };
         let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("bin");
         zip.start_file(format!("assets/{id}.{ext}"), stored)
             .map_err(zip_err)?;
-        zip.write_all(&data).map_err(io_err)?;
+        std::io::copy(&mut file, &mut zip).map_err(io_err)?;
     }
     let unit_file = UnitFile {
         unit,
@@ -179,69 +206,101 @@ pub fn export_unit(storage: &Storage, unit_id: &str, assets_dir: &Path) -> Resul
         serde_json::to_vec_pretty(&unit_file)?,
     )?;
     let bytes = zip.finish().map_err(zip_err)?.into_inner();
-    if bytes.len() > MAX_ARCHIVE_BYTES {
-        return Err(limit("archive would be larger than 512 MiB"));
-    }
-    Ok(bytes)
+    Ok((bytes.len() as u64 <= cap).then_some(bytes))
 }
 
-/// One book of a backup: its entry name inside the zip and its `.mate` bytes.
-pub struct BackupEntry {
-    pub name: String,
-    pub bytes: Vec<u8>,
+/// A book a backup left out, and why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedBook {
+    pub unit_id: String,
+    pub title: String,
+    pub reason: String,
 }
 
-/// Exports every live book as a `.mate` archive. This is the part that needs the database, so
-/// callers can hold the storage lock for it and build the zip ([`zip_backup`]) afterwards.
-pub fn backup_entries(storage: &Storage, assets_dir: &Path) -> Result<Vec<BackupEntry>> {
+/// What a backup holds.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupReport {
+    /// Books written to the backup.
+    pub books: usize,
+    /// Books left out because their archive would exceed the per-book cap.
+    pub skipped: Vec<SkippedBook>,
+}
+
+/// The `books/NN-<slug>.mate` name of a book in a backup.
+fn backup_name(index: usize, title: &str) -> String {
+    let slug: String = title
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+        .chars()
+        .take(40)
+        .collect();
+    let slug = if slug.is_empty() { "book".to_string() } else { slug };
+    format!("books/{:02}-{slug}.mate", index + 1)
+}
+
+/// Writes every live book as its own `.mate` archive (`books/NN-<title>.mate`, stored without
+/// further compression) plus a `backup.json` manifest to `out`, so a whole library can be restored
+/// one book at a time. Each book is exported and written before the next one is read, so at most
+/// one book's archive is in memory. A book whose archive would exceed [`MAX_ARCHIVE_BYTES`] is
+/// left out and listed in the report instead of failing the backup. Used by "Download backup" and
+/// the pre-reset recovery file. Returns `out` (finished) with the report.
+pub fn write_backup<W: Write + Seek>(
+    storage: &Storage,
+    assets_dir: &Path,
+    out: W,
+) -> Result<(W, BackupReport)> {
+    write_backup_capped(storage, assets_dir, out, MAX_ARCHIVE_BYTES as u64)
+}
+
+/// [`write_backup`] with the per-book cap passed in (tests use a small one).
+pub fn write_backup_capped<W: Write + Seek>(
+    storage: &Storage,
+    assets_dir: &Path,
+    out: W,
+    max_book_bytes: u64,
+) -> Result<(W, BackupReport)> {
     let units = storage.list_tree()?.units;
-    let mut out = Vec::with_capacity(units.len());
-    for (i, unit) in units.iter().enumerate() {
-        let slug: String = unit
-            .title
-            .to_lowercase()
-            .chars()
-            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-            .collect::<String>()
-            .split('-')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("-")
-            .chars()
-            .take(40)
-            .collect();
-        let slug = if slug.is_empty() { "book".to_string() } else { slug };
-        out.push(BackupEntry {
-            name: format!("books/{:02}-{slug}.mate", i + 1),
-            bytes: export_unit(storage, &unit.id, assets_dir)?,
-        });
-    }
-    Ok(out)
-}
-
-/// Zips backup entries (stored without further compression) plus a `backup.json` manifest.
-pub fn zip_backup(entries: &[BackupEntry]) -> Result<Vec<u8>> {
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
-    let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
-    for e in entries {
-        zip.start_file(&e.name, stored).map_err(zip_err)?;
-        zip.write_all(&e.bytes).map_err(io_err)?;
+    let mut zip = ZipWriter::new(out);
+    let mut report = BackupReport::default();
+    for (i, unit) in units.iter().enumerate() {
+        let Some(bytes) = export_unit_capped(storage, &unit.id, assets_dir, max_book_bytes)? else {
+            report.skipped.push(SkippedBook {
+                unit_id: unit.id.clone(),
+                title: unit.title.clone(),
+                reason: BOOK_TOO_LARGE.into(),
+            });
+            continue;
+        };
+        zip.start_file(backup_name(i, &unit.title), stored)
+            .map_err(zip_err)?;
+        zip.write_all(&bytes).map_err(io_err)?;
+        report.books += 1;
     }
     let manifest = serde_json::json!({
         "format": "mate-backup",
         "exportedAt": now_iso(),
-        "books": entries.len(),
+        "books": report.books,
+        "skipped": report.skipped.iter().map(|b| &b.title).collect::<Vec<_>>(),
     });
     zip.start_file("backup.json", stored).map_err(zip_err)?;
     zip.write_all(&serde_json::to_vec_pretty(&manifest)?)
         .map_err(io_err)?;
-    Ok(zip.finish().map_err(zip_err)?.into_inner())
+    Ok((zip.finish().map_err(zip_err)?, report))
 }
 
-/// Zips every live book as its own `.mate` archive (`books/NN-<title>.mate`) so a whole library
-/// can be restored one book at a time. Used by "Download backup" and the pre-reset recovery file.
-pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<Vec<u8>> {
-    zip_backup(&backup_entries(storage, assets_dir)?)
+/// [`write_backup`] into memory.
+pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<(Vec<u8>, BackupReport)> {
+    let (out, report) = write_backup(storage, assets_dir, Cursor::new(Vec::new()))?;
+    Ok((out.into_inner(), report))
 }
 
 /// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store,
@@ -267,22 +326,25 @@ pub fn wipe_local_data(data_dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Reads one entry, enforcing [`MAX_ENTRY_BYTES`]; `None` if the entry does not exist.
-fn read_entry(zip: &mut ZipArchive<Cursor<&[u8]>>, name: &str) -> Result<Option<Vec<u8>>> {
+/// Reads one entry of at most `max` bytes ([`MAX_JSON_ENTRY_BYTES`] for JSON, [`MAX_ENTRY_BYTES`]
+/// for assets); `None` if the entry does not exist.
+fn read_entry(
+    zip: &mut ZipArchive<Cursor<&[u8]>>,
+    name: &str,
+    max: u64,
+) -> Result<Option<Vec<u8>>> {
     let file = match zip.by_name(name) {
         Ok(f) => f,
         Err(zip::result::ZipError::FileNotFound) => return Ok(None),
         Err(e) => return Err(zip_err(e)),
     };
-    if file.size() > MAX_ENTRY_BYTES {
+    if file.size() > max {
         return Err(limit(format!("archive entry {name} is too large")));
     }
     let mut data = Vec::new();
     // `take` guards against entries whose declared size understates the real one.
-    file.take(MAX_ENTRY_BYTES + 1)
-        .read_to_end(&mut data)
-        .map_err(io_err)?;
-    if data.len() as u64 > MAX_ENTRY_BYTES {
+    file.take(max + 1).read_to_end(&mut data).map_err(io_err)?;
+    if data.len() as u64 > max {
         return Err(limit(format!("archive entry {name} is too large")));
     }
     Ok(Some(data))
@@ -316,7 +378,7 @@ pub fn import_archive_with_limits(
     }
     let mut zip = ZipArchive::new(Cursor::new(bytes))
         .map_err(|_| limit("not a Mate archive (not a zip file)"))?;
-    let manifest_raw = read_entry(&mut zip, "manifest.json")?
+    let manifest_raw = read_entry(&mut zip, "manifest.json", MAX_JSON_ENTRY_BYTES)?
         .ok_or_else(|| limit("not a Mate archive (missing manifest.json)"))?;
     let manifest: Manifest = serde_json::from_slice(&manifest_raw)
         .map_err(|e| limit(format!("not a Mate archive (bad manifest.json: {e})")))?;
@@ -326,7 +388,7 @@ pub fn import_archive_with_limits(
     if manifest.schema_version > ARCHIVE_SCHEMA_VERSION {
         return Err(limit("written by a newer version of Mate"));
     }
-    let unit_raw = read_entry(&mut zip, "unit.json")?
+    let unit_raw = read_entry(&mut zip, "unit.json", MAX_JSON_ENTRY_BYTES)?
         .ok_or_else(|| limit("not a Mate archive (missing unit.json)"))?;
     let unit_file: UnitFile =
         serde_json::from_slice(&unit_raw).map_err(|e| limit(format!("bad unit.json: {e}")))?;
@@ -363,16 +425,22 @@ struct AssetImport<'a> {
     total: u64,
 }
 
-/// What a reference may point at: `image_url` an image, `pdfSourceKey` a PDF.
+/// What a reference may point at: a media element's `image_url` an audio or video file, any
+/// other element's `image_url` an image, `pdfSourceKey` a PDF.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Want {
     Image,
+    Media,
     Pdf,
 }
 
 impl Want {
     fn accepts(self, kind: assets::AssetKind) -> bool {
-        (kind == assets::AssetKind::Pdf) == (self == Want::Pdf)
+        match self {
+            Want::Image => !kind.is_media() && kind != assets::AssetKind::Pdf,
+            Want::Media => kind.is_media(),
+            Want::Pdf => kind == assets::AssetKind::Pdf,
+        }
     }
 }
 
@@ -414,7 +482,7 @@ impl<'a> AssetImport<'a> {
             return Ok(m.clone());
         }
         let data = match self.entries.get(id) {
-            Some(name) => read_entry(zip, name)?,
+            Some(name) => read_entry(zip, name, MAX_ENTRY_BYTES)?,
             None => None,
         };
         if let Some(d) = &data {
@@ -433,8 +501,9 @@ impl<'a> AssetImport<'a> {
 
     /// Rewrites `e`'s asset references to the imported copies.
     fn rewrite(&mut self, zip: &mut ZipArchive<Cursor<&[u8]>>, e: &mut Element) -> Result<()> {
+        let want = if e.r#type == ElementType::Media { Want::Media } else { Want::Image };
         if let Some(old) = e.image_url.clone()
-            && let Some(new) = self.map(zip, &old, Want::Image)?
+            && let Some(new) = self.map(zip, &old, want)?
         {
             e.image_url = Some(new);
         }
@@ -542,7 +611,7 @@ fn write_unit(
     let mut skipped = 0;
     let mut group_ids: HashMap<String, String> = HashMap::new();
     for old_page in &order {
-        let Some(raw) = read_entry(zip, &format!("pages/{old_page}.json"))? else {
+        let Some(raw) = read_entry(zip, &format!("pages/{old_page}.json"), MAX_JSON_ENTRY_BYTES)? else {
             continue;
         };
         let elements: Vec<Element> = serde_json::from_slice(&raw)

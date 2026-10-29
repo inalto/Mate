@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
 
@@ -10,9 +10,14 @@ vi.mock("../../images/insert", () => ({ pickAndInsertImage: pick }));
 
 import { patchSettings } from "../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../model/constants";
+import type { Page } from "../../model/types";
+import { useChromeStore } from "../../stores/chrome";
 import { useEditorStore } from "../../stores/editor";
+import { useNotebookStore } from "../../stores/notebook";
+import { useTabsStore } from "../../stores/tabs";
 import { flushSettings, useSettingsStore } from "../../stores/settings";
 import { setPlatformForTests } from "../../platform";
+import { wheelToScroll } from "../DockPopover";
 import Toolbar from "../Toolbar";
 
 const renderBar = () =>
@@ -22,10 +27,14 @@ const renderBar = () =>
     </MemoryRouter>,
   );
 
+const realUpdate = useSettingsStore.getState().update;
+
 describe("Toolbar", () => {
   afterEach(() => {
     cleanup();
-    useSettingsStore.setState({ settings: DEFAULT_SETTINGS });
+    useSettingsStore.setState({ settings: DEFAULT_SETTINGS, update: realUpdate });
+    useChromeStore.getState().setPaperPickerOpen(false);
+    setPlatformForTests(false);
   });
 
   it("finger_toggle_only_on_mobile_and_cycles_draw_pan", () => {
@@ -99,6 +108,85 @@ describe("Toolbar", () => {
     expect(addMathBox).toHaveBeenCalledTimes(1);
   });
 
+  it("data_dock_follows_the_setting_and_vertical_docks_set_orientation", () => {
+    const { rerender } = renderBar();
+    const bar = () => screen.getByRole("toolbar", { name: "Editor tools" });
+    expect(bar().getAttribute("data-dock")).toBe("top");
+    expect(bar().getAttribute("aria-orientation")).toBe("horizontal");
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, toolbarDock: "left" } });
+    rerender(
+      <MemoryRouter>
+        <Toolbar />
+      </MemoryRouter>,
+    );
+    expect(bar().getAttribute("data-dock")).toBe("left");
+    expect(bar().getAttribute("aria-orientation")).toBe("vertical");
+  });
+
+  it("vertical_docks_fall_back_to_top_on_mobile", () => {
+    setPlatformForTests(true);
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, toolbarDock: "right" } });
+    renderBar();
+    expect(screen.getByRole("toolbar", { name: "Editor tools" }).getAttribute("data-dock")).toBe("top");
+    fireEvent.click(screen.getByRole("button", { name: "Move toolbar" }));
+    expect(screen.queryByRole("menuitemradio", { name: "Left" })).toBeNull();
+    expect(screen.getByRole("menuitemradio", { name: "Bottom" })).toBeTruthy();
+  });
+
+  it("dock_menu_lists_four_positions_and_writes_the_setting", () => {
+    const update = vi.fn(async () => {});
+    useSettingsStore.setState({ update });
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Move toolbar" }));
+    const menu = screen.getByRole("menu", { name: "Toolbar position" });
+    expect(within(menu).getAllByRole("menuitemradio").map((e) => e.textContent)).toEqual(["Top", "Bottom", "Left", "Right"]);
+    expect(within(menu).getByRole("menuitemradio", { name: "Top" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(within(menu).getByRole("menuitemradio", { name: "Bottom" }));
+    expect(update).toHaveBeenCalledWith({ toolbarDock: "bottom" });
+    expect(screen.queryByRole("menu", { name: "Toolbar position" })).toBeNull();
+  });
+
+  it("paper_button_toggles_the_picker_popover_for_the_focused_page", () => {
+    const STAMP = "2026-01-01T00:00:00.000Z";
+    const page: Page = {
+      id: "p1",
+      sectionId: "s1",
+      title: "P",
+      isExpanded: false,
+      isFavourite: false,
+      depth: 0,
+      mode: "page",
+      backgroundConfig: { type: "ruled", spacing: 40, dotRadius: 1.5 },
+      thumbnailVersion: 0,
+      orderIndex: 0,
+      createdAt: STAMP,
+      updatedAt: STAMP,
+      version: 0,
+    };
+    useNotebookStore.setState((s) => ({ tree: { ...s.tree, pages: [page] } }));
+    useTabsStore.setState({
+      tabs: [{ id: "t1", panes: [{ pageId: "p1" }], focusedPaneIndex: 0 }],
+      activeTabId: "t1",
+    } as never);
+    renderBar();
+    const btn = () => screen.getByRole("button", { name: "Paper" });
+    expect(screen.queryByRole("dialog", { name: /paper/i })).toBeNull();
+    fireEvent.click(btn());
+    expect(useChromeStore.getState().paperPickerOpen).toBe(true);
+    const dlg = screen.getByRole("dialog", { name: /paper/i });
+    expect(dlg.closest(".tb-portal")).not.toBeNull();
+    expect(within(dlg).getByRole("button", { name: "Ruled" })).toBeTruthy();
+    expect(dlg.contains(document.activeElement)).toBe(true); // focus moved in although placement is pending
+    // A dialog opening on top closes the popover.
+    act(() => useChromeStore.getState().pushModal());
+    expect(useChromeStore.getState().paperPickerOpen).toBe(false);
+    act(() => useChromeStore.getState().popModal());
+    fireEvent.click(btn());
+    fireEvent.click(btn());
+    expect(useChromeStore.getState().paperPickerOpen).toBe(false);
+    expect(screen.queryByRole("dialog", { name: /paper/i })).toBeNull();
+  });
+
   it("text_tool_button", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Text" }));
@@ -134,5 +222,11 @@ describe("Toolbar", () => {
     expect(screen.queryByRole("dialog", { name: "Shape options" })).toBeNull();
     await flushSettings();
     expect(patchSettings).toHaveBeenCalledWith(expect.objectContaining({ defaultShapeType: "star", defaultShapeStrokeWidth: 6.5 }));
+  });
+
+  it("wheel_to_scroll_maps_vertical_wheels_only", () => {
+    expect(wheelToScroll({ deltaX: 0, deltaY: 40, deltaMode: 0 })).toBe(40);
+    expect(wheelToScroll({ deltaX: 0, deltaY: 3, deltaMode: 1 })).toBe(48);
+    expect(wheelToScroll({ deltaX: 30, deltaY: 5, deltaMode: 0 })).toBe(0);
   });
 });
