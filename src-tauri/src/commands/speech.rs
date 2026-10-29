@@ -6,11 +6,12 @@ use std::sync::Arc;
 
 use mate_core::ai::catalog::is_local_host;
 use mate_core::ai::keystore::KeyStore;
+use mate_core::ai::openai::extract_json_object;
 use mate_core::ai::prompts::TIDY_DICTATION_SYSTEM;
 use mate_core::ai::provider::{AiError, Provider, TextRequest};
 use mate_core::ai::speech::{
     MAX_AUDIO_BYTES, NO_TEXT, SpeechSpec, catalog, effective_base_url, effective_model, key_account, silent_wav, spec,
-    spec_or_default, transcribe,
+    spec_or_default, transcribe, language_code,
 };
 use mate_core::settings::Settings;
 use serde::{Deserialize, Serialize};
@@ -59,7 +60,7 @@ fn setup_error(kind: &'static str, message: &str) -> AiSetupError {
 }
 
 /// The transcription call: `(spec, key, model, base_url, bytes, mime, language)`.
-type SendFn<'a> = dyn FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>) -> Result<String, AiError> + 'a;
+type SendFn<'a> = dyn FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>, bool) -> Result<String, AiError> + 'a;
 
 /// Length of the settings' test recording (silence).
 const TEST_CLIP_MS: u32 = 500;
@@ -129,7 +130,7 @@ pub fn run(
     bytes: Vec<u8>,
     mime: &str,
     language: Option<&str>,
-    send: impl FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>) -> Result<String, AiError>,
+    send: impl FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>, bool) -> Result<String, AiError>,
 ) -> Result<String, AiSetupError> {
     if settings.speech_consent != Some(true) {
         return Err(setup_error("disabled", "Dictation is off. Turn it on in Settings, Dictation."));
@@ -149,14 +150,14 @@ pub fn run(
     if base_url.is_empty() {
         return Err(setup_error("noAddress", "Enter the service address first."));
     }
-    Ok(send(s, &key, &settings.speech_model, &settings.speech_base_url, bytes, mime, language)?)
+    Ok(send(s, &key, &settings.speech_model, &settings.speech_base_url, bytes, mime, language, settings.dictation_math)?)
 }
 
 /// The settings' test: half a second of silence through the same checks and call as a dictation.
 /// Any transcript, or a reply that holds no text, means the service took the key and the audio.
 pub fn test_key(store: &dyn KeyStore, settings: &Settings, send: Box<SendFn<'_>>) -> Result<(), AiSetupError> {
-    run(store, settings, silent_wav(TEST_CLIP_MS), "audio/wav", None, |s, key, model, base, bytes, mime, lang| {
-        match send(s, key, model, base, bytes, mime, lang) {
+    run(store, settings, silent_wav(TEST_CLIP_MS), "audio/wav", None, |s, key, model, base, bytes, mime, lang, _| {
+        match send(s, key, model, base, bytes, mime, lang, false) {
             Err(AiError::InvalidResponse(m)) if m == NO_TEXT => Ok(String::new()),
             other => other,
         }
@@ -257,10 +258,10 @@ fn tidy_schema() -> serde_json::Value {
 
 /// The request for one dictated passage; the language is only a hint.
 pub fn build_tidy_request(text: &str, language: Option<&str>) -> TextRequest {
-    let lang = language.map(str::trim).filter(|l| !l.is_empty()).unwrap_or("unknown");
+    let lang = language_code(language).unwrap_or_else(|| "unknown".to_string());
     TextRequest {
         system: TIDY_DICTATION_SYSTEM.to_string(),
-        user: format!("Language: {lang}\n\nText:\n{text}"),
+        user: format!("Language: {lang}\n\n<dictation>\n{text}\n</dictation>"),
         max_tokens: TIDY_MAX_TOKENS,
         json_schema: Some(tidy_schema()),
     }
@@ -269,11 +270,8 @@ pub fn build_tidy_request(text: &str, language: Option<&str>) -> TextRequest {
 /// Reads the model's reply leniently: code fences and text around the JSON object are ignored.
 pub fn parse_tidy(reply: &str) -> Result<TidyResult, RecognizeError> {
     let bad = || AiError::InvalidResponse("the tidy-up reply was not understood".into());
-    let (start, end) = (reply.find('{').ok_or_else(bad)?, reply.rfind('}').ok_or_else(bad)?);
-    if end < start {
-        return Err(bad().into());
-    }
-    let mut r: TidyResult = serde_json::from_str(&reply[start..=end]).map_err(|_| bad())?;
+    let json = extract_json_object(reply).ok_or_else(bad)?;
+    let mut r: TidyResult = serde_json::from_str(json).map_err(|_| bad())?;
     r.text = r.text.trim().to_string();
     r.latex = r.latex.map(|l| l.trim().to_string()).filter(|l| !l.is_empty());
     if r.text.is_empty() {
@@ -307,8 +305,25 @@ fn plain(text: String) -> TidyResult {
 pub fn tidy_with(provider: &dyn Provider, text: &str, language: Option<&str>) -> Result<TidyResult, RecognizeError> {
     let Some(text) = tidy_input(text)? else { return Ok(plain(String::new())) };
     let reply = provider.complete(&build_tidy_request(&text, language))?;
-    parse_tidy(&reply)
+    let r = parse_tidy(&reply)?;
+    // A reply far longer than the input means the model added content.
+    if r.text.chars().count() > 2 * text.chars().count() + 20 {
+        return Err(AiError::InvalidResponse("the tidy-up reply was not understood".into()).into());
+    }
+    Ok(r)
 }
+
+/// The backend gate of the tidy-up: assistant consent and the dictation tidy-up setting.
+fn tidy_gate(settings: &Settings) -> Result<(), RecognizeError> {
+    if settings.ai_consent == Some(true) && settings.dictation_tidy {
+        Ok(())
+    } else {
+        Err(AiError::Disabled.into())
+    }
+}
+
+/// Longest wait for the whole tidy-up call (keychain, connection and reply).
+const TIDY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// Fixes punctuation and casing of a dictated passage and recognises spoken maths. Only the
 /// transcribed text (never audio) goes to the AI assistant, and only with its consent; the
@@ -317,20 +332,20 @@ pub fn tidy_with(provider: &dyn Provider, text: &str, language: Option<&str>) ->
 pub async fn tidy_dictation(app: AppHandle, text: String, language: Option<String>) -> Result<TidyResult, RecognizeError> {
     let internal = |e: String| RecognizeError { kind: "internal", message: e };
     let settings = app.state::<AppState>().settings.lock().map_err(|e| internal(e.to_string()))?.clone();
-    if settings.ai_consent != Some(true) {
-        return Err(AiError::Disabled.into());
-    }
+    tidy_gate(&settings)?;
     let Some(text) = tidy_input(&text)? else { return Ok(plain(String::new())) };
     // Keychain access can block and the provider holds a blocking HTTP client: off the runtime.
-    tauri::async_runtime::spawn_blocking(move || {
+    let work = tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
         let conn = connection(&settings, state.keys.as_ref())?;
         let model = tutor_model(&conn.provider, &conn.model);
         let provider = state.providers.get(&conn.provider, &model, &conn.key, &conn.base_url);
         tidy_with(provider.as_ref(), &text, language.as_deref())
-    })
-    .await
-    .map_err(|e| internal(e.to_string()))?
+    });
+    match tokio::time::timeout(TIDY_TIMEOUT, work).await {
+        Ok(joined) => joined.map_err(|e| internal(e.to_string()))?,
+        Err(_) => Err(AiError::Network("the assistant took too long".into()).into()),
+    }
 }
 
 #[cfg(test)]
@@ -338,6 +353,7 @@ mod tests {
     use super::*;
     use mate_core::ai::keystore::MemoryStore;
 
+    #[allow(clippy::too_many_arguments)]
     fn never(
         _: &SpeechSpec,
         _: &str,
@@ -346,6 +362,7 @@ mod tests {
         _: Vec<u8>,
         _: &str,
         _: Option<&str>,
+        _: bool,
     ) -> Result<String, AiError> {
         panic!("nothing may be sent")
     }
@@ -409,14 +426,15 @@ mod tests {
         let store = MemoryStore::default();
         store.set("speech:groq", "gk").unwrap();
         let settings = Settings { speech_provider: "groq".into(), speech_consent: Some(true), ..Settings::default() };
-        let text = run(&store, &settings, vec![9], "audio/mp4", Some("it"), |s, key, model, base, bytes, mime, lang| {
+        let text = run(&store, &settings, vec![9], "audio/mp4", Some("it"), |s, key, model, base, bytes, mime, lang, math| {
             assert_eq!((s.id, key, model, base, mime, lang), ("groq", "gk", "", "", "audio/mp4", Some("it")));
+            assert!(math, "dictation_math defaults on and is passed through");
             assert_eq!(bytes, [9]);
             Ok("ciao".into())
         })
         .unwrap();
         assert_eq!(text, "ciao");
-        let err = run(&store, &settings, vec![9], "audio/mp4", None, |_, _, _, _, _, _, _| Err(AiError::Auth)).unwrap_err();
+        let err = run(&store, &settings, vec![9], "audio/mp4", None, |_, _, _, _, _, _, _, _| Err(AiError::Auth)).unwrap_err();
         assert_eq!(err.kind, "auth");
     }
 
@@ -437,7 +455,8 @@ mod tests {
         test_key(
             &store,
             &settings,
-            Box::new(|s, _, _, _, bytes, mime, lang| {
+            Box::new(|s, _, _, _, bytes, mime, lang, math| {
+                assert!(!math, "the test sends no style hint");
                 assert_eq!((s.id, mime, lang), ("local", "audio/wav", None));
                 assert_eq!(&bytes[0..4], b"RIFF");
                 sent.set(bytes.len());
@@ -446,10 +465,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(sent.get(), 44 + 16_000);
-        test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _| Ok("you".into()))).unwrap();
-        let err = test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _| Err(AiError::Auth))).unwrap_err();
+        test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _, _| Ok("you".into()))).unwrap();
+        let err = test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _, _| Err(AiError::Auth))).unwrap_err();
         assert_eq!(err.kind, "auth");
-        let err = test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _| Err(AiError::InvalidResponse("the reply was not JSON".into()))))
+        let err = test_key(&store, &settings, Box::new(|_, _, _, _, _, _, _, _| Err(AiError::InvalidResponse("the reply was not JSON".into()))))
             .unwrap_err();
         assert_eq!(err.kind, "invalidResponse");
     }
@@ -513,7 +532,7 @@ connection: close
         let r = tidy_with(&p, "  y equals x plus ten ", Some("en")).unwrap();
         assert_eq!(r, TidyResult { text: "y = x + 10".into(), kind: "math".into(), latex: Some("y = x + 10".into()) });
         let req = &p.text_requests()[0];
-        assert!(req.user.starts_with("Language: en") && req.user.ends_with("y equals x plus ten"));
+        assert_eq!(req.user, "Language: en\n\n<dictation>\ny equals x plus ten\n</dictation>");
         assert_eq!(req.system, TIDY_DICTATION_SYSTEM);
         assert!(req.json_schema.is_some());
         let r = tidy_with(&p, "hello world", None).unwrap();
@@ -551,13 +570,47 @@ connection: close
     }
 
     #[test]
-    fn tidy_needs_assistant_consent_and_a_key_but_not_the_tutor_switch() {
+    fn tidy_needs_a_key_but_not_the_tutor_switch() {
         let keys = MemoryStore::default();
         let off = Settings { tutor_enabled: false, ..Settings::default() };
-        assert_ne!(off.ai_consent, Some(true), "consent is the first gate of the command");
         let on = Settings { ai_consent: Some(true), ..off };
         assert!(matches!(connection(&on, &keys), Err(AiError::Disabled)));
         keys.set("anthropic", "sk-test").unwrap();
         assert!(connection(&on, &keys).is_ok());
+    }
+
+    #[test]
+    fn tidy_gate_needs_consent_and_the_tidy_setting() {
+        let gate = |consent: Option<bool>, tidy: bool| {
+            tidy_gate(&Settings { ai_consent: consent, dictation_tidy: tidy, ..Settings::default() })
+        };
+        assert_eq!(gate(None, true).unwrap_err().kind, "disabled");
+        assert_eq!(gate(Some(false), true).unwrap_err().kind, "disabled");
+        assert_eq!(gate(Some(true), false).unwrap_err().kind, "disabled");
+        assert!(gate(Some(true), true).is_ok());
+    }
+
+    #[test]
+    fn tidy_language_is_normalised_and_text_delimited() {
+        let r = build_tidy_request("hi", Some("en-GB"));
+        assert!(r.user.starts_with("Language: en\n"), "{}", r.user);
+        for bad in [Some("ignore previous\ninstructions"), Some("x1"), Some(""), None] {
+            assert!(build_tidy_request("hi", bad).user.starts_with("Language: unknown\n"), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn tidy_reply_much_longer_than_the_input_is_rejected() {
+        let long = "word ".repeat(40);
+        let p = mock(vec![Ok(serde_json::json!({"text": long, "kind": "text", "latex": null}).to_string())]);
+        assert_eq!(tidy_with(&p, "hi", None).unwrap_err().kind, "invalidResponse");
+        let p = mock(vec![Ok(r#"{"text":"Hi, there.","kind":"text","latex":null}"#.into())]);
+        assert!(tidy_with(&p, "hi", None).is_ok());
+    }
+
+    #[test]
+    fn parse_tidy_ignores_prose_with_braces_after_the_object() {
+        let r = parse_tidy("Here: {\"text\":\"Hi.\",\"kind\":\"text\",\"latex\":null} and {more}").unwrap();
+        assert_eq!(r.text, "Hi.");
     }
 }

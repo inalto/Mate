@@ -187,16 +187,16 @@ fn part_mime(mime: &str) -> String {
 }
 
 /// A plausible ISO 639-1/639-3 code (`"it"`, `"en"`), else nothing (the service detects it).
-fn language_code(language: Option<&str>) -> Option<String> {
+pub fn language_code(language: Option<&str>) -> Option<String> {
     let l = language?.trim().to_ascii_lowercase();
     let l = l.split(['-', '_']).next().unwrap_or("").to_string();
     ((2..=3).contains(&l.len()) && l.chars().all(|c| c.is_ascii_lowercase())).then_some(l)
 }
 
 /// A short style hint per language, sent as the transcription `prompt` so that spoken maths is
-/// written as symbols (`y = x + 10`) rather than words. Unknown or missing languages use English.
-pub fn hint_for(language: Option<&str>) -> &'static str {
-    match language.unwrap_or("") {
+/// written as symbols (`y = x + 10`) rather than words. Unknown or missing languages get none.
+pub fn hint_for(language: Option<&str>) -> Option<&'static str> {
+    Some(match language.unwrap_or("") {
         "it" => "La matematica si scrive con i simboli: y = x + 10, x^2, radice(2), 1/2.",
         "fr" => "Les mathématiques s'écrivent avec des symboles : y = x + 10, x^2, racine(2), 1/2.",
         "es" => "Las matemáticas se escriben con símbolos: y = x + 10, x^2, raíz(2), 1/2.",
@@ -204,8 +204,16 @@ pub fn hint_for(language: Option<&str>) -> &'static str {
         "pt" => "A matemática escreve-se com símbolos: y = x + 10, x^2, raiz(2), 1/2.",
         "ja" => "数学は記号で書きます: y = x + 10, x^2, √2, 1/2。",
         "zh" => "数学用符号书写：y = x + 10，x^2，√2，1/2。",
-        _ => "Mathematics is written in symbols: y = x + 10, x^2, sqrt(2), 1/2.",
-    }
+        "en" => "Mathematics is written in symbols: y = x + 10, x^2, sqrt(2), 1/2.",
+        _ => return None,
+    })
+}
+
+/// A transcript that is just the hint played back (Whisper does this on silence).
+fn echoes_hint(text: &str, hint: &str) -> bool {
+    let strip = |s: &str| s.trim().trim_end_matches(|c: char| c.is_ascii_punctuation() || "。．！？、…".contains(c)).trim_end().to_string();
+    let (t, h) = (strip(text), strip(hint));
+    !h.is_empty() && t.starts_with(&h)
 }
 
 /// Whether the service accepts the OpenAI `prompt` field. Mistral's Voxtral transcription
@@ -221,6 +229,7 @@ fn accepts_prompt(spec: &SpeechSpec) -> bool {
 /// not allow one), `model` the model setting (empty = the default), `key` may be empty for
 /// services that need none. A refused address fails with [`AiError::BadAddress`] before anything
 /// is sent; an empty transcript is [`AiError::InvalidResponse`].
+#[allow(clippy::too_many_arguments)]
 pub fn transcribe(
     spec: &SpeechSpec,
     key: &str,
@@ -229,6 +238,7 @@ pub fn transcribe(
     bytes: Vec<u8>,
     mime: &str,
     language: Option<&str>,
+    math_hint: bool,
 ) -> Result<String, AiError> {
     let base = effective_base_url(spec, base_url).map_err(|_| AiError::BadAddress)?;
     if base.is_empty() {
@@ -239,7 +249,7 @@ pub fn transcribe(
     }
     let model = effective_model(spec, model);
     let language = language_code(language);
-    let prompt = accepts_prompt(spec).then(|| hint_for(language.as_deref()));
+    let prompt = if math_hint && accepts_prompt(spec) { language.as_deref().and_then(|l| hint_for(Some(l))) } else { None };
     let form = || -> Result<Form, AiError> {
         let file = Part::bytes(bytes.clone())
             .file_name(file_name_for(mime))
@@ -278,7 +288,11 @@ pub fn transcribe(
     } else {
         (status, text)
     };
-    reply(status, &text)
+    let out = reply(status, &text)?;
+    if prompt.is_some_and(|h| echoes_hint(&out, h)) {
+        return Err(AiError::InvalidResponse(NO_TEXT.into()));
+    }
+    Ok(out)
 }
 
 fn is_transient(status: u16, body: &str) -> bool {
@@ -374,13 +388,16 @@ mod tests {
     }
 
     #[test]
-    fn every_language_has_a_hint_and_unknown_ones_use_english() {
+    fn every_known_language_has_a_hint_and_others_none() {
         for l in ["en", "it", "fr", "es", "de", "pt", "ja", "zh"] {
-            assert!(!hint_for(Some(l)).is_empty(), "{l}");
+            assert!(!hint_for(Some(l)).unwrap().is_empty(), "{l}");
         }
-        assert_eq!(hint_for(None), hint_for(Some("en")));
-        assert_eq!(hint_for(Some("xx")), hint_for(Some("en")));
+        assert_eq!(hint_for(None), None);
+        assert_eq!(hint_for(Some("xx")), None);
         assert_ne!(hint_for(Some("it")), hint_for(Some("en")));
+        let h = hint_for(Some("en")).unwrap();
+        assert!(echoes_hint(h, h) && echoes_hint("Mathematics is written in symbols: y = x + 10, x^2, sqrt(2), 1/2", h));
+        assert!(echoes_hint(&format!("{h} thanks"), h) && !echoes_hint("y = x + 10", h));
         assert!(accepts_prompt(spec("openai").unwrap()) && !accepts_prompt(spec("mistral").unwrap()));
     }
 

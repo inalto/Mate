@@ -91,6 +91,7 @@ fn sends_a_multipart_form_and_reads_the_text() {
         b"OPUSDATA".to_vec(),
         "audio/webm;codecs=opus",
         Some("it"),
+        false,
     )
     .unwrap();
     assert_eq!(text, "Ciao a tutti.");
@@ -111,7 +112,7 @@ fn sends_a_multipart_form_and_reads_the_text() {
 fn sends_the_key_model_and_no_language_when_none() {
     let (base, seen) = stub(200, r#"{"text":"hello"}"#);
     let custom = spec("custom").unwrap();
-    let text = transcribe(custom, " sk-test ", "my-model", &base, vec![1, 2, 3], "audio/mp4", None).unwrap();
+    let text = transcribe(custom, " sk-test ", "my-model", &base, vec![1, 2, 3], "audio/mp4", None, false).unwrap();
     assert_eq!(text, "hello");
     let seen = seen.lock().unwrap()[0].clone();
     assert_eq!(seen.path, "/audio/transcriptions");
@@ -122,27 +123,49 @@ fn sends_the_key_model_and_no_language_when_none() {
     assert!(!body.contains("name=\"language\""), "{body}");
 }
 
+fn prompt_sent(language: Option<&str>, math_hint: bool) -> bool {
+    let (base, seen) = stub(200, r#"{"text":"x"}"#);
+    transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", language, math_hint).unwrap();
+    let body = seen.lock().unwrap()[0].body_text();
+    body.contains("name=\"prompt\"")
+}
+
 #[test]
-fn the_style_hint_follows_the_language() {
+fn the_style_hint_follows_the_language_and_the_setting() {
     // The stub is reached through the editable "custom" spec (Mistral is skipped by id; see the
     // unit test in speech.rs, since its address is fixed).
     let (base, seen) = stub(200, r#"{"text":"x"}"#);
-    transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", Some("it")).unwrap();
+    transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", Some("it"), true).unwrap();
     let body = seen.lock().unwrap()[0].body_text();
     assert!(body.contains("name=\"prompt\"\r\n\r\nLa matematica"), "{body}");
-    let (base, seen) = stub(200, r#"{"text":"x"}"#);
-    transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", None).unwrap();
-    let body = seen.lock().unwrap()[0].body_text();
-    assert!(body.contains("name=\"prompt\"\r\n\r\nMathematics is written"), "{body}");
+    // Setting off, no language, or a language without a hint: no prompt field.
+    assert!(!prompt_sent(Some("it"), false));
+    assert!(!prompt_sent(None, true));
+    assert!(!prompt_sent(Some("xx"), true));
+}
+
+#[test]
+fn a_transcript_that_echoes_the_hint_is_no_text() {
+    let hint = "La matematica si scrive con i simboli: y = x + 10, x^2, radice(2), 1/2.";
+    for echoed in [hint, "La matematica si scrive con i simboli: y = x + 10, x^2, radice(2), 1/2", "La matematica si scrive con i simboli: y = x + 10, x^2, radice(2), 1/2. Grazie."] {
+        let body: &'static str = Box::leak(serde_json::json!({ "text": echoed }).to_string().into_boxed_str());
+        let (base, _) = stub(200, body);
+        let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", Some("it"), true);
+        assert!(matches!(&r, Err(AiError::InvalidResponse(m)) if m == "no text was recognised"), "{r:?}");
+    }
+    // Without the hint sent, the same words are a real transcript.
+    let (base, _) = stub(200, r#"{"text":"La matematica si scrive con i simboli: y = x + 10, x^2, radice(2), 1/2."}"#);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![1], "audio/webm", Some("it"), false);
+    assert!(r.is_ok(), "{r:?}");
 }
 
 #[test]
 fn provider_errors_are_mapped() {
     let (base, _) = stub(401, r#"{"error":{"message":"bad key"}}"#);
-    let r = transcribe(spec("custom").unwrap(), "k", "", &base, vec![0], "audio/webm", None);
+    let r = transcribe(spec("custom").unwrap(), "k", "", &base, vec![0], "audio/webm", None, false);
     assert!(matches!(r, Err(AiError::Auth)), "{r:?}");
     let (base, _) = stub(200, r#"{"text":""}"#);
-    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None, false);
     assert!(matches!(r, Err(AiError::InvalidResponse(_))), "{r:?}");
 }
 
@@ -151,11 +174,11 @@ fn refuses_bad_addresses_before_sending() {
     let custom = spec("custom").unwrap();
     for bad in ["http://example.com/v1", "ftp://127.0.0.1", "not a url"] {
         assert!(effective_base_url(custom, bad).is_err(), "{bad}");
-        let r = transcribe(custom, "", "", bad, vec![0], "audio/webm", None);
+        let r = transcribe(custom, "", "", bad, vec![0], "audio/webm", None, false);
         assert!(matches!(r, Err(AiError::BadAddress)), "{bad}: {r:?}");
     }
     // Custom without an address has nowhere to send.
-    assert!(matches!(transcribe(custom, "", "", "", vec![0], "audio/webm", None), Err(AiError::BadAddress)));
+    assert!(matches!(transcribe(custom, "", "", "", vec![0], "audio/webm", None, false), Err(AiError::BadAddress)));
     assert_eq!(effective_base_url(custom, "https://stt.example.com/v1/").unwrap(), "https://stt.example.com/v1");
     assert_eq!(effective_base_url(custom, "http://192.168.1.5:9000/v1").unwrap(), "http://192.168.1.5:9000/v1");
     // Cloud services ignore the address setting.
@@ -165,14 +188,14 @@ fn refuses_bad_addresses_before_sending() {
 
 #[test]
 fn refuses_oversized_recordings() {
-    let r = transcribe(spec("local").unwrap(), "", "", "", vec![0; MAX_AUDIO_BYTES + 1], "audio/webm", None);
+    let r = transcribe(spec("local").unwrap(), "", "", "", vec![0; MAX_AUDIO_BYTES + 1], "audio/webm", None, false);
     assert!(matches!(r, Err(AiError::Rejected(_))), "{r:?}");
 }
 
 #[test]
 fn retries_once_when_the_service_fails_for_a_moment() {
     let (base, seen) = stub_seq(vec![(503, r#"{"error":{"message":"busy"}}"#), (200, r#"{"text":"again"}"#)]);
-    let r = transcribe(spec("custom").unwrap(), "", "", &base, b"AUDIO".to_vec(), "audio/webm", None);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, b"AUDIO".to_vec(), "audio/webm", None, false);
     assert_eq!(r.unwrap(), "again");
     let seen = seen.lock().unwrap();
     assert_eq!(seen.len(), 2);
@@ -182,7 +205,7 @@ fn retries_once_when_the_service_fails_for_a_moment() {
 #[test]
 fn a_second_failure_is_reported() {
     let (base, seen) = stub_seq(vec![(503, "{}"), (502, "{}"), (200, r#"{"text":"never"}"#)]);
-    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None, false);
     assert!(matches!(r, Err(AiError::Network(_))), "{r:?}");
     assert_eq!(seen.lock().unwrap().len(), 2, "only one retry");
 }
@@ -190,7 +213,7 @@ fn a_second_failure_is_reported() {
 #[test]
 fn a_spent_quota_is_not_retried() {
     let (base, seen) = stub_seq(vec![(429, r#"{"error":{"code":"insufficient_quota"}}"#), (200, r#"{"text":"x"}"#)]);
-    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None);
+    let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None, false);
     assert!(matches!(r, Err(AiError::Billing)), "{r:?}");
     assert_eq!(seen.lock().unwrap().len(), 1);
 }
