@@ -83,6 +83,15 @@ describe("parseExpression", () => {
     warn.mockRestore();
   });
 
+  it("reads_an_upright_differential_as_a_differential", () => {
+    // Recognisers write `\mathrm{dx}`, which the engine alone takes for a symbol named "dx".
+    const p = ok("\\int_0^{2\\cdot\\pi}\\sin(x)\\mathrm{dx}");
+    expect(p.kind).toBe("of-x");
+    if (p.kind === "of-x") expect(p.f(1)).toBeCloseTo(0);
+    const q = ok("\\int_0^x\\sin(t)\\,\\mathrm{dt}");
+    if (q.kind === "of-x") expect(q.f(Math.PI)).toBeCloseTo(2);
+  });
+
   it("uncompilable_is_an_error_not_a_slow_fallback", async () => {
     const p = await parseExpression("\\sum_{n=1}^{N} x");
     expect("error" in p).toBe(true);

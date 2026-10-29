@@ -11,7 +11,8 @@ plus the lines already on the page as context.
 
 Your job:
 1. Transcribe the handwriting in the image. Put mathematics in `latex` as plain LaTeX without \
-surrounding dollar signs. If the image is prose or code rather than mathematics, leave `latex` empty \
+surrounding dollar signs; write differentials as plain letters (`dx`, `\\frac{dy}{dx}`), never as \
+`\\mathrm{dx}`. If the image is prose or code rather than mathematics, leave `latex` empty \
 and put the words in `transcription` with kind \"text\" or \"code\". \
 Write a short plain-language `description` of what the line says.
 2. Judge whether the new line is mathematically correct, given the preceding lines. \

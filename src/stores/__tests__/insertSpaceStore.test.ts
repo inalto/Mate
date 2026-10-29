@@ -82,6 +82,17 @@ describe("editor insert space and alignment", () => {
     expect(s().elements.has(id)).toBe(false);
   });
 
+  it("graph_from_equation_unwraps_upright_differentials", () => {
+    const m = mathElement("pg", "m3", new Date().toISOString(), { x: 40, y: 40 }, "#000000");
+    const latex = String.raw`\int_0^{2\cdot\pi}\sin(x)\mathrm{dx}`;
+    useEditorStore.setState({ elements: new Map(s().elements).set("m3", { ...m, content: { ...(m.content as object), latex } }) });
+    s().select(["m3"]);
+    const id = s().graphFromSelectedEquation()!;
+    expect(graphDataOf(s().elements.get(id)!).expressions[0].latex).toBe(String.raw`\int_0^{2\cdot\pi}\sin(x)dx`);
+    // The maths box keeps what was written.
+    expect((s().elements.get("m3")!.content as { latex: string }).latex).toBe(latex);
+  });
+
   it("graph_from_equation_uses_inferred_kind", () => {
     const m = mathElement("pg", "m2", new Date().toISOString(), { x: 40, y: 40 }, "#000000");
     useEditorStore.setState({ elements: new Map(s().elements).set("m2", { ...m, content: { ...(m.content as object), latex: String.raw`\sin(2\theta)` } }) });

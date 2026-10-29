@@ -24,6 +24,7 @@ import { defaultGraphData, graphElement, inferGraphKind, presetFor } from "../gr
 import { lastGraphKind } from "../graph/presets";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
 import { isMathBox, latexOf, mathElement } from "../math/mathBox";
+import { normalizeLatex } from "../math/normalizeLatex";
 import { defaultTextAttributes, sameText, textAttrsOf, textBoxElement } from "../text/textBox";
 import { alignElements, distributeElements, type AlignMode, type DistributeAxis } from "../tools/align";
 import { eraseAt } from "../tools/eraser";
@@ -751,7 +752,8 @@ export function createEditorStore(): EditorStore {
       const top = topZ(s.elements.values());
       const base = graphElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), { x: b.x, y: b.y + b.height + DUPLICATE_OFFSET }, math.color);
       const data = defaultGraphData();
-      const latex = latexOf(math);
+      // Recogniser notation the graph parser would misread (`\mathrm{dx}`) is cleaned up on the way.
+      const latex = normalizeLatex(latexOf(math));
       data.kind = inferGraphKind(latex);
       data.expressions = [{ ...data.expressions[0], latex }];
       const graph = { ...base, content: { ...(base.content as object), graphData: data } };

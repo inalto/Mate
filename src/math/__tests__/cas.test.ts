@@ -49,6 +49,12 @@ describe("compute", () => {
     expect(latexOf(await compute("\\frac{1}{3}", "numeric"))).toBe("0.333333");
   });
 
+  it("computes_integrals_written_with_an_upright_differential", async () => {
+    // Numeric integration may carry an uncertainty term after the value.
+    expect(latexOf(await compute("\\int_0^{\\pi}\\sin(x)\\mathrm{dx}", "numeric"))).toMatch(/^(2|1\.9999)/);
+    expect(flat(latexOf(await compute("\\frac{\\mathrm{d}}{\\mathrm{dx}}x^2", "evaluate")))).toBe("2x");
+  });
+
   it("applies_the_operation_to_each_side_of_an_equation", async () => {
     expect(flat(latexOf(await compute("(x+1)^2=1+3", "expand")))).toBe("x^2+2x+1=4");
   });
