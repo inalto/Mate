@@ -2,7 +2,8 @@ import { useTranslation } from "react-i18next";
 import type { TKey } from "../../../i18n";
 import type { Theme } from "../../../model/types";
 import { useSettingsStore } from "../../../stores/settings";
-import { Row, SettingsSection, ToggleRow } from "../rows";
+import { isMobile } from "../../../platform";
+import { Row, SelectRow, SettingsSection, ToggleRow } from "../rows";
 
 const THEMES: Array<{ id: Theme; labelKey: TKey }> = [
   { id: "light", labelKey: "settings.theme.light" },
@@ -33,6 +34,13 @@ export default function ThemeSection() {
           ))}
         </div>
       </Row>
+      <SelectRow
+        k="toolbarDock"
+        label={t("dock.position")}
+        options={(["top", "bottom", "left", "right"] as const)
+          .filter((d) => !isMobile() || d === "top" || d === "bottom")
+          .map((d) => ({ value: d, label: t(`dock.${d}`) }))}
+      />
       <ToggleRow
         k="invertImagesInDarkMode"
         label={t("settings.theme.invertImages.label")}

@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   settingsVersion: 1,
   theme: "light",
   handedness: "right",
+  toolbarDock: "top",
   libraryView: "recent",
   sidebarLayout: "split",
   shortcutHintMode: "always",

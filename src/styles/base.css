@@ -550,7 +550,31 @@ button.card:hover {
 /* Editor */
 .editor {
   position: relative;
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  overflow: hidden;
+}
+
+/* The toolbar is a non-growing child; the canvas pane takes the rest, so the dock never covers ink.
+   The bar comes first in the DOM (tab order); the direction puts it on the chosen edge. */
+.editor[data-dock="bottom"] {
+  flex-direction: column-reverse;
+}
+
+.editor[data-dock="left"] {
+  flex-direction: row;
+}
+
+.editor[data-dock="right"] {
+  flex-direction: row-reverse;
+}
+
+.editor-canvas {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -1007,7 +1031,6 @@ button.card:hover {
 
 .toolbar,
 .selection-bar {
-  position: absolute;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -1018,18 +1041,86 @@ button.card:hover {
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
 }
 
+/* Dock bar: spans the pane edge, one track that scrolls (wheel on top/bottom) instead of wrapping.
+   Popovers are portaled out (DockPopover), so the overflow never clips them. */
 .toolbar {
-  top: var(--space-3);
-  left: 50%;
-  transform: translateX(-50%);
-  max-width: calc(100% - var(--space-6));
-  flex-wrap: wrap;
-  justify-content: center;
+  position: relative;
+  z-index: 2;
+  flex: none;
+  gap: var(--space-1);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  scrollbar-width: none;
+}
+
+.toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbar > * {
+  flex: none;
+}
+
+.toolbar[data-dock="top"],
+.toolbar[data-dock="bottom"] {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.toolbar[data-dock="top"] {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="bottom"] {
+  border-top: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="left"],
+.toolbar[data-dock="right"] {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-1);
+}
+
+.toolbar[data-dock="left"] {
+  border-right: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="right"] {
+  border-left: 1px solid var(--color-border);
+}
+
+.toolbar[data-dock="left"] .tb-sep,
+.toolbar[data-dock="right"] .tb-sep {
+  width: 20px;
+  height: 1px;
+  margin: var(--space-1) 0;
 }
 
 .selection-bar {
+  position: absolute;
   transform: translateX(-50%);
   z-index: 1;
+}
+
+/* Toolbar popovers live on <body> (see DockPopover) and are placed from the anchor's rectangle. */
+.tb-portal {
+  position: fixed;
+  z-index: 50;
+  max-width: calc(100vw - 8px);
+  max-height: calc(100vh - 8px);
+  overflow: auto;
+}
+
+.tb-portal > .tb-popover {
+  position: static;
+  top: auto;
+  left: auto;
 }
 
 .tb-anchor {
@@ -1169,7 +1260,8 @@ button.card:hover {
   cursor: pointer;
 }
 
-.tb-menu-item:hover {
+.tb-menu-item:hover,
+.tb-menu-item.active {
   background: var(--color-surface-2);
 }
 
@@ -1781,17 +1873,6 @@ html.mobile .graph-plot {
   -webkit-touch-callout: none;
 }
 
-html.mobile .toolbar {
-  flex-wrap: nowrap;
-  justify-content: flex-start;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-html.mobile .toolbar::-webkit-scrollbar {
-  display: none;
-}
-
 html.mobile .toolbar .tb-btn {
   min-width: 40px;
   min-height: 40px;
@@ -1807,6 +1888,10 @@ html.mobile .sb-resize {
   width: min(640px, 94vw);
   max-height: 90vh;
   overflow-y: auto;
+}
+
+.tb-popover.paper-picker {
+  width: min(560px, calc(100vw - 16px));
 }
 
 .paper-tiles {

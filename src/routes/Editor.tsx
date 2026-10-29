@@ -4,7 +4,6 @@ import i18n from "../i18n";
 import { closeThisWindow, isPageWindow, setThisWindowTitle } from "../ipc/windows";
 import CanvasView from "../canvas/CanvasView";
 import PageSettingsDialog from "../components/PageSettingsDialog";
-import PaperPicker from "../components/PaperPicker";
 import SelectionBar from "../components/SelectionBar";
 import Sidebar from "../components/Sidebar";
 import TabBar from "../components/TabBar";
@@ -20,6 +19,7 @@ import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { watchPageLimit } from "../stores/pageLimit";
 import { useSettingsStore } from "../stores/settings";
+import { useDock } from "../components/DockPopover";
 import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
 import TutorController from "../tutor/TutorController";
@@ -43,6 +43,7 @@ export default function Editor() {
   useEffect(() => {
     if (paperPickerOpen && (!focusedId || !paperPage)) closePaperPicker();
   }, [paperPickerOpen, focusedId, paperPage]);
+  const dock = useDock();
   const leftHanded = useSettingsStore((s) => s.settings.handedness) === "left";
 
   // The URL names a page: make sure a tab shows it.
@@ -123,7 +124,8 @@ export default function Editor() {
       {!pageWindow && <TabBar />}
       <div className={leftHanded ? "editor-row reverse" : "editor-row"}>
         {!pageWindow && <Sidebar />}
-        <div className="editor">
+        <div className="editor" data-dock={dock}>
+          <div className="editor-canvas">
           <div className={tab.panes.length === 2 ? "panes split" : "panes"}>
             {tab.panes.map((pane, i) => (
               <div
@@ -141,14 +143,12 @@ export default function Editor() {
             ))}
           </div>
           <SelectionBar />
+          </div>
           <Toolbar />
         </div>
       </div>
       {settingsPage && (
         <PageSettingsDialog key={settingsPage.id} page={settingsPage} onClose={() => useChromeStore.getState().openPageSettings(null)} />
-      )}
-      {paperPage && (
-        <PaperPicker key={paperPage.id} page={paperPage} onClose={closePaperPicker} />
       )}
     </div>
   );

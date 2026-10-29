@@ -6,11 +6,13 @@ import {
   Cursor,
   ArrowsVertical,
   Eraser,
+  DotsSixVertical,
   Highlighter,
   House,
   ImageSquare,
   Lasso,
   Minus,
+  Note,
   Pen,
   PenNib,
   Plus,
@@ -22,7 +24,7 @@ import {
   HandPointing,
   HandGrabbing,
 } from "@phosphor-icons/react";
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode, type WheelEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import type { TKey } from "../i18n";
@@ -32,8 +34,13 @@ import type { ShortcutAction } from "../keys/actions";
 import type { FingerAction, PenPreset } from "../model/types";
 import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
+import { useChromeStore } from "../stores/chrome";
+import { useNotebookStore } from "../stores/notebook";
+import { focusedPageId, useTabsStore } from "../stores/tabs";
 import { useSettingsStore } from "../stores/settings";
 import { isMobile } from "../platform";
+import DockPopover, { useDock, type Dock } from "./DockPopover";
+import PaperPicker from "./PaperPicker";
 import PresetMenu from "./PresetMenu";
 import { SHAPE_LABEL_KEY } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
@@ -80,7 +87,9 @@ function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number
         <InkIcon type={preset.type} color={preset.color} />
       </button>
       {open && (
-        <PresetMenu preset={preset} index={index} count={count} anchorRef={ref} onClose={() => setOpen(false)} />
+        <DockPopover anchorRef={ref}>
+          <PresetMenu preset={preset} index={index} count={count} anchorRef={ref} onClose={() => setOpen(false)} />
+        </DockPopover>
       )}
     </div>
   );
@@ -98,6 +107,7 @@ function AddPenMenu() {
         <Plus size={16} />
       </button>
       {open && (
+        <DockPopover anchorRef={ref}>
         <div className="tb-popover tb-menu" role="menu">
           {(["pen", "fountain-pen", "highlighter"] as const).map((ink) => (
             <button
@@ -114,6 +124,7 @@ function AddPenMenu() {
             </button>
           ))}
         </div>
+        </DockPopover>
       )}
     </div>
   );
@@ -156,6 +167,7 @@ function EraserButton() {
         <Eraser size={18} />
       </button>
       {open && (
+        <DockPopover anchorRef={ref}>
         <div className="tb-popover eraser-menu" role="dialog" aria-label={t("toolbar.eraserOptions")}>
           <div className="tb-row" role="radiogroup" aria-label={t("toolbar.eraserType")}>
             {(
@@ -205,6 +217,7 @@ function EraserButton() {
             {t("settings.pen.eraseImages")}
           </label>
         </div>
+        </DockPopover>
       )}
     </div>
   );
@@ -231,7 +244,11 @@ function ShapeButton() {
       >
         <ShapeIcon type={type} />
       </button>
-      {open && <ShapeMenu />}
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <ShapeMenu />
+        </DockPopover>
+      )}
     </div>
   );
 }
@@ -260,6 +277,7 @@ function InsertSpaceButton() {
         <ArrowsVertical size={18} />
       </button>
       {open && (
+        <DockPopover anchorRef={ref}>
         <div className="tb-popover" role="dialog" aria-label={t("toolbar.insertSpaceOptions")}>
           <div className="tb-row" role="radiogroup" aria-label={t("toolbar.insertSpaceMode")}>
             {(
@@ -285,6 +303,7 @@ function InsertSpaceButton() {
             {t("toolbar.cutImages")}
           </label>
         </div>
+        </DockPopover>
       )}
     </div>
   );
@@ -346,6 +365,83 @@ function FingerToggle() {
   );
 }
 
+/** Opens the paper picker as a popover next to the button; `chrome.paperPickerOpen` is the open flag. */
+function PaperButton() {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLDivElement>(null);
+  const open = useChromeStore((s) => s.paperPickerOpen);
+  const focusedId = useTabsStore((s) => focusedPageId(s));
+  const page = useNotebookStore((s) => (open ? s.tree.pages.find((p) => p.id === focusedId) : undefined));
+  const set = useChromeStore.getState().setPaperPickerOpen;
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={open ? "tb-btn active" : "tb-btn"}
+        aria-pressed={open}
+        aria-label={t("toolbar.paper")}
+        title={t("toolbar.paper")}
+        disabled={!focusedId}
+        onClick={() => set(!open)}
+      >
+        <Note size={18} />
+      </button>
+      {open && page && <PaperPicker key={page.id} page={page} anchorRef={ref} onClose={() => set(false)} />}
+    </div>
+  );
+}
+
+const DOCKS: Dock[] = ["top", "bottom", "left", "right"];
+
+/** Last button of the bar: where the bar sits (left/right are not offered on mobile). */
+function DockMenu() {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const dock = useDock();
+  useDismiss(ref, open, () => setOpen(false));
+  const options = isMobile() ? DOCKS.filter((d) => d === "top" || d === "bottom") : DOCKS;
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className="tb-btn"
+        aria-label={t("dock.menu")}
+        title={t("dock.menu")}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <DotsSixVertical size={18} />
+      </button>
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <div className="tb-popover tb-menu" role="menu" aria-label={t("dock.position")}>
+            {options.map((d) => (
+              <button
+                key={d}
+                type="button"
+                role="menuitemradio"
+                aria-checked={dock === d}
+                className={dock === d ? "tb-menu-item active" : "tb-menu-item"}
+                onClick={() => {
+                  setOpen(false);
+                  useSettingsStore
+                    .getState()
+                    .update({ toolbarDock: d })
+                    .catch((err) => console.error("saving toolbar position failed", err));
+                }}
+              >
+                {t(`dock.${d}`)}
+              </button>
+            ))}
+          </div>
+        </DockPopover>
+      )}
+    </div>
+  );
+}
+
 export default function Toolbar() {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
@@ -355,6 +451,13 @@ export default function Toolbar() {
   const canRedo = ed((s) => s.canRedo);
   const zoom = ed((s) => s.camera.z);
   const s = ed.getState;
+  const dock = useDock();
+  const vertical = dock === "left" || dock === "right";
+  // A mouse wheel has no horizontal axis: turn it into sideways scrolling of a horizontal bar.
+  const onWheel = (e: WheelEvent<HTMLDivElement>) => {
+    if (vertical || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.currentTarget.scrollLeft += e.deltaY;
+  };
 
   const toolBtn = (id: "cursor" | "lasso" | "text", action: ShortcutAction, label: string, icon: ReactNode) => (
     <HintButton
@@ -369,7 +472,14 @@ export default function Toolbar() {
   );
 
   return (
-    <div className="toolbar" role="toolbar" aria-label={t("toolbar.label")}>
+    <div
+      className="toolbar"
+      role="toolbar"
+      data-dock={dock}
+      aria-orientation={vertical ? "vertical" : "horizontal"}
+      aria-label={t("toolbar.label")}
+      onWheel={onWheel}
+    >
       <Link to="/" className="tb-btn" aria-label={t("nav.home")} title={t("nav.home")}>
         <House size={18} />
       </Link>
@@ -403,6 +513,7 @@ export default function Toolbar() {
       <button type="button" className="tb-btn" aria-label={t("toolbar.insertGraph")} title={t("toolbar.insertGraph")} onClick={() => s().addGraph()}>
         <ChartLine size={18} />
       </button>
+      <PaperButton />
       {toolBtn("cursor", "tool.cursor", t("toolbar.select"), <Cursor size={18} />)}
       {toolBtn("lasso", "tool.lasso", t("toolbar.lasso"), <Lasso size={18} />)}
       <InsertSpaceButton />
@@ -424,6 +535,8 @@ export default function Toolbar() {
       <HintButton action="zoom.in" label={t("keys.actions.zoomIn")} onClick={() => zoomStep(ZOOM_STEP)}>
         <Plus size={16} />
       </HintButton>
+      <span className="tb-sep" />
+      <DockMenu />
     </div>
   );
 }

@@ -558,7 +558,34 @@
     "insertEquation": "Inserisci un'equazione",
     "insertGraph": "Inserisci un grafico",
     "select": "Seleziona",
-    "lasso": "Lazo"
+    "lasso": "Lazo",
+    "paper": "Carta"
+  },
+  "dock": {
+    "position": "Posizione della barra",
+    "top": "In alto",
+    "bottom": "In basso",
+    "left": "A sinistra",
+    "right": "A destra",
+    "menu": "Sposta la barra",
+    "paper": "Carta"
+  },
+  "dock": {
+    "position": "Posizione della barra",
+    "top": "In alto",
+    "bottom": "In basso",
+    "left": "A sinistra",
+    "right": "A destra",
+    "menu": "Sposta la barra",
+    "paper": "Carta"
+  },
+  "dock": {
+    "position": "Posizione della barra",
+    "top": "In alto",
+    "bottom": "In basso",
+    "left": "A sinistra",
+    "right": "A destra",
+    "menu": "Sposta la barra"
   },
   "topbar": {
     "more": "Altre azioni",
@@ -567,7 +594,6 @@
     "exportPage": "Esporta la pagina…",
     "importNotes": "Importa appunti…",
     "pageSettings": "Impostazioni della pagina",
-    "paper": "Carta",
     "searchActions": "Cerca e azioni…",
     "about": "Informazioni su Mate",
     "pageTitle": "Titolo della pagina"

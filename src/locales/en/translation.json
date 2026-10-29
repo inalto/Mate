@@ -558,7 +558,34 @@
     "insertEquation": "Insert equation",
     "insertGraph": "Insert graph",
     "select": "Select",
-    "lasso": "Lasso"
+    "lasso": "Lasso",
+    "paper": "Paper"
+  },
+  "dock": {
+    "position": "Toolbar position",
+    "top": "Top",
+    "bottom": "Bottom",
+    "left": "Left",
+    "right": "Right",
+    "menu": "Move toolbar",
+    "paper": "Paper"
+  },
+  "dock": {
+    "position": "Toolbar position",
+    "top": "Top",
+    "bottom": "Bottom",
+    "left": "Left",
+    "right": "Right",
+    "menu": "Move toolbar",
+    "paper": "Paper"
+  },
+  "dock": {
+    "position": "Toolbar position",
+    "top": "Top",
+    "bottom": "Bottom",
+    "left": "Left",
+    "right": "Right",
+    "menu": "Move toolbar"
   },
   "topbar": {
     "more": "More actions",
@@ -567,7 +594,6 @@
     "exportPage": "Export page…",
     "importNotes": "Import notes…",
     "pageSettings": "Page settings",
-    "paper": "Paper",
     "searchActions": "Search and actions…",
     "about": "About Mate",
     "pageTitle": "Page title"

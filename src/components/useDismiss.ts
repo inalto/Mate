@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from "react";
+import { isInsidePortal } from "./DockPopover";
 import { useModal } from "./useModal";
 
 /** Close on pointer-down outside `ref` or Escape while `open`. */
@@ -11,7 +12,8 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, on
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) cb.current();
+      const t = e.target as Node;
+      if (ref.current && !ref.current.contains(t) && !isInsidePortal(ref.current, t)) cb.current();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") cb.current();

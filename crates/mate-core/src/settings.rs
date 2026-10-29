@@ -91,6 +91,8 @@ pub struct Settings {
     /// `"light" | "dark" | "sepia" | "high-contrast"`.
     pub theme: String,
     pub handedness: String,
+    /// `"top" | "bottom" | "left" | "right"`.
+    pub toolbar_dock: String,
     pub library_view: String,
     pub sidebar_layout: String,
     pub shortcut_hint_mode: String,
@@ -192,6 +194,7 @@ impl Default for Settings {
             settings_version: 1,
             theme: s("light"),
             handedness: s("right"),
+            toolbar_dock: s("top"),
             library_view: s("recent"),
             sidebar_layout: s("split"),
             shortcut_hint_mode: s("always"),

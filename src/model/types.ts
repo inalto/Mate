@@ -333,6 +333,8 @@ export interface Settings {
   settingsVersion: number;
   theme: Theme;
   handedness: string;
+  /** Pane edge the editor toolbar is docked to. */
+  toolbarDock: "top" | "bottom" | "left" | "right";
   libraryView: string;
   sidebarLayout: string;
   shortcutHintMode: string;
