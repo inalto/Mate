@@ -87,6 +87,8 @@ export const DEFAULT_SETTINGS: Settings = {
   speechModel: "",
   speechBaseUrl: "",
   speechConsent: null,
+  dictationMath: true,
+  dictationTidy: false,
   wolframConsent: false,
   language: "system",
   trashRetentionDays: 30,

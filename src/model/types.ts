@@ -404,6 +404,10 @@ export interface Settings {
   speechBaseUrl: string;
   /** Recordings may be sent to the speech service; null until the user is asked. */
   speechConsent: boolean | null;
+  /** Dictated maths is written as notation (and a maths box when the engine can read it). */
+  dictationMath: boolean;
+  /** Dictated text goes to the AI assistant to fix punctuation, casing and spoken maths. */
+  dictationTidy: boolean;
   /** Wolfram|Alpha may be sent typed maths when the user asks. */
   wolframConsent: boolean;
   /** Interface language: "system" (follow the OS) or a supported code ("en", "it", …). */
