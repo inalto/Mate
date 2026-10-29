@@ -401,14 +401,36 @@ fn trashing_a_folder_trashes_subfolders_and_unfiles_books() {
 
 #[test]
 fn restore_keeps_a_separately_trashed_subfolder_in_the_trash() {
-    let mut st = nested();
+    // A file database so the test can backdate s3's deletion: two soft deletes in the same
+    // millisecond would share a deleted_at stamp, and restore treats equal stamps as one deletion.
+    let path = std::env::temp_dir().join(format!("mate-restore-{}.db", mate_core::model::new_id()));
+    let mut st = Storage::open(&path).unwrap();
+    st.upsert_bookshelf(&common::shelf("s1")).unwrap();
+    st.upsert_unit(&common::unit("u1", Some("s1"))).unwrap();
+    st.upsert_bookshelf(&folder("s2", Some("s1"))).unwrap();
+    st.upsert_bookshelf(&folder("s3", Some("s2"))).unwrap();
+    st.upsert_unit(&unit("u3", Some("s3"))).unwrap();
     st.soft_delete(EntityKind::Bookshelf, "s3").unwrap();
+    let raw = rusqlite::Connection::open(&path).unwrap();
+    raw.execute(
+        "UPDATE bookshelves SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute') WHERE id = 's3'",
+        [],
+    )
+    .unwrap();
+    raw.execute(
+        "UPDATE units SET deleted_at = (SELECT deleted_at FROM bookshelves WHERE id = 's3') WHERE deleted_at IS NOT NULL",
+        [],
+    )
+    .unwrap();
+    drop(raw);
     st.soft_delete(EntityKind::Bookshelf, "s1").unwrap();
     // s3 sits under a trashed folder: hidden until its parent comes back.
     assert_eq!(trash_ids(&st), ["s1"]);
     st.restore(EntityKind::Bookshelf, "s1").unwrap();
     assert_eq!(shelf_ids(&st), ["s1", "s2"]);
     assert_eq!(trash_ids(&st), ["s3"]);
+    drop(st);
+    let _ = std::fs::remove_file(&path);
 }
 
 #[test]

@@ -2,6 +2,7 @@
 // Protocol (./runtime): { type: "run", id, code } → { type: "result", id, stdout, stderr, status };
 // { type: "reset" } forgets the globals the runs defined.
 import { evaluate } from "./jsEval";
+import { runQueued } from "./workerChain";
 
 interface WorkerScope {
   onmessage: ((e: MessageEvent) => void) | null;
@@ -28,8 +29,5 @@ scope.onmessage = (e: MessageEvent) => {
   }
   if (msg?.type !== "run" || typeof msg.code !== "string") return;
   const { id, code } = msg;
-  chain = chain.then(async () => {
-    const r = await evaluate(code);
-    scope.postMessage({ type: "result", id, ...r });
-  });
+  chain = runQueued(chain, id, code, evaluate, (msg) => scope.postMessage(msg));
 };

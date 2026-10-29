@@ -4,6 +4,7 @@
 // { type: "state", state: "loading" } then "idle" (or { type: "loadError", message }); runs posted
 // before that are never sent by ./runtime. Runs share one namespace until { type: "reset" }.
 import { cleanTraceback } from "./pyErrors";
+import { TailBuffer } from "./tailBuffer";
 
 interface WorkerScope {
   onmessage: ((e: MessageEvent) => void) | null;
@@ -23,8 +24,8 @@ interface PyodideLike {
 const scope = self as unknown as WorkerScope;
 const indexURL = new URL("/pyodide/", scope.location.href).href;
 
-let out: string[] = [];
-let err: string[] = [];
+let out = new TailBuffer();
+let err = new TailBuffer();
 let namespace: (PyProxyLike & object) | null = null;
 let runner: ((...a: unknown[]) => unknown) | null = null;
 
@@ -52,12 +53,11 @@ async def _mate_run(src, ns):
 const ready = load();
 ready.catch((e: unknown) => scope.postMessage({ type: "loadError", message: e instanceof Error ? e.message : String(e) }));
 
-const text = (lines: string[]) => (lines.length ? `${lines.join("\n")}\n` : "");
 let chain: Promise<void> = Promise.resolve();
 
 async function run(py: PyodideLike, id: number, code: string): Promise<void> {
-  out = [];
-  err = [];
+  out = new TailBuffer();
+  err = new TailBuffer();
   let status: "ok" | "error" = "ok";
   try {
     // Like a REPL: a final expression's repr is printed (None arrives as undefined).
@@ -68,7 +68,7 @@ async function run(py: PyodideLike, id: number, code: string): Promise<void> {
     status = "error";
     err.push(cleanTraceback(e instanceof Error ? e.message : String(e)));
   }
-  scope.postMessage({ type: "result", id, stdout: text(out), stderr: text(err), status });
+  scope.postMessage({ type: "result", id, stdout: out.text(), stderr: err.text(), status });
 }
 
 scope.onmessage = (e: MessageEvent) => {

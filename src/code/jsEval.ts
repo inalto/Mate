@@ -1,6 +1,7 @@
 // The JavaScript evaluator behind ./jsWorker (pure, testable outside a worker): runs code as a
 // global (indirect) eval so `var`/function declarations persist on `globalThis` between runs like
 // notebook cells, captures console output, and prints the completion value like a REPL.
+import { TailBuffer } from "./tailBuffer";
 
 export interface EvalResult {
   stdout: string;
@@ -24,13 +25,140 @@ export function formatValue(v: unknown, top: boolean): string {
   }
 }
 
+const IDENT_START = /[A-Za-z_$]/;
+const IDENT = /[\w$]/;
+/** After one of these (or at the start) a `/` begins a regular expression, not a division. */
+const REGEX_AFTER = new Set(["", "(", ",", "=", ":", "[", "!", "&", "|", "?", "{", "}", ";", "+", "-", "*", "%", "<", ">", "~", "^"]);
+
 /**
- * `code` with its unindented top-level `let`/`const`/`class` declarations turned into `var`s, so
- * they persist on `globalThis` like notebook cells (a global eval keeps lexical declarations to
- * itself). A heuristic on line starts: indented declarations (inside blocks) are left alone.
+ * `code` with its top-level `let`/`const`/`class` declarations turned into `var`s, so they persist
+ * on `globalThis` like notebook cells (a global eval keeps lexical declarations to itself). A small
+ * scanner skips strings, template literals (with `${}` nesting), comments and regular expressions,
+ * and rewrites only statements at bracket depth 0: declarations inside blocks, loops and functions
+ * keep their block scope.
  */
 export function hoistTopLevel(code: string): string {
-  return code.replace(/^(?:const|let)(?=\s+[[{A-Za-z_$])/gm, "var").replace(/^class\s+([A-Za-z_$][\w$]*)/gm, "var $1 = class $1");
+  let out = "";
+  let i = 0;
+  let depth = 0;
+  /** Depths at which an open template literal's `${` was entered. */
+  const templates: number[] = [];
+  /** Last significant (non-space, non-comment) character, and whether a newline came after it. */
+  let prev = "";
+  let newline = true;
+  const n = code.length;
+
+  const copyString = (q: string) => {
+    let j = i + 1;
+    while (j < n && code[j] !== q && code[j] !== "\n") j += code[j] === "\\" ? 2 : 1;
+    out += code.slice(i, j + 1);
+    i = j + 1;
+  };
+  /** Copy template text from `i` (just after "`" or "}") up to its end or a `${`. */
+  const copyTemplate = () => {
+    let j = i;
+    while (j < n) {
+      if (code[j] === "\\") j += 2;
+      else if (code[j] === "`") {
+        out += code.slice(i, j + 1);
+        i = j + 1;
+        prev = "`";
+        return;
+      } else if (code[j] === "$" && code[j + 1] === "{") {
+        out += code.slice(i, j + 2);
+        i = j + 2;
+        templates.push(depth);
+        depth++;
+        prev = "{";
+        return;
+      } else j++;
+    }
+    out += code.slice(i);
+    i = n;
+  };
+
+  while (i < n) {
+    const c = code[i];
+    if (c === "\n") {
+      newline = true;
+      out += c;
+      i++;
+    } else if (c === " " || c === "\t" || c === "\r") {
+      out += c;
+      i++;
+    } else if (c === "/" && code[i + 1] === "/") {
+      const end = code.indexOf("\n", i);
+      const j = end < 0 ? n : end;
+      out += code.slice(i, j);
+      i = j;
+    } else if (c === "/" && code[i + 1] === "*") {
+      const end = code.indexOf("*/", i + 2);
+      const j = end < 0 ? n : end + 2;
+      out += code.slice(i, j);
+      i = j;
+    } else if (c === "'" || c === '"') {
+      copyString(c);
+      prev = c;
+      newline = false;
+    } else if (c === "`") {
+      out += c;
+      i++;
+      newline = false;
+      copyTemplate();
+    } else if (c === "/" && REGEX_AFTER.has(prev)) {
+      let j = i + 1;
+      let cls = false;
+      while (j < n && code[j] !== "\n" && (cls || code[j] !== "/")) {
+        if (code[j] === "\\") j++;
+        else if (code[j] === "[") cls = true;
+        else if (code[j] === "]") cls = false;
+        j++;
+      }
+      j++;
+      while (j < n && IDENT.test(code[j])) j++;
+      out += code.slice(i, j);
+      i = j;
+      prev = "/";
+      newline = false;
+    } else if (IDENT_START.test(c) && !IDENT.test(code[i - 1] ?? "")) {
+      let j = i;
+      while (j < n && IDENT.test(code[j])) j++;
+      const word = code.slice(i, j);
+      const atStatement = depth === 0 && (prev === "" || prev === ";" || prev === "}" || newline) && prev !== ".";
+      const rest = code.slice(j);
+      if (atStatement && (word === "let" || word === "const") && /^\s+[[{A-Za-z_$]/.test(rest)) {
+        out += "var";
+      } else if (atStatement && word === "class") {
+        const m = /^\s+([A-Za-z_$][\w$]*)/.exec(rest);
+        out += m && m[1] !== "extends" ? `var ${m[1]} = class` : word;
+      } else {
+        out += word;
+      }
+      i = j;
+      prev = word.at(-1)!;
+      newline = false;
+    } else {
+      if (c === "{" || c === "(" || c === "[") depth++;
+      else if (c === ")" || c === "]") depth = Math.max(0, depth - 1);
+      else if (c === "}") {
+        if (templates.length && templates.at(-1) === depth - 1) {
+          templates.pop();
+          depth--;
+          out += c;
+          i++;
+          copyTemplate();
+          newline = false;
+          continue;
+        }
+        depth = Math.max(0, depth - 1);
+      }
+      out += c;
+      i++;
+      prev = c;
+      newline = false;
+    }
+  }
+  return out;
 }
 
 const errorText = (err: unknown): string => {
@@ -43,9 +171,9 @@ const OUT: ConsoleMethod[] = ["log", "info", "debug"];
 const ERR: ConsoleMethod[] = ["warn", "error"];
 
 /** Evaluate `code` in the global scope, console captured for the duration of the run. */
-export async function evaluate(code: string): Promise<EvalResult> {
-  const out: string[] = [];
-  const err: string[] = [];
+export async function evaluate(code: string, cap?: number): Promise<EvalResult> {
+  const out = new TailBuffer(cap);
+  const err = new TailBuffer(cap);
   const line = (args: unknown[]) => args.map((a) => formatValue(a, true)).join(" ");
   const saved = new Map<ConsoleMethod, (...a: unknown[]) => void>();
   for (const m of [...OUT, ...ERR]) {
@@ -71,6 +199,5 @@ export async function evaluate(code: string): Promise<EvalResult> {
   } finally {
     for (const [m, fn] of saved) console[m] = fn;
   }
-  const text = (lines: string[]) => (lines.length ? `${lines.join("\n")}\n` : "");
-  return { stdout: text(out), stderr: text(err), status };
+  return { stdout: out.text(), stderr: err.text(), status };
 }
