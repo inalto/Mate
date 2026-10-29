@@ -1,7 +1,8 @@
 // Swipe to turn pages (touch, page mode only). Pure: `detectSwipe` reads a one-finger pan's
-// screen-space samples; `canSwipeAt` allows it only when the camera has no horizontal room left in
-// the swipe's direction, so a pan that can still scroll is never a page turn.
-import { clampCamera, type Camera, type SheetStack, type Viewport } from "./camera";
+// screen-space samples; `canSwipeAt` allows it only once the sheet edge the finger pushes towards is
+// already in view, so a pan across the sheet itself is never a page turn (the side overshoot does not
+// count as room to scroll).
+import { sheetSize, type Camera, type SheetStack, type Viewport } from "./camera";
 import type { Page } from "../model/types";
 
 export interface SwipeSample {
@@ -67,12 +68,15 @@ export function detectSwipe(samples: readonly SwipeSample[], opts: SwipeOptions 
 }
 
 /**
- * True when `page` is in page mode and the camera is already against the edge the finger pushes
- * towards: panning a further pixel in `dir` (screen px, the swipe's sign) leaves x unchanged.
+ * True when `page` is in page mode and the sheet edge the finger pushes towards is visible at
+ * `camera` (the camera at the start of the pan): for a leftward swipe (dir -1) the sheet's right
+ * edge is at or left of the viewport's right side, for a rightward one (dir 1) its left edge is at
+ * or right of 0. Both hold when the whole sheet width fits.
  */
 export function canSwipeAt(camera: Camera, page: Page, viewport: Viewport, dir: -1 | 1, stack?: SheetStack): boolean {
   if (page.mode !== "page") return false;
-  const base = clampCamera(camera, page, viewport, stack);
-  const pushed = clampCamera({ ...base, x: base.x + dir }, page, viewport, stack);
-  return Math.abs(pushed.x - base.x) < 1e-6;
+  const width = (stack ?? sheetSize(page)).width;
+  const left = camera.x;
+  const right = camera.x + width * camera.z;
+  return dir === -1 ? right <= viewport.width : left >= 0;
 }
