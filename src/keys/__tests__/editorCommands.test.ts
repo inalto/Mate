@@ -9,7 +9,8 @@ import { useChromeStore } from "../../stores/chrome";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
-import { runEditorShortcut, sectionPageOrder } from "../editorCommands";
+import { runEditorShortcut, sectionPageOrder, turnPage } from "../editorCommands";
+import i18n from "../../i18n";
 import { openPageInWindow } from "../windowBridge";
 
 const page = (id: string, orderIndex: number, parentId: string | null = null, sectionId = "s1"): Page =>
@@ -151,5 +152,75 @@ describe("runEditorShortcut", () => {
     expect(spies.setPanHold).not.toHaveBeenCalled(); // a new pan does not start under a modal
     runEditorShortcut("pan", { phase: "up" });
     expect(spies.setPanHold).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("turnPage", () => {
+  it("at_the_end_creates_and_opens_a_page", async () => {
+    const createPage = vi.fn(async (sectionId: string, title: string) => ({ ...page("new", 2, null, sectionId), title }));
+    useNotebookStore.setState({ createPage } as never);
+    await turnPage(1); // "b" is the last page of s1 (a, a1, b)
+    expect(createPage).toHaveBeenCalledWith("s1", i18n.t("common.pageName", { n: 4 }));
+    expect(focused()).toBe("new");
+  });
+
+  it("in_the_middle_steps", async () => {
+    const createPage = vi.fn();
+    useNotebookStore.setState({ createPage } as never);
+    await turnPage(-1);
+    expect(focused()).toBe("a1");
+    await turnPage(1);
+    expect(focused()).toBe("b");
+    expect(createPage).not.toHaveBeenCalled();
+  });
+
+  it("a_second_turn_while_creating_does_nothing", async () => {
+    let resolve!: (p: Page) => void;
+    const createPage = vi.fn(() => new Promise<Page>((r) => (resolve = r)));
+    useNotebookStore.setState({ createPage } as never);
+    const first = turnPage(1);
+    await turnPage(1); // swipe again while the first create is in flight
+    await turnPage(-1);
+    expect(createPage).toHaveBeenCalledTimes(1);
+    expect(focused()).toBe("b");
+    resolve(page("new", 2));
+    await first;
+    expect(focused()).toBe("new");
+    // The guard is released afterwards ("new" is not in the mocked tree: go back to "b" first).
+    useTabsStore.getState().openPage("b");
+    await turnPage(-1);
+    expect(focused()).toBe("a1");
+  });
+
+  it("created_page_not_opened_when_focus_moved", async () => {
+    let resolve!: (p: Page) => void;
+    const createPage = vi.fn(() => new Promise<Page>((r) => (resolve = r)));
+    useNotebookStore.setState({ createPage } as never);
+    const pending = turnPage(1);
+    useTabsStore.getState().openPage("x"); // the user went elsewhere meanwhile
+    resolve(page("new", 2));
+    await pending;
+    expect(focused()).toBe("x");
+  });
+
+  it("failed_create_is_ignored", async () => {
+    const createPage = vi.fn(async () => {
+      throw new Error("disk full");
+    });
+    useNotebookStore.setState({ createPage } as never);
+    await expect(turnPage(1)).resolves.toBeUndefined();
+    expect(focused()).toBe("b");
+    // Not stuck: the next turn still runs.
+    await turnPage(-1);
+    expect(focused()).toBe("a1");
+  });
+
+  it("at_the_start_backwards_does_nothing", async () => {
+    const createPage = vi.fn();
+    useNotebookStore.setState({ createPage } as never);
+    useTabsStore.getState().openPage("a");
+    await turnPage(-1);
+    expect(focused()).toBe("a");
+    expect(createPage).not.toHaveBeenCalled();
   });
 });

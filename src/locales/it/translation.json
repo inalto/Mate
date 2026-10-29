@@ -1075,7 +1075,12 @@
       "testing": "Prova in corso…",
       "testOk": "Il servizio vocale ha risposto. La dettatura è pronta.",
       "testHint": "Invia mezzo secondo di silenzio a {{provider}} per verificare chiave, modello e indirizzo. Questo audio esce dal dispositivo, quindi serve il consenso qui sotto.",
-      "testHintLocal": "Invia mezzo secondo di silenzio al programma all'indirizzo {{address}} per verificare che risponda. Serve il consenso qui sotto."
+      "testHintLocal": "Invia mezzo secondo di silenzio al programma all'indirizzo {{address}} per verificare che risponda. Serve il consenso qui sotto.",
+      "convertMath": "Converti la matematica dettata in notazione",
+      "convertMathHelp": "Le espressioni dettate come “y uguale x più dieci” diventano y = x + 10 e vengono inserite come equazione; in una casella di testo in modifica, la notazione viene aggiunta come testo. Funziona offline nella lingua dell'interfaccia (italiano, inglese, francese, spagnolo, tedesco o portoghese).",
+      "tidy": "Rifinisci la dettatura con l'assistente IA",
+      "tidyHelp": "Il testo trascritto, mai l'audio, viene inviato all'assistente IA configurato per il tutor, per correggere la punteggiatura e scrivere la matematica in notazione.",
+      "tidyNeedsAi": "Per usarlo, configura l'assistente IA in Impostazioni, Tutor e riconoscimento (consenso e chiave)."
     },
     "consent": {
       "title": "Inviare le registrazioni a {{provider}}?",

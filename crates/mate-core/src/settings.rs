@@ -172,6 +172,12 @@ pub struct Settings {
     pub speech_base_url: String,
     /// Recordings may be sent to the speech service. `None` until the user is asked.
     pub speech_consent: Option<bool>,
+    /// Dictated maths ("y equals x plus ten") is written as notation (and a maths box when the
+    /// maths engine can read it). On by default; works offline.
+    pub dictation_math: bool,
+    /// Dictated text is sent to the AI assistant to fix punctuation and casing (and to recognise
+    /// spoken maths). Needs the assistant's consent; off until the user turns it on.
+    pub dictation_tidy: bool,
     /// Wolfram|Alpha may be asked (the typed maths is sent to it). Off until the user turns it on.
     pub wolfram_consent: bool,
     /// Interface language: `"system"` (follow the OS) or a supported code (`"en"`, `"it"`, …).
@@ -263,6 +269,8 @@ impl Default for Settings {
             speech_model: String::new(),
             speech_base_url: String::new(),
             speech_consent: None,
+            dictation_math: true,
+            dictation_tidy: false,
             wolfram_consent: false,
             language: s("system"),
             trash_retention_days: 30,

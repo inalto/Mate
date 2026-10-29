@@ -1,5 +1,6 @@
-// Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon),
-// selection drag-move and corner-handle scaling, click/double-click on boxed elements (select /
+// Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon;
+// clockwise = select what it encloses, drawn solid; anticlockwise = select what it touches, drawn
+// dashed), selection drag-move and corner-handle scaling, click/double-click on boxed elements (select /
 // open the editor), shape tool (drag a box, Shift constrains, live preview), text tool (click adds or
 // edits a text box). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
@@ -7,7 +8,7 @@ import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
 import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
-import { lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
+import { lassoMode, lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { shiftBelow } from "../tools/insertSpace";
 import { spaceShift } from "../stores/editor";
@@ -331,7 +332,7 @@ export function createToolController(deps: ToolDeps) {
         s.insertSpace(g.lineY, g.dy);
         break;
       case "lasso":
-        if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points));
+        if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points, lassoMode(g.points)));
         break;
       case "move":
         drop();
@@ -384,7 +385,8 @@ export function createToolController(deps: ToolDeps) {
         else ctx.lineTo(v.x, v.y);
       });
       ctx.lineWidth = 1.5;
-      ctx.setLineDash([6, 4]);
+      // Dashed while the loop runs anticlockwise ("touch"), solid while clockwise ("inside").
+      ctx.setLineDash(lassoMode(g.points) === "touch" ? [6, 4] : []);
       ctx.strokeStyle = "#4a5d4e";
       ctx.stroke();
       ctx.restore();

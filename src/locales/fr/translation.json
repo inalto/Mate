@@ -1078,7 +1078,12 @@
       "testing": "Test en cours…",
       "testOk": "Le service vocal a répondu. La dictée est prête.",
       "testHint": "Envoie une demi-seconde de silence à {{provider}} pour vérifier la clé, le modèle et l'adresse. Cet audio quitte l'appareil : le consentement ci-dessous doit être activé.",
-      "testHintLocal": "Envoie une demi-seconde de silence au programme à l'adresse {{address}} pour vérifier qu'il répond. Le consentement ci-dessous doit être activé."
+      "testHintLocal": "Envoie une demi-seconde de silence au programme à l'adresse {{address}} pour vérifier qu'il répond. Le consentement ci-dessous doit être activé.",
+      "convertMath": "Convertir les maths dictées en notation",
+      "convertMathHelp": "Les expressions dictées comme « y égale x plus dix » deviennent y = x + 10 et sont insérées comme équation ; dans une zone de texte en cours de modification, la notation est ajoutée en texte. Fonctionne hors ligne dans la langue de l'interface (français, anglais, italien, espagnol, allemand ou portugais).",
+      "tidy": "Améliorer la dictée avec l'assistant IA",
+      "tidyHelp": "Le texte transcrit, jamais l'audio, est envoyé à l'assistant IA configuré pour le tuteur, afin de corriger la ponctuation et d'écrire les maths en notation.",
+      "tidyNeedsAi": "Pour l'utiliser, configurez l'assistant IA dans Réglages, Tuteur et reconnaissance (consentement et clé)."
     },
     "consent": {
       "title": "Envoyer les enregistrements à {{provider}} ?",

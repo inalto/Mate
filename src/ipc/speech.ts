@@ -49,3 +49,20 @@ export const transcribeAudio = (bytes: Uint8Array, mime: string, language?: stri
  * address checks as a dictation) and resolves when it answered; rejects like `transcribeAudio`.
  */
 export const testSpeechKey = (): Promise<void> => invoke("test_speech_key");
+
+/** The dictated text after the AI assistant's tidy-up. */
+export interface TidyResult {
+  /** Punctuated and capitalised text; for maths, the expression as notation (`y = x + 10`). */
+  text: string;
+  kind: "text" | "math";
+  /** LaTeX of the expression when `kind` is `"math"`, else null. */
+  latex: string | null;
+}
+
+/**
+ * Asks the AI assistant to fix punctuation and casing of a dictated passage and to write spoken
+ * maths as notation. Only the transcribed text (never audio) is sent to the AI assistant, and only
+ * with its consent. Rejects with `{ kind, message }` like `transcribeAudio`.
+ */
+export const tidyDictation = (text: string, language?: string): Promise<TidyResult> =>
+  invoke<TidyResult>("tidy_dictation", { text, language: language ?? null });

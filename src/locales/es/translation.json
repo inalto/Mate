@@ -1078,7 +1078,12 @@
       "testing": "Probando…",
       "testOk": "El servicio de voz respondió. El dictado está listo.",
       "testHint": "Envía medio segundo de silencio a {{provider}} para comprobar la clave, el modelo y la dirección. Este audio sale del dispositivo, así que el consentimiento de abajo debe estar activado.",
-      "testHintLocal": "Envía medio segundo de silencio al programa en {{address}} para comprobar que responde. El consentimiento de abajo debe estar activado."
+      "testHintLocal": "Envía medio segundo de silencio al programa en {{address}} para comprobar que responde. El consentimiento de abajo debe estar activado.",
+      "convertMath": "Convertir las matemáticas dictadas en notación",
+      "convertMathHelp": "Las expresiones dictadas como «y igual a x más diez» se convierten en y = x + 10 y se insertan como ecuación; en un cuadro de texto que se está editando, la notación se añade como texto. Funciona sin conexión en el idioma de la interfaz (español, inglés, italiano, francés, alemán o portugués).",
+      "tidy": "Pulir el dictado con el asistente de IA",
+      "tidyHelp": "El texto transcrito, nunca el audio, se envía al asistente de IA configurado para el tutor, para corregir la puntuación y escribir las matemáticas en notación.",
+      "tidyNeedsAi": "Para usarlo, configura el asistente de IA en Ajustes, Tutor y reconocimiento (consentimiento y clave)."
     },
     "consent": {
       "title": "¿Enviar las grabaciones a {{provider}}?",

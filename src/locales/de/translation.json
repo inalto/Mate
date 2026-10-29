@@ -1078,7 +1078,12 @@
       "testing": "Wird getestet…",
       "testOk": "Der Sprachdienst hat geantwortet. Diktat ist bereit.",
       "testHint": "Sendet eine halbe Sekunde Stille an {{provider}}, um Schlüssel, Modell und Adresse zu prüfen. Dieser Ton verlässt das Gerät, daher muss die Zustimmung unten aktiviert sein.",
-      "testHintLocal": "Sendet eine halbe Sekunde Stille an das Programm unter {{address}}, um zu prüfen, ob es antwortet. Die Zustimmung unten muss aktiviert sein."
+      "testHintLocal": "Sendet eine halbe Sekunde Stille an das Programm unter {{address}}, um zu prüfen, ob es antwortet. Die Zustimmung unten muss aktiviert sein.",
+      "convertMath": "Gesprochene Mathematik in Formeln umwandeln",
+      "convertMathHelp": "Diktierte Ausdrücke wie „y gleich x plus zehn“ werden zu y = x + 10 und als Gleichung eingefügt; an ein gerade bearbeitetes Textfeld wird die Schreibweise als Text angehängt. Funktioniert offline in der Sprache der Oberfläche (Deutsch, Englisch, Italienisch, Französisch, Spanisch oder Portugiesisch).",
+      "tidy": "Diktat mit dem KI-Assistenten überarbeiten",
+      "tidyHelp": "Der transkribierte Text, nie die Aufnahme, wird an den für den Tutor eingerichteten KI-Assistenten gesendet, um die Zeichensetzung zu korrigieren und Mathematik als Formel zu schreiben.",
+      "tidyNeedsAi": "Richte dazu den KI-Assistenten unter Einstellungen, Tutor und Erkennung ein (Zustimmung und Schlüssel)."
     },
     "consent": {
       "title": "Aufnahmen an {{provider}} senden?",
