@@ -177,7 +177,29 @@ The Tauri CLI may add `features = []` to `tauri-build` in `src-tauri/Cargo.toml`
 - Tested on Android 16 (API 36) on the tablet emulator only, not yet on real tablets with a pen. Older Android versions are untested; keep the Android System WebView up to date.
 - Opening a file that is too large (over 200 MiB) or unreadable shows nothing.
 
-iPad is not built yet; it is still a study. See [Mobile](https://github.com/inalto/Mate/wiki/Mobile).
+## iPad
+
+Mate also builds for iPad (Tauri 2 iOS target). It is the same app as on the desktop and Android: the library, ink canvas, typed maths, graphs, PDFs, the AI tutor and the maths engines. The Xcode project is committed in `src-tauri/gen/apple`.
+
+### Build it yourself
+
+You need a Mac with Xcode 16 or later and an iOS simulator runtime installed, the Rust iOS targets and Node 24:
+
+```bash
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim
+npm ci
+npm run tauri ios dev -- "<iPad simulator name>"                    # debug build in the simulator
+npm run tauri ios build -- --export-method app-store-connect        # release .ipa under src-tauri/gen/apple/build/arm64/
+```
+
+The release build needs a development team: set `bundle.iOS.developmentTeam` in `src-tauri/tauri.conf.json` or export `APPLE_DEVELOPMENT_TEAM`. The Tauri CLI may add `features = []` to `tauri-build` in `src-tauri/Cargo.toml`; revert it before committing.
+
+### Known limitations
+
+- Tested on the iPad simulator only, not on a real iPad.
+- No Apple Pencil tuning yet (pressure, hover and double-tap are not specially handled).
+- No TestFlight or App Store build until an Apple Developer account exists.
+- No in-app updater.
 
 ## Screenshots
 
@@ -267,6 +289,20 @@ The Android release job signs the APK with its own keystore (not the updater key
 3. Add GitHub repository secrets: `ANDROID_KEYSTORE_BASE64` (the keystore as one line of base64: `base64 -w0 ~/.tauri/mate-android.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`mate`) and `ANDROID_KEY_PASSWORD`. On PowerShell, copy the base64 with `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$HOME\.tauri\mate-android.jks")) | Set-Clipboard`.
 
 On a tag, the `android` job builds `Mate_<version>_aarch64.apk` and uploads it to the same draft release. Without `ANDROID_KEYSTORE_BASE64` the job skips its build steps and the release is published without an APK.
+
+### iOS signing
+
+The `ios` release job builds the iPad `.ipa` with an Apple Distribution certificate and an App Store provisioning profile. Add these GitHub repository secrets:
+
+- `APPLE_DEVELOPMENT_TEAM`: your 10-character Apple team ID (Apple Developer account, Membership).
+- `IOS_CERTIFICATE`: the Apple Distribution certificate exported from Keychain Access as a `.p12`, as one line of base64 (`base64 -i cert.p12 | tr -d '\n'`).
+- `IOS_CERTIFICATE_PASSWORD`: the password you chose when exporting the `.p12`.
+- `IOS_MOBILE_PROVISION`: the App Store provisioning profile for the app's bundle identifier, downloaded from the Apple Developer site, as one line of base64 (`base64 -i Mate.mobileprovision | tr -d '\n'`).
+- `APPLE_API_KEY_BASE64`: the App Store Connect API key (`AuthKey_<id>.p8`) as one line of base64; the job writes it to a file and sets `APPLE_API_KEY_PATH`.
+- `APPLE_API_KEY`: the key ID of that API key.
+- `APPLE_API_ISSUER`: the issuer ID shown on the App Store Connect API keys page.
+
+On a tag the job uploads `Mate_<version>_ios.ipa` to the draft release. Without `IOS_CERTIFICATE` the job skips its build steps and the release is published without an `.ipa`. The job does not upload to TestFlight: do that by hand with Transporter or `xcrun altool --upload-app` for now.
 
 ### Without a key
 

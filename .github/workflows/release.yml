@@ -207,6 +207,110 @@ jobs:
           name: mate-android-apk
           path: ${{ steps.apk.outputs.path }}
 
+  # Builds the iPad .ipa (App Store Connect export) and attaches it to the same draft release.
+  # One-time setup: see README "iOS signing". Without IOS_CERTIFICATE the job still succeeds but
+  # skips every build step, so `publish` is never held up by it. Uploading the .ipa to TestFlight
+  # is a manual Transporter / `xcrun altool` step for now.
+  ios:
+    needs: prepare
+    if: always() && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped')
+    runs-on: macos-15
+    steps:
+      # Secrets cannot be read in a job-level `if`, so this step turns "is the secret set" into an output.
+      - name: Check for iOS signing
+        id: signing
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+        run: |
+          if [ -n "$IOS_CERTIFICATE" ]; then
+            echo "has_signing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_signing=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::IOS_CERTIFICATE is not set; skipping the iOS build."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.signing.outputs.has_signing == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.signing.outputs.has_signing == 'true'
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.signing.outputs.has_signing == 'true'
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+
+      - uses: swatinem/rust-cache@v2
+        if: steps.signing.outputs.has_signing == 'true'
+
+      - run: npm ci
+        if: steps.signing.outputs.has_signing == 'true'
+
+      # Temporary keychain for the distribution certificate, the provisioning profile where Xcode
+      # looks for it, and the App Store Connect API key for the export.
+      - name: Import the certificate and profile
+        if: steps.signing.outputs.has_signing == 'true'
+        env:
+          IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_MOBILE_PROVISION: ${{ secrets.IOS_MOBILE_PROVISION }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$IOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/ios.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/ios.p12" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          echo "$IOS_MOBILE_PROVISION" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          uuid=$(grep -a -A1 UUID "$RUNNER_TEMP/profile.mobileprovision" | grep -Eio '[0-9a-f]{8}-[0-9a-f-]{27}' | head -n 1)
+          [ -n "$uuid" ] || { echo "no UUID found in the provisioning profile"; exit 1; }
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+
+          echo "$APPLE_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
+          echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+
+      - name: Build the IPA
+        if: steps.signing.outputs.has_signing == 'true'
+        env:
+          APPLE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_DEVELOPMENT_TEAM }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: npm run tauri ios build -- --export-method app-store-connect
+
+      - name: Upload the IPA
+        if: steps.signing.outputs.has_signing == 'true'
+        id: ipa
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IS_TAG: ${{ github.ref_type == 'tag' }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ipa=src-tauri/gen/apple/build/arm64/Mate.ipa
+          [ -f "$ipa" ] || { echo "no IPA was built"; exit 1; }
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          out="$RUNNER_TEMP/Mate_${version}_ios.ipa"
+          cp "$ipa" "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+          if [ "$IS_TAG" = "true" ]; then
+            gh release upload "$TAG" "$out" --repo "$GITHUB_REPOSITORY" --clobber
+          fi
+
+      # workflow_dispatch has no release to attach to; keep the IPA as a workflow artifact instead.
+      - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.has_signing == 'true' && github.ref_type != 'tag'
+        with:
+          name: mate-ios-ipa
+          path: ${{ steps.ipa.outputs.path }}
+
   # Publishes the draft only when all four desktop builds uploaded their installers, so updaters
   # never see a release without latest.json. The Android job must not have failed; when it has no
   # keystore it succeeds with its steps skipped, and a skipped job does not hold the release back.
