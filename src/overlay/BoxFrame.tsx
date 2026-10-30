@@ -3,9 +3,9 @@
 // selected element — 8 resize handles and a rotate handle 24 px above the top-centre. The drag shows
 // a draft frame and commits once on release. Moves and (unrotated) resizes snap to smart guides of
 // the other elements on screen (published to the store for the live layer); Ctrl/Cmd suspends that,
-// Shift locks a move to its dominant axis and snaps rotation to 15°. A locked box shows no handles,
-// only a lock glyph.
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+// Shift locks a move to its dominant axis and snaps rotation to 15°; Escape cancels the drag. A
+// locked box shows no handles, only a lock glyph.
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { angleLabel, guideCandidates, GUIDE_SNAP_PX, lockedAxis, smartMoveDelta, snapAngle } from "../canvas/toolInteractions";
 import { isLocked } from "../model/content";
@@ -130,13 +130,13 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
     store.getState().setGuides(guides);
   };
 
-  const end = () => {
+  const end = useCallback(() => {
     drag.current = null;
     others.current = null;
     setDraft(null);
     setDraftRotation(null);
     store.getState().setGuides([]);
-  };
+  }, [store]);
 
   const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current;
@@ -159,11 +159,34 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
     }
   };
 
+  // Ends the drag in progress (if any) without committing: Escape, a lost capture, or unmounting
+  // (deselect, undo or delete mid-drag) must not leave the smart guides on the live layer.
+  const cancel = () => {
+    if (drag.current) end();
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || !drag.current) return;
+      e.preventDefault();
+      e.stopPropagation(); // the drag is cancelled; the selection stays
+      end();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      if (drag.current) {
+        drag.current = null;
+        store.getState().setGuides([]);
+      }
+    };
+  }, [store, end]);
+
   const grip = (handle: Handle | "rotate" | null) => ({
     onPointerDown: onDown(handle),
     onPointerMove: onMove,
     onPointerUp: onUp,
     onPointerCancel: end,
+    onLostPointerCapture: cancel,
   });
 
   const shownRotation = draftRotation ?? rotation;

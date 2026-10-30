@@ -18,6 +18,7 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.f
 
 import { useEditorStore } from "../editor";
 import { useNotebookStore } from "../notebook";
+import { useSettingsStore } from "../settings";
 
 const STAMP = "2026-01-01T00:00:00.000Z";
 const style = { shapeType: "rectangle" as const, color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 };
@@ -135,5 +136,39 @@ describe("connector store", () => {
     const c = contentOf<ConnectorContent>(conn);
     expect(c.source?.id).toBe(shape.id);
     expect(c.target).toBeUndefined();
+  });
+});
+
+describe("eraser and connectors", () => {
+  const eraseAt = (x: number, y: number, eraseShapes = true) => {
+    useSettingsStore.setState((st) => ({ settings: { ...st.settings, defaultEraserType: "stroke", defaultEraserWidth: 20, eraserEraseShapes: eraseShapes } }));
+    useEditorStore.setState({ camera: { x: 0, y: 0, z: 1 } });
+    s().eraser({ x, y });
+    s().endEraser();
+  };
+
+  it("erasing_a_bound_shape_frees_the_connector_end_in_the_same_entry", async () => {
+    const id = await setup();
+    const start = route(id)[0];
+    eraseAt(0, 50); // left edge of a
+    expect(s().elements.has("a")).toBe(false);
+    expect(content(id).source).toBeUndefined();
+    expect(content(id).target).toEqual({ id: "b", side: "auto" });
+    expect(route(id)[0]).toEqual(start);
+    s().undo(); // one "Erase" entry restores both
+    expect(s().elements.has("a")).toBe(true);
+    expect(content(id).source).toEqual({ id: "a", side: "auto" });
+  });
+
+  it("connectors_are_erased_along_their_route_like_shapes", async () => {
+    const id = await setup();
+    eraseAt(250, 50, false);
+    expect(s().elements.has(id)).toBe(true); // eraserEraseShapes off
+    eraseAt(250, 50);
+    expect(s().elements.has(id)).toBe(false);
+    expect(s().elements.has("a")).toBe(true);
+    expect(s().elements.has("b")).toBe(true);
+    s().undo();
+    expect(s().elements.has(id)).toBe(true);
   });
 });

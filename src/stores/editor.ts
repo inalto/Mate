@@ -638,6 +638,7 @@ export function createEditorStore(): EditorStore {
     setLineCaps(id, caps) {
       const cur = get().elements.get(id);
       if (!cur || cur.type !== "shape" || (cur.shapeType !== "line" && cur.shapeType !== "arrow")) return false;
+      if (isLocked(cur)) return false;
       const was = effectiveCaps(cur);
       if (was.start === caps.start && was.end === caps.end) return false;
       const after = stamp({ ...cur, content: { ...contentOf<ShapeContent>(cur), caps: { start: caps.start, end: caps.end } } });
@@ -742,7 +743,7 @@ export function createEditorStore(): EditorStore {
       const cur = get().elements.get(after.id);
       const fresh = freshText === after.id;
       if (fresh) freshText = null;
-      if (!cur || cur.type !== "text-box") return;
+      if (!cur || cur.type !== "text-box" || isLocked(cur)) return; // locked boxes are never edited or deleted
       const c = contentOf<TextBoxContent>(after);
       const contentHtml = sanitizeHtml(c.contentHtml);
       const rawContent = plainText(contentHtml);
@@ -883,6 +884,8 @@ export function createEditorStore(): EditorStore {
           (id): Action => ({ type: "delete", el: s.elements.get(id)! }),
         );
       }
+      // Connectors bound to an erased element keep their end at its last point, freed (as removeElements).
+      actions.push(...freeEnds(new Set([...r.removed, ...r.replaced.map((x) => x.removedId)])));
       appendCompact(eraseBatch, actions);
       applyActions(actions);
     },
@@ -893,7 +896,7 @@ export function createEditorStore(): EditorStore {
 
     beginEdit(id) {
       const el = get().elements.get(id);
-      if (!el || !isBoxed(el) || isPdfPlacement(el)) return;
+      if (!el || !isBoxed(el) || isPdfPlacement(el) || isLocked(el)) return;
       if (get().editingId !== id) closeEdit();
       set({ selection: new Set([id]), editingId: id });
     },

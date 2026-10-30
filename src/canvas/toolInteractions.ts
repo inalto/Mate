@@ -417,7 +417,7 @@ export function createToolController(deps: ToolDeps) {
         g.dy = spaceShift(s, g.lineY, p.y - g.lineY);
         const all = [...s.elements.values()];
         const shifted = shiftBelow(all, g.lineY, g.dy, { cutImages: s.spaceCutImages });
-        const moved = shifted.filter((e, i) => e !== all[i]);
+        const moved = shifted.filter((e, i) => e !== all[i] && !isLocked(all[i])); // as insertSpace commits
         if (g.dy === 0) {
           // Back at the line: show the originals again (nothing is shifted).
           drop();

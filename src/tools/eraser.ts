@@ -1,7 +1,9 @@
 // Eraser hit-testing (pure). Stroke mode removes any touched element; partial mode cuts strokes
 // where they enter/leave the eraser circle. Shapes are hit along their outline (or anywhere inside
 // when filled); partial mode turns a touched shape outline into stroke fragments. Text boxes,
-// tables, code blocks and graphs are never erased, nor is anything locked.
+// tables, code blocks and graphs are never erased, nor is anything locked. Connectors are erased
+// whole (in both modes) like shapes, hit along their route.
+import { connectorRoute } from "../connectors/geometry";
 import { isLocked, isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
@@ -30,6 +32,7 @@ function erasable(el: Element, opts: EraseOptions): boolean {
     case "stroke":
       return true;
     case "shape":
+    case "connector":
       return opts.eraseShapes;
     case "image":
       return opts.eraseImages && !isPdfPlacement(el); // PDF pages are locked
@@ -53,7 +56,7 @@ function segDist2(a: Vec2, b: Vec2, c: Vec2): number {
 }
 
 /** True when any segment of `pts` comes within `r` of `c`. */
-export function polylineTouches(pts: Point[], c: Vec2, r: number): boolean {
+export function polylineTouches(pts: readonly Vec2[], c: Vec2, r: number): boolean {
   const r2 = r * r;
   if (pts.length === 1) return segDist2(pts[0], pts[0], c) <= r2;
   for (let i = 0; i + 1 < pts.length; i++) if (segDist2(pts[i], pts[i + 1], c) <= r2) return true;
@@ -215,6 +218,10 @@ export function eraseAt(
       }
       const now = opts.now ?? new Date().toISOString();
       result.replaced.push({ removedId: id, parts: frags.map((points) => shapeFragment(el, points, newId(), now)) });
+      continue;
+    }
+    if (el.type === "connector") {
+      if (polylineTouches(connectorRoute(el), center, r + el.width / 2)) result.removed.push(id);
       continue;
     }
     if (el.type !== "stroke") {

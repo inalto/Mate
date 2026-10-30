@@ -284,14 +284,18 @@ function orbit(el: Element, from: Vec2, centre: Vec2, cos: number, sin: number, 
 }
 
 /**
- * Rotate by `rad` about `centre`. Strokes (and other point lists) rotate their points. Shapes and
- * boxed elements keep their anchor box: it moves so its centre orbits `centre`, and `rad` is added
- * to `content.rotation` (turned about the box centre when drawn).
+ * Rotate by `rad` about `centre`. Strokes, lines and arrows (and other point lists) rotate their
+ * points, so later scaling stays exact. Closed shapes and boxed elements keep their anchor box: it
+ * moves so its centre orbits `centre`, and `rad` is added to `content.rotation` (turned about the
+ * box centre when drawn).
  */
 export function rotateElements(els: readonly Element[], centre: Vec2, rad: number): Element[] {
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
   return els.map((el) => {
+    if (el.type === "shape" && !isClosedShape(el.shapeType ?? "rectangle")) {
+      return normalizeShape(mapPoints(el, (p) => rotateAbout(p, centre, cos, sin)));
+    }
     if (el.type === "shape") {
       const b = shapeRectOf(el);
       return orbit(el, { x: b.x + b.width / 2, y: b.y + b.height / 2 }, centre, cos, sin, rad);

@@ -98,4 +98,46 @@ describe("BoxFrame", () => {
     fireEvent.pointerUp(edge, { clientX: 297, clientY: 150, pointerId: 2, ctrlKey: true });
     expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 397, y: 250 });
   });
+
+  const startSnappedDrag = (container: HTMLElement) => {
+    const edge = container.querySelector(".box-frame-edge.top") as HTMLElement;
+    fireEvent.pointerDown(edge, { clientX: 0, clientY: 0, pointerId: 1, button: 0 });
+    fireEvent.pointerMove(edge, { clientX: 297, clientY: 150, pointerId: 1 });
+    expect(s().guides.length).toBeGreaterThan(0);
+    return edge;
+  };
+
+  it("unmounting_mid_drag_clears_the_guides", async () => {
+    await load([box("a", 100, 100), box("b", 400, 400)]);
+    s().select(["a"]);
+    const { container, unmount } = frame("a");
+    startSnappedDrag(container);
+    unmount(); // e.g. deselect, undo or delete mid-drag
+    expect(s().guides).toEqual([]);
+  });
+
+  it("escape_cancels_the_drag_without_committing", async () => {
+    await load([box("a", 100, 100), box("b", 400, 400)]);
+    s().select(["a"]);
+    const { container } = frame("a");
+    const edge = startSnappedDrag(container);
+    const key = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    window.dispatchEvent(key);
+    expect(key.defaultPrevented).toBe(true);
+    expect(s().guides).toEqual([]);
+    fireEvent.pointerUp(edge, { clientX: 297, clientY: 150, pointerId: 1 });
+    expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 100, y: 100 });
+    expect(s().canUndo).toBe(false);
+    expect([...s().selection]).toEqual(["a"]);
+  });
+
+  it("lost_pointer_capture_clears_the_guides", async () => {
+    await load([box("a", 100, 100), box("b", 400, 400)]);
+    s().select(["a"]);
+    const { container } = frame("a");
+    const edge = startSnappedDrag(container);
+    fireEvent.lostPointerCapture(edge, { pointerId: 1 });
+    expect(s().guides).toEqual([]);
+    expect(container.querySelector(".box-frame")).not.toBeNull();
+  });
 });

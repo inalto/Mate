@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 import { el } from "../../tools/__tests__/fixtures";
-import { isLocked } from "../../model/content";
+import { contentOf, isLocked, type TextBoxContent } from "../../model/content";
+import { PAGE_GAP } from "../../model/constants";
+import { fitBounds } from "../../canvas/camera";
+import { lassoSelect } from "../../tools/lasso";
+import { shapeElement, shapeFromDrag } from "../../shapes/geometry";
 import en from "../../locales/en/translation.json";
 import it_ from "../../locales/it/translation.json";
 
@@ -17,7 +21,7 @@ vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.els) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
-import { useEditorStore } from "../editor";
+import { clampToPage, sheetStack, useEditorStore } from "../editor";
 import { useNotebookStore } from "../notebook";
 
 const s = () => useEditorStore.getState();
@@ -30,6 +34,7 @@ async function load(els: Element[]) {
 
 const stroke = (id: string, locked = false) =>
   el(id, [[0, 0], [100, 0]], locked ? { content: { locked: true } } : {});
+const lock = (e: Element): Element => ({ ...e, content: { ...(e.content as object), locked: true } });
 const textBox = (id: string, x: number, y: number): Element =>
   el(id, [[x, y]], {
     type: "text-box",
@@ -113,6 +118,70 @@ describe("lock", () => {
     expect(s().elements.get("b")!.uiGroupId).toBe(s().elements.get("c")!.uiGroupId);
   });
 
+  it("locked_elements_are_skipped_by_insert_space_and_scribble_erase", async () => {
+    await load([el("a", [[0, 100], [100, 100]], { content: { locked: true } }), el("b", [[0, 120], [100, 120]]), stroke("c", true)]);
+    s().insertSpace(50, 40);
+    expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 0, y: 100 });
+    expect(s().elements.get("b")!.points[0]).toMatchObject({ x: 0, y: 160 });
+    s().scribbleErase(["a", "b", "c"]);
+    expect([...s().elements.keys()].sort()).toEqual(["a", "c"]);
+  });
+
+  it("distribute_skips_locked_elements", async () => {
+    // Unlocked a, c, d span 0..400; locked b sits off the even spacing and must stay put.
+    await load([el("a", [[0, 0], [10, 0]]), el("b", [[30, 100], [40, 100]], { content: { locked: true } }), el("c", [[50, 200], [60, 200]]), el("d", [[390, 300], [400, 300]])]);
+    s().select(["a", "b", "c", "d"]);
+    s().distributeSelection("horizontal");
+    expect(s().elements.get("b")!.points[0]).toMatchObject({ x: 30, y: 100 });
+    expect(s().elements.get("c")!.points[0].x).toBeCloseTo(195);
+  });
+
+  it("lasso_never_selects_locked_elements", async () => {
+    await load([stroke("a", true), el("b", [[10, 10], [20, 10]])]);
+    const square = [
+      { x: -10, y: -10 },
+      { x: 200, y: -10 },
+      { x: 200, y: 200 },
+      { x: -10, y: 200 },
+    ];
+    expect(lassoSelect(s().elements, useEditorStore.spatialIndex(), square, "inside")).toEqual(["b"]);
+    expect(lassoSelect(s().elements, useEditorStore.spatialIndex(), square, "touch")).toEqual(["b"]);
+  });
+
+  it("restyle_text_box_skips_locked_boxes", async () => {
+    await load([lock(textBox("t", 0, 0)), textBox("u", 0, 200)]);
+    s().select(["t", "u"]);
+    s().restyleTextBox({ color: "#ff0000" });
+    expect(contentOf<TextBoxContent>(s().elements.get("t")!).textAttributes!.color).toBe("#000");
+    expect(contentOf<TextBoxContent>(s().elements.get("u")!).textAttributes!.color).toBe("#ff0000");
+  });
+
+  it("text_tool_cannot_edit_or_empty_a_locked_text_box", async () => {
+    await load([lock(textBox("t", 0, 0))]);
+    s().beginEdit("t");
+    expect(s().editingId).toBeNull();
+    const before = s().elements.get("t")!;
+    const emptied: Element = { ...before, content: { ...contentOf<TextBoxContent>(before), contentHtml: "", rawContent: "" } };
+    s().commitTextEdit(emptied);
+    expect(s().elements.get("t")).toBe(before);
+    s().commitTextEdit({ ...before, content: { ...contentOf<TextBoxContent>(before), contentHtml: "<p>changed</p>" } });
+    expect(s().elements.get("t")).toBe(before);
+    expect(s().canUndo).toBe(false);
+  });
+
+  it("line_caps_refuse_a_locked_line", async () => {
+    const line = shapeElement(
+      { shapeType: "line", color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 },
+      shapeFromDrag("line", { x: 0, y: 0 }, { x: 100, y: 0 }, false),
+      "pg",
+      "l",
+      "2026-01-01T00:00:00.000Z",
+    );
+    await load([lock(line)]);
+    expect(s().setLineCaps("l", { start: "arrow", end: "arrow" })).toBe(false);
+    expect(s().canUndo).toBe(false);
+  });
+
   it("lock_strings_exist_after_line_caps", () => {
     for (const cat of [en, it_] as Record<string, unknown>[]) {
       const keys = Object.keys(cat);
@@ -155,6 +224,31 @@ describe("rotateSelection", () => {
     expect((t.content as { rotation: number }).rotation).toBeCloseTo(Math.PI / 2);
   });
 
+  it("rotates_a_line_by_its_points_so_a_later_scale_is_exact", async () => {
+    const line = shapeElement(
+      { shapeType: "line", color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 },
+      shapeFromDrag("line", { x: 0, y: 0 }, { x: 100, y: 0 }, false),
+      "pg",
+      "l",
+      "2026-01-01T00:00:00.000Z",
+    );
+    await load([line]);
+    s().select(["l"]);
+    s().rotateSelection({ x: 50, y: 0 }, Math.PI / 2);
+    let r = s().elements.get("l")!;
+    expect((r.content as { rotation?: number } | undefined)?.rotation ?? 0).toBe(0);
+    expect(r.points[0].x).toBeCloseTo(50);
+    expect(r.points[0].y).toBeCloseTo(-50);
+    expect(r.points[1].x).toBeCloseTo(50);
+    expect(r.points[1].y).toBeCloseTo(50);
+    // Stretch vertically about the top end: the (now vertical) line doubles in length.
+    s().scaleSelection({ x: 50, y: -50 }, 1, 2);
+    r = s().elements.get("l")!;
+    expect(r.points[1].x).toBeCloseTo(50);
+    expect(r.points[1].y).toBeCloseTo(150);
+    expect(r.boxHeight).toBeCloseTo(200);
+  });
+
   it("rotates_a_shape_by_rotation_and_orbits_its_anchors", async () => {
     const shape = el("sh", [[0, 0], [100, 50]], { type: "shape", shapeType: "rectangle", content: { fillOpacity: 1 } });
     await load([shape]);
@@ -195,5 +289,18 @@ describe("fit", () => {
     s().fitPage();
     // union (1000, 1000)-(1200, 1100): 200x100 in 200x100 room, zoom 1
     expect(s().camera).toEqual({ x: 148 - 1100, y: 98 - 1050, z: 1 });
+  });
+
+  it("fit_page_frames_the_sheet_under_the_viewport_centre_in_page_mode", async () => {
+    await load([]);
+    useEditorStore.setState({ page: { ...s().page!, mode: "page" }, viewport: { width: 800, height: 600 }, contentBottom: 1e5 });
+    const stack = sheetStack(s());
+    expect(stack.count).toBeGreaterThan(2);
+    const pitch = stack.height + PAGE_GAP;
+    // Viewport centre on sheet 2 (index 1).
+    useEditorStore.setState({ camera: { x: 0, y: 300 - (pitch + stack.height / 2), z: 1 } });
+    s().fitPage();
+    const sheet = { x: 0, y: pitch, width: stack.width, height: stack.height };
+    expect(s().camera).toEqual(clampToPage(fitBounds(sheet, s().viewport), s()));
   });
 });
