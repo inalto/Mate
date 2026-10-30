@@ -1,5 +1,6 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, line ends (one
-// line/arrow), connector controls (one connector: routing mode, ends, dash, label), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
+// line/arrow), connector controls (one connector: routing mode, ends, dash, label), frame controls
+// (one frame: rename, background, select contents, export, present from here), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width; a single math box also gets Graph and Compute; a single runnable code block gets Run. Hidden while a text box is
 // being edited (its editor has its own bar). Lock (nothing locked) / Unlock (anything locked) and Copy as image are always
 // offered; when every selected element is locked the buttons that would change them are disabled.
@@ -14,6 +15,10 @@ import {
   ChartLine,
   Copy,
   CopySimple,
+  Export,
+  PencilSimple,
+  Presentation,
+  SelectionAll,
   Function as FunctionIcon,
   Minus,
   Plus,
@@ -47,6 +52,10 @@ import { CONNECTOR_CAPS, effectiveCaps, isLocked, type ConnectorContent } from "
 import { connectorCaps, connectorLabel, connectorMode } from "../connectors/geometry";
 import { CONNECTOR_MODES } from "../connectors/route";
 import { openLabelPopover } from "../stores/labelPopover";
+import { framesInOrder } from "../frames/contain";
+import { exportPage, type PageExportFormat } from "../export/exportPage";
+import { useSettingsStore } from "../stores/settings";
+import { boxRect } from "../tools/spatialIndex";
 import { copySelectionAsImage } from "../export/copyImage";
 import { showToast } from "./Toast";
 import { LineCapsPicker } from "./LineCapsPopover";
@@ -216,6 +225,86 @@ function ConnectorControls({ connector }: { connector: Element }) {
         onClick={() => openLabelPopover(ed, connector.id)}
       >
         <Tag size={16} />
+      </button>
+    </>
+  );
+}
+
+/** Export the region of `frame` (its title left out) in the default export format (PNG unless SVG or PDF). */
+function exportFrame(frame: Element): Promise<string | null> {
+  const setting = useSettingsStore.getState().settings.defaultExportFormat;
+  const format: PageExportFormat = setting === "svg" || setting === "pdf" ? setting : "png";
+  const untitled = (els: Element[]) => els.map((e) => (e.id === frame.id ? { ...e, content: { ...(e.content as object), title: "" } } : e));
+  return exportPage(frame.pageId, format, { region: boxRect(frame), mapElements: untitled });
+}
+
+/** Rename, background swatches, select contents, export and "Present from here" for the single selected frame. */
+function FrameControls({ frame }: { frame: Element }) {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  const locked = isLocked(frame);
+  const background = (frame.content as { background?: string } | undefined)?.background;
+  const s = ed.getState;
+  const setBackground = (color: string | null) => {
+    s().setFrameBackground(frame.id, color);
+    setOpen(false);
+  };
+  const present = () => {
+    const st = s() as unknown as { startPresentation?: (index: number) => void };
+    if (typeof st.startPresentation === "function") st.startPresentation(Math.max(0, framesInOrder(s().elements.values()).findIndex((f) => f.id === frame.id)));
+  };
+  return (
+    <>
+      <button type="button" className="tb-btn" aria-label={t("frame.rename")} title={t("frame.rename")} disabled={locked} onClick={() => openLabelPopover(ed, frame.id)}>
+        <PencilSimple size={16} />
+      </button>
+      <div ref={ref} className="tb-anchor">
+        <button
+          type="button"
+          className={background ? "tb-swatch" : "tb-swatch no-fill"}
+          style={background ? { background } : undefined}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label={t("frame.background")}
+          title={t("frame.background")}
+          disabled={locked}
+          onClick={() => setOpen((o) => !o)}
+        />
+        {open && (
+          <div className="tb-popover fill-menu" role="dialog" aria-label={t("frame.background")}>
+            <div className="tb-row">
+              <button type="button" className={background ? "tb-swatch no-fill" : "tb-swatch no-fill active"} aria-label={t("toolbar.noFill")} title={t("toolbar.noFill")} onClick={() => setBackground(null)} />
+              {FILL_PALETTE.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={background?.toUpperCase() === c.toUpperCase() ? "tb-swatch active" : "tb-swatch"}
+                  style={{ background: c }}
+                  aria-label={t("toolbar.fillColor", { color: c })}
+                  onClick={() => setBackground(c)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <button type="button" className="tb-btn" aria-label={t("frame.selectContents")} title={t("frame.selectContents")} onClick={() => s().selectFrameContents(frame.id)}>
+        <SelectionAll size={16} />
+      </button>
+      <button
+        type="button"
+        className="tb-btn"
+        aria-label={t("frame.export")}
+        title={t("frame.export")}
+        onClick={() => void exportFrame(frame).catch((err) => console.error("frame export failed", err))}
+      >
+        <Export size={16} />
+      </button>
+      <button type="button" className="tb-btn" aria-label={t("frame.present")} title={t("frame.present")} onClick={present}>
+        <Presentation size={16} />
       </button>
     </>
   );
@@ -394,6 +483,7 @@ export default function SelectionBar() {
   const closedShape =
     selected.length === 1 && selected[0]?.type === "shape" && isClosedShape(selected[0].shapeType ?? "rectangle") ? selected[0] : undefined;
   const connector = selected.length === 1 && selected[0]?.type === "connector" ? selected[0] : undefined;
+  const frame = selected.length === 1 && selected[0]?.type === "frame" ? selected[0] : undefined;
   const lockedCount = selected.filter((e) => !!e && isLocked(e)).length;
   /** Every selected element is locked: nothing here may change them. */
   const allLocked = lockedCount > 0 && lockedCount === selected.length;
@@ -441,11 +531,12 @@ export default function SelectionBar() {
       {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} />}
       {lineShape && <LineEndsMenu shape={lineShape} />}
       {connector && <ConnectorControls connector={connector} />}
+      {frame && <FrameControls frame={frame} />}
       {closedShape && <ShapeTextControls shape={closedShape} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} disabled={selected.length - lockedCount < 2} />}
       <span className="tb-sep" />
       {textBox && !allLocked && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
-      {!textBox && PEN_PALETTE.map((c) => (
+      {!textBox && !frame && PEN_PALETTE.map((c) => (
         <button
           key={c}
           type="button"

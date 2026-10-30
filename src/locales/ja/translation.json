@@ -407,6 +407,20 @@
     "text": "Text",
     "note": "Note"
   },
+  "frame": {
+    "tool": "Frame",
+    "draw": "Draw frame",
+    "preset169": "Slide 16:9",
+    "preset43": "Slide 4:3",
+    "presetSquare": "Square",
+    "presetA4": "A4 portrait",
+    "rename": "Rename",
+    "background": "Background",
+    "selectContents": "Select contents",
+    "export": "Export frame…",
+    "present": "Present from here",
+    "untitled": "Frame {{n}}"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -448,6 +462,7 @@
       "lasso": "投げ縄選択",
       "shape": "図形",
       "connector": "Connector",
+      "frame": "Frame",
       "text": "テキスト",
       "insertSpace": "スペースを挿入",
       "presetSlot": "プリセット 1〜9",

@@ -7,7 +7,9 @@
 // connector's endpoint handles and label drag, double-click on a connector (label popover), text
 // tool (click adds or edits a text box), auto-complete handle drags (a connector from a side of the
 // selected element: a tap opens the auto-complete popover, a release on an element binds to it, a
-// release in empty space adds a free-ended connector and opens the popover there). Geometry is pure; `createToolController` wires it
+// release in empty space adds a free-ended connector and opens the popover there), frame tool (drag
+// a frame, then back to the cursor; a frame is hit only on its border band or title, a double-click
+// on its title opens the rename popover). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
@@ -17,10 +19,11 @@ import { routeConnector } from "../connectors";
 import { CONNECTOR_MODES, nearestT } from "../connectors/route";
 import { openLabelPopover } from "../stores/labelPopover";
 import { openAutoComplete } from "../stores/autoComplete";
+import { FRAME_TITLE_BAND, frameTitleRect, isFrame, isNestedFrame, withFrameChildren } from "../frames/contain";
 import { isClosedShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
-import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
+import { boxRect, elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { shiftBelow } from "../tools/insertSpace";
 import { spaceShift } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
@@ -183,12 +186,31 @@ export function scaleFromDrag(b: Rect, corner: Corner, p: Vec2, uniform: boolean
   return { origin, sx, sy };
 }
 
+/** A frame's border band (8 screen px at `zoom`, i.e. `8 / zoom` page units) is hit. */
+export const FRAME_BAND_PX = 8;
+
+/** World point `p` on the title of frame `el` at `zoom` (never when the title is hidden). */
+export function hitFrameTitle(el: Element, p: Vec2, zoom: number): boolean {
+  const t = frameTitleRect(el, zoom, isNestedFrame(el));
+  return t.width > 0 && rectContains(t, p, 2 / zoom);
+}
+
+/** Frame `el` is hit at `p`: on its border band (`tol` either side of the edge) or its title. Never inside. */
+export function frameHit(el: Element, p: Vec2, tol: number, zoom: number): boolean {
+  const r = boxRect(el);
+  if (rectContains(r, p, tol) && !(r.width > 2 * tol && r.height > 2 * tol && rectContains({ x: r.x + tol, y: r.y + tol, width: r.width - 2 * tol, height: r.height - 2 * tol }, p))) return true;
+  return hitFrameTitle(el, p, zoom);
+}
+
 /**
  * Topmost element under `p` (strokes by distance, shapes by outline or interior, connectors by
- * route or label pill, others by bounds).
+ * route or label pill, frames by their border band or title only, others by bounds). `zoom`
+ * (default `HIT_SLOP_PX / tol`) sizes a frame's title.
  */
-export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number): string | null {
-  const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
+export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number, zoom = HIT_SLOP_PX / tol): string | null {
+  // Reaching down by the title's height finds frames whose title (above their rect) is under `p`.
+  const reach = Math.max(FRAME_TITLE_BAND, FRAME_TITLE_BAND / Math.min(1, zoom));
+  const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol + reach });
   const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e && !isPdfPlacement(e))).filter((el) =>
     el.type === "stroke"
       ? polylineTouches(el.points, p, el.width / 2 + tol)
@@ -196,7 +218,9 @@ export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Eleme
         ? shapeHit(el, p, tol)
         : el.type === "connector"
           ? connectorHit(el, p, tol)
-          : rectContains(elementBounds(el), p, tol),
+          : el.type === "frame"
+            ? frameHit(el, p, tol, zoom)
+            : rectContains(elementBounds(el), p, tol),
   );
   return hits.length > 0 ? hits[hits.length - 1].id : null;
 }
@@ -230,9 +254,14 @@ export function attachableAt(index: SpatialIndex, elements: ReadonlyMap<string, 
     ids
       .map((id) => elements.get(id))
       .filter((e): e is Element => !!e && e.id !== exclude && isAttachable(e) && !isLocked(e) && !isPdfPlacement(e)),
-  ).filter((el) => (el.type === "shape" ? shapeHit(el, p, tol) : rectContains(elementBounds(el), p, tol)));
+  ).filter((el) =>
+    el.type === "shape" ? shapeHit(el, p, tol) : el.type === "frame" ? frameHit(el, p, Math.max(tol, FRAME_BAND_PX / zoomOf(tol)), zoomOf(tol)) : rectContains(elementBounds(el), p, tol),
+  );
   return hits.length > 0 ? hits[hits.length - 1] : null;
 }
+
+/** Zoom implied by a `ANCHOR_SNAP_PX / zoom` tolerance. */
+const zoomOf = (tol: number): number => ANCHOR_SNAP_PX / tol;
 
 /** The selection is a single boxed element: the DOM overlay (BoxFrame) frames it, not the canvas. */
 export function framedByOverlay(elements: ReadonlyMap<string, Element>, selection: ReadonlySet<string>): boolean {
@@ -256,6 +285,7 @@ type Gesture =
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
   | { kind: "shape"; start: Vec2; end: Vec2 }
+  | { kind: "frame"; start: Vec2; end: Vec2 }
   | {
       kind: "connector";
       /** The pointer-down point (the drag length is measured from it) and the source end's point. */
@@ -345,7 +375,9 @@ export function createToolController(deps: ToolDeps) {
     const s = st();
     const id = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
     const el = id ? s.elements.get(id) : undefined;
-    if (!id || !el || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle"))) || isLocked(el)) {
+    // A frame opens on its title only (its border band just selects and moves it).
+    const frameTitle = !!el && isFrame(el) && hitFrameTitle(el, p, s.camera.z);
+    if (!id || !el || (isFrame(el) && !frameTitle) || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle"))) || isLocked(el)) {
       lastTap = null;
       return false;
     }
@@ -353,7 +385,7 @@ export function createToolController(deps: ToolDeps) {
     const tap: Tap = { id, t: now(), x: scr.x, y: scr.y };
     if (isDoubleTap(lastTap, tap)) {
       lastTap = null;
-      if (el.type === "connector") openLabelPopover(deps.store, id);
+      if (el.type === "connector" || isFrame(el)) openLabelPopover(deps.store, id);
       else s.beginEdit(id);
       return true;
     }
@@ -392,10 +424,16 @@ export function createToolController(deps: ToolDeps) {
   const moveDelta = (anchor: Vec2 | null, d: Vec2): Vec2 =>
     anchor && deps.getSettings().snapToGrid ? snapDelta(anchor, d, gridSpacingOf(st().page)) : d;
 
-  /** The unlocked selected elements (the ones a transform changes). */
-  const movable = (): Element[] => {
+  /**
+   * The unlocked selected elements (the ones a transform changes); with `children`, plus what the
+   * selected frames contain (unlocked, no PDF placements), as moveSelection moves them.
+   */
+  const movable = (children = true): Element[] => {
     const s = st();
-    return [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e && !isLocked(e));
+    const sel = [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e && !isLocked(e));
+    if (!children || !sel.some(isFrame)) return sel;
+    const ids = new Set(sel.map((e) => e.id));
+    return withFrameChildren(sel, s.elements.values()).filter((e) => ids.has(e.id) || (!isLocked(e) && !isPdfPlacement(e)));
   };
 
   /** Start a selection move of the selected elements (Alt held: of fresh copies of them, made when the drag starts). */
@@ -412,6 +450,25 @@ export function createToolController(deps: ToolDeps) {
     const drag = shapeFromDrag(style.shapeType, start, end, shift);
     return [shapeElement(style, drag, st().pageId ?? "", "shape-preview", "")];
   };
+
+  /** The frame being dragged from `start` to `end`, as an element (for the live preview). */
+  const framePreview = (start: Vec2, end: Vec2): Element[] => [
+    {
+      id: "frame-preview",
+      pageId: st().pageId ?? "",
+      type: "frame",
+      points: [{ x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), pressure: 0.5, timestamp: 0 }],
+      color: "#000000",
+      width: 1,
+      isHighlighter: false,
+      boxWidth: Math.abs(end.x - start.x),
+      boxHeight: Math.abs(end.y - start.y),
+      content: { title: "", order: 0 },
+      createdAt: "",
+      updatedAt: "",
+      version: 0,
+    },
+  ];
 
   /**
    * The connector end under world `p`, ignoring element `exclude`: bound to the attachable element
@@ -549,6 +606,18 @@ export function createToolController(deps: ToolDeps) {
     if (st().dragging !== on) deps.store.setState({ dragging: on });
   };
 
+  /**
+   * A press at `p` moves the selection with bounds `b`: anywhere inside them, except when only frames
+   * are selected, which move from their border band or title only (inside, the press reaches the content).
+   */
+  const onSelection = (b: Rect, p: Vec2): boolean => {
+    const s = st();
+    const tol = HIT_SLOP_PX / s.camera.z;
+    const sel = [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e);
+    if (sel.length === 0 || !sel.every(isFrame)) return rectContains(b, p, tol);
+    return sel.some((f) => frameHit(f, p, tol, s.camera.z));
+  };
+
   const down = (p: Vec2, tool: PointerTool) => {
     const s = st();
     const auto = s.autoCompleteDrag;
@@ -564,6 +633,10 @@ export function createToolController(deps: ToolDeps) {
     } else if (tool === "shape") {
       const q = snap(p);
       g = { kind: "shape", start: q, end: q };
+      preview = [];
+    } else if (tool === "frame") {
+      const q = snap(p);
+      g = { kind: "frame", start: q, end: q };
       preview = [];
     } else if (tool === "connector") {
       const at = endAt(p);
@@ -587,7 +660,9 @@ export function createToolController(deps: ToolDeps) {
       const lone = loneConnector(s.elements, s.selection);
       // Locked elements are never transformed: only the unlocked part of the selection moves.
       const orig = [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e && !isLocked(e));
-      const corner = b && orig.length > 0 && !lone ? hitHandle(b, p, s.camera.z) : null;
+      // A lone frame's handles are the overlay's (BoxFrame): its bounds also span the title, whose corner is no handle.
+      const loneFrame = s.selection.size === 1 && orig.length === 1 && isFrame(orig[0]);
+      const corner = b && orig.length > 0 && !lone && !loneFrame ? hitHandle(b, p, s.camera.z) : null;
       if (b && orig.length > 0 && !lone && !framedByOverlay(s.elements, s.selection) && hitRotateHandle(b, p, s.camera.z)) {
         const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
         g = { kind: "rotate", centre, from: Math.atan2(p.y - centre.y, p.x - centre.x), angle: 0, orig };
@@ -597,7 +672,7 @@ export function createToolController(deps: ToolDeps) {
         g = { kind: "scale", corner, bounds: b, orig, t: { origin: p, sx: 1, sy: 1 } };
         preview = orig;
         lift(orig);
-      } else if (b && (lone ? connectorHit(lone, p, HIT_SLOP_PX / s.camera.z) : rectContains(b, p, HIT_SLOP_PX / s.camera.z))) {
+      } else if (b && (lone ? connectorHit(lone, p, HIT_SLOP_PX / s.camera.z) : onSelection(b, p))) {
         g = startMove(p);
       } else {
         const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
@@ -653,6 +728,10 @@ export function createToolController(deps: ToolDeps) {
         g.end = snap(p);
         preview = shapePreview(g.start, g.end);
         break;
+      case "frame":
+        g.end = snap(p);
+        preview = framePreview(g.start, g.end);
+        break;
       case "connector":
         g.end = p;
         // Never back onto the element the connector starts from.
@@ -680,7 +759,8 @@ export function createToolController(deps: ToolDeps) {
           const key = `alt-duplicate:${++dupCount}`;
           if (st().duplicateSelectionInPlace(key).length > 0) {
             g.dupKey = key;
-            g.orig = movable();
+            // The copies already include the frames' contents.
+            g.orig = movable(false);
             g.anchor = anchorOf(g.orig);
           }
         }
@@ -696,7 +776,8 @@ export function createToolController(deps: ToolDeps) {
           clearGuides();
         } else if (deps.getSettings().smartGuides && g.orig.length > 0) {
           g.bounds ??= selectionBounds(new Map(g.orig.map((e) => [e.id, e])), g.orig.map((e) => e.id));
-          g.others ??= guideCandidates(deps.store, new Set(st().selection));
+          // The moving frames' contents are not guides either.
+          g.others ??= guideCandidates(deps.store, new Set([...st().selection, ...g.orig.map((e) => e.id)]));
           if (g.bounds) {
             const r = smartMoveDelta(g.bounds, held, g.others, GUIDE_SNAP_PX / z, grid, lock);
             g.delta = r.delta;
@@ -741,6 +822,14 @@ export function createToolController(deps: ToolDeps) {
         drop();
         s.insertSpace(g.lineY, g.dy);
         break;
+      case "frame": {
+        drop();
+        const w = Math.abs(g.end.x - g.start.x);
+        const h = Math.abs(g.end.y - g.start.y);
+        // One frame, then back to the cursor (addFrame switches the tool).
+        if (Math.min(w, h) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addFrame({ x: Math.min(g.start.x, g.end.x), y: Math.min(g.start.y, g.end.y), width: w, height: h });
+        break;
+      }
       case "connector": {
         drop();
         const dragged = Math.hypot(g.end.x - g.press.x, g.end.y - g.press.y) * s.camera.z >= MIN_SHAPE_DRAG_PX;
@@ -765,7 +854,7 @@ export function createToolController(deps: ToolDeps) {
       case "move":
         drop();
         clearGuides();
-        s.moveSelection(g.delta.x, g.delta.y, g.dupKey ? { label: "Duplicate", mergeKey: g.dupKey } : undefined);
+        s.moveSelection(g.delta.x, g.delta.y, g.dupKey ? { label: "Duplicate", mergeKey: g.dupKey, children: false } : undefined);
         break;
       case "scale":
         drop();
@@ -916,7 +1005,7 @@ export function createToolController(deps: ToolDeps) {
   const onKey = (e: KeyboardEvent) => {
     readMods(e);
     // Escape drops a connector drag (drawing, an endpoint or the label) without changing anything.
-    if (e.type === "keydown" && e.key === "Escape" && (g.kind === "connector" || g.kind === "endpoint" || g.kind === "label")) {
+    if (e.type === "keydown" && e.key === "Escape" && (g.kind === "connector" || g.kind === "endpoint" || g.kind === "label" || g.kind === "frame")) {
       cancel();
       return;
     }

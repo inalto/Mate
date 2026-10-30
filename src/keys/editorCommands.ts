@@ -211,6 +211,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.setTool("shape");
     case "tool.connector":
       return s.setTool("connector");
+    case "tool.frame":
+      return s.setTool("frame");
     case "tool.text":
       return s.setTool("text");
     case "tool.insertSpace":

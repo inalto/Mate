@@ -125,6 +125,17 @@ export interface ConnectorContent extends ContentMeta {
   route: Vec2[];
 }
 
+/**
+ * frame (`points[0]` top-left, `boxWidth/boxHeight` top-level): a named region. Its children are
+ * computed by containment (frames/contain), never stored. `background` unset paints the paper
+ * tinted 4 % towards the ink colour; `order` is its place in a presentation.
+ */
+export interface FrameContent extends ContentMeta {
+  title: string;
+  background?: string;
+  order: number;
+}
+
 /** `el.content` as a partial `T` when it is a JSON object, else `{}`. Never throws. */
 export function contentOf<T>(el: Pick<Element, "content">): Partial<T> {
   const c = el.content;
@@ -156,7 +167,7 @@ export const isPdfPlacement = (el: Pick<Element, "type" | "content">): boolean =
   el.type === "image" && typeof contentOf<ImageContent>(el).pdfSourceKey === "string";
 
 /** Element types laid out as a box: `points[0]` is the top-left anchor (page units). */
-export const BOXED_TYPES: readonly ElementType[] = ["text-box", "table", "codespace", "graph", "image", "media"];
+export const BOXED_TYPES: readonly ElementType[] = ["text-box", "table", "codespace", "graph", "image", "media", "frame"];
 
 export const isBoxedType = (t: ElementType): boolean => BOXED_TYPES.includes(t);
 

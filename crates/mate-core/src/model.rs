@@ -35,6 +35,7 @@ pub enum ElementType {
     Table,
     Media,
     Connector,
+    Frame,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -277,5 +278,13 @@ mod tests {
         assert_eq!(json, "\"connector\"");
         let back: ElementType = serde_json::from_str("\"connector\"").unwrap();
         assert_eq!(back, ElementType::Connector);
+    }
+
+    #[test]
+    fn frame_element_type_round_trips() {
+        let json = serde_json::to_string(&ElementType::Frame).unwrap();
+        assert_eq!(json, "\"frame\"");
+        let back: ElementType = serde_json::from_str("\"frame\"").unwrap();
+        assert_eq!(back, ElementType::Frame);
     }
 }

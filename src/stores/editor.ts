@@ -12,6 +12,7 @@ import {
   isPdfPlacement,
   type ConnectorContent,
   type ConnectorEnd,
+  type FrameContent,
   type LineCaps,
   type ShapeContent,
   type Side,
@@ -60,8 +61,10 @@ import {
 } from "../canvas/camera";
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
+import i18n from "../i18n";
+import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "text" | "insert-space";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -167,6 +170,23 @@ export interface EditorState {
   ): boolean;
   /** Set (empty text removes) or remove the label of connector `id`; one "Label" entry (moves of `t` merge). */
   setConnectorLabel(id: string, label: { text: string; t: number } | null): boolean;
+  /**
+   * Add a frame over `rect` (page units), titled `title` or "Frame n" (n = frames + 1), last in the
+   * presentation order and on top of the other frames; one "Frame" entry. The frame is selected and
+   * the tool returns to the cursor. Its id, or null when refused.
+   */
+  addFrame(rect: Rect, title?: string): string | null;
+  /** Rename frame `id` (trimmed; empty is refused); one "Rename frame" entry. */
+  renameFrame(id: string, title: string): boolean;
+  /** Set (or, with null, clear to the paper tint) the background of frame `id`; one "Frame background" entry. */
+  setFrameBackground(id: string, color: string | null): boolean;
+  /**
+   * Presentation order: `ids` lists frames first to last (frames left out follow in their current
+   * order); every frame whose `order` changes is written in one "Reorder frames" entry.
+   */
+  reorderFrames(ids: string[]): boolean;
+  /** Select what frame `id` contains (nested frames and their contents included; locked ones left out). */
+  selectFrameContents(id: string): void;
   /** Set the end caps of line/arrow shape `id` as one "Line ends" entry; false when not applicable. */
   setLineCaps(id: string, caps: LineCaps): boolean;
   /** Set (or, for empty text / null, remove) a closed shape's label; one "Shape text" history entry. */
@@ -243,10 +263,12 @@ export interface EditorState {
   select(ids: Iterable<string>): void;
   selectAll(): void;
   /**
-   * Move the unlocked selected elements; one "Move" entry. `opts` renames the entry and merges it
-   * with the newest entry of the same key (an Alt+drag copy and its move are one "Duplicate").
+   * Move the unlocked selected elements, and what the selected frames contain (computed now; locked
+   * elements and PDF placements stay); one "Move" entry. `opts` renames the entry and merges it
+   * with the newest entry of the same key (an Alt+drag copy and its move are one "Duplicate");
+   * `children: false` moves the selection alone (the copies already include the frames' contents).
    */
-  moveSelection(dx: number, dy: number, opts?: { label?: string; mergeKey?: string }): void;
+  moveSelection(dx: number, dy: number, opts?: { label?: string; mergeKey?: string; children?: boolean }): void;
   setSpaceOptions(patch: { spaceMode?: "insert" | "remove"; spaceCutImages?: boolean }): void;
   /** Insert-space tool: shift everything below `lineY` by `dy` (clamped); one "Insert space" entry, none when it is 0. */
   insertSpace(lineY: number, dy: number): void;
@@ -268,9 +290,10 @@ export interface EditorState {
   /** Stroke colour applies to all; width to strokes and shapes; fill colour to shapes only. */
   restyleSelection(patch: { color?: string; width?: number; fillColor?: string }): void;
   deleteSelection(): void;
+  /** Duplicate the selection, with what the selected frames contain (unlocked), offset by 20. */
   duplicateSelection(): void;
   /**
-   * Duplicate the selection with zero offset (Alt+drag) and select the copies; their ids ([] when
+   * Duplicate the selection (and the selected frames' unlocked contents) with zero offset (Alt+drag) and select the copies; their ids ([] when
    * refused). `mergeKey` lets the following move join the same "Duplicate" entry.
    */
   duplicateSelectionInPlace(mergeKey?: string): string[];
@@ -537,6 +560,7 @@ export function createEditorStore(): EditorStore {
         camera: clampCamera(initialCamera(resolved, viewport, stack), resolved, viewport, stack),
         loadedPageId: pageId,
       });
+      setPageFrames(pageId, els.filter(isFrame));
     },
 
     refreshPage(page) {
@@ -706,6 +730,79 @@ export function createEditorStore(): EditorStore {
       return record("Shape text", [{ type: "update", before: cur, after: stamp(next) }]);
     },
 
+    addFrame(rect, title) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const x = Math.min(rect.x, rect.x + rect.width);
+      const y = Math.min(rect.y, rect.y + rect.height);
+      const width = Math.max(1, Math.abs(rect.width));
+      const height = Math.max(1, Math.abs(rect.height));
+      const all = [...s.elements.values()];
+      const frames = all.filter(isFrame);
+      const name = title?.trim() || nextFrameTitle(all, (n) => i18n.t("frame.untitled", { n }));
+      const now = new Date().toISOString();
+      const top = topZ(frames);
+      const content: FrameContent = { title: name, order: frames.length, ...(frames.length > 0 ? { zIndex: top + 1 } : {}) };
+      const el: Element = {
+        id: crypto.randomUUID(),
+        pageId: s.pageId,
+        type: "frame",
+        points: [{ x, y, pressure: 0.5, timestamp: 0 }],
+        color: "#000000",
+        width: 1,
+        isHighlighter: false,
+        boxWidth: width,
+        boxHeight: height,
+        content,
+        createdAt: now,
+        updatedAt: now,
+        version: 0,
+      };
+      if (!record("Frame", [{ type: "add", el }])) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      return el.id;
+    },
+
+    renameFrame(id, title) {
+      const cur = editableFrame(id);
+      const name = title.trim();
+      if (!cur || name === "" || contentOf<FrameContent>(cur).title === name) return false;
+      return record("Rename frame", [{ type: "update", before: cur, after: stamp({ ...cur, content: { ...contentOf<FrameContent>(cur), title: name } }) }]);
+    },
+
+    setFrameBackground(id, color) {
+      const cur = editableFrame(id);
+      if (!cur) return false;
+      const content: Partial<FrameContent> = { ...contentOf<FrameContent>(cur) };
+      if (color === null || color === "") delete content.background;
+      else content.background = color;
+      if ((content.background ?? null) === (contentOf<FrameContent>(cur).background ?? null)) return false;
+      return record("Frame background", [{ type: "update", before: cur, after: stamp({ ...cur, content }) }]);
+    },
+
+    reorderFrames(ids) {
+      const frames = framesInOrder(get().elements.values());
+      const byId = new Map(frames.map((f) => [f.id, f]));
+      const wanted = ids.filter((id, i) => byId.has(id) && ids.indexOf(id) === i);
+      const listed = new Set(wanted);
+      const order = [...wanted.map((id) => byId.get(id)!), ...frames.filter((f) => !listed.has(f.id))];
+      const now = new Date().toISOString();
+      const actions: Action[] = [];
+      order.forEach((f, i) => {
+        if (contentOf<FrameContent>(f).order === i) return;
+        actions.push({ type: "update", before: f, after: stamp({ ...f, content: { ...contentOf<FrameContent>(f), order: i } }, now) });
+      });
+      return record("Reorder frames", actions);
+    },
+
+    selectFrameContents(id) {
+      const s = get();
+      const frame = s.elements.get(id);
+      if (!frame || !isFrame(frame)) return;
+      get().select(frameChildren(frame, s.elements.values()).filter((e) => !isLocked(e)).map((e) => e.id));
+    },
+
     scribbleErase(ids) {
       const cur = get().elements;
       const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!);
@@ -872,7 +969,7 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      if (tool === "eraser" || tool === "shape" || tool === "connector" || tool === "text" || tool === "insert-space") {
+      if (tool === "eraser" || tool === "shape" || tool === "connector" || tool === "frame" || tool === "text" || tool === "insert-space") {
         closeEdit();
         set({ tool, selection: new Set(), editingId: null });
       } else set({ tool });
@@ -985,7 +1082,8 @@ export function createEditorStore(): EditorStore {
 
     moveSelection(dx, dy, opts) {
       if (dx === 0 && dy === 0) return;
-      transformSelection(opts?.label ?? "Move", (els) => translateElements(els, dx, dy), opts?.mergeKey);
+      const before = opts?.children === false ? unlockedSelection() : withChildren(unlockedSelection());
+      transformSelection(opts?.label ?? "Move", (els) => translateElements(els, dx, dy), opts?.mergeKey, before);
     },
     setSpaceOptions(patch) {
       set(patch);
@@ -1079,10 +1177,10 @@ export function createEditorStore(): EditorStore {
     },
 
     duplicateSelection() {
-      pasteElements(selectedElements(), DUPLICATE_OFFSET, "Duplicate");
+      pasteElements(withChildren(selectedElements()), DUPLICATE_OFFSET, "Duplicate");
     },
     duplicateSelectionInPlace(mergeKey) {
-      return pasteElements(selectedElements(), 0, "Duplicate", mergeKey);
+      return pasteElements(withChildren(selectedElements()), 0, "Duplicate", mergeKey);
     },
     copySelection() {
       const els = selectedElements();
@@ -1382,6 +1480,7 @@ export function createEditorStore(): EditorStore {
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });
     syncHistoryFlags();
+    publishFrames(actions.some((a) => (a.type === "update" ? isFrame(a.after) || isFrame(a.before) : isFrame(a.el))));
     if (changeListeners.size > 0 && added.size + updated.size + removed.size > 0) {
       const change: ElementsChange = { added: [...added], updated: [...updated], removed: [...removed] };
       for (const cb of [...changeListeners]) cb(change);
@@ -1465,9 +1564,31 @@ export function createEditorStore(): EditorStore {
     return selectedElements().filter((el) => !isLocked(el));
   }
 
-  /** Apply `fn` to the unlocked selected elements as one history entry. */
-  function transformSelection(label: string, fn: (els: Element[]) => Element[], mergeKey?: string): void {
-    const before = unlockedSelection();
+  /**
+   * `base` plus what its frames contain (nested frames included), the added elements filtered to
+   * unlocked ones that are not PDF placements.
+   */
+  function withChildren(base: Element[]): Element[] {
+    if (!base.some(isFrame)) return base;
+    const ids = new Set(base.map((e) => e.id));
+    return withFrameChildren(base, S().elements.values()).filter((e) => ids.has(e.id) || (!isLocked(e) && !isPdfPlacement(e)));
+  }
+
+  /** Frame `id` when it exists and is not locked. */
+  function editableFrame(id: string): Element | null {
+    const el = S().elements.get(id);
+    return el && isFrame(el) && !isLocked(el) ? el : null;
+  }
+
+  /** Publish the page's frames for the renderer (nested titles), when `touched` says frames changed. */
+  function publishFrames(touched: boolean): void {
+    const s = S();
+    if (!touched || !s.pageId) return;
+    setPageFrames(s.pageId, [...s.elements.values()].filter(isFrame));
+  }
+
+  /** Apply `fn` to `before` (default: the unlocked selected elements) as one history entry. */
+  function transformSelection(label: string, fn: (els: Element[]) => Element[], mergeKey?: string, before: Element[] = unlockedSelection()): void {
     if (before.length === 0) return;
     const now = new Date().toISOString();
     const after = settleConnectors(fn(before));

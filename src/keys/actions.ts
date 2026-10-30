@@ -10,6 +10,7 @@ export type ShortcutAction =
   | "tool.lasso"
   | "tool.shape"
   | "tool.connector"
+  | "tool.frame"
   | "tool.text"
   | "tool.insertSpace"
   | "preset.slot"
@@ -73,6 +74,7 @@ export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
   "tool.lasso": { labelKey: "keys.actions.lasso", group: "tools", defaultKeys: ["L"] },
   "tool.shape": { labelKey: "keys.actions.shape", group: "tools", defaultKeys: ["S"] },
   "tool.connector": { labelKey: "keys.actions.connector", group: "tools", defaultKeys: ["C"] },
+  "tool.frame": { labelKey: "keys.actions.frame", group: "tools", defaultKeys: ["F"] },
   "tool.text": { labelKey: "keys.actions.text", group: "tools", defaultKeys: ["T"] },
   "tool.insertSpace": { labelKey: "keys.actions.insertSpace", group: "tools", defaultKeys: ["N"] },
   "preset.slot": {

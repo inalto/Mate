@@ -1,10 +1,11 @@
 // Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options),
-// connectors (with options), text, cursor, lasso, undo/redo, zoom.
+// connectors (with options), frames (draw or a preset), text, cursor, lasso, undo/redo, zoom.
 import {
   ArrowElbowRight,
   ArrowUUpLeft,
   BezierCurve,
   FlowArrow,
+  FrameCorners,
   LineSegment,
   ArrowUUpRight,
   Cursor,
@@ -40,6 +41,8 @@ import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
 import type { FingerAction, PenPreset, Settings } from "../model/types";
 import { CONNECTOR_MODES } from "../connectors/route";
+import { screenToWorld } from "../canvas/camera";
+import { FRAME_PRESETS, isFrame, presetFrameRect } from "../frames/contain";
 import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
@@ -374,6 +377,57 @@ function ConnectorButton() {
   );
 }
 
+/**
+ * Frame tool button; a second click opens its menu: "Draw frame" (the tool) and presets placed at
+ * the view centre (nudged when a frame of that size already sits there).
+ */
+function FrameButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "frame");
+  useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.frame", t("frame.tool"));
+  const place = (width: number, height: number) => {
+    const s = ed.getState();
+    const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+    const centre = screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+    s.addFrame(presetFrameRect([...s.elements.values()].filter(isFrame), centre, width, height));
+    setOpen(false);
+  };
+  const item = (label: string, run: () => void) => (
+    <button key={label} type="button" role="menuitem" className="tb-menu-item" onClick={run}>
+      {label}
+    </button>
+  );
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label={t("frame.tool")}
+        {...hint}
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("frame"))}
+      >
+        <FrameCorners size={18} />
+      </button>
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <div className="tb-popover tb-menu" role="menu" aria-label={t("frame.tool")}>
+            {item(t("frame.draw"), () => {
+              ed.getState().setTool("frame");
+              setOpen(false);
+            })}
+            {FRAME_PRESETS.map((p) => item(`${t(`frame.${p.key}`)} (${p.width} × ${p.height})`, () => place(p.width, p.height)))}
+          </div>
+        </DockPopover>
+      )}
+    </div>
+  );
+}
+
 /** Insert-space tool button; a second click opens its options (Insert / Remove, Cut images). */
 function InsertSpaceButton() {
   const { t } = useTranslation();
@@ -615,6 +669,7 @@ export default function Toolbar() {
       <EraserButton />
       <ShapeButton />
       <ConnectorButton />
+      <FrameButton />
       {toolBtn("text", "tool.text", t("toolbar.text"), <TextT size={18} />)}
       <button
         type="button"

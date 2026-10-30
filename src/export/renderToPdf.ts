@@ -34,6 +34,8 @@ import type { TextBitmapSet } from "../overlay/snapshot";
 import { preparePdfPages, type PdfTileSet } from "../pdf/render";
 import { PLACEHOLDER_COLOR } from "../renderers/boxDraw";
 import { connectorDash, labelPaper } from "../renderers/connector";
+import { frameBorder, frameFill, frameTitleColour } from "../renderers/frame";
+import { FRAME_RADIUS, frameTitle, frameTitleHidden, frameTitleRect, isNestedFrame } from "../frames/contain";
 import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
 import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
@@ -452,6 +454,32 @@ function paintConnector(p: Painter, el: Element, theme: ThemeName): void {
   p.pdf.text(latin1(pill.text), cx, cy, { align: "center", baseline: "middle" });
 }
 
+/** A frame: its rounded rect (fill and 1 px border) and the title as at zoom 1. */
+function paintFrame(p: Painter, el: Element, theme: ThemeName): void {
+  const r = boxRect(el);
+  if (r.width <= 0 || r.height <= 0) return;
+  p.colour(frameFill(el, theme), "fill");
+  p.colour(frameBorder(theme), "draw");
+  p.pdf.setLineWidth(0.75);
+  if (contentMeta(el).rotation) {
+    const at = boxLocal(el);
+    p.polyline([at(0, 0), at(r.width, 0), at(r.width, r.height), at(0, r.height)].map(([x, y]) => ({ x, y })), true);
+    p.pdf.fillStroke();
+  } else {
+    const [x, y] = p.pt(r.x, r.y);
+    const k = Math.min(FRAME_RADIUS, r.width / 2, r.height / 2) * p.k;
+    p.pdf.roundedRect(x, y, r.width * p.k, r.height * p.k, k, k, "FD");
+  }
+  const text = latin1(frameTitle(el).trim());
+  if (text.trim() === "" || frameTitleHidden(el, 1)) return;
+  const t = frameTitleRect(el, 1, isNestedFrame(el));
+  p.colour(frameTitleColour(theme), "text");
+  p.pdf.setFont("helvetica", "bold");
+  p.pdf.setFontSize((t.height / 1.4) * p.k);
+  const [tx, ty] = p.pt(t.x, t.y + t.height / 2);
+  p.pdf.text(text, tx, ty, { baseline: "middle", maxWidth: t.width * p.k });
+}
+
 /** Maps box-local (unrotated) coordinates of `el` to world coordinates, rotation applied. */
 function boxLocal(el: Element): (x: number, y: number) => Pt {
   const r = boxRect(el);
@@ -599,6 +627,9 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
         break;
       case "connector":
         paintConnector(p, el, theme);
+        break;
+      case "frame":
+        paintFrame(p, el, theme);
         break;
       default: {
         const key = `${el.id}|${theme}`; // backed sheets draw in light, others in the export theme

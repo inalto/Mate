@@ -147,12 +147,23 @@ function touches(el: Element, polygon: readonly Vec2[], bounds: Rect): boolean {
   return (isBoxed(el) || isFilledShape(el)) && lines.length > 0 && pointInPolygon(polygon[0], lines[0]);
 }
 
+/** The polygon encloses frame `el`'s rect entirely: every corner inside and no edge crossing it. */
+function enclosesFrame(el: Element, polygon: readonly Vec2[]): boolean {
+  const ring = boxPolyline(el);
+  for (let i = 0; i + 1 < ring.length; i++) if (!pointInPolygon(ring[i], polygon)) return false;
+  const n = polygon.length;
+  for (let i = 0; i + 1 < ring.length; i++)
+    for (let j = 0; j < n; j++) if (segmentsIntersect(ring[i], ring[i + 1], polygon[j], polygon[(j + 1) % n])) return false;
+  return true;
+}
+
 /**
  * Ids of the elements the lasso picks. "inside" (clockwise loop): bbox centre inside `polygon` or
  * ≥ 50 % of the points inside. "touch" (anticlockwise loop): any point inside, any segment of the
  * element's polyline (strokes: points; shapes: outline; boxed elements: box edges) crossing the
  * lasso, or the lasso drawn entirely within a boxed element or a filled shape. PDF placements and
- * locked elements are never selected.
+ * locked elements are never selected. Frames are picked, in either mode, only when the lasso
+ * encloses their whole rect.
  */
 export function lassoSelect(
   elements: ReadonlyMap<string, Element>,
@@ -167,6 +178,10 @@ export function lassoSelect(
   for (const id of index.query(bounds)) {
     const el = elements.get(id);
     if (!el || el.points.length === 0 || isPdfPlacement(el) || isLocked(el)) continue;
+    if (el.type === "frame") {
+      if (enclosesFrame(el, polygon)) out.push(id);
+      continue;
+    }
     if (mode === "touch") {
       if (touches(el, polygon, bounds)) out.push(id);
       continue;

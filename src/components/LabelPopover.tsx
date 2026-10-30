@@ -1,12 +1,13 @@
 // A small single-line text popover anchored at a screen point of the pane (a connector's label
 // pill): Enter commits, Escape or a pointer-down outside cancels. It opens below the anchor and is
 // clamped inside the pane. `ConnectorLabelPopover` drives it from stores/labelPopover for the
-// connector being labelled.
+// connector being labelled, or the frame being renamed (anchored at its title).
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { worldToScreen, type Vec2 } from "../canvas/camera";
 import { connectorLabel, connectorRoute, labelPill } from "../connectors/geometry";
 import { pointAt } from "../connectors/route";
+import { frameTitle, frameTitleRect, isNestedFrame } from "../frames/contain";
 import { isLocked } from "../model/content";
 import type { EditorStore } from "../stores/editor";
 import { closeLabelPopover, useLabelPopoverStore } from "../stores/labelPopover";
@@ -102,14 +103,16 @@ export default function LabelPopover({ anchor, value, onCommit, onCancel, pane, 
 
 /**
  * The label popover for the pane whose editor is `store`: shown while `stores/labelPopover` targets
- * one of its (unlocked) connectors, below the label pill or the route's midpoint.
+ * one of its (unlocked) connectors, below the label pill or the route's midpoint, or one of its
+ * (unlocked) frames, below the title (Enter renames it).
  */
 export function ConnectorLabelPopover({ store }: { store: EditorStore }) {
+  const { t } = useTranslation();
   const target = useLabelPopoverStore((s) => (s.target?.editor === store ? s.target : null));
   const el = store((s) => (target ? s.elements.get(target.id) : undefined));
   const camera = store((s) => s.camera);
   const viewport = store((s) => s.viewport);
-  const valid = !!el && el.type === "connector" && !isLocked(el);
+  const valid = !!el && (el.type === "connector" || el.type === "frame") && !isLocked(el);
 
   // The connector went away (undo, erase, page change) or got locked: nothing left to edit.
   useEffect(() => {
@@ -117,6 +120,24 @@ export function ConnectorLabelPopover({ store }: { store: EditorStore }) {
   }, [target, valid]);
 
   if (!target || !el || !valid) return null;
+  if (el.type === "frame") {
+    const r = frameTitleRect(el, camera.z, isNestedFrame(el));
+    const anchor = worldToScreen(camera, { x: r.x + Math.max(r.width, 0) / 2, y: r.y + r.height });
+    return (
+      <LabelPopover
+        key={target.id}
+        anchor={anchor}
+        value={frameTitle(el)}
+        label={t("frame.rename")}
+        pane={viewport.width > 0 ? viewport : undefined}
+        onCommit={(text) => {
+          store.getState().renameFrame(el.id, text);
+          closeLabelPopover();
+        }}
+        onCancel={closeLabelPopover}
+      />
+    );
+  }
   const current = connectorLabel(el);
   const at = labelPill(el)?.centre ?? pointAt(connectorRoute(el), 0.5);
   const anchor = worldToScreen(camera, at);

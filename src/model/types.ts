@@ -16,7 +16,8 @@ export type ElementType =
   | "slide"
   | "table"
   | "media"
-  | "connector";
+  | "connector"
+  | "frame";
 export type BackgroundType =
   | "blank"
   | "ruled"

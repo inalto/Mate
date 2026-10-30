@@ -405,6 +405,20 @@
     "text": "Testo",
     "note": "Nota"
   },
+  "frame": {
+    "tool": "Riquadro",
+    "draw": "Disegna riquadro",
+    "preset169": "Diapositiva 16:9",
+    "preset43": "Diapositiva 4:3",
+    "presetSquare": "Quadrato",
+    "presetA4": "A4 verticale",
+    "rename": "Rinomina",
+    "background": "Sfondo",
+    "selectContents": "Seleziona contenuto",
+    "export": "Esporta riquadro…",
+    "present": "Presenta da qui",
+    "untitled": "Riquadro {{n}}"
+  },
   "lock": {
     "lock": "Blocca",
     "unlock": "Sblocca",
@@ -446,6 +460,7 @@
       "lasso": "Lazo",
       "shape": "Forma",
       "connector": "Connettore",
+      "frame": "Riquadro",
       "text": "Testo",
       "insertSpace": "Inserisci spazio",
       "presetSlot": "Preimpostazione da 1 a 9",

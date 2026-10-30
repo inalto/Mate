@@ -27,6 +27,8 @@ export interface PageExportOptions extends Partial<ExportOptions> {
   pages?: "all" | "current";
   /** PDF: add an invisible text layer from text boxes. */
   searchable?: boolean;
+  /** Adjust the elements before they are drawn (a frame export drops the frame's own title). */
+  mapElements?: (els: Element[]) => Element[];
 }
 
 const EXTENSIONS: Record<PageExportFormat, string> = { png: "png", svg: "svg", pdf: "pdf", latex: "tex" };
@@ -99,7 +101,8 @@ export async function exportPage(
   if (!page) throw new Error("page not found");
   // An open box editor keeps its edits locally until the session ends: commit them first.
   endAllEdits();
-  const elements = await elementsOf(pageId);
+  const loaded = await elementsOf(pageId);
+  const elements = options.mapElements ? options.mapElements(loaded) : loaded;
   const filename = pageExportFilename(page.title, EXTENSIONS[format]);
   if (format === "latex") {
     const tex = renderToLatex(elements.filter((e) => e.pageId === pageId));

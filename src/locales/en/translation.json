@@ -405,6 +405,20 @@
     "text": "Text",
     "note": "Note"
   },
+  "frame": {
+    "tool": "Frame",
+    "draw": "Draw frame",
+    "preset169": "Slide 16:9",
+    "preset43": "Slide 4:3",
+    "presetSquare": "Square",
+    "presetA4": "A4 portrait",
+    "rename": "Rename",
+    "background": "Background",
+    "selectContents": "Select contents",
+    "export": "Export frame…",
+    "present": "Present from here",
+    "untitled": "Frame {{n}}"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -446,6 +460,7 @@
       "lasso": "Lasso",
       "shape": "Shape",
       "connector": "Connector",
+      "frame": "Frame",
       "text": "Text",
       "insertSpace": "Insert space",
       "presetSlot": "Preset 1 to 9",
