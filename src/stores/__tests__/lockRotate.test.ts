@@ -185,8 +185,8 @@ describe("lock", () => {
   it("lock_strings_exist_after_line_caps", () => {
     for (const cat of [en, it_] as Record<string, unknown>[]) {
       const keys = Object.keys(cat);
-      // The connector strings (Task 6a) sit between the line ends and the lock strings.
-      expect(keys.slice(keys.indexOf("lineCaps") + 1, keys.indexOf("lineCaps") + 3)).toEqual(["connector", "lock"]);
+      // The connector (Task 6a) and shape text (Task 6b) strings sit between the line ends and the lock strings.
+      expect(keys.slice(keys.indexOf("lineCaps") + 1, keys.indexOf("lineCaps") + 4)).toEqual(["connector", "shapeText", "lock"]);
       expect(Object.keys(cat.lock as object).sort()).toEqual(["lock", "locked", "unlock"]);
     }
   });

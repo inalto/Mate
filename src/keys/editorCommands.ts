@@ -12,6 +12,9 @@ import type { ShortcutDispatch } from "./shortcuts";
 import { openPageInWindow } from "./windowBridge";
 import { noteShortcutUse } from "../components/shortcutHints";
 import { modalAllows } from "./modalGuard";
+import { isClosedShape } from "../shapes/geometry";
+import { isTypingTarget } from "./shortcuts";
+import { beginShapeTyping } from "../overlay/ShapeLabelEditor";
 import i18n from "../i18n";
 
 export const ZOOM_STEP = 1.2;
@@ -156,6 +159,29 @@ function runChromeShortcut(action: string): boolean {
   }
   return false;
 }
+
+/**
+ * "Typing starts editing": a printable key (no Ctrl/Meta/Alt) with exactly one unlocked closed shape
+ * selected, nothing being edited and no text field focused opens that shape's text editor with the
+ * key already typed. True when the key was taken.
+ */
+export function startShapeTyping(e: KeyboardEvent): boolean {
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return false;
+  if (e.key.length !== 1 || e.key.trim() === "" || isTypingTarget(e.target)) return false;
+  if (!modalAllows("tool.cursor", undefined)) return false;
+  const store = getFocusedEditor();
+  const s = store.getState();
+  if (s.editingId !== null || s.selection.size !== 1) return false;
+  const el = s.elements.get([...s.selection][0]);
+  if (!el || el.type !== "shape" || !isClosedShape(el.shapeType ?? "rectangle") || isLocked(el)) return false;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  beginShapeTyping(store, el.id, e.key);
+  return true;
+}
+
+// Capture phase on the window, so the key wins over single-letter tool shortcuts.
+if (typeof window !== "undefined") window.addEventListener("keydown", (e) => void startShapeTyping(e), true);
 
 export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   // While any dialog, overlay, palette or menu is open it owns the keyboard (see modalAllows:

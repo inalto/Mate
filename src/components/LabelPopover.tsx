@@ -37,16 +37,18 @@ export default function LabelPopover({ anchor, value, onCommit, onCancel, pane, 
   const [text, setText] = useState(value);
   const [size, setSize] = useState(EST);
   const [parent, setParent] = useState<{ width: number; height: number } | null>(null);
-  const cancel = useRef(onCancel);
+  const commit = useRef(onCommit);
+  const typed = useRef(value);
   useEffect(() => {
-    cancel.current = onCancel;
+    commit.current = onCommit;
+    typed.current = text;
   });
 
   useEffect(() => {
     input.current?.focus();
     input.current?.select();
     const onDown = (e: PointerEvent) => {
-      if (!ref.current?.contains(e.target as Node)) cancel.current();
+      if (!ref.current?.contains(e.target as Node)) commit.current(typed.current); // a press outside keeps what was typed
     };
     document.addEventListener("pointerdown", onDown, true);
     return () => document.removeEventListener("pointerdown", onDown, true);

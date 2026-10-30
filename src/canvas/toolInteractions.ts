@@ -14,7 +14,7 @@ import { anchors, nearestAnchor, SIDES } from "../connectors/anchors";
 import { routeConnector } from "../connectors";
 import { CONNECTOR_MODES, nearestT } from "../connectors/route";
 import { openLabelPopover } from "../stores/labelPopover";
-import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
+import { isClosedShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
@@ -340,7 +340,7 @@ export function createToolController(deps: ToolDeps) {
     const s = st();
     const id = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
     const el = id ? s.elements.get(id) : undefined;
-    if (!id || !el || !(isBoxed(el) || el.type === "connector") || isLocked(el)) {
+    if (!id || !el || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle"))) || isLocked(el)) {
       lastTap = null;
       return false;
     }

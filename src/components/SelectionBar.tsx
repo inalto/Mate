@@ -15,6 +15,12 @@ import {
   Copy,
   CopySimple,
   Function as FunctionIcon,
+  Minus,
+  Plus,
+  TextAa,
+  TextAlignCenter,
+  TextAlignLeft,
+  TextAlignRight,
   Image as ImageIcon,
   LockSimple,
   LockSimpleOpen,
@@ -22,12 +28,14 @@ import {
   Stack,
   Trash,
 } from "@phosphor-icons/react";
-import { useCallback, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
-import { hasFill } from "../shapes/geometry";
+import { hasFill, isClosedShape } from "../shapes/geometry";
+import { shapeLabelOf, type ShapeLabel } from "../shapes/label";
+import { stepFontSize } from "../text/style";
 import { isMathBox, latexOf } from "../math/mathBox";
 import { textAttrsOf } from "../text/textBox";
 import { codeOf, isRunnable, type RunnableLanguage } from "../text/tableCode";
@@ -213,6 +221,54 @@ function ConnectorControls({ connector }: { connector: Element }) {
   );
 }
 
+/** Text controls of the single selected closed shape: "Add text" without a label, else size, colour and alignment. */
+function ShapeTextControls({ shape }: { shape: Element }) {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const locked = isLocked(shape);
+  const label = shapeLabelOf(shape);
+  if (!label) {
+    return (
+      <button type="button" className="tb-btn" aria-label={t("shapeText.addText")} title={t("shapeText.addText")} disabled={locked} onClick={() => ed.getState().beginEdit(shape.id)}>
+        <TextAa size={16} /> {t("shapeText.addText")}
+      </button>
+    );
+  }
+  const set = (patch: Partial<ShapeLabel>) => ed.getState().setShapeLabel(shape.id, { ...label, ...patch });
+  const align = (value: ShapeLabel["align"], name: string, icon: ReactNode) => (
+    <button key={value} type="button" className={label.align === value ? "tb-btn active" : "tb-btn"} aria-label={name} aria-pressed={label.align === value} title={name} disabled={locked} onClick={() => set({ align: value })}>
+      {icon}
+    </button>
+  );
+  return (
+    <>
+      <button type="button" className="tb-btn" aria-label={t("text.smaller")} title={t("text.smaller")} disabled={locked} onClick={() => set({ fontSize: stepFontSize(label.fontSize, -1) })}>
+        <Minus size={14} />
+      </button>
+      <span className="tb-size" aria-label={t("text.size")}>
+        {Math.round(label.fontSize)}
+      </span>
+      <button type="button" className="tb-btn" aria-label={t("text.larger")} title={t("text.larger")} disabled={locked} onClick={() => set({ fontSize: stepFontSize(label.fontSize, 1) })}>
+        <Plus size={14} />
+      </button>
+      {PEN_PALETTE.map((c) => (
+        <button
+          key={c}
+          type="button"
+          className={label.color.toUpperCase() === c ? "tb-swatch active" : "tb-swatch"}
+          style={{ background: c }}
+          aria-label={t("text.colour", { color: c })}
+          disabled={locked}
+          onClick={() => set({ color: c })}
+        />
+      ))}
+      {align("left", t("selection.alignLeft"), <TextAlignLeft size={16} />)}
+      {align("center", t("text.alignCentre"), <TextAlignCenter size={16} />)}
+      {align("right", t("selection.alignRight"), <TextAlignRight size={16} />)}
+    </>
+  );
+}
+
 /** Align (>= 2 selected) and distribute (>= 3 selected) menu. */
 function AlignMenu({ count, disabled }: { count: number; disabled: boolean }) {
   const { t } = useTranslation();
@@ -335,6 +391,8 @@ export default function SelectionBar() {
   const codeLanguage = codeBlock ? codeOf(codeBlock).language : undefined;
   const lineShape =
     selected.length === 1 && selected[0]?.type === "shape" && (selected[0].shapeType === "line" || selected[0].shapeType === "arrow") ? selected[0] : undefined;
+  const closedShape =
+    selected.length === 1 && selected[0]?.type === "shape" && isClosedShape(selected[0].shapeType ?? "rectangle") ? selected[0] : undefined;
   const connector = selected.length === 1 && selected[0]?.type === "connector" ? selected[0] : undefined;
   const lockedCount = selected.filter((e) => !!e && isLocked(e)).length;
   /** Every selected element is locked: nothing here may change them. */
@@ -383,6 +441,7 @@ export default function SelectionBar() {
       {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} />}
       {lineShape && <LineEndsMenu shape={lineShape} />}
       {connector && <ConnectorControls connector={connector} />}
+      {closedShape && <ShapeTextControls shape={closedShape} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} disabled={selected.length - lockedCount < 2} />}
       <span className="tb-sep" />
       {textBox && !allLocked && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}

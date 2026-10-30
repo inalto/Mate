@@ -398,6 +398,11 @@
     "width": "Connector width",
     "colour": "Connector colour"
   },
+  "shapeText": {
+    "edit": "Edit text",
+    "placeholder": "Type text",
+    "addText": "Add text"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",

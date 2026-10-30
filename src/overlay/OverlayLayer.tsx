@@ -13,8 +13,10 @@ import { paneOfStore } from "../stores/tutor";
 import TutorCard from "../tutor/TutorCard";
 import { useTutorViews } from "../tutor/useTutor";
 import { boxRect, contentMeta, isBoxed } from "../tools/spatialIndex";
+import { isClosedShape } from "../shapes/geometry";
 import BoxFrame from "./BoxFrame";
 import { boxStyle } from "./boxGeometry";
+import ShapeLabelEditor, { shapeBoxOf } from "./ShapeLabelEditor";
 import { editorFor, NoEditor } from "./editorRegistry";
 
 export default function OverlayLayer({ store }: { store: EditorStore }) {
@@ -32,6 +34,8 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
   const edited = editingId !== null ? elements.get(editingId) : undefined;
   const editor = edited ? editorFor(edited.type, contentOf<{ subtype?: string }>(edited).subtype) : NoEditor;
   const editing = editor !== NoEditor ? edited : undefined;
+  // A closed shape's text is edited in place (shapes are not boxed): the slot is its own box.
+  const shapeEditing = edited?.type === "shape" && isClosedShape(edited.shapeType ?? "rectangle") ? edited : undefined;
 
   const layerStyle = {
     transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.z})`,
@@ -45,6 +49,11 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
         {editing && (
           <div className="box-editor" data-editor-for={editing.id} data-editor-type={editing.type} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
             {createElement(editor, { el: editing, store })}
+          </div>
+        )}
+        {shapeEditing && (
+          <div className="box-editor" data-editor-for={shapeEditing.id} data-editor-type="shape" style={{ ...boxStyle(shapeBoxOf(shapeEditing), 0), transform: undefined }}>
+            <ShapeLabelEditor el={shapeEditing} store={store} />
           </div>
         )}
         {framed.map((el) => (

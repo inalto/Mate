@@ -395,6 +395,11 @@
     "width": "Spessore del connettore",
     "colour": "Colore del connettore"
   },
+  "shapeText": {
+    "edit": "Modifica testo",
+    "placeholder": "Scrivi il testo",
+    "addText": "Aggiungi testo"
+  },
   "lock": {
     "lock": "Blocca",
     "unlock": "Sblocca",

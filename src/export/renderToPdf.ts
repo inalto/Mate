@@ -36,7 +36,10 @@ import { PLACEHOLDER_COLOR } from "../renderers/boxDraw";
 import { connectorDash, labelPaper } from "../renderers/connector";
 import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
-import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline } from "../shapes/geometry";
+import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
+import { LABEL_LINE_HEIGHT, labelLines, labelMeasure, shapeInnerRect, shapeLabelOf } from "../shapes/label";
+import { FALLBACK_INK } from "../text/boxHtml";
+import { safeColor } from "../text/sanitize";
 import { useSettingsStore } from "../stores/settings";
 import { LINE_HEIGHT } from "../text/style";
 import { textContentOf } from "../text/textBox";
@@ -373,6 +376,41 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
       p.pdf.stroke();
     }
   }
+  if (closed) paintShapeLabel(p, el, theme);
+}
+
+/**
+ * A closed shape's label: the same wrapped lines as the canvas (1.25 x size apart, the block centred
+ * in the inner rectangle), each line placed about the box centre so rotation matches the outline.
+ */
+function paintShapeLabel(p: Painter, el: Element, theme: ThemeName): void {
+  const label = shapeLabelOf(el);
+  const inner = shapeInnerRect(el);
+  if (!label || !inner) return;
+  const lines = labelLines(el, labelMeasure(label.fontSize));
+  if (!lines.some((l) => l.trim() !== "")) return;
+  const r = shapeRectOf(el);
+  const cx = r.x + r.width / 2;
+  const cy = r.y + r.height / 2;
+  const rot = contentOf<{ rotation?: number }>(el).rotation ?? 0;
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  const step = label.fontSize * LABEL_LINE_HEIGHT;
+  const top = inner.y + inner.height / 2 - (lines.length * step) / 2;
+  p.colour(mapInkColor(safeColor(label.color, safeColor(el.color, FALLBACK_INK)), theme), "text");
+  p.pdf.setFont("helvetica", "normal");
+  p.pdf.setFontSize(label.fontSize * p.k);
+  lines.forEach((line, i) => {
+    const text = latin1(line);
+    if (text.trim() === "") return;
+    const w = p.pdf.getTextWidth(text) / p.k;
+    const x0 = label.align === "left" ? inner.x : label.align === "right" ? inner.x + inner.width - w : inner.x + (inner.width - w) / 2;
+    const y0 = top + i * step + step / 2;
+    const dx = x0 - cx;
+    const dy = y0 - cy;
+    const [x, y] = p.pt(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+    p.pdf.text(text, x, y, { baseline: "middle", angle: (-rot * 180) / Math.PI });
+  });
 }
 
 /** A connector: its cached route (dashed when set), caps like line shapes, then the label pill. */

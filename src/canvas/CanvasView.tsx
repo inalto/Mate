@@ -8,6 +8,7 @@ import { isScribbleGesture, scribbleHits } from "../ink/scribble";
 import type { ThemeName } from "../ink/types";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Point, Settings } from "../model/types";
+import { withShapeLabel } from "../shapes/label";
 import { hasEditor } from "../overlay/editorRegistry";
 import { boxSnapshots } from "../renderers/boxSnapshot";
 import "../renderers/builtins";
@@ -123,7 +124,7 @@ function createEngine(
       const bgPage = { mode: s.page.mode, width: stack.width, height: stack.height, count: stack.count };
       paintBackground(ctx, s.page.backgroundConfig, cache.worldClip(), bgPage, theme(), colors);
     } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
-      drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr });
+      drawElement(asCtx(ctx), el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr });
     }
   };
 

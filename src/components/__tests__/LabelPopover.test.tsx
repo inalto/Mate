@@ -47,13 +47,16 @@ describe("LabelPopover", () => {
     expect(parseFloat(box.style.left)).toBeGreaterThanOrEqual(8);
   });
 
-  it("closes_on_an_outside_pointerdown", () => {
+  it("commits_the_typed_text_on_an_outside_pointerdown", () => {
     const onCancel = vi.fn();
-    render(<LabelPopover anchor={{ x: 100, y: 100 }} value="" onCommit={() => {}} onCancel={onCancel} />);
+    const onCommit = vi.fn();
+    render(<LabelPopover anchor={{ x: 100, y: 100 }} value="" onCommit={onCommit} onCancel={onCancel} />);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "typed" } });
     fireEvent.pointerDown(screen.getByRole("textbox"));
-    expect(onCancel).not.toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
     fireEvent.pointerDown(document.body);
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCommit).toHaveBeenCalledWith("typed");
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   it("edits_the_label_of_a_connector", async () => {

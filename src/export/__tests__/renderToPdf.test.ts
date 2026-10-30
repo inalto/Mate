@@ -122,6 +122,21 @@ describe("renderToPdf", () => {
     expect(bar.B).toBe(base.B);
   });
 
+  it("paints_the_label_of_a_rotated_shape_without_throwing", async () => {
+    const shape: Element = {
+      ...stroke("sh", [{ x: 100, y: 100, pressure: 0.5, timestamp: 0 }, { x: 400, y: 260, pressure: 0.5, timestamp: 1 }]),
+      type: "shape",
+      shapeType: "ellipse",
+      fillColor: "transparent",
+      content: { fillOpacity: 1, rotation: 0.4, label: { text: "Hello wrapped label text\nsecond line", fontSize: 18, color: "#C62828", align: "right" } },
+    };
+    const bare = { ...shape, content: { fillOpacity: 1, rotation: 0.4 } };
+    const withText = await renderToPdf([shape], page(), { ...OPTS, compress: false }, deps());
+    const without = await renderToPdf([bare], page(), { ...OPTS, compress: false }, deps());
+    expect(withText.length).toBeGreaterThan(without.length);
+    expect(text(withText)).toContain("Tj");
+  });
+
   it("caps a tall canvas page at the PDF size limit", async () => {
     const bytes = await renderToPdf([stroke("a", line(0, 0, 100, 40_000))], page(), OPTS, deps());
     const { width, height } = (await PDFDocument.load(bytes)).getPage(0).getSize();

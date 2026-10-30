@@ -18,7 +18,8 @@ import {
   type TextAttributes,
   type TextBoxContent,
 } from "../model/content";
-import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
+import { isClosedShape, shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
+import { withShapeLabel, type ShapeLabel } from "../shapes/label";
 import { boundIds, connectorEnds, routeConnector } from "../connectors";
 import { connectorCaps, connectorLabel, connectorMode, DEFAULT_CONNECTOR_CAPS, DEFAULT_CONNECTOR_MODE } from "../connectors/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
@@ -145,6 +146,8 @@ export interface EditorState {
   setConnectorLabel(id: string, label: { text: string; t: number } | null): boolean;
   /** Set the end caps of line/arrow shape `id` as one "Line ends" entry; false when not applicable. */
   setLineCaps(id: string, caps: LineCaps): boolean;
+  /** Set (or, for empty text / null, remove) a closed shape's label; one "Shape text" history entry. */
+  setShapeLabel(id: string, label: ShapeLabel | null): boolean;
   /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
   scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
@@ -399,6 +402,9 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
   onElementsChanged(cb: (change: ElementsChange) => void): () => void;
 };
 
+/** A closed shape: its text is edited in place (shapes are not boxed). */
+const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle");
+
 export function createEditorStore(): EditorStore {
   let loadToken = 0;
   // Page-scoped helpers (reset by loadPage).
@@ -643,6 +649,14 @@ export function createEditorStore(): EditorStore {
       if (was.start === caps.start && was.end === caps.end) return false;
       const after = stamp({ ...cur, content: { ...contentOf<ShapeContent>(cur), caps: { start: caps.start, end: caps.end } } });
       return record("Line ends", [{ type: "update", before: cur, after }]);
+    },
+
+    setShapeLabel(id, label) {
+      const cur = get().elements.get(id);
+      if (!cur || cur.type !== "shape" || !isClosedShape(cur.shapeType ?? "rectangle") || isLocked(cur)) return false;
+      const next = withShapeLabel(cur, label && label.text !== "" ? label : null);
+      if (sameElement(next, cur)) return false;
+      return record("Shape text", [{ type: "update", before: cur, after: stamp(next) }]);
     },
 
     scribbleErase(ids) {
@@ -896,7 +910,7 @@ export function createEditorStore(): EditorStore {
 
     beginEdit(id) {
       const el = get().elements.get(id);
-      if (!el || !isBoxed(el) || isPdfPlacement(el) || isLocked(el)) return;
+      if (!el || !(isBoxed(el) || isLabelShape(el)) || isPdfPlacement(el) || isLocked(el)) return;
       if (get().editingId !== id) closeEdit();
       set({ selection: new Set([id]), editingId: id });
     },
