@@ -38,6 +38,7 @@ export type ShortcutAction =
   | "zoom.reset"
   | "zoom.fit"
   | "zoom.selection"
+  | "present.start"
   | "pan"
   | "page.prev"
   | "page.next"
@@ -109,6 +110,7 @@ export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
   "zoom.reset": { labelKey: "keys.actions.zoomReset", group: "view", defaultKeys: ["Ctrl+0"] },
   "zoom.fit": { labelKey: "keys.actions.zoomFit", group: "view", defaultKeys: ["Shift+1"] },
   "zoom.selection": { labelKey: "keys.actions.zoomSelection", group: "view", defaultKeys: ["Shift+2"] },
+  "present.start": { labelKey: "keys.actions.presentStart", group: "view", defaultKeys: ["Ctrl+Shift+P"] },
   "sidebar.toggle": { labelKey: "keys.actions.toggleSidebar", group: "view", defaultKeys: ["Ctrl+\\"] },
   "page.prev": { labelKey: "keys.actions.prevPage", group: "pages", defaultKeys: ["Ctrl+PageUp"] },
   "page.next": { labelKey: "keys.actions.nextPage", group: "pages", defaultKeys: ["Ctrl+PageDown"] },

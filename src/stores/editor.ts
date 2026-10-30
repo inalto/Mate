@@ -66,6 +66,7 @@ import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
 import i18n from "../i18n";
 import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
+import { frameCamera } from "../canvas/presentCamera";
 
 export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
@@ -76,6 +77,8 @@ export const INK_TYPES: readonly InkType[] = ["pen", "highlighter", "fountain-pe
 export const isInkTool = (t: string): t is InkType => (INK_TYPES as readonly string[]).includes(t);
 /** Offset applied by duplicate / paste (world units). */
 export const DUPLICATE_OFFSET = 20;
+/** Camera tween of the presentation (frame to frame, and back on exit). */
+export const PRESENT_CAMERA_MS = 300;
 
 export interface EditorState {
   pageId: string | null;
@@ -113,6 +116,25 @@ export interface EditorState {
   limitReached: boolean;
   /** What limitReached refers to: the page item limit or a table cell limit. */
   limitKind: "page" | "table";
+  /**
+   * Presentation in progress: the index of the frame shown (in `orderedFrames()`) and whether it
+   * fills the viewport (else fits). While set the page is read-only: no tool change, no edit, no
+   * selection; only panning and zooming. Not persisted; loading a page ends it.
+   */
+  presenting: { index: number; fill: boolean } | null;
+  /** The page's frames in presentation order (`content.order`, then `createdAt`). */
+  orderedFrames(): Element[];
+  /** Present the frames from `index` (clamped): cursor tool, selection cleared, camera on the frame. Nothing without frames. */
+  startPresentation(index?: number): void;
+  /** Next / previous frame, clamped at the ends (no wrap). */
+  presentNext(): void;
+  presentPrev(): void;
+  /** Show frame `i` (clamped to the frames). */
+  presentGo(i: number): void;
+  /** Fit (false) or fill (true) the current frame; the camera follows. */
+  setPresentFill(fill: boolean): void;
+  /** End the presentation: the camera and tool from before it come back. */
+  stopPresentation(): void;
   loadPage(pageId: string): Promise<void>;
   /** Adopt an edited page record (mode, sheet size, background) without reloading elements. */
   refreshPage(page: Page): void;
@@ -358,7 +380,7 @@ export function spaceShift(s: EditorState, lineY: number, dy: number): number {
 
 /** Clamp a camera to the current page bounds (no overscroll). */
 export function clampToPage(c: Camera, s: EditorState): Camera {
-  if (!s.page) return c;
+  if (!s.page || s.presenting) return c; // presenting: frames may sit anywhere
   return clampCamera(c, s.page, s.viewport, sheetStack(s));
 }
 
@@ -478,6 +500,18 @@ export function createEditorStore(): EditorStore {
     editCommit = null;
     fn?.();
   };
+  /** Camera and tool from before the presentation in progress (restored by stopPresentation). */
+  let presentFrom: { camera: Camera; tool: ToolId } | null = null;
+  /** Show frame `i` (clamped) of the presentation, fitted or filled; the camera animates there. */
+  const showFrame = (i: number, fill: boolean) => {
+    const s = store.getState();
+    const frames = s.orderedFrames();
+    if (frames.length === 0) return;
+    const index = Math.max(0, Math.min(frames.length - 1, Math.round(i)));
+    const cur = s.presenting;
+    if (!cur || cur.index !== index || cur.fill !== fill) store.setState({ presenting: { index, fill } });
+    animateCamera(store, frameCamera(frames[index], s.viewport, fill), PRESENT_CAMERA_MS);
+  };
 
   const store = create<EditorState>((set, get) => ({
     pageId: null,
@@ -502,6 +536,47 @@ export function createEditorStore(): EditorStore {
     canRedo: false,
     limitReached: false,
     limitKind: "page",
+    presenting: null,
+
+    orderedFrames() {
+      return framesInOrder(get().elements.values());
+    },
+
+    startPresentation(index = 0) {
+      const s = get();
+      if (s.orderedFrames().length === 0) return;
+      if (!s.presenting) {
+        closeEdit();
+        flushEraseBatch();
+        presentFrom = { camera: get().camera, tool: get().tool };
+        set({ tool: "cursor", selection: new Set(), editingId: null, guides: [], tempTool: null, dragging: false });
+      }
+      const fill = get().presenting?.fill ?? useSettingsStore.getState().settings.presentFill;
+      showFrame(index, fill);
+    },
+    presentNext() {
+      const p = get().presenting;
+      if (p) showFrame(p.index + 1, p.fill);
+    },
+    presentPrev() {
+      const p = get().presenting;
+      if (p) showFrame(p.index - 1, p.fill);
+    },
+    presentGo(i) {
+      const p = get().presenting;
+      if (p) showFrame(i, p.fill);
+    },
+    setPresentFill(fill) {
+      const p = get().presenting;
+      if (p) showFrame(p.index, fill);
+    },
+    stopPresentation() {
+      if (!get().presenting) return;
+      const from = presentFrom;
+      presentFrom = null;
+      set({ presenting: null, ...(from ? { tool: from.tool } : {}) });
+      if (from) animateCamera(store, from.camera, PRESENT_CAMERA_MS);
+    },
 
     async loadPage(pageId) {
       closeEdit();
@@ -512,7 +587,9 @@ export function createEditorStore(): EditorStore {
       index.clear();
       clearBindings();
       eraseBatch = [];
+      presentFrom = null;
       set({
+        presenting: null,
         canUndo: false,
         canRedo: false,
         tempTool: null,
@@ -791,7 +868,13 @@ export function createEditorStore(): EditorStore {
         if (contentOf<FrameContent>(f).order === i) return;
         actions.push({ type: "update", before: f, after: stamp({ ...f, content: { ...contentOf<FrameContent>(f), order: i } }, now) });
       });
-      return record("Reorder frames", actions);
+      // Allowed while presenting (the order panel), which keeps showing the same frame.
+      const shown = get().presenting ? get().orderedFrames()[get().presenting!.index]?.id : undefined;
+      if (!commitEntry("Reorder frames", actions)) return false;
+      const p = get().presenting;
+      const at = shown ? get().orderedFrames().findIndex((f) => f.id === shown) : -1;
+      if (p && at >= 0 && at !== p.index) set({ presenting: { ...p, index: at } });
+      return true;
     },
 
     selectFrameContents(id) {
@@ -998,6 +1081,7 @@ export function createEditorStore(): EditorStore {
     },
 
     setTool(tool) {
+      if (get().presenting) return; // the presentation keeps the cursor
       if (isInkTool(tool)) {
         get().selectInk(tool);
         return;
@@ -1008,11 +1092,18 @@ export function createEditorStore(): EditorStore {
       } else set({ tool });
     },
     setPreset: (preset) => {
+      if (get().presenting) return;
       closeEdit();
       set({ preset, tool: preset.type, selection: new Set(), editingId: null });
     },
     setCamera: (camera) => set({ camera }),
-    setViewport: (viewport) => set({ viewport }),
+    setViewport(viewport) {
+      const prev = get().viewport;
+      set({ viewport });
+      // Presenting: the chrome hiding (or a window resize) re-fits the frame shown.
+      const p = get().presenting;
+      if (p && (prev.width !== viewport.width || prev.height !== viewport.height)) showFrame(p.index, p.fill);
+    },
     setGuides(guides) {
       if (guides.length === 0 && get().guides.length === 0) return;
       set({ guides });
@@ -1056,6 +1147,7 @@ export function createEditorStore(): EditorStore {
     },
 
     eraser(center) {
+      if (get().presenting) return;
       const s = get();
       const cfg = useSettingsStore.getState().settings;
       const radius = cfg.defaultEraserWidth / 2 / s.camera.z;
@@ -1087,6 +1179,7 @@ export function createEditorStore(): EditorStore {
     },
 
     beginEdit(id) {
+      if (get().presenting) return;
       const el = get().elements.get(id);
       if (!el || !(isBoxed(el) || isLabelShape(el)) || isPdfPlacement(el) || isLocked(el)) return;
       if (get().editingId !== id) closeEdit();
@@ -1097,6 +1190,7 @@ export function createEditorStore(): EditorStore {
       if (get().editingId !== null) set({ editingId: null });
     },
     select(ids) {
+      if (get().presenting) return; // nothing is selected while presenting
       const wanted = [...ids];
       const prev = get().editingId;
       if (prev !== null && !wanted.includes(prev)) closeEdit(); // may remove an empty box
@@ -1110,6 +1204,7 @@ export function createEditorStore(): EditorStore {
       set({ selection, editingId });
     },
     selectAll() {
+      if (get().presenting) return;
       set({ selection: new Set([...get().elements.values()].filter((el) => !isPdfPlacement(el)).map((el) => el.id)) });
     },
 
@@ -1232,6 +1327,7 @@ export function createEditorStore(): EditorStore {
     },
 
     undo() {
+      if (get().presenting) return;
       flushEraseBatch();
       const peek = history.peekUndo();
       if (peek && exceedsLimit(peek)) {
@@ -1243,6 +1339,7 @@ export function createEditorStore(): EditorStore {
       syncHistoryFlags();
     },
     redo() {
+      if (get().presenting) return;
       flushEraseBatch();
       const peek = history.peekRedo();
       if (peek && exceedsLimit(peek)) {
@@ -1264,6 +1361,7 @@ export function createEditorStore(): EditorStore {
       if (p) get().setPreset(p);
     },
     selectInk(type) {
+      if (get().presenting) return;
       const s = get();
       if (s.preset.type === type) {
         closeEdit();
@@ -1570,6 +1668,12 @@ export function createEditorStore(): EditorStore {
    * never committed (ink to shape: the stroke replaced before it was added).
    */
   function record(label: string, actions: Action[], mergeKey?: string, applied: Action[] = actions): boolean {
+    if (S().presenting) return false; // the page is read-only while presenting
+    return commitEntry(label, actions, mergeKey, applied);
+  }
+
+  /** `record` without the presentation guard (the presentation may reorder its frames). */
+  function commitEntry(label: string, actions: Action[], mergeKey?: string, applied: Action[] = actions): boolean {
     if (actions.length === 0) return false;
     if (exceedsLimit(applied)) {
       store.setState({ limitReached: true, limitKind: "page" });

@@ -8,6 +8,8 @@
     "page-*"
   ],
   "permissions": [
-    "window-state:default"
+    "window-state:default",
+    "core:window:allow-set-fullscreen",
+    "core:window:allow-is-fullscreen"
   ]
 }

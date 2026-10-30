@@ -438,6 +438,19 @@
     "grey": "Grigio",
     "white": "Bianco"
   },
+  "present": {
+    "start": "Presenta",
+    "exit": "Esci dalla presentazione",
+    "next": "Riquadro successivo",
+    "previous": "Riquadro precedente",
+    "counter": "{{n}} / {{total}}",
+    "fullscreen": "Schermo intero",
+    "blackBackground": "Sfondo nero",
+    "fill": "Riempi",
+    "fit": "Adatta",
+    "order": "Ordine dei riquadri",
+    "noFrames": "Aggiungi un riquadro per presentare"
+  },
   "lock": {
     "lock": "Blocca",
     "unlock": "Sblocca",
@@ -507,6 +520,7 @@
       "zoomReset": "Reimposta lo zoom",
       "zoomFit": "Adatta la pagina allo schermo",
       "zoomSelection": "Zoom sulla selezione",
+      "presentStart": "Avvia presentazione",
       "toggleLock": "Blocca o sblocca la selezione",
       "toggleSidebar": "Mostra/nascondi la barra laterale",
       "prevPage": "Pagina precedente",

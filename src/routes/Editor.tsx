@@ -15,7 +15,10 @@ import { runEditorShortcut, startNewTab } from "../keys/editorCommands";
 import { ignoredInPageWindow } from "../keys/modalGuard";
 import { bindLiveShortcuts } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
-import { editorForPane } from "../stores/focusedEditor";
+import { editorForPane, useFocusedEditor } from "../stores/focusedEditor";
+import type { EditorStore } from "../stores/editor";
+import PresentationBar from "../components/PresentationBar";
+import FrameOrderPanel from "../components/FrameOrderPanel";
 import { useNotebookStore } from "../stores/notebook";
 import { watchPageLimit } from "../stores/pageLimit";
 import { useSettingsStore } from "../stores/settings";
@@ -26,6 +29,12 @@ import TutorController from "../tutor/TutorController";
 import { disposeAll, disposeClosedPages } from "../code/runtime";
 
 const closePaperPicker = () => useChromeStore.getState().setPaperPickerOpen(false);
+
+/** A pane's DOM overlays (box editors), hidden while that pane presents. */
+function PaneOverlay({ store }: { store: EditorStore }) {
+  const presenting = store((s) => s.presenting !== null);
+  return presenting ? null : <OverlayLayer store={store} />;
+}
 
 export default function Editor() {
   const { pageId } = useParams();
@@ -45,6 +54,8 @@ export default function Editor() {
   }, [paperPickerOpen, focusedId, paperPage]);
   const dock = useDock();
   const leftHanded = useSettingsStore((s) => s.settings.handedness) === "left";
+  // The focused pane presents: the chrome that acts on it (top bar, toolbar, selection bar) hides.
+  const presenting = useFocusedEditor()((s) => s.presenting !== null);
 
   // The URL names a page: make sure a tab shows it.
   useEffect(() => {
@@ -120,12 +131,12 @@ export default function Editor() {
 
   return (
     <div className={pageWindow ? "editor-shell page-window" : "editor-shell"}>
-      <TopBar />
+      {!presenting && <TopBar />}
       {!pageWindow && <TabBar />}
       <div className={leftHanded ? "editor-row reverse" : "editor-row"}>
         {!pageWindow && <Sidebar />}
         <div className="editor" data-dock={dock}>
-          <Toolbar />
+          {!presenting && <Toolbar />}
           <div className="editor-canvas">
           <div className={tab.panes.length === 2 ? "panes split" : "panes"}>
             {tab.panes.map((pane, i) => (
@@ -139,14 +150,16 @@ export default function Editor() {
                 <CanvasView pageId={pane.pageId} store={editorForPane(i as PaneIndex)} />
                 {/* Live tutor (checks only with AI consent and a key); renders nothing. */}
                 <TutorController store={editorForPane(i as PaneIndex)} pane={i as PaneIndex} />
-                <OverlayLayer store={editorForPane(i as PaneIndex)} />
+                <PaneOverlay store={editorForPane(i as PaneIndex)} />
+                <PresentationBar store={editorForPane(i as PaneIndex)} />
               </div>
             ))}
           </div>
-          <SelectionBar />
+          {!presenting && <SelectionBar />}
           </div>
         </div>
       </div>
+      <FrameOrderPanel />
       {settingsPage && (
         <PageSettingsDialog key={settingsPage.id} page={settingsPage} onClose={() => useChromeStore.getState().openPageSettings(null)} />
       )}

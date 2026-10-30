@@ -440,6 +440,19 @@
     "grey": "Grey",
     "white": "White"
   },
+  "present": {
+    "start": "Present",
+    "exit": "Exit presentation",
+    "next": "Next frame",
+    "previous": "Previous frame",
+    "counter": "{{n}} / {{total}}",
+    "fullscreen": "Full screen",
+    "blackBackground": "Black background",
+    "fill": "Fill",
+    "fit": "Fit",
+    "order": "Frame order",
+    "noFrames": "Add a frame to present"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -509,6 +522,7 @@
       "zoomReset": "拡大率をリセット",
       "zoomFit": "Fit page to screen",
       "zoomSelection": "Zoom to selection",
+      "presentStart": "Start presentation",
       "toggleLock": "Lock or unlock selection",
       "toggleSidebar": "サイドバーの表示切り替え",
       "prevPage": "前のページ",

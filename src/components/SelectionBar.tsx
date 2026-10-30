@@ -1,6 +1,6 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, line ends (one
 // line/arrow), connector controls (one connector: routing mode, ends, dash, label), frame controls
-// (one frame: rename, background, select contents, export, present from here), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
+// (one frame: rename, background, select contents, export, present from here, frame order), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width; a single math box also gets Graph and Compute; a single runnable code block gets Run. Hidden while a text box is
 // being edited (its editor has its own bar). Lock (nothing locked) / Unlock (anything locked) and Copy as image are always
 // offered; when every selected element is locked the buttons that would change them are disabled.
@@ -11,6 +11,7 @@ import {
   BezierCurve,
   LineSegment,
   LineSegments,
+  ListNumbers,
   Tag,
   ChartLine,
   Copy,
@@ -54,7 +55,7 @@ import { NOTE_SWATCHES, noteBackground, noteCard } from "./noteColors";
 import { connectorCaps, connectorLabel, connectorMode } from "../connectors/geometry";
 import { CONNECTOR_MODES } from "../connectors/route";
 import { openLabelPopover } from "../stores/labelPopover";
-import { framesInOrder } from "../frames/contain";
+import { openFrameOrder } from "../stores/frameOrder";
 import { exportPage, type PageExportFormat } from "../export/exportPage";
 import { useSettingsStore } from "../stores/settings";
 import { boxRect } from "../tools/spatialIndex";
@@ -254,10 +255,7 @@ function FrameControls({ frame }: { frame: Element }) {
     s().setFrameBackground(frame.id, color);
     setOpen(false);
   };
-  const present = () => {
-    const st = s() as unknown as { startPresentation?: (index: number) => void };
-    if (typeof st.startPresentation === "function") st.startPresentation(Math.max(0, framesInOrder(s().elements.values()).findIndex((f) => f.id === frame.id)));
-  };
+  const present = () => s().startPresentation(Math.max(0, s().orderedFrames().findIndex((f) => f.id === frame.id)));
   return (
     <>
       <button type="button" className="tb-btn" aria-label={t("frame.rename")} title={t("frame.rename")} disabled={locked} onClick={() => openLabelPopover(ed, frame.id)}>
@@ -307,6 +305,9 @@ function FrameControls({ frame }: { frame: Element }) {
       </button>
       <button type="button" className="tb-btn" aria-label={t("frame.present")} title={t("frame.present")} onClick={present}>
         <Presentation size={16} />
+      </button>
+      <button type="button" className="tb-btn" aria-label={t("present.order")} title={t("present.order")} onClick={() => openFrameOrder(ed)}>
+        <ListNumbers size={16} />
       </button>
     </>
   );

@@ -335,3 +335,28 @@ export function paintBackground(
   }
   ctx.restore();
 }
+
+/** Colour of the presentation backdrop (desk and paper outside the frame shown). */
+export const PRESENT_BACKDROP = "#000000";
+
+/**
+ * Presentation backdrop: paint `clip` black except the frame rect `hole` (rounded by `radius`), over
+ * the background and under the elements, so the frame's own fill and every element stay visible.
+ * `ctx` already has the world transform.
+ */
+export function presentBackdrop(
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  clip: Rect,
+  hole: Rect,
+  radius = 0,
+  color = PRESENT_BACKDROP,
+): void {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.rect(clip.x, clip.y, clip.width, clip.height);
+  if (radius > 0 && typeof ctx.roundRect === "function") ctx.roundRect(hole.x, hole.y, hole.width, hole.height, radius);
+  else ctx.rect(hole.x, hole.y, hole.width, hole.height);
+  ctx.fill("evenodd");
+  ctx.restore();
+}

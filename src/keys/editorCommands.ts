@@ -183,10 +183,15 @@ export function startShapeTyping(e: KeyboardEvent): boolean {
 // Capture phase on the window, so the key wins over single-letter tool shortcuts.
 if (typeof window !== "undefined") window.addEventListener("keydown", (e) => void startShapeTyping(e), true);
 
+/** Shortcuts that still work while the focused pane presents. */
+const PRESENTING_ACTIONS = new Set<string>(["zoom.in", "zoom.out", "zoom.reset", "zoom.fit", "pan", "save", "help.shortcuts"]);
+
 export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   // While any dialog, overlay, palette or menu is open it owns the keyboard (see modalAllows:
   // only the palette/help toggles and a pan release get through).
   if (!modalAllows(action, detail.phase)) return;
+  // Presenting: only the view keys (zoom, pan) and save; PresentationBar owns the navigation keys.
+  if (getFocusedEditor().getState().presenting && !PRESENTING_ACTIONS.has(action)) return;
   noteShortcutUse(action);
   if (runChromeShortcut(action)) return;
   const s = getFocusedEditor().getState();
@@ -270,6 +275,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.fitPage();
     case "zoom.selection":
       return s.fitSelection();
+    case "present.start":
+      return s.startPresentation(0);
     case "pan":
       return s.setPanHold(detail.phase === "down");
   }

@@ -29,6 +29,7 @@ import {
   ChartLine,
   HandPointing,
   HandGrabbing,
+  Presentation,
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ReactNode, type WheelEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -500,6 +501,22 @@ function InsertSpaceButton() {
   );
 }
 
+/** Present the page's frames from the first; disabled until the page has a frame. */
+function PresentButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const hasFrames = ed((s) => {
+    for (const el of s.elements.values()) if (isFrame(el)) return true;
+    return false;
+  });
+  const hint = useShortcutHint("present.start", hasFrames ? t("present.start") : t("present.noFrames"));
+  return (
+    <button type="button" className="tb-btn" aria-label={t("present.start")} disabled={!hasFrames} {...hint} onClick={() => ed.getState().startPresentation(0)}>
+      <Presentation size={18} />
+    </button>
+  );
+}
+
 /** Toolbar button whose tooltip carries the action's shortcut (settings.shortcutHintMode). */
 function HintButton({
   action,
@@ -719,6 +736,7 @@ export default function Toolbar() {
       <button type="button" className="tb-btn" aria-label={t("toolbar.insertGraph")} title={t("toolbar.insertGraph")} onClick={() => s().addGraph()}>
         <ChartLine size={18} />
       </button>
+      <PresentButton />
       <PaperButton />
       {toolBtn("cursor", "tool.cursor", t("toolbar.select"), <Cursor size={18} />)}
       {toolBtn("lasso", "tool.lasso", t("toolbar.lasso"), <Lasso size={18} />)}

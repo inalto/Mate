@@ -21,7 +21,9 @@ import LineCapsPopover from "../components/LineCapsPopover";
 import { ConnectorLabelPopover } from "../components/LabelPopover";
 import { openLineCaps } from "../stores/lineCaps";
 import MediaLayer from "../media/MediaLayer";
-import { paintBackground, type SurfaceColors } from "./background";
+import { paintBackground, PRESENT_BACKDROP, presentBackdrop, type SurfaceColors } from "./background";
+import { boxRect, type Rect } from "../tools/spatialIndex";
+import { FRAME_RADIUS } from "../frames/contain";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
@@ -115,6 +117,14 @@ function createEngine(
     return s.loadedPageId === pageId && s.page !== null ? s : null;
   };
 
+  /** Presenting with the black backdrop: the rect of the frame shown (the hole in the black), else null. */
+  const presentHole = (): Rect | null => {
+    const s = st();
+    if (!s.presenting || !getSettings().presentBlackBackground) return null;
+    const frame = s.orderedFrames()[s.presenting.index];
+    return frame ? boxRect(frame) : null;
+  };
+
   const paintScene = (ctx: SnapshotContext, el?: Element) => {
     const s = st();
     if (!s.page) return;
@@ -122,7 +132,11 @@ function createEngine(
       const stack = sheetStack(s);
       sheetCount = stack.count;
       const bgPage = { mode: s.page.mode, width: stack.width, height: stack.height, count: stack.count };
-      paintBackground(ctx, s.page.backgroundConfig, cache.worldClip(), bgPage, theme(), colors);
+      const clip = cache.worldClip();
+      paintBackground(ctx, s.page.backgroundConfig, clip, bgPage, theme(), colors);
+      // Presenting: the desk and paper around the frame shown go black (elements still draw on top).
+      const hole = presentHole();
+      if (hole) presentBackdrop(ctx, clip, hole, FRAME_RADIUS);
     } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
       drawElement(asCtx(ctx), el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper });
     }
@@ -159,7 +173,7 @@ function createEngine(
       }
     }
     sctx.setTransform(1, 0, 0, 1, 0, 0);
-    sctx.fillStyle = s.page!.mode === "page" ? colors.desk : colors.paper;
+    sctx.fillStyle = presentHole() ? PRESENT_BACKDROP : s.page!.mode === "page" ? colors.desk : colors.paper;
     sctx.fillRect(0, 0, staticCanvas.width, staticCanvas.height);
     cache.blitTo(sctx, s.camera);
   };
@@ -175,6 +189,8 @@ function createEngine(
     lctx.setTransform(1, 0, 0, 1, 0, 0);
     lctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
     const c = st().camera;
+    // Presenting: nothing but the page itself (no selection, guides, handles or tutor markers).
+    if (st().presenting) return;
     if (liveEl) {
       lctx.setTransform(dpr * c.z, 0, 0, dpr * c.z, dpr * c.x, dpr * c.y);
       if (liveEl.type === "shape") drawElement(lctx, liveEl, { theme: theme(), zoomBucket: c.z });
@@ -289,6 +305,11 @@ function createEngine(
         if (!s) return;
         const dismissing = consumeDismissDown();
         const { tool, temp } = pointerTool(s.tool, s.panHold, info, getSettings());
+        // Presenting: only panning (Space or a pen pan button); every other press does nothing.
+        if (s.presenting && tool !== "pan") {
+          mode = "none";
+          return;
+        }
         // This press closed the tutor card. With a select tool it only dismisses; a pen stroke is
         // kept (ink always wins) and only a bare tap's dot is dropped on pen-up.
         if (dismissing && !isInkTool(tool)) {
@@ -440,7 +461,7 @@ function createEngine(
         swipe = null;
         const s = st();
         // A cancelled contact or one that rested while the pen wrote is never a page turn.
-        if (!g?.oneFinger || end.cancelled || end.drewMeanwhile || !s.page) return;
+        if (!g?.oneFinger || end.cancelled || end.drewMeanwhile || !s.page || s.presenting) return;
         // The lift time closes the gesture: a flick followed by a hold fails the time window.
         const last = g.samples[g.samples.length - 1];
         g.samples.push({ x: last.x, y: last.y, t: end.timeStamp });
@@ -494,6 +515,12 @@ function createEngine(
       requestLive();
     }
     if (s.selection !== prev.selection || s.guides !== prev.guides || s.tool !== prev.tool || s.tempTool !== prev.tempTool) requestLive();
+    if (s.presenting !== prev.presenting) {
+      // The backdrop hole moved (or the presentation started / ended): repaint the background.
+      if (getSettings().presentBlackBackground) cache.invalidate();
+      requestStatic();
+      requestLive();
+    }
     if (s.panHold !== prev.panHold) host.classList.toggle("is-panning", s.panHold);
     if (s.tool !== prev.tool) host.dataset.tool = s.tool;
   });
@@ -504,6 +531,10 @@ function createEngine(
   });
   const unsubscribeSettings = useSettingsStore.subscribe((s, prev) => {
     if (s.settings !== prev.settings) requestLive();
+    if (st().presenting && s.settings.presentBlackBackground !== prev.settings.presentBlackBackground) {
+      cache.invalidate();
+      requestStatic();
+    }
   });
   const unsubscribeAiStatus = useAiStatus.subscribe(() => requestLive());
   const unsubscribeSnapshots = boxSnapshots.subscribe(() => {
@@ -514,7 +545,7 @@ function createEngine(
   host.addEventListener("wheel", onWheel, { passive: false });
   // Mouse hover over a "couldn't check" marker shows its label (pen and touch get the tap instead).
   const onHover = (e: PointerEvent) => {
-    if (e.pointerType !== "mouse" || e.buttons !== 0) return;
+    if (e.pointerType !== "mouse" || e.buttons !== 0 || st().presenting) return;
     const r = host.getBoundingClientRect();
     const s = st();
     const m = hitTutorMarker(markersNow(), screenToWorld(s.camera, { x: e.clientX - r.left, y: e.clientY - r.top }), s.camera.z, 0);

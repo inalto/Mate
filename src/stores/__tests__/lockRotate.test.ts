@@ -186,7 +186,7 @@ describe("lock", () => {
     for (const cat of [en, it_] as Record<string, unknown>[]) {
       const keys = Object.keys(cat);
       // The connector (Task 6a), shape text (Task 6b) and auto-complete (Task 7), frame and note (Task 8) strings sit between the line ends and the lock strings.
-      expect(keys.slice(keys.indexOf("lineCaps") + 1, keys.indexOf("lineCaps") + 7)).toEqual(["connector", "shapeText", "autoComplete", "frame", "note", "lock"]);
+      expect(keys.slice(keys.indexOf("lineCaps") + 1, keys.indexOf("lineCaps") + 8)).toEqual(["connector", "shapeText", "autoComplete", "frame", "note", "present", "lock"]);
       expect(Object.keys(cat.lock as object).sort()).toEqual(["lock", "locked", "unlock"]);
     }
   });

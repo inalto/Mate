@@ -368,6 +368,10 @@ export interface Settings {
   defaultConnectorDash: "solid" | "dashed";
   /** Swatch id (yellow, orange, pink, green, blue, purple, grey, white) of a new sticky note. */
   defaultNoteColor: string;
+  /** Presentation: paint the desk and paper black outside the current frame. */
+  presentBlackBackground: boolean;
+  /** Presentation: the frame fills the viewport (cropped) instead of fitting whole. */
+  presentFill: boolean;
   defaultEraserType: string;
   defaultEraserWidth: number;
   eraserEraseShapes: boolean;
