@@ -224,6 +224,27 @@ describe("AutoCompleteHandles", () => {
     tools.dispose();
   });
 
+  it("clearing_the_selection_mid_drag_cancels_the_arrow_drag", () => {
+    const tools = controller();
+    const { container } = ui();
+    const right = container.querySelector<HTMLButtonElement>('[data-side="right"]')!;
+    const mouse = { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, isPrimary: true };
+    fireEvent.pointerDown(right, { ...mouse, clientX: 120, clientY: 50 });
+    fireEvent.pointerMove(right, { ...mouse, clientX: 300, clientY: 50 });
+    expect(s().dragging).toBe(true);
+    act(() => s().select([]));
+    // The gesture ended with nothing added; a later press starts afresh.
+    expect(s().dragging).toBe(false);
+    expect(connectors()).toHaveLength(0);
+    act(() => s().select(["a"]));
+    const again = container.querySelector<HTMLButtonElement>('[data-side="right"]')!;
+    fireEvent.pointerDown(again, { ...mouse, pointerId: 2, clientX: 120, clientY: 50 });
+    fireEvent.pointerMove(again, { ...mouse, pointerId: 2, clientX: 402, clientY: 50 });
+    fireEvent.pointerUp(again, { ...mouse, pointerId: 2, clientX: 402, clientY: 50, buttons: 0 });
+    expect(connectors()).toHaveLength(1);
+    tools.dispose();
+  });
+
   it("without_a_controller_a_press_opens_the_popover", () => {
     const { container } = ui();
     fireEvent.pointerDown(container.querySelector('[data-side="left"]')!, { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1 });

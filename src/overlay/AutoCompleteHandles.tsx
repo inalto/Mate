@@ -47,19 +47,27 @@ export default function AutoCompleteHandles({ store }: { store: EditorStore }) {
   const dragging = store((s) => s.dragging);
   const hidden = store((s) => s.editingId !== null || (s.tempTool ?? s.tool) !== "cursor");
   /** The arrow whose pointer drives a drag now (kept mounted for it). */
-  const press = useRef<{ side: Side; pointerId: number } | null>(null);
+  const press = useRef<{ side: Side; pointerId: number; id: string } | null>(null);
   const [pressed, setPressed] = useState<Side | null>(null);
   const release = () => {
     press.current = null;
     setPressed(null);
   };
-  // Unmounted mid-drag (selection or page change): the drag is dropped, nothing is added.
+  // Unmounted mid-drag (page change): the drag is dropped, nothing is added.
   useEffect(
     () => () => {
       if (press.current) autoCompleteDriverOf(store)?.cancelAutoComplete();
     },
     [store],
   );
+  // The selection lost the source mid-drag (Ctrl+A, Escape, undo…) or the arrows got hidden: the
+  // pressed button is about to go with its capture, so the drag is dropped here.
+  const targetId = el?.id ?? null;
+  useEffect(() => {
+    if (!press.current || (targetId === press.current.id && !hidden)) return;
+    release();
+    autoCompleteDriverOf(store)?.cancelAutoComplete();
+  }, [targetId, hidden, store]);
   if (!el || hidden) return null;
   // While anything drags, only the arrow driving it stays, invisible, so its pointer capture holds.
   if (dragging && !pressed) return null;
@@ -113,7 +121,7 @@ export default function AutoCompleteHandles({ store }: { store: EditorStore }) {
               } catch {
                 // Not an active pointer (synthetic press): moves still arrive while over the button.
               }
-              press.current = { side, pointerId: e.pointerId };
+              press.current = { side, pointerId: e.pointerId, id: el.id };
               setPressed(side);
             }}
             onPointerMove={(e) => {
