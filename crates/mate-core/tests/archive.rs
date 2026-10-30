@@ -580,14 +580,19 @@ fn archive_round_trips_whiteboard_elements() {
         "label": { "text": "leads to", "t": 0.5 },
         "route": [{ "x": 0.0, "y": 0.0 }, { "x": 10.0, "y": 0.0 }]
     }));
+    // Created (and so exported and imported) before the elements it binds to: the id map must
+    // cover every element before any connector is rewritten.
+    conn.created_at = "2000-01-01T00:00:00.000Z".into();
     // A connector bound to an element that is not in the archive comes back with a free end.
     let mut dangling = stroke("dangling", "p", 2);
     dangling.r#type = ElementType::Connector;
+    let dangling_route = json!([{ "x": 0.0, "y": 0.0 }, { "x": 1.0, "y": 2.0 }]);
     dangling.content = Some(json!({
         "mode": "straight", "source": { "id": "gone", "side": "auto" },
-        "caps": { "start": "none", "end": "none" }, "route": []
+        "caps": { "start": "none", "end": "none" }, "route": dangling_route
     }));
-    src.upsert_elements(&[card, frame, map, conn, dangling]).unwrap();
+    let dangling_points = dangling.points.clone();
+    src.upsert_elements(&[conn, card, frame, map, dangling]).unwrap();
 
     let bytes = export_unit(&src, "u1", &tmp("wb-src")).unwrap();
     let mut dst = Storage::open_in_memory().unwrap();
@@ -614,5 +619,10 @@ fn archive_round_trips_whiteboard_elements() {
     assert_eq!(c["label"], json!({ "text": "leads to", "t": 0.5 }));
     assert_eq!(c["caps"], json!({ "start": "none", "end": "arrow" }));
     let free = conns.iter().find(|c| c.content.as_ref().unwrap()["mode"] == "straight").unwrap();
-    assert!(free.content.as_ref().unwrap().get("source").is_none());
+    let fc = free.content.as_ref().unwrap();
+    assert!(fc.get("source").is_none());
+    assert!(fc.get("target").is_none());
+    // The freed end keeps its absolute point, and the cached route is kept.
+    assert_eq!(free.points, dangling_points);
+    assert_eq!(fc["route"], dangling_route);
 }

@@ -15,6 +15,7 @@ import { elementsQueue } from "../ipc/elementsQueue";
 import { gcAssets } from "../ipc/assets";
 import { useSettingsStore } from "./settings";
 import { sheetSizeFor } from "../canvas/camera";
+import { remapConnectorEnds } from "../connectors";
 
 /** The backend's message when a folder would move into itself or one of its subfolders. */
 export const FOLDER_CYCLE = "Cannot move a folder into itself";
@@ -364,8 +365,10 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
       await savePage(copy);
       const els = await loadElements(src.id);
       if (els.length > 0) {
+        // Fresh ids; copied connectors bind to the copies of their elements (as an archive import does).
+        const ids = new Map(els.map((e) => [e.id, crypto.randomUUID()]));
         await upsertElements(
-          els.map((e) => ({ ...e, id: crypto.randomUUID(), pageId: copy.id, createdAt: stamp, updatedAt: stamp, version: 0 })),
+          els.map((e) => remapConnectorEnds({ ...e, id: ids.get(e.id)!, pageId: copy.id, createdAt: stamp, updatedAt: stamp, version: 0 }, ids)),
         );
       }
       return copy;

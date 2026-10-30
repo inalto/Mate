@@ -23,6 +23,26 @@ export function connectorEnds(el: Pick<Element, "type" | "content">): { source?:
   return { ...(isEnd(c.source) ? { source: c.source } : {}), ...(isEnd(c.target) ? { target: c.target } : {}) };
 }
 
+/**
+ * Connector `el` with its ends re-pointed through `ids` (old element id to new, as a copy of a page
+ * mints them); an end whose element is not in `ids` is freed (its point stays). Other elements, and
+ * connectors with nothing to change, come back as they are.
+ */
+export function remapConnectorEnds(el: Element, ids: ReadonlyMap<string, string>): Element {
+  if (el.type !== "connector") return el;
+  const ends = connectorEnds(el);
+  if (!ends.source && !ends.target) return el;
+  const content = { ...contentOf<ConnectorContent>(el) };
+  for (const which of ["source", "target"] as const) {
+    const end = ends[which];
+    if (!end) continue;
+    const to = ids.get(end.id);
+    if (to) content[which] = { ...end, id: to };
+    else delete content[which];
+  }
+  return { ...el, content };
+}
+
 /** Ids of the elements a connector is bound to (deduplicated). */
 export function boundIds(el: Pick<Element, "type" | "content">): string[] {
   const { source, target } = connectorEnds(el);
