@@ -2,6 +2,9 @@
 // `content` is untyped JSON from storage: read it through `contentOf`, never by casting directly.
 import type { Vec2 } from "../canvas/camera";
 import type { GraphData } from "../graph/data";
+import type { MindmapLayoutMode } from "../mindmap/layout";
+import type { MindmapStyle } from "../mindmap/styles";
+import type { MindNode } from "../mindmap/tree";
 import type { Element, ElementType } from "./types";
 
 /** Metadata any element's content may carry (see spatialIndex.contentMeta). */
@@ -164,6 +167,58 @@ export interface FrameContent extends ContentMeta {
   title: string;
   background?: string;
   order: number;
+}
+
+/**
+ * mindmap (`points[0]` = the root node's centre): the whole tree in one element. Node boxes come
+ * from the layout (mindmap/layout), never stored. `rotation` is ignored.
+ */
+export interface MindmapContent extends ContentMeta {
+  layout: MindmapLayoutMode;
+  style: MindmapStyle;
+  root: MindNode;
+}
+
+const MINDMAP_LAYOUTS: readonly MindmapLayoutMode[] = ["right", "left", "balance"];
+const MINDMAP_STYLE_IDS: readonly MindmapStyle[] = [1, 2, 3, 4];
+
+/**
+ * `raw` as a valid `MindNode` (the same object when it already is one), or null when it has no
+ * string id or that id was seen already. A missing text reads as "", bad children are dropped.
+ */
+function cleanMindNode(raw: unknown, seen: Set<string>): MindNode | null {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const n = raw as Partial<Record<keyof MindNode, unknown>>;
+  if (typeof n.id !== "string" || n.id === "" || seen.has(n.id)) return null;
+  seen.add(n.id);
+  const list = Array.isArray(n.children) ? (n.children as unknown[]) : [];
+  const children: MindNode[] = [];
+  let same = Array.isArray(n.children) && typeof n.text === "string";
+  for (const c of list) {
+    const k = cleanMindNode(c, seen);
+    if (k) children.push(k);
+    if (k !== c) same = false;
+  }
+  if (n.collapsed !== undefined && typeof n.collapsed !== "boolean") same = false;
+  if (n.color !== undefined && typeof n.color !== "string") same = false;
+  if (same) return raw as MindNode;
+  const out: MindNode = { id: n.id, text: typeof n.text === "string" ? n.text : "", children };
+  if (n.collapsed === true) out.collapsed = true;
+  if (typeof n.color === "string") out.color = n.color;
+  return out;
+}
+
+/**
+ * The content of mind map `el`, normalised (unknown layout reads "right", unknown style 1, a bad
+ * root a lone empty root; the root keeps its identity when valid); null for other types.
+ */
+export function mindmapOf(el: Pick<Element, "type" | "content">): MindmapContent | null {
+  if (el.type !== "mindmap") return null;
+  const c = contentOf<MindmapContent>(el);
+  const layout = MINDMAP_LAYOUTS.includes(c.layout as MindmapLayoutMode) ? (c.layout as MindmapLayoutMode) : "right";
+  const style = MINDMAP_STYLE_IDS.includes(c.style as MindmapStyle) ? (c.style as MindmapStyle) : 1;
+  const root = cleanMindNode(c.root, new Set()) ?? { id: "root", text: "", children: [] };
+  return { ...c, layout, style, root };
 }
 
 /** `el.content` as a partial `T` when it is a JSON object, else `{}`. Never throws. */

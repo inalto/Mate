@@ -16,6 +16,8 @@ import {
   type ConnectorEnd,
   type FrameContent,
   type LineCaps,
+  mindmapOf,
+  type MindmapContent,
   type ShapeContent,
   type Side,
   type TableContent,
@@ -67,6 +69,9 @@ import { useSettingsStore } from "./settings";
 import i18n from "../i18n";
 import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
 import { frameCamera } from "../canvas/presentCamera";
+import { findNode, newNode, type MindNode } from "../mindmap/tree";
+import type { MindmapLayoutMode } from "../mindmap/layout";
+import type { MindmapStyle } from "../mindmap/styles";
 
 export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
@@ -207,6 +212,29 @@ export interface EditorState {
   reorderFrames(ids: string[]): boolean;
   /** Select what frame `id` contains (nested frames and their contents included; locked ones left out). */
   selectFrameContents(id: string): void;
+  /**
+   * The focused node of a mind map (the overlay's add/edit/keys target), or null. Cleared when the
+   * element or the node goes away (edits, undo, delete) and when a page loads.
+   */
+  mindmapFocus: { elementId: string; nodeId: string } | null;
+  /** Focus node `nodeId` of mind map `elementId` (null clears); ignored when it does not exist. */
+  focusMindNode(elementId: string, nodeId: string | null): void;
+  /**
+   * Add a mind map (layout "right", `style`) whose root node "Topic" is centred on `at` (default:
+   * the view centre), on top of the stack; one "Mind map" entry. It is selected, its root focused,
+   * and the tool returns to the cursor. Its id, or null when refused.
+   */
+  addMindmap(at?: Vec2, style?: MindmapStyle): string | null;
+  /**
+   * The one write path of a mind map's tree: `fn` maps the current root to the new one (returning
+   * the same tree means nothing changed); one `label` entry, consecutive edits with the same
+   * `mergeKey` merging (typing). Refused (false) when locked, presenting or unchanged.
+   */
+  editMindmap(id: string, fn: (root: MindNode) => MindNode, label: string, mergeKey?: string): boolean;
+  /** Set the layout and/or style of mind map `id`; one "Mind map style" entry; false when unchanged or locked. */
+  setMindmapProps(id: string, patch: { layout?: MindmapLayoutMode; style?: MindmapStyle }): boolean;
+  /** Insert the imported tree `root` as a new mind map (style 1) centred on `at` or the view centre; one "Import mind map" entry. */
+  importMindmap(root: MindNode, at?: Vec2): string | null;
   /** Set the end caps of line/arrow shape `id` as one "Line ends" entry; false when not applicable. */
   setLineCaps(id: string, caps: LineCaps): boolean;
   /** Set (or, for empty text / null, remove) a closed shape's label; one "Shape text" history entry. */
@@ -342,7 +370,7 @@ export interface EditorState {
 }
 
 const maxY = (el: Element): number => {
-  if (isBoxed(el) || el.type === "shape" || el.type === "connector") {
+  if (isBoxed(el) || el.type === "shape" || el.type === "connector" || el.type === "mindmap") {
     const b = elementBounds(el);
     return b.y + b.height;
   }
@@ -432,6 +460,9 @@ let clipboard: Element[] = [];
 let pasteCount = 0;
 
 const stamp = (el: Element, now = new Date().toISOString()): Element => ({ ...el, updatedAt: now });
+
+const MINDMAP_LAYOUTS: readonly MindmapLayoutMode[] = ["right", "left", "balance"];
+const MINDMAP_STYLE_IDS: readonly MindmapStyle[] = [1, 2, 3, 4];
 
 /** `el` without `content.locked` (the same object when it is not locked). */
 function unlocked(el: Element): Element {
@@ -537,6 +568,7 @@ export function createEditorStore(): EditorStore {
     limitReached: false,
     limitKind: "page",
     presenting: null,
+    mindmapFocus: null,
 
     orderedFrames() {
       return framesInOrder(get().elements.values());
@@ -590,6 +622,7 @@ export function createEditorStore(): EditorStore {
       presentFrom = null;
       set({
         presenting: null,
+        mindmapFocus: null,
         canUndo: false,
         canRedo: false,
         tempTool: null,
@@ -875,6 +908,49 @@ export function createEditorStore(): EditorStore {
       const at = shown ? get().orderedFrames().findIndex((f) => f.id === shown) : -1;
       if (p && at >= 0 && at !== p.index) set({ presenting: { ...p, index: at } });
       return true;
+    },
+
+    focusMindNode(elementId, nodeId) {
+      if (get().presenting) return;
+      if (nodeId === null) {
+        if (get().mindmapFocus) set({ mindmapFocus: null });
+        return;
+      }
+      const el = get().elements.get(elementId);
+      const c = el ? mindmapOf(el) : null;
+      if (!c || !findNode(c.root, nodeId)) return;
+      const cur = get().mindmapFocus;
+      if (cur?.elementId === elementId && cur.nodeId === nodeId) return;
+      set({ mindmapFocus: { elementId, nodeId } });
+    },
+
+    addMindmap(at, style = 1) {
+      return insertMindmap("Mind map", newNode(i18n.t("mindmap.topic", { defaultValue: "Topic" })), style, at);
+    },
+
+    editMindmap(id, fn, label, mergeKey) {
+      const cur = editableMindmap(id);
+      if (!cur) return false;
+      const c = mindmapOf(cur)!;
+      const root = fn(c.root);
+      if (root === c.root) return false;
+      const after = bumped({ ...cur, content: { ...contentOf<MindmapContent>(cur), root } }, cur);
+      return record(label, [{ type: "update", before: cur, after }], mergeKey);
+    },
+
+    setMindmapProps(id, patch) {
+      const cur = editableMindmap(id);
+      if (!cur) return false;
+      const c = mindmapOf(cur)!;
+      const layout = patch.layout && MINDMAP_LAYOUTS.includes(patch.layout) ? patch.layout : c.layout;
+      const style = patch.style && MINDMAP_STYLE_IDS.includes(patch.style) ? patch.style : c.style;
+      if (layout === c.layout && style === c.style) return false;
+      const after = bumped({ ...cur, content: { ...contentOf<MindmapContent>(cur), layout, style } }, cur);
+      return record("Mind map style", [{ type: "update", before: cur, after }]);
+    },
+
+    importMindmap(root, at) {
+      return insertMindmap("Import mind map", root, 1, at);
     },
 
     selectFrameContents(id) {
@@ -1619,10 +1695,18 @@ export function createEditorStore(): EditorStore {
         bottom = Math.max(bottom, maxY(el));
       }
     }
+    // A focused mind-map node that is gone (node removed, element deleted, undo) loses the focus.
+    let mindmapFocus = s.mindmapFocus;
+    if (mindmapFocus && (added.has(mindmapFocus.elementId) || updated.has(mindmapFocus.elementId) || removed.has(mindmapFocus.elementId))) {
+      const el = elements.get(mindmapFocus.elementId);
+      const c = el ? mindmapOf(el) : null;
+      if (!c || !findNode(c.root, mindmapFocus.nodeId)) mindmapFocus = null;
+    }
     store.setState({
       elements,
       selection,
       editingId,
+      mindmapFocus,
       contentBottom: grewOnly ? bottom : bottomOf(elements.values()),
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });
@@ -1735,6 +1819,49 @@ export function createEditorStore(): EditorStore {
   }
 
   /** Frame `id` when it exists and is not locked. */
+  /** Mind map `id` when it exists, is not locked and the page is not presenting. */
+  function editableMindmap(id: string): Element | null {
+    if (S().presenting) return null;
+    const el = S().elements.get(id);
+    return el && el.type === "mindmap" && !isLocked(el) ? el : null;
+  }
+
+  /** `next` stamped with an `updatedAt` later than `prev`'s (the layout memo keys on it). */
+  function bumped(next: Element, prev: Element): Element {
+    const now = Date.now();
+    const last = Date.parse(prev.updatedAt);
+    const t = Number.isFinite(last) && last >= now ? last + 1 : now;
+    return { ...next, updatedAt: new Date(t).toISOString() };
+  }
+
+  /** Add a mind map rooted at `root` centred on `at` (default: the view centre) as one `label` entry. */
+  function insertMindmap(label: string, root: MindNode, style: MindmapStyle, at?: Vec2): string | null {
+    closeEdit();
+    const s = S();
+    if (!s.pageId) return null;
+    const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+    const c = at ?? screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+    const now = new Date().toISOString();
+    const top = topZ(s.elements.values());
+    const content: MindmapContent = { layout: "right", style, root, ...(top > 0 ? { zIndex: top } : {}) };
+    const el: Element = {
+      id: crypto.randomUUID(),
+      pageId: s.pageId,
+      type: "mindmap",
+      points: [{ x: c.x, y: c.y, pressure: 0.5, timestamp: 0 }],
+      color: "#000000",
+      width: 1,
+      isHighlighter: false,
+      content,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    };
+    if (!record(label, [{ type: "add", el }])) return null;
+    store.setState({ tool: "cursor", selection: new Set([el.id]), editingId: null, mindmapFocus: { elementId: el.id, nodeId: root.id } });
+    return el.id;
+  }
+
   function editableFrame(id: string): Element | null {
     const el = S().elements.get(id);
     return el && isFrame(el) && !isLocked(el) ? el : null;

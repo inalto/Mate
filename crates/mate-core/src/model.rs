@@ -36,6 +36,7 @@ pub enum ElementType {
     Media,
     Connector,
     Frame,
+    Mindmap,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -286,5 +287,13 @@ mod tests {
         assert_eq!(json, "\"frame\"");
         let back: ElementType = serde_json::from_str("\"frame\"").unwrap();
         assert_eq!(back, ElementType::Frame);
+    }
+
+    #[test]
+    fn mindmap_element_type_round_trips() {
+        let json = serde_json::to_string(&ElementType::Mindmap).unwrap();
+        assert_eq!(json, "\"mindmap\"");
+        let back: ElementType = serde_json::from_str("\"mindmap\"").unwrap();
+        assert_eq!(back, ElementType::Mindmap);
     }
 }

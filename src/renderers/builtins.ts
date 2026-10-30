@@ -20,6 +20,7 @@ import "./graph";
 import "./connector";
 import { mediaRenderer } from "./media";
 import { frameRenderer } from "./frame";
+import { mindmapRenderer } from "./mindmap";
 
 export { PLACEHOLDER_COLOR };
 
@@ -51,3 +52,5 @@ for (const t of ["text-box", "table", "codespace"] as const) registerRenderer(t,
 registerRenderer("media", mediaRenderer);
 // Frames draw vector directly (registered after the boxed loop for the same reason).
 registerRenderer("frame", frameRenderer);
+// Mind maps draw vector directly from their memoised layout.
+registerRenderer("mindmap", mindmapRenderer);

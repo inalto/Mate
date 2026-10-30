@@ -17,7 +17,8 @@ export type ElementType =
   | "table"
   | "media"
   | "connector"
-  | "frame";
+  | "frame"
+  | "mindmap";
 export type BackgroundType =
   | "blank"
   | "ruled"

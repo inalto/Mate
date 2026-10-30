@@ -20,6 +20,7 @@ import { CONNECTOR_MODES, nearestT } from "../connectors/route";
 import { openLabelPopover } from "../stores/labelPopover";
 import { openAutoComplete } from "../stores/autoComplete";
 import { FRAME_TITLE_BAND, frameTitleRect, isFrame, isNestedFrame, withFrameChildren } from "../frames/contain";
+import { mindmapHit } from "../mindmap/hit";
 import { isClosedShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
@@ -39,6 +40,8 @@ export type PointerTool = ToolId | "pan" | "none";
 /** Corner handle half-size and hit slop (screen px). */
 export const HANDLE_PX = 5;
 const HIT_SLOP_PX = 8;
+/** Mind maps: how near a node box or an edge (screen px) a press still hits. */
+const MINDMAP_HIT_PX = 4;
 const MIN_SCALE = 0.05;
 const LASSO_STEP_PX = 3;
 /** A shape drag shorter than this (screen px) is a click and adds nothing. */
@@ -204,8 +207,9 @@ export function frameHit(el: Element, p: Vec2, tol: number, zoom: number): boole
 
 /**
  * Topmost element under `p` (strokes by distance, shapes by outline or interior, connectors by
- * route or label pill, frames by their border band or title only, others by bounds). `zoom`
- * (default `HIT_SLOP_PX / tol`) sizes a frame's title.
+ * route or label pill, frames by their border band or title only, mind maps by a node box or
+ * within 4 screen px of an edge, others by bounds). `zoom` (default `HIT_SLOP_PX / tol`) sizes a
+ * frame's title and the mind-map slop.
  */
 export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number, zoom = HIT_SLOP_PX / tol): string | null {
   // Reaching down by the title's height finds frames whose title (above their rect) is under `p`.
@@ -220,7 +224,9 @@ export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Eleme
           ? connectorHit(el, p, tol)
           : el.type === "frame"
             ? frameHit(el, p, tol, zoom)
-            : rectContains(elementBounds(el), p, tol),
+            : el.type === "mindmap"
+              ? mindmapHit(el, p, MINDMAP_HIT_PX / zoom)
+              : rectContains(elementBounds(el), p, tol),
   );
   return hits.length > 0 ? hits[hits.length - 1].id : null;
 }

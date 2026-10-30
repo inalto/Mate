@@ -36,6 +36,7 @@ import { noteBackground } from "../components/noteColors";
 import { CARD_BORDER_ALPHA, cardInk, PLACEHOLDER_COLOR, type BoxRenderOptions } from "../renderers/boxDraw";
 import { connectorDash, labelPaper } from "../renderers/connector";
 import { frameBorder, frameFill, frameTitleColour } from "../renderers/frame";
+import { lineY, mindmapScene, nodeRadius } from "../renderers/mindmap";
 import { FRAME_RADIUS, frameTitle, frameTitleHidden, frameTitleRect, isNestedFrame } from "../frames/contain";
 import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
@@ -485,6 +486,68 @@ function paintFrame(p: Painter, el: Element, theme: ThemeName): void {
   p.pdf.text(text, tx, ty, { baseline: "middle", maxWidth: t.width * p.k });
 }
 
+/**
+ * A mind map: the renderer's scene (edges, node boxes or underlines, centred text lines, count
+ * badges) painted as paths, rounded rects and Helvetica text. Rotation is ignored.
+ */
+function paintMindmap(p: Painter, el: Element, theme: ThemeName): void {
+  const scene = mindmapScene(el, theme);
+  p.pdf.setLineCap("round");
+  p.pdf.setLineJoin("round");
+  for (const e of scene.edges) {
+    if (e.path.length < 2) continue;
+    p.pdf.setLineWidth(e.paint.strokeWidth * p.k);
+    p.colour(e.paint.stroke, "draw");
+    if (e.paint.dash) p.pdf.setLineDashPattern(e.paint.dash.map((d) => d * p.k), 0);
+    p.polyline(e.path, false);
+    p.pdf.stroke();
+    if (e.paint.dash) p.pdf.setLineDashPattern([], 0);
+  }
+  for (const { box, paint, lines, fontSize, bold } of scene.nodes) {
+    p.setOpacity(1);
+    if (paint.underline) {
+      p.pdf.setLineWidth(paint.strokeWidth * p.k);
+      p.colour(paint.stroke, "draw");
+      p.polyline([{ x: box.x, y: box.y + box.height }, { x: box.x + box.width, y: box.y + box.height }], false);
+      p.pdf.stroke();
+    } else {
+      const filled = paint.fill !== "transparent";
+      const outlined = paint.strokeWidth > 0;
+      if (filled || outlined) {
+        if (filled) p.colour(paint.fill, "fill");
+        if (outlined) {
+          p.colour(paint.stroke, "draw");
+          p.pdf.setLineWidth(paint.strokeWidth * p.k);
+          if (paint.dash) p.pdf.setLineDashPattern(paint.dash.map((d) => d * p.k), 0);
+        }
+        const [x, y] = p.pt(box.x, box.y);
+        const k = nodeRadius(box, paint.radius) * p.k;
+        p.pdf.roundedRect(x, y, box.width * p.k, box.height * p.k, k, k, filled && outlined ? "FD" : filled ? "F" : "S");
+        if (outlined && paint.dash) p.pdf.setLineDashPattern([], 0);
+      }
+    }
+    p.colour(paint.text, "text");
+    p.pdf.setFont("helvetica", bold ? "bold" : "normal");
+    p.pdf.setFontSize(fontSize * p.k);
+    const cx = box.x + box.width / 2;
+    lines.forEach((line, i) => {
+      const text = latin1(line);
+      if (text.trim() === "") return;
+      const [tx, ty] = p.pt(cx, lineY(box, lines.length, i, fontSize));
+      p.pdf.text(text, tx, ty, { align: "center", baseline: "middle" });
+    });
+  }
+  for (const b of scene.badges) {
+    p.colour(b.fill, "fill");
+    p.circle(b.centre.x, b.centre.y, b.radius);
+    p.colour(b.text, "text");
+    p.pdf.setFont("helvetica", "bold");
+    p.pdf.setFontSize(b.radius * 1.2 * p.k);
+    const [tx, ty] = p.pt(b.centre.x, b.centre.y);
+    p.pdf.text(b.label, tx, ty, { align: "center", baseline: "middle" });
+  }
+}
+
 /** Maps box-local (unrotated) coordinates of `el` to world coordinates, rotation applied. */
 function boxLocal(el: Element): (x: number, y: number) => Pt {
   const r = boxRect(el);
@@ -661,6 +724,9 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
         break;
       case "frame":
         paintFrame(p, el, theme);
+        break;
+      case "mindmap":
+        paintMindmap(p, el, theme);
         break;
       default: {
         const key = `${el.id}|${theme}`; // backed sheets draw in light, others in the export theme
