@@ -1,7 +1,9 @@
 // Mind-map overlay (spec D5), mounted by OverlayLayer while exactly one mind map is selected. In
 // page units (the layer carries the camera transform): an outline on the hovered node, a ring on the
 // focused node (`mindmapFocus`), "+" buttons at the focused node's outer side (add a child) and below
-// it (add a sibling), and a collapse toggle at the outer edge of every node with children.
+// it (add a sibling; beside its inner edge when the next sibling leaves no room), and a collapse
+// toggle at the outer edge of every node with children. Every button target is fitted into the free
+// space between the visible nodes (never over a node or its hit slop, nor over another button).
 // Pointers over the canvas are read from the pane in the capture phase: a press on a node focuses
 // it; on a node other than the root (map unlocked) the press is taken and dragging it shows a drop
 // indicator on the node under the pointer, and the release moves it there as the target's last child
@@ -24,10 +26,11 @@ import type { EditorStore } from "../stores/editor";
 const BUTTON_PX = 36;
 const DOT_PX = 20;
 /**
- * Gap (screen px) between a node and the hit target of its "+" buttons. Every button target sits
- * wholly outside its node's box (the collapse toggle starts at the outer edge), so none of them
- * takes the presses and drags of the node itself.
+ * Smallest button target (screen px) a fitted button keeps: 8 px of slop either side of its centre.
+ * A button that cannot get this much free space is not shown (the keys still add and fold topics).
  */
+const MIN_BUTTON_PX = 16;
+/** Gap (screen px) between two buttons sharing a node's outer gap. */
 const BUTTON_GAP_PX = 4;
 /** Pointer travel (screen px) before a press on a node becomes a drag. */
 const DRAG_START_PX = 4;
@@ -46,6 +49,38 @@ interface Drag {
 function hostOf(anchor: HTMLElement | null): HTMLElement | null {
   if (!anchor) return null;
   return (anchor.closest(".overlay-clip")?.parentElement as HTMLElement | null) ?? (anchor.closest(".pane") as HTMLElement | null) ?? anchor.parentElement;
+}
+
+/** An axis-aligned box (page units). */
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const overlaps = (a: Box, b: Box): boolean => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+const strictlyIn = (p: Vec2, b: Box): boolean => p.x > b.x && p.x < b.x + b.width && p.y > b.y && p.y < b.y + b.height;
+
+/**
+ * `r` trimmed so it overlaps none of `obstacles`, always keeping `anchor` (a point of `r`) inside:
+ * each overlapping obstacle is cut away along the side that keeps the most area. Null when `anchor`
+ * itself lies inside an obstacle.
+ */
+function fitButton(r: Box, anchor: Vec2, obstacles: readonly Box[]): Box | null {
+  let cur = r;
+  for (const o of obstacles) {
+    if (!overlaps(cur, o)) continue;
+    if (strictlyIn(anchor, o)) return null;
+    const opts: Box[] = [];
+    if (anchor.x <= o.x) opts.push({ ...cur, width: o.x - cur.x });
+    if (anchor.x >= o.x + o.width) opts.push({ ...cur, x: o.x + o.width, width: cur.x + cur.width - (o.x + o.width) });
+    if (anchor.y <= o.y) opts.push({ ...cur, height: o.y - cur.y });
+    if (anchor.y >= o.y + o.height) opts.push({ ...cur, y: o.y + o.height, height: cur.y + cur.height - (o.y + o.height) });
+    if (opts.length === 0) return null;
+    cur = opts.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
+  }
+  return cur;
 }
 
 /** Pointer events the overlay reads: the ones on the canvas (or on the pane itself). */
@@ -220,7 +255,7 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
     return <div key={key} data-mindmap-ring={kind} data-node={box.id} style={style} />;
   };
 
-  const button = (key: string, centre: Vec2, label: string, onPress: () => void, content: ReactNode, attrs: Record<string, string> = {}): ReactNode => (
+  const button = (key: string, r: Box, label: string, onPress: () => void, content: ReactNode, attrs: Record<string, string> = {}): ReactNode => (
     <button
       key={key}
       type="button"
@@ -230,10 +265,10 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
       title={label}
       style={{
         position: "absolute",
-        left: centre.x - px(BUTTON_PX / 2),
-        top: centre.y - px(BUTTON_PX / 2),
-        width: px(BUTTON_PX),
-        height: px(BUTTON_PX),
+        left: r.x,
+        top: r.y,
+        width: r.width,
+        height: r.height,
         padding: 0,
         border: "none",
         background: "transparent",
@@ -255,12 +290,15 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
       {content}
     </button>
   );
-  const dot = (children: ReactNode, filled = true): ReactNode => (
+  /** The visible dot of a button with target `r` (never larger than the target; it takes no hits). */
+  const dot = (r: Box, children: ReactNode, filled = true): ReactNode => (
     <span
       aria-hidden="true"
       style={{
-        width: px(DOT_PX),
-        height: px(DOT_PX),
+        width: Math.min(px(DOT_PX), r.width, r.height),
+        height: Math.min(px(DOT_PX), r.width, r.height),
+        flexShrink: 0,
+        pointerEvents: "none",
         borderRadius: "50%",
         boxSizing: "border-box",
         background: filled ? "var(--color-primary)" : "var(--color-background, #ffffff)",
@@ -290,36 +328,83 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
     if (focused) parts.push(ring(focused, "focus", "focus"));
     const showButtons = cursor && !locked && !isMindNodeEditing(store);
     if (showButtons) {
+      const slop = px(NODE_SLOP_PX);
+      // Every visible node with its hit slop: no button target covers any of it.
+      const obstacles: Box[] = [...nodes.values()].map((b) => ({ x: b.x - slop, y: b.y - slop, width: b.width + 2 * slop, height: b.height + 2 * slop }));
+      const placed: Box[] = [];
+      const place = (want: Box, anchorAt: Vec2): Box | null => {
+        const r = fitButton(want, anchorAt, [...obstacles, ...placed]);
+        const min = px(MIN_BUTTON_PX) - 1e-9;
+        if (!r || r.width < min || r.height < min) return null;
+        placed.push(r);
+        return r;
+      };
+      /** A target `along` screen px long on the level axis, `offset` px out from `edge` (outward `dir`), centred on `cy`. */
+      const outward = (edge: number, dir: 1 | -1, offset: number, along: number, cy: number): [Box, Vec2] => {
+        const near = edge + dir * px(offset);
+        const far = near + dir * px(along);
+        return [{ x: Math.min(near, far), y: cy - px(BUTTON_PX / 2), width: px(along), height: px(BUTTON_PX) }, { x: near + dir * px(1), y: cy }];
+      };
+      const outerEdge = (box: NodeBox, side: "left" | "right") => (side === "left" ? box.x : box.x + box.width);
+      /** Screen px between `box`'s outer edge (on `side`) and its nearest visible child on that side, or Infinity. */
+      const childGap = (box: NodeBox, side: "left" | "right"): number => {
+        const node = findNode(c.root, box.id);
+        let gap = Infinity;
+        for (const k of node && !node.collapsed ? node.children : []) {
+          const kb = nodes.get(k.id);
+          if (!kb) continue;
+          const d = side === "left" ? box.x - (kb.x + kb.width) : kb.x - (box.x + box.width);
+          if (d >= 0) gap = Math.min(gap, d * z);
+        }
+        return gap;
+      };
+      const focusedNode = focused ? findNode(c.root, focused.id) : null;
+      const childSide: "left" | "right" | null = focused ? (focused.id === c.root.id && c.layout === "left" ? "left" : focused.side) : null;
+      // The focused node's toggle and "+" child share its outer gap when its children are shown there.
+      let toggleLen = BUTTON_PX;
+      let childOffset = NODE_SLOP_PX + (focusedNode && focusedNode.children.length > 0 ? BUTTON_PX + BUTTON_GAP_PX : 0);
+      if (focused && focusedNode && focusedNode.children.length > 0 && childSide === focused.side) {
+        const free = childGap(focused, focused.side) - 2 * NODE_SLOP_PX;
+        if (free >= 2 * MIN_BUTTON_PX + BUTTON_GAP_PX) {
+          toggleLen = Math.min(BUTTON_PX, (free - BUTTON_GAP_PX) / 2);
+          childOffset = NODE_SLOP_PX + toggleLen + BUTTON_GAP_PX;
+        }
+      }
       // Collapse toggles just outside the outer edge of every node with children (over the outer half of a collapsed node's badge).
       for (const box of nodes.values()) {
         const node = findNode(c.root, box.id);
         if (!node || node.children.length === 0) continue;
-        const half = px(BUTTON_PX / 2);
-        const outer = { x: box.side === "left" ? box.x - half : box.x + box.width + half, y: box.y + box.height / 2 };
+        const dir = box.side === "left" ? -1 : 1;
+        const r = place(...outward(outerEdge(box, box.side), dir, NODE_SLOP_PX, box.id === focused?.id ? toggleLen : BUTTON_PX, box.y + box.height / 2));
+        if (!r) continue;
         const label = node.collapsed ? t("mindmap.expand") : t("mindmap.collapse");
         parts.push(
           button(
             `toggle-${box.id}`,
-            outer,
+            r,
             label,
             () => store.getState().editMindmap(el.id, (root) => toggleCollapsed(root, box.id), node.collapsed ? "Expand topic" : "Collapse topic"),
-            node.collapsed ? <span aria-hidden="true" style={{ width: px(DOT_PX), height: px(DOT_PX) }} /> : dot("−", false),
+            node.collapsed ? <span aria-hidden="true" style={{ width: Math.min(px(DOT_PX), r.width), height: Math.min(px(DOT_PX), r.height), pointerEvents: "none" }} /> : dot(r, "−", false),
             { "data-mindmap-toggle": box.id },
           ),
         );
       }
-      if (focused) {
-        const node = findNode(c.root, focused.id);
-        const hasToggle = !!node && node.children.length > 0;
-        const out = px((hasToggle ? BUTTON_PX : 0) + BUTTON_GAP_PX + BUTTON_PX / 2);
-        const side = focused.id === c.root.id && c.layout === "left" ? "left" : focused.side;
-        const childAt = { x: side === "left" ? focused.x - out : focused.x + focused.width + out, y: focused.y + focused.height / 2 };
-        parts.push(button("add-child", childAt, t("mindmap.addChild"), () => void addMindChild(store, el.id, focused.id), dot("+"), { "data-mindmap-add": "child" }));
+      if (focused && childSide) {
+        const cy = focused.y + focused.height / 2;
+        const child = place(...outward(outerEdge(focused, childSide), childSide === "left" ? -1 : 1, childOffset, BUTTON_PX, cy));
+        if (child) parts.push(button("add-child", child, t("mindmap.addChild"), () => void addMindChild(store, el.id, focused.id), dot(child, "+"), { "data-mindmap-add": "child" }));
         if (focused.id !== c.root.id) {
-          const siblingAt = { x: focused.x + focused.width / 2, y: focused.y + focused.height + px(BUTTON_GAP_PX + BUTTON_PX / 2) };
-          parts.push(
-            button("add-sibling", siblingAt, t("mindmap.addSibling"), () => void addMindSibling(store, el.id, focused.id), dot("+"), { "data-mindmap-add": "sibling" }),
-          );
+          // Below the node; beside its inner edge (towards the parent) when the next sibling is too close.
+          const cx = focused.x + focused.width / 2;
+          const top = focused.y + focused.height + slop;
+          const below: [Box, Vec2] = [{ x: cx - px(BUTTON_PX / 2), y: top, width: px(BUTTON_PX), height: px(BUTTON_PX) }, { x: cx, y: top + px(1) }];
+          const innerSide = focused.side === "left" ? "right" : "left";
+          const sibling = place(...below) ?? place(...outward(outerEdge(focused, innerSide), innerSide === "left" ? -1 : 1, NODE_SLOP_PX, BUTTON_PX, cy));
+          if (sibling) {
+            parts.push(
+              button("add-sibling", sibling, t("mindmap.addSibling"), () => void addMindSibling(store, el.id, focused.id), dot(sibling, "+"), { "data-mindmap-add": "sibling" }),
+            );
+          }
         }
       }
     }

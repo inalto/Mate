@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFreeMind, parseMindmapFile, parseOpml } from "../import";
+import { MAX_IMPORT_DEPTH, parseFreeMind, parseMindmapFile, parseOpml } from "../import";
 import type { MindNode } from "../tree";
 
 type Shape = { text: string; collapsed?: boolean; children: Shape[] };
@@ -96,5 +96,16 @@ describe("mind-map import", () => {
     expect(() => parseMindmapFile("page.html", "<html><body/></html>")).toThrow(/not a FreeMind or OPML/);
     expect(() => parseMindmapFile("bad.mm", "<map><node")).toThrow(Error);
     expect(() => parseFreeMind("<map></map>")).toThrow(/no nodes/);
+  });
+
+  it("caps_the_nesting_depth_at_MAX_IMPORT_DEPTH_levels", () => {
+    const chain = (levels: number, open: string, close: string) => open.repeat(levels + 1) + close.repeat(levels + 1);
+    // MAX_IMPORT_DEPTH levels below the top node parse; one more is refused.
+    const ok = parseFreeMind(`<map>${chain(MAX_IMPORT_DEPTH, '<node TEXT="n">', "</node>")}</map>`);
+    let depth = 0;
+    for (let n = ok; n.children.length > 0; n = n.children[0]) depth++;
+    expect(depth).toBe(MAX_IMPORT_DEPTH);
+    expect(() => parseFreeMind(`<map>${chain(MAX_IMPORT_DEPTH + 1, '<node TEXT="n">', "</node>")}</map>`)).toThrow(/deeper than/);
+    expect(() => parseOpml(`<opml><body>${chain(MAX_IMPORT_DEPTH + 1, '<outline text="n">', "</outline>")}</body></opml>`)).toThrow(/deeper than/);
   });
 });

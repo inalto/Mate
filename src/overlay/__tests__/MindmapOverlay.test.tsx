@@ -12,12 +12,19 @@ const queue = vi.hoisted(() => ({
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => [] as Element[]) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
+// The window mind-map keys act on the focused pane's store: point it at the test's own store
+// (the shared default store is never swapped in, so no state leaks into later suites).
+const focus = vi.hoisted(() => ({ store: null as unknown }));
+vi.mock("../../stores/focusedEditor", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../../stores/focusedEditor")>();
+  return { ...orig, getFocusedEditor: () => (focus.store as ReturnType<typeof orig.getFocusedEditor> | null) ?? orig.getFocusedEditor() };
+});
 
 import { mindmapView } from "../../mindmap/cache";
 import { beginMindNodeEdit, endMindNodeEdit, useMindEdit } from "../../mindmap/editSession";
 import { addChild, findNode, newNode, parentOf, type MindNode } from "../../mindmap/tree";
 import { mindmapOf } from "../../model/content";
-import { createEditorStore, useEditorStore, type EditorStore } from "../../stores/editor";
+import { createEditorStore, type EditorStore } from "../../stores/editor";
 import "../../keys/editorCommands"; // the window mind-map keys, as in the app
 import { useNotebookStore } from "../../stores/notebook";
 import MindmapOverlay from "../MindmapOverlay";
@@ -65,6 +72,7 @@ describe("MindmapOverlay", () => {
     store = createEditorStore();
   });
   afterEach(() => {
+    focus.store = null;
     endMindNodeEdit();
     cleanup();
   });
@@ -88,7 +96,7 @@ describe("MindmapOverlay", () => {
   });
 
   it("escape_cancels_a_node_drag_before_the_mind_map_keys_see_it", async () => {
-    store = useEditorStore; // the focused pane's store, which the window mind-map keys act on
+    focus.store = store; // the focused pane's store, which the window mind-map keys act on
     const id = await load();
     const { canvas, container } = mount(id);
     const to = centreOf(id, "a");
@@ -144,28 +152,51 @@ describe("MindmapOverlay", () => {
     expect(root(id).children).toHaveLength(3);
   });
 
-  it("buttons_have_8px_of_slop_and_stay_off_the_node_box", async () => {
+  it("buttons_fit_between_the_visible_nodes_at_zoom_1_and_0_5", async () => {
     const id = await load();
-    s().focusMindNode(id, "a");
-    const { container } = mount(id);
-    const nodes = mindmapView(s().elements.get(id)!).layout.nodes;
-    const rect = (node: globalThis.Element | null) => {
+    // a gets two children, so its toggle and "+" child share the gap before them.
+    s().editMindmap(id, (r) => addChild(addChild(r, "a", { ...newNode("C"), id: "c" }), "a", { ...newNode("D"), id: "d" }), "seed");
+    const rect = (node: globalThis.Element) => {
       const st = (node as HTMLElement).style;
       return { x: parseFloat(st.left), y: parseFloat(st.top), w: parseFloat(st.width), h: parseFloat(st.height) };
     };
-    const overlaps = (a: ReturnType<typeof rect>, b: { x: number; y: number; width: number; height: number }) =>
-      a.x < b.x + b.width && b.x < a.x + a.w && a.y < b.y + b.height && b.y < a.y + a.h;
-    const buttons = [...container.querySelectorAll("button[data-mindmap-ui]")];
-    expect(buttons.length).toBeGreaterThanOrEqual(3); // root toggle, "+" child, "+" sibling
-    for (const b of buttons) {
-      const r = rect(b);
-      const dot = rect(b.querySelector("span"));
-      expect(r.w).toBeGreaterThanOrEqual(dot.w + 16);
-      expect(r.h).toBeGreaterThanOrEqual(dot.h + 16);
-      // A toggle stays off its own node, a "+" off the focused node.
-      const owner = nodes.get(b.getAttribute("data-mindmap-toggle") ?? "a")!;
-      expect(overlaps(r, owner)).toBe(false);
+    type R = ReturnType<typeof rect>;
+    const hit = (a: R, b: R) => a.x < b.x + b.w - 1e-9 && b.x < a.x + a.w - 1e-9 && a.y < b.y + b.h - 1e-9 && b.y < a.y + a.h - 1e-9;
+    /** The buttons shown with `focusId` focused at zoom `z`: each fits the free space (off every node and its 4 px hit slop). */
+    const buttonsAt = (focusId: string, z: number): string[] => {
+      act(() => {
+        store.setState({ camera: { x: 0, y: 0, z } });
+        s().focusMindNode(id, focusId);
+      });
+      const { container, unmount } = mount(id);
+      const slop = 4 / z;
+      const nodes = [...mindmapView(s().elements.get(id)!).layout.nodes.values()].map((n) => ({ x: n.x - slop, y: n.y - slop, w: n.width + 2 * slop, h: n.height + 2 * slop }));
+      const els = [...container.querySelectorAll("button[data-mindmap-ui]")];
+      const rects = els.map(rect);
+      rects.forEach((r, i) => {
+        // At least 8 px of slop either side of the centre, in screen px.
+        expect(r.w * z).toBeGreaterThanOrEqual(16 - 1e-6);
+        expect(r.h * z).toBeGreaterThanOrEqual(16 - 1e-6);
+        for (const n of nodes) expect(hit(r, n)).toBe(false);
+        for (const o of rects.slice(i + 1)) expect(hit(r, o)).toBe(false);
+      });
+      const names = els.map((b) => (b.getAttribute("data-mindmap-toggle") ? `toggle-${b.getAttribute("data-mindmap-toggle")}` : `add-${b.getAttribute("data-mindmap-add")}`));
+      unmount();
+      return names.sort();
+    };
+    const r = root(id).id;
+    for (const z of [1, 0.5]) {
+      for (const f of [r, "a", "b", "c", "d"]) {
+        const names = buttonsAt(f, z);
+        // Every collapse toggle stays, at both zooms.
+        expect(names).toEqual(expect.arrayContaining([`toggle-${r}`, "toggle-a"]));
+      }
     }
+    // At zoom 1 the focused node also gets both "+" buttons.
+    expect(buttonsAt("a", 1)).toEqual(["add-child", "add-sibling", `toggle-${r}`, "toggle-a"].sort());
+    expect(buttonsAt("b", 1)).toEqual(["add-child", "add-sibling", `toggle-${r}`, "toggle-a"].sort());
+    expect(buttonsAt("c", 1)).toEqual(["add-child", "add-sibling", `toggle-${r}`, "toggle-a"].sort());
+    expect(buttonsAt(r, 1)).toEqual(["add-child", `toggle-${r}`, "toggle-a"].sort());
   });
 
   it("the_collapse_toggle_hides_the_children", async () => {

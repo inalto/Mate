@@ -4,6 +4,9 @@ import { type MindNode, newNodeId } from "./tree";
 
 const FALLBACK_TITLE = "Imported";
 
+/** Deepest node level an import accepts (layout, rendering and serialisation recurse over the tree). */
+export const MAX_IMPORT_DEPTH = 64;
+
 function parseXml(xml: string): Document {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.getElementsByTagName("parsererror").length > 0 || !doc.documentElement) {
@@ -16,8 +19,8 @@ const childElements = (el: Element, name: string): Element[] =>
   Array.from(el.children).filter((c) => c.localName.toLowerCase() === name);
 
 /**
- * Convert an element tree into `MindNode`s, iteratively (deep files cannot overflow the stack).
- * `kids` lists an element's child elements that are nodes; `read` gives text and fold state.
+ * Convert an element tree into `MindNode`s, iteratively (deep files cannot overflow the stack); a
+ * tree nested deeper than MAX_IMPORT_DEPTH levels below `top` throws. `kids` lists an element's child elements that are nodes; `read` gives text and fold state.
  */
 function convert(
   top: Element,
@@ -31,13 +34,15 @@ function convert(
     return node;
   };
   const root = make(top);
-  const stack: [Element, MindNode][] = [[top, root]];
+  const stack: [Element, MindNode, number][] = [[top, root, 0]];
   while (stack.length > 0) {
-    const [el, node] = stack.pop()!;
-    for (const k of kids(el)) {
+    const [el, node, depth] = stack.pop()!;
+    const below = kids(el);
+    if (below.length > 0 && depth >= MAX_IMPORT_DEPTH) throw new Error(`The map is nested deeper than ${MAX_IMPORT_DEPTH} levels`);
+    for (const k of below) {
       const child = make(k);
       node.children.push(child);
-      stack.push([k, child]);
+      stack.push([k, child, depth + 1]);
     }
   }
   // A collapsed leaf has nothing to hide.

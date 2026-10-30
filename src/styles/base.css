@@ -1224,6 +1224,12 @@ button.card:hover {
   background: var(--color-surface-2);
 }
 
+/* A narrow menu opener beside its button (the mobile toolbar rule below widens it to 40 px). */
+.tb-btn.tb-caret {
+  min-width: 16px;
+  padding: 0;
+}
+
 .tb-btn.active {
   color: var(--color-primary);
   box-shadow: inset 0 0 0 1px var(--color-primary);

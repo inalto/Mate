@@ -485,8 +485,7 @@ function MindmapButton() {
       </button>
       <button
         type="button"
-        className={open ? "tb-btn active" : "tb-btn"}
-        style={{ minWidth: 16, padding: 0 }}
+        className={open ? "tb-btn tb-caret active" : "tb-btn tb-caret"}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t("mindmap.options")}

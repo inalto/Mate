@@ -18,6 +18,7 @@ import { useChromeStore } from "../../stores/chrome";
 import { endMindNodeEdit } from "../../mindmap/editSession";
 import { mindmapOf } from "../../model/content";
 import { useToastStore } from "../Toast";
+import { MAX_IMPORT_DEPTH } from "../../mindmap/import";
 import { MINDMAP_IMPORT_MAX_BYTES } from "../MindmapMenu";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
@@ -273,6 +274,27 @@ describe("Toolbar mind-map button", () => {
     expect(maps()).toHaveLength(2);
     expect(screen.queryByRole("menu")).toBeNull();
     expect(screen.getByRole("button", { name: "Mind map" }).hasAttribute("aria-haspopup")).toBe(false);
+  });
+
+  it("the_caret_is_sized_by_a_class_the_mobile_toolbar_rule_widens", async () => {
+    await emptyPage();
+    renderBar();
+    const caret = screen.getByRole("button", { name: "Mind map options" });
+    // No inline width that would beat `html.mobile .toolbar .tb-btn { min-width: 40px }`.
+    expect(caret.style.minWidth).toBe("");
+    expect(caret.style.padding).toBe("");
+    expect(caret.classList.contains("tb-caret")).toBe(true);
+  });
+
+  it("a_map_nested_too_deep_shows_the_import_failed_toast", async () => {
+    await emptyPage();
+    renderBar();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const deep = `<map>${'<node TEXT="n">'.repeat(MAX_IMPORT_DEPTH + 2)}${"</node>".repeat(MAX_IMPORT_DEPTH + 2)}</map>`;
+    await act(async () => choose({ name: "deep.mm", size: deep.length, text: async () => deep }));
+    expect(maps()).toHaveLength(0);
+    expect(useToastStore.getState().message).toBe("Could not import this file");
+    err.mockRestore();
   });
 
   it("import_opens_the_picker_and_inserts_the_file", async () => {
