@@ -17,7 +17,10 @@ import { htmlBoxRenderer } from "./htmlBox";
 import "./shape";
 import "./image";
 import "./graph";
+import "./connector";
 import { mediaRenderer } from "./media";
+import { frameRenderer } from "./frame";
+import { mindmapRenderer } from "./mindmap";
 
 export { PLACEHOLDER_COLOR };
 
@@ -47,3 +50,7 @@ for (const t of BOXED_TYPES) if (t !== "image" && t !== "graph") registerRendere
 for (const t of ["text-box", "table", "codespace"] as const) registerRenderer(t, htmlBoxRenderer);
 // Media placeholders (after the boxed loop above, which would otherwise replace them).
 registerRenderer("media", mediaRenderer);
+// Frames draw vector directly (registered after the boxed loop for the same reason).
+registerRenderer("frame", frameRenderer);
+// Mind maps draw vector directly from their memoised layout.
+registerRenderer("mindmap", mindmapRenderer);

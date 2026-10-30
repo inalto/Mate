@@ -120,6 +120,18 @@ pub struct Settings {
     pub default_shape_fill_color: String,
     pub default_shape_stroke_width: f64,
     pub default_shape_fill_opacity: f64,
+    // Connectors
+    /// `"straight" | "curve" | "elbow"`.
+    pub default_connector_mode: String,
+    pub default_connector_color: String,
+    pub default_connector_width: f64,
+    /// `"solid" | "dashed"`.
+    pub default_connector_dash: String,
+    /// Swatch id of a new sticky note.
+    pub default_note_color: String,
+    // Presentation
+    pub present_black_background: bool,
+    pub present_fill: bool,
     // Eraser
     pub default_eraser_type: String,
     pub default_eraser_width: f64,
@@ -137,6 +149,8 @@ pub struct Settings {
     // Input
     pub palm_rejection: String,
     pub snap_to_grid: bool,
+    /// Snap a moved or resized selection to other elements' edges and centres (smart guides).
+    pub smart_guides: bool,
     pub pen_barrel_button_action: String,
     pub pen_eraser_button_action: String,
     pub scroll_behavior: String,
@@ -233,6 +247,13 @@ impl Default for Settings {
             default_shape_fill_color: s("transparent"),
             default_shape_stroke_width: 2.0,
             default_shape_fill_opacity: 1.0,
+            default_connector_mode: s("curve"),
+            default_connector_color: s("#000000"),
+            default_connector_width: 3.0,
+            default_connector_dash: s("solid"),
+            default_note_color: s("yellow"),
+            present_black_background: true,
+            present_fill: false,
             default_eraser_type: s("stroke"),
             default_eraser_width: 20.0,
             eraser_erase_shapes: true,
@@ -247,6 +268,7 @@ impl Default for Settings {
             fountain_pen_nib_flatness: 35.0,
             palm_rejection: s("high"),
             snap_to_grid: false,
+            smart_guides: true,
             pen_barrel_button_action: s("eraser"),
             pen_eraser_button_action: s("eraser"),
             scroll_behavior: s("pan"),

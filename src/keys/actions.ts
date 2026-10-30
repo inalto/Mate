@@ -9,6 +9,10 @@ export type ShortcutAction =
   | "tool.cursor"
   | "tool.lasso"
   | "tool.shape"
+  | "tool.connector"
+  | "tool.frame"
+  | "tool.note"
+  | "tool.mindmap"
   | "tool.text"
   | "tool.insertSpace"
   | "preset.slot"
@@ -29,9 +33,13 @@ export type ShortcutAction =
   | "arrange.backward"
   | "arrange.front"
   | "arrange.back"
+  | "arrange.lock"
   | "zoom.in"
   | "zoom.out"
   | "zoom.reset"
+  | "zoom.fit"
+  | "zoom.selection"
+  | "present.start"
   | "pan"
   | "page.prev"
   | "page.next"
@@ -68,6 +76,10 @@ export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
   "tool.cursor": { labelKey: "keys.actions.cursor", group: "tools", defaultKeys: ["V"] },
   "tool.lasso": { labelKey: "keys.actions.lasso", group: "tools", defaultKeys: ["L"] },
   "tool.shape": { labelKey: "keys.actions.shape", group: "tools", defaultKeys: ["S"] },
+  "tool.connector": { labelKey: "keys.actions.connector", group: "tools", defaultKeys: ["C"] },
+  "tool.frame": { labelKey: "keys.actions.frame", group: "tools", defaultKeys: ["F"] },
+  "tool.note": { labelKey: "keys.actions.note", group: "tools", defaultKeys: ["Shift+N"] },
+  "tool.mindmap": { labelKey: "keys.actions.mindmap", group: "tools", defaultKeys: ["M"] },
   "tool.text": { labelKey: "keys.actions.text", group: "tools", defaultKeys: ["T"] },
   "tool.insertSpace": { labelKey: "keys.actions.insertSpace", group: "tools", defaultKeys: ["N"] },
   "preset.slot": {
@@ -94,9 +106,13 @@ export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
   "arrange.backward": { labelKey: "keys.actions.sendBackward", group: "arrange", defaultKeys: ["Ctrl+["] },
   "arrange.front": { labelKey: "keys.actions.bringToFront", group: "arrange", defaultKeys: ["Ctrl+Shift+]"] },
   "arrange.back": { labelKey: "keys.actions.sendToBack", group: "arrange", defaultKeys: ["Ctrl+Shift+["] },
+  "arrange.lock": { labelKey: "keys.actions.toggleLock", group: "arrange", defaultKeys: ["Ctrl+Shift+L"] },
   "zoom.in": { labelKey: "keys.actions.zoomIn", group: "view", defaultKeys: ["Ctrl+=", "Ctrl+Shift+="] },
   "zoom.out": { labelKey: "keys.actions.zoomOut", group: "view", defaultKeys: ["Ctrl+-"] },
   "zoom.reset": { labelKey: "keys.actions.zoomReset", group: "view", defaultKeys: ["Ctrl+0"] },
+  "zoom.fit": { labelKey: "keys.actions.zoomFit", group: "view", defaultKeys: ["Shift+1"] },
+  "zoom.selection": { labelKey: "keys.actions.zoomSelection", group: "view", defaultKeys: ["Shift+2"] },
+  "present.start": { labelKey: "keys.actions.presentStart", group: "view", defaultKeys: ["Ctrl+Shift+P"] },
   "sidebar.toggle": { labelKey: "keys.actions.toggleSidebar", group: "view", defaultKeys: ["Ctrl+\\"] },
   "page.prev": { labelKey: "keys.actions.prevPage", group: "pages", defaultKeys: ["Ctrl+PageUp"] },
   "page.next": { labelKey: "keys.actions.nextPage", group: "pages", defaultKeys: ["Ctrl+PageDown"] },

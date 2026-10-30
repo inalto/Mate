@@ -1,7 +1,12 @@
-// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options), text,
-// cursor, lasso, undo/redo, zoom.
+// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options),
+// connectors (with options), frames (draw or a preset), text, cursor, lasso, undo/redo, zoom.
 import {
+  ArrowElbowRight,
   ArrowUUpLeft,
+  BezierCurve,
+  FlowArrow,
+  FrameCorners,
+  LineSegment,
   ArrowUUpRight,
   Cursor,
   ArrowsVertical,
@@ -24,8 +29,11 @@ import {
   ChartLine,
   HandPointing,
   HandGrabbing,
+  Presentation,
+  TreeStructure,
+  CaretDown,
 } from "@phosphor-icons/react";
-import { useRef, useState, type ReactNode, type WheelEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode, type WheelEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import type { TKey } from "../i18n";
@@ -34,7 +42,10 @@ import { pickAndInsertMedia } from "../media/insert";
 import { DictateButton } from "./DictateButton";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
-import type { FingerAction, PenPreset } from "../model/types";
+import type { FingerAction, PenPreset, Settings } from "../model/types";
+import { CONNECTOR_MODES } from "../connectors/route";
+import { screenToWorld } from "../canvas/camera";
+import { FRAME_PRESETS, isFrame, presetFrameRect } from "../frames/contain";
 import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
@@ -47,8 +58,12 @@ import PaperPicker from "./PaperPicker";
 import PresetMenu from "./PresetMenu";
 import { SHAPE_LABEL_KEY } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
+import MindmapMenu, { MindmapImportInput } from "./MindmapMenu";
+import { addMindmapAndEdit } from "../mindmap/editSession";
+import type { MindmapStyle } from "../mindmap/styles";
 import { useShortcutHint } from "./shortcutHints";
 import { useDismiss } from "./useDismiss";
+import { PEN_PALETTE } from "./inkColors";
 
 const INK_LABEL = {
   pen: "toolbar.ink.pen",
@@ -256,6 +271,247 @@ function ShapeButton() {
   );
 }
 
+type ConnectorSettings = Pick<Settings, "defaultConnectorMode" | "defaultConnectorColor" | "defaultConnectorWidth" | "defaultConnectorDash">;
+
+const pickConnector = (s: Settings): ConnectorSettings => ({
+  defaultConnectorMode: s.defaultConnectorMode,
+  defaultConnectorColor: s.defaultConnectorColor,
+  defaultConnectorWidth: s.defaultConnectorWidth,
+  defaultConnectorDash: s.defaultConnectorDash,
+});
+
+const CONNECTOR_MODE_ICON = { straight: LineSegment, curve: BezierCurve, elbow: ArrowElbowRight } as const;
+
+/** Connector tool options: routing mode, colour, width, dashed. Live in the settings, saved on close. */
+function ConnectorMenu() {
+  const { t } = useTranslation();
+  const cfg = useSettingsStore((s) => s.settings);
+  const local = (patch: Partial<ConnectorSettings>) => useSettingsStore.setState((s) => ({ settings: { ...s.settings, ...patch } }));
+  const initial = useRef(pickConnector(cfg));
+  useEffect(
+    () => () => {
+      const now = pickConnector(useSettingsStore.getState().settings);
+      if (JSON.stringify(now) === JSON.stringify(initial.current)) return;
+      useSettingsStore
+        .getState()
+        .update(now)
+        .catch((err) => console.error("saving connector settings failed", err));
+    },
+    [],
+  );
+  const dashed = cfg.defaultConnectorDash === "dashed";
+  return (
+    <div className="tb-popover connector-menu" role="dialog" aria-label={t("connector.tool")}>
+      <div className="tb-row" role="radiogroup" aria-label={t("connector.mode")}>
+        {CONNECTOR_MODES.map((m) => {
+          const Icon = CONNECTOR_MODE_ICON[m];
+          return (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={cfg.defaultConnectorMode === m}
+              aria-label={t(`connector.${m}`)}
+              title={t(`connector.${m}`)}
+              className={cfg.defaultConnectorMode === m ? "tb-btn active" : "tb-btn"}
+              onClick={() => local({ defaultConnectorMode: m })}
+            >
+              <Icon size={18} />
+            </button>
+          );
+        })}
+      </div>
+      <span className="tb-label">{t("connector.colour")}</span>
+      <div className="tb-row">
+        {PEN_PALETTE.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={cfg.defaultConnectorColor.toUpperCase() === c.toUpperCase() ? "tb-swatch active" : "tb-swatch"}
+            style={{ background: c }}
+            aria-label={t("toolbar.strokeColor", { color: c })}
+            onClick={() => local({ defaultConnectorColor: c })}
+          />
+        ))}
+      </div>
+      <label className="tb-row tb-width" title={t("connector.width")}>
+        <input
+          type="range"
+          min={0.5}
+          max={15}
+          step={0.5}
+          value={cfg.defaultConnectorWidth}
+          aria-label={t("connector.width")}
+          onChange={(e) => local({ defaultConnectorWidth: Number(e.target.value) })}
+        />
+        <span>{cfg.defaultConnectorWidth}</span>
+      </label>
+      <label className="tb-row">
+        <input type="checkbox" checked={dashed} onChange={(e) => local({ defaultConnectorDash: e.target.checked ? "dashed" : "solid" })} />
+        {t("connector.dashed")}
+      </label>
+    </div>
+  );
+}
+
+function ConnectorButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "connector");
+  useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.connector", t("connector.tool"));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label={t("connector.tool")}
+        {...hint}
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("connector"))}
+      >
+        <FlowArrow size={18} />
+      </button>
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <ConnectorMenu />
+        </DockPopover>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Frame tool button; a second click opens its menu: "Draw frame" (the tool) and presets placed at
+ * the view centre (nudged when a frame of that size already sits there).
+ */
+function FrameButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "frame");
+  useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.frame", t("frame.tool"));
+  const place = (width: number, height: number) => {
+    const s = ed.getState();
+    const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+    const centre = screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+    s.addFrame(presetFrameRect([...s.elements.values()].filter(isFrame), centre, width, height));
+    setOpen(false);
+  };
+  const item = (label: string, run: () => void) => (
+    <button key={label} type="button" role="menuitem" className="tb-menu-item" onClick={run}>
+      {label}
+    </button>
+  );
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label={t("frame.tool")}
+        {...hint}
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("frame"))}
+      >
+        <FrameCorners size={18} />
+      </button>
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <div className="tb-popover tb-menu" role="menu" aria-label={t("frame.tool")}>
+            {item(t("frame.draw"), () => {
+              ed.getState().setTool("frame");
+              setOpen(false);
+            })}
+            {FRAME_PRESETS.map((p) => item(`${t(`frame.${p.key}`)} (${p.width} × ${p.height})`, () => place(p.width, p.height)))}
+          </div>
+        </DockPopover>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Note button: adds a sticky note at the view centre and starts editing it. The N-style shortcut
+ * (`tool.note`) arms the note tool instead: the next canvas click places one, then the cursor returns.
+ */
+function NoteButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const active = ed((s) => s.tool === "note");
+  const hint = useShortcutHint("tool.note", t("note.tool"));
+  return (
+    <button type="button" className={active ? "tb-btn active" : "tb-btn"} aria-pressed={active} aria-label={t("note.tool")} {...hint} onClick={() => ed.getState().addNote()}>
+      <Note size={18} />
+    </button>
+  );
+}
+
+/** Style used by the mind-map button's plain click: the last one picked in its menu. */
+let lastMindmapStyle: MindmapStyle = 1;
+
+/**
+ * Mind-map button: adds a mind map at the view centre and opens its root's editor (key M,
+ * `tool.mindmap`). A second click while a lone mind map is selected opens its menu: the four styles
+ * and "Import…" (FreeMind / OPML).
+ */
+function MindmapButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.selection.size === 1 && s.elements.get(s.selection.values().next().value!)?.type === "mindmap");
+  useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.mindmap", t("mindmap.tool"));
+  return (
+    <div ref={ref} className="tb-anchor">
+      {/* The button always places a map; the caret beside it opens the styles and Import. */}
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-label={t("mindmap.tool")}
+        data-mindmap-place=""
+        {...hint}
+        onClick={() => {
+          setOpen(false);
+          addMindmapAndEdit(ed, lastMindmapStyle);
+        }}
+      >
+        <TreeStructure size={18} />
+      </button>
+      <button
+        type="button"
+        className={open ? "tb-btn tb-caret active" : "tb-btn tb-caret"}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t("mindmap.options")}
+        title={t("mindmap.options")}
+        data-mindmap-menu=""
+        onClick={() => setOpen((o) => !o)}
+      >
+        <CaretDown size={10} weight="bold" />
+      </button>
+      <MindmapImportInput store={ed} inputRef={file} />
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <MindmapMenu
+            store={ed}
+            onImport={() => file.current?.click()}
+            onClose={() => setOpen(false)}
+            onStyle={(style) => {
+              lastMindmapStyle = style;
+            }}
+          />
+        </DockPopover>
+      )}
+    </div>
+  );
+}
+
 /** Insert-space tool button; a second click opens its options (Insert / Remove, Cut images). */
 function InsertSpaceButton() {
   const { t } = useTranslation();
@@ -309,6 +565,22 @@ function InsertSpaceButton() {
         </DockPopover>
       )}
     </div>
+  );
+}
+
+/** Present the page's frames from the first; disabled until the page has a frame. */
+function PresentButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const hasFrames = ed((s) => {
+    for (const el of s.elements.values()) if (isFrame(el)) return true;
+    return false;
+  });
+  const hint = useShortcutHint("present.start", hasFrames ? t("present.start") : t("present.noFrames"));
+  return (
+    <button type="button" className="tb-btn" aria-label={t("present.start")} disabled={!hasFrames} {...hint} onClick={() => ed.getState().startPresentation(0)}>
+      <Presentation size={18} />
+    </button>
   );
 }
 
@@ -496,6 +768,10 @@ export default function Toolbar() {
       <span className="tb-sep" />
       <EraserButton />
       <ShapeButton />
+      <ConnectorButton />
+      <FrameButton />
+      <NoteButton />
+      <MindmapButton />
       {toolBtn("text", "tool.text", t("toolbar.text"), <TextT size={18} />)}
       <button
         type="button"
@@ -528,6 +804,7 @@ export default function Toolbar() {
       <button type="button" className="tb-btn" aria-label={t("toolbar.insertGraph")} title={t("toolbar.insertGraph")} onClick={() => s().addGraph()}>
         <ChartLine size={18} />
       </button>
+      <PresentButton />
       <PaperButton />
       {toolBtn("cursor", "tool.cursor", t("toolbar.select"), <Cursor size={18} />)}
       {toolBtn("lasso", "tool.lasso", t("toolbar.lasso"), <Lasso size={18} />)}

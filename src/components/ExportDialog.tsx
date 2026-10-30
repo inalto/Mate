@@ -2,9 +2,11 @@
 import { useModal } from "./useModal";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { paddedSelectionRegion } from "../export/copyImage";
 import { exportPage } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
 import { isMobile } from "../platform";
+import { useFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 import ShareDialog from "./ShareDialog";
@@ -37,6 +39,9 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
   const [pages, setPages] = useState<"all" | "current">("all");
   const [searchable, setSearchable] = useState(true);
   const pageMode = useNotebookStore((s) => s.tree.pages.find((p) => p.id === pageId)?.mode === "page");
+  const editor = useFocusedEditor();
+  const canSelect = editor((s) => s.loadedPageId === pageId && s.selection.size > 0);
+  const [selectionOnly, setSelectionOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,15 +50,16 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
     setError(null);
     try {
       let saved: string | null;
+      const region = selectionOnly && canSelect ? (paddedSelectionRegion(editor) ?? undefined) : undefined;
       if (format === "mate") {
         if (!unitId) throw new Error(t("export.notInBook"));
         saved = await exportUnitArchive(unitId);
       } else if (format === "latex") {
         saved = await exportPage(pageId, "latex", {});
       } else if (format === "pdf") {
-        saved = await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable });
+        saved = await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable, region });
       } else {
-        saved = await exportPage(pageId, format, format === "png" ? { theme, background, scale } : { theme, background });
+        saved = await exportPage(pageId, format, format === "png" ? { theme, background, scale, region } : { theme, background, region });
       }
       // Mobile: the file went to the share sheet (desktop users picked the path themselves).
       if (saved && isMobile()) showToast(t("export.shared"));
@@ -97,6 +103,17 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
               setBackground,
             )}
           </>
+        )}
+        {format !== "mate" && format !== "latex" && (
+          <label className="field">
+            <span className="field-label">{t("exportRegion.selectionOnly")}</span>
+            <input
+              type="checkbox"
+              checked={selectionOnly && canSelect}
+              disabled={!canSelect}
+              onChange={(e) => setSelectionOnly(e.target.checked)}
+            />
+          </label>
         )}
         {format === "png" && seg(t("export.scale"), SCALES.map((s): [number, string] => [s, t("export.times", { n: s })]), scale, setScale)}
         {format === "pdf" &&

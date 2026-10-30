@@ -32,7 +32,7 @@ function insert(f: (s: ReturnType<typeof editor>) => unknown) {
   };
 }
 
-type ToolAction = "tool.pen" | "tool.highlighter" | "tool.eraser" | "tool.cursor" | "tool.lasso" | "tool.shape" | "tool.text" | "tool.insertSpace";
+type ToolAction = "tool.pen" | "tool.highlighter" | "tool.eraser" | "tool.cursor" | "tool.lasso" | "tool.shape" | "tool.connector" | "tool.text" | "tool.insertSpace";
 
 const SWITCH_TO_KEY = {
   "tool.pen": "palette.switchTo.pen",
@@ -41,6 +41,7 @@ const SWITCH_TO_KEY = {
   "tool.cursor": "palette.switchTo.cursor",
   "tool.lasso": "palette.switchTo.lasso",
   "tool.shape": "palette.switchTo.shape",
+  "tool.connector": "palette.switchTo.connector",
   "tool.text": "palette.switchTo.text",
   "tool.insertSpace": "palette.switchTo.insertSpace",
 } as const satisfies Record<ToolAction, TKey>;
@@ -53,6 +54,7 @@ const TOOL_NAME: Record<ToolAction, string> = {
   "tool.cursor": "select (cursor)",
   "tool.lasso": "lasso",
   "tool.shape": "shape",
+  "tool.connector": "connector",
   "tool.text": "text",
   "tool.insertSpace": "insert space",
 };
@@ -80,6 +82,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
   switchTo("tool.cursor", ["select", "pointer"]),
   switchTo("tool.lasso", ["select"]),
   switchTo("tool.shape", ["rectangle", "circle", "line"]),
+  switchTo("tool.connector", ["arrow", "flowchart", "link"]),
   switchTo("tool.text", ["type"]),
   switchTo("tool.insertSpace", ["gap"]),
   plain("zoom.in", "editor", ["magnify"]),

@@ -1,4 +1,4 @@
-// Camera maths (spec 03 §4): screen = world·z + (x, y). Pure; no DOM.
+// Camera maths (spec 03 §4): screen = world·z + (x, y). Pure, except `animateCamera` (rAF tween).
 import {
   ASPECT_PRESET_HEIGHTS,
   PAGE_GAP,
@@ -127,4 +127,82 @@ export function initialCamera(page: Page, viewport: Viewport, stack?: SheetStack
   const fit = viewport.width > 0 ? viewport.width / (s.width + 2 * PAGE_MODE_SIDE_MARGIN) : 1;
   const z = clampZoom(Math.min(1, fit));
   return { x: (viewport.width - s.width * z) / 2, y: PAGE_MODE_TOP_MARGIN * z, z };
+}
+
+/** World rect (page units). Same shape as spatialIndex `Rect`. */
+interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Camera that shows `bounds` whole, centred, inside `viewport` less `marginPx` on every side (zoom
+ * clamped to 0.1..10). A rect with no extent on either axis is centred at zoom 1.
+ */
+export function fitBounds(bounds: Bounds, viewport: Viewport, marginPx = 48): Camera {
+  const roomX = Math.max(1, viewport.width - 2 * marginPx);
+  const roomY = Math.max(1, viewport.height - 2 * marginPx);
+  const fx = bounds.width > 0 ? roomX / bounds.width : Infinity;
+  const fy = bounds.height > 0 ? roomY / bounds.height : Infinity;
+  const fit = Math.min(fx, fy);
+  const z = clampZoom(Number.isFinite(fit) ? fit : 1);
+  const cx = bounds.x + bounds.width / 2;
+  const cy = bounds.y + bounds.height / 2;
+  return { x: viewport.width / 2 - cx * z, y: viewport.height / 2 - cy * z, z };
+}
+
+/** What `animateCamera` needs from an editor store. */
+export interface CameraHost {
+  getState(): { camera: Camera; setCamera(camera: Camera): void };
+}
+
+/** Cancel of the tween running per store (a new tween on the same store cancels the old one). */
+const tweens = new WeakMap<object, () => void>();
+
+const easeOutCubic = (t: number): number => 1 - (1 - t) ** 3;
+
+/**
+ * Tween the store's camera to `to` over `ms` (ease-out) with requestAnimationFrame; sets it at
+ * once when rAF is unavailable or `ms` ≤ 0. Cancels a tween already running on the same store.
+ * Returns the cancel function.
+ */
+export function animateCamera(store: CameraHost, to: Camera, ms = 200): () => void {
+  tweens.get(store)?.();
+  tweens.delete(store);
+  const raf = typeof requestAnimationFrame === "function" ? requestAnimationFrame : null;
+  if (!raf || ms <= 0) {
+    store.getState().setCamera(to);
+    return () => {};
+  }
+  const from = store.getState().camera;
+  const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();
+  let handle = 0;
+  let live = true;
+  const cancel = () => {
+    if (!live) return;
+    live = false;
+    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(handle);
+    if (tweens.get(store) === cancel) tweens.delete(store);
+  };
+  const step = (now: number) => {
+    if (!live) return;
+    const t = Math.min(1, Math.max(0, (now - t0) / ms));
+    if (t >= 1) {
+      store.getState().setCamera(to);
+      cancel();
+      return;
+    }
+    const k = easeOutCubic(t);
+    store.getState().setCamera({
+      x: from.x + (to.x - from.x) * k,
+      y: from.y + (to.y - from.y) * k,
+      z: from.z + (to.z - from.z) * k,
+    });
+    handle = raf(step);
+  };
+  handle = raf(step);
+  tweens.set(store, cancel);
+  return cancel;
 }

@@ -51,6 +51,17 @@ describe("paste", () => {
     detach();
   });
 
+  it("ignores_pastes_while_presenting_and_saves_no_asset", () => {
+    const store = getFocusedEditor();
+    store.setState({ presenting: { index: 0, fill: false } });
+    const detach = attachDropPaste(document.createElement("div"), store);
+    expect(pasteEvent([png()]).defaultPrevented).toBe(false);
+    detach();
+    store.setState({ presenting: null });
+    expect(saveAsset).not.toHaveBeenCalled();
+    expect(insertAsset).not.toHaveBeenCalled();
+  });
+
   it("ignores pastes into text fields and non-image clipboards", () => {
     const store = getFocusedEditor();
     const detach = attachDropPaste(document.createElement("div"), store);

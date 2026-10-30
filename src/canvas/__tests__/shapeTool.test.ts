@@ -112,4 +112,22 @@ describe("insert-space tool", () => {
     expect(useEditorStore.getState().canUndo).toBe(undoBefore);
     tools.dispose();
   });
+  it("space_preview_leaves_locked_elements_in_place", async () => {
+    await ready();
+    const s = useEditorStore.getState();
+    const locked = s.addTextBox({ x: 0, y: 100 })!;
+    s.endEdit();
+    const free = s.addTextBox({ x: 0, y: 200 })!;
+    s.endEdit();
+    s.select([locked]);
+    s.lockSelection();
+    useEditorStore.setState({ spaceMode: "insert", spaceCutImages: false });
+    const tools = createToolController({ store: useEditorStore, el: document.createElement("div"), requestLive: () => {}, invalidate: () => {}, renderElement: () => {}, getSettings: () => DEFAULT_SETTINGS });
+    tools.down({ x: 0, y: 50 }, "insert-space");
+    tools.move([{ x: 0, y: 90 }]);
+    expect(tools.hidden.has(free)).toBe(true);
+    expect(tools.hidden.has(locked)).toBe(false);
+    tools.up();
+    tools.dispose();
+  });
 });

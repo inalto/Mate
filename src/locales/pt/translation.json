@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "Encaixar na grade",
         "hint": "Encaixa formas e traços no fundo quadriculado"
+      },
+      "smartGuides": {
+        "label": "Guias inteligentes",
+        "hint": "Ajusta às margens, centros e espaçamentos de outros elementos ao mover ou redimensionar; mantenha Ctrl (Cmd) premido para suspender"
       }
     },
     "pen": {
@@ -378,7 +382,111 @@
     "dot": "Ponto",
     "bar": "Barra",
     "settingsToggle": "Oferecer extremidades de linha após o ajuste",
-    "settingsHint": "Mostrar um pequeno seletor de extremidades em seta, ponto ou barra quando um traço se torna uma linha ou seta."
+    "settingsHint": "Mostrar um pequeno seletor de extremidades em seta, ponto ou barra quando um traço se torna uma linha ou seta.",
+    "diamond": "Losango"
+  },
+  "connector": {
+    "tool": "Conector",
+    "mode": "Traçado",
+    "straight": "Reto",
+    "curve": "Curvo",
+    "elbow": "Em cotovelo",
+    "dashed": "Tracejado",
+    "label": "Etiqueta",
+    "addLabel": "Adicionar etiqueta",
+    "editLabel": "Editar etiqueta",
+    "width": "Espessura do conector",
+    "colour": "Cor do conector"
+  },
+  "shapeText": {
+    "edit": "Editar texto",
+    "placeholder": "Escreva o texto",
+    "addText": "Adicionar texto",
+    "colour": "Cor do texto"
+  },
+  "autoComplete": {
+    "add": "Adicionar elemento ligado",
+    "text": "Texto",
+    "note": "Nota"
+  },
+  "frame": {
+    "tool": "Moldura",
+    "draw": "Desenhar moldura",
+    "preset169": "Diapositivo 16:9",
+    "preset43": "Diapositivo 4:3",
+    "presetSquare": "Quadrado",
+    "presetA4": "A4 vertical",
+    "rename": "Mudar o nome",
+    "background": "Fundo",
+    "selectContents": "Selecionar conteúdo",
+    "export": "Exportar moldura…",
+    "present": "Apresentar a partir daqui",
+    "untitled": "Moldura {{n}}"
+  },
+  "note": {
+    "tool": "Nota",
+    "card": "Cartão",
+    "none": "Nenhuma",
+    "radius": "Raio dos cantos",
+    "shadow": "Sombra",
+    "soft": "Suave",
+    "paper": "Papel",
+    "border": "Borda",
+    "yellow": "Amarelo",
+    "orange": "Laranja",
+    "pink": "Rosa",
+    "green": "Verde",
+    "blue": "Azul",
+    "purple": "Roxo",
+    "grey": "Cinzento",
+    "white": "Branco"
+  },
+  "present": {
+    "start": "Apresentar",
+    "exit": "Sair da apresentação",
+    "next": "Moldura seguinte",
+    "previous": "Moldura anterior",
+    "counter": "{{n}} / {{total}}",
+    "fullscreen": "Ecrã inteiro",
+    "blackBackground": "Fundo preto",
+    "fill": "Preencher",
+    "fit": "Ajustar",
+    "order": "Ordem das molduras",
+    "noFrames": "Adicione uma moldura para apresentar"
+  },
+  "mindmap": {
+    "tool": "Mapa mental",
+    "options": "Opções do mapa mental",
+    "style": "Estilo",
+    "style1": "Contorno",
+    "style2": "Preenchido",
+    "style3": "Minimalista",
+    "style4": "Suave",
+    "layout": "Disposição",
+    "left": "Esquerda",
+    "right": "Direita",
+    "balance": "Equilibrado",
+    "branchColor": "Cor do ramo",
+    "autoColor": "Automático",
+    "addChild": "Adicionar subtópico",
+    "addSibling": "Adicionar tópico no mesmo nível",
+    "collapse": "Recolher",
+    "expand": "Expandir",
+    "edit": "Editar tópico",
+    "import": "Importar…",
+    "importFailed": "Não foi possível importar este ficheiro",
+    "tooLarge": "O ficheiro excede 2 MB",
+    "topic": "Tópico",
+    "collapsed": "{{n}} ocultos"
+  },
+  "lock": {
+    "lock": "Bloquear",
+    "unlock": "Desbloquear",
+    "locked": "Bloqueado"
+  },
+  "rotate": {
+    "handle": "Rodar",
+    "angle": "Rotação {{degrees}}"
   },
   "keys": {
     "title": "Atalhos de teclado",
@@ -411,6 +519,10 @@
       "cursor": "Selecionar (cursor)",
       "lasso": "Laço",
       "shape": "Forma",
+      "connector": "Conector",
+      "frame": "Moldura",
+      "note": "Nota",
+      "mindmap": "Mapa mental",
       "text": "Texto",
       "insertSpace": "Inserir espaço",
       "presetSlot": "Predefinição 1 a 9",
@@ -435,6 +547,10 @@
       "zoomIn": "Aumentar zoom",
       "zoomOut": "Diminuir zoom",
       "zoomReset": "Redefinir zoom",
+      "zoomFit": "Ajustar a página ao ecrã",
+      "zoomSelection": "Ampliar para a seleção",
+      "presentStart": "Iniciar apresentação",
+      "toggleLock": "Bloquear ou desbloquear a seleção",
       "toggleSidebar": "Mostrar ou ocultar barra lateral",
       "prevPage": "Página anterior",
       "nextPage": "Próxima página",
@@ -487,6 +603,7 @@
       "cursor": "Mudar para selecionar (cursor)",
       "lasso": "Mudar para laço",
       "shape": "Mudar para forma",
+      "connector": "Mudar para o conector",
       "text": "Mudar para texto",
       "insertSpace": "Mudar para inserir espaço"
     },
@@ -603,6 +720,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}}%, redefinir",
+    "zoomMenu": "Opções de zoom",
     "pageFull": "Esta página está cheia ({{max}} itens): comece uma nova página.",
     "tableLimit": "A tabela atingiu o limite de tamanho ({{max}} células)",
     "insertImageFailed": "Não foi possível inserir essa imagem.",
@@ -706,6 +824,13 @@
     "shareInstead": "Partilhar em vez disso…",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
+  },
+  "exportRegion": {
+    "selectionOnly": "Apenas a seleção",
+    "copyImage": "Copiar como imagem",
+    "copyImageFailed": "Não foi possível copiar a imagem",
+    "fitPage": "Ajustar à página",
+    "fitSelection": "Ajustar à seleção"
   },
   "selection": {
     "label": "Seleção",

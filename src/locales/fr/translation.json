@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "Magnétisme sur la grille",
         "hint": "Aligne formes et tracés sur le quadrillage"
+      },
+      "smartGuides": {
+        "label": "Repères intelligents",
+        "hint": "S'aligne sur les bords, centres et espacements des autres éléments lors d'un déplacement ou d'un redimensionnement ; maintenez Ctrl (Cmd) pour suspendre"
       }
     },
     "pen": {
@@ -378,7 +382,111 @@
     "dot": "Point",
     "bar": "Barre",
     "settingsToggle": "Proposer les extrémités de ligne après l'ajustement",
-    "settingsHint": "Afficher un petit sélecteur d'extrémités en flèche, point ou barre lorsqu'un trait devient une ligne ou une flèche."
+    "settingsHint": "Afficher un petit sélecteur d'extrémités en flèche, point ou barre lorsqu'un trait devient une ligne ou une flèche.",
+    "diamond": "Losange"
+  },
+  "connector": {
+    "tool": "Connecteur",
+    "mode": "Tracé",
+    "straight": "Droit",
+    "curve": "Courbe",
+    "elbow": "Coudé",
+    "dashed": "Pointillé",
+    "label": "Étiquette",
+    "addLabel": "Ajouter une étiquette",
+    "editLabel": "Modifier l'étiquette",
+    "width": "Épaisseur du connecteur",
+    "colour": "Couleur du connecteur"
+  },
+  "shapeText": {
+    "edit": "Modifier le texte",
+    "placeholder": "Saisissez du texte",
+    "addText": "Ajouter du texte",
+    "colour": "Couleur du texte"
+  },
+  "autoComplete": {
+    "add": "Ajouter un élément relié",
+    "text": "Texte",
+    "note": "Note"
+  },
+  "frame": {
+    "tool": "Cadre",
+    "draw": "Dessiner un cadre",
+    "preset169": "Diapositive 16:9",
+    "preset43": "Diapositive 4:3",
+    "presetSquare": "Carré",
+    "presetA4": "A4 portrait",
+    "rename": "Renommer",
+    "background": "Arrière-plan",
+    "selectContents": "Sélectionner le contenu",
+    "export": "Exporter le cadre…",
+    "present": "Présenter à partir d'ici",
+    "untitled": "Cadre {{n}}"
+  },
+  "note": {
+    "tool": "Note",
+    "card": "Carte",
+    "none": "Aucune",
+    "radius": "Rayon des coins",
+    "shadow": "Ombre",
+    "soft": "Douce",
+    "paper": "Papier",
+    "border": "Bordure",
+    "yellow": "Jaune",
+    "orange": "Orange",
+    "pink": "Rose",
+    "green": "Vert",
+    "blue": "Bleu",
+    "purple": "Violet",
+    "grey": "Gris",
+    "white": "Blanc"
+  },
+  "present": {
+    "start": "Présenter",
+    "exit": "Quitter la présentation",
+    "next": "Cadre suivant",
+    "previous": "Cadre précédent",
+    "counter": "{{n}} / {{total}}",
+    "fullscreen": "Plein écran",
+    "blackBackground": "Arrière-plan noir",
+    "fill": "Remplir",
+    "fit": "Ajuster",
+    "order": "Ordre des cadres",
+    "noFrames": "Ajoutez un cadre pour présenter"
+  },
+  "mindmap": {
+    "tool": "Carte mentale",
+    "options": "Options de la carte mentale",
+    "style": "Style",
+    "style1": "Contour",
+    "style2": "Rempli",
+    "style3": "Minimal",
+    "style4": "Doux",
+    "layout": "Disposition",
+    "left": "Gauche",
+    "right": "Droite",
+    "balance": "Équilibré",
+    "branchColor": "Couleur de la branche",
+    "autoColor": "Automatique",
+    "addChild": "Ajouter un sous-thème",
+    "addSibling": "Ajouter un thème au même niveau",
+    "collapse": "Réduire",
+    "expand": "Développer",
+    "edit": "Modifier le thème",
+    "import": "Importer…",
+    "importFailed": "Impossible d'importer ce fichier",
+    "tooLarge": "Le fichier dépasse 2 Mo",
+    "topic": "Thème",
+    "collapsed": "{{n}} masqués"
+  },
+  "lock": {
+    "lock": "Verrouiller",
+    "unlock": "Déverrouiller",
+    "locked": "Verrouillé"
+  },
+  "rotate": {
+    "handle": "Pivoter",
+    "angle": "Rotation {{degrees}}"
   },
   "keys": {
     "title": "Raccourcis clavier",
@@ -411,6 +519,10 @@
       "cursor": "Sélectionner (curseur)",
       "lasso": "Lasso",
       "shape": "Forme",
+      "connector": "Connecteur",
+      "frame": "Cadre",
+      "note": "Note",
+      "mindmap": "Carte mentale",
       "text": "Texte",
       "insertSpace": "Insérer un espace",
       "presetSlot": "Préréglage 1 à 9",
@@ -435,6 +547,10 @@
       "zoomIn": "Zoomer",
       "zoomOut": "Dézoomer",
       "zoomReset": "Réinitialiser le zoom",
+      "zoomFit": "Ajuster la page à l'écran",
+      "zoomSelection": "Zoomer sur la sélection",
+      "presentStart": "Démarrer la présentation",
+      "toggleLock": "Verrouiller ou déverrouiller la sélection",
       "toggleSidebar": "Afficher ou masquer la barre latérale",
       "prevPage": "Page précédente",
       "nextPage": "Page suivante",
@@ -487,6 +603,7 @@
       "cursor": "Passer à la sélection (curseur)",
       "lasso": "Passer au lasso",
       "shape": "Passer à la forme",
+      "connector": "Passer au connecteur",
       "text": "Passer au texte",
       "insertSpace": "Passer à l'insertion d'espace"
     },
@@ -603,6 +720,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}} %, réinitialiser",
+    "zoomMenu": "Options de zoom",
     "pageFull": "Cette page est pleine ({{max}} éléments) : commence une nouvelle page.",
     "tableLimit": "Le tableau a atteint sa taille limite ({{max}} cellules)",
     "insertImageFailed": "Impossible d'insérer cette image.",
@@ -706,6 +824,13 @@
     "shareInstead": "Partager plutôt…",
     "boxRender": "Impossible de générer le contenu de la zone {{id}} pour l'export.",
     "boxMissing": "La zone {{id}} n'a pas été générée pour l'export."
+  },
+  "exportRegion": {
+    "selectionOnly": "Sélection uniquement",
+    "copyImage": "Copier comme image",
+    "copyImageFailed": "Impossible de copier l'image",
+    "fitPage": "Ajuster à la page",
+    "fitSelection": "Ajuster à la sélection"
   },
   "selection": {
     "label": "Sélection",

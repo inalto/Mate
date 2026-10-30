@@ -94,6 +94,24 @@ describe("runEditorShortcut", () => {
     expect(spies.setCamera).toHaveBeenCalledTimes(2);
   });
 
+  it("refuses_fit_reset_and_selection_zoom_while_presenting_but_keeps_zoom_in_out", () => {
+    const fitPage = vi.fn();
+    const fitSelection = vi.fn();
+    useEditorStore.setState({ fitPage, fitSelection, presenting: { index: 0, fill: false } } as never);
+    try {
+      runEditorShortcut("zoom.fit", {});
+      runEditorShortcut("zoom.reset", {});
+      runEditorShortcut("zoom.selection", {});
+      expect(fitPage).not.toHaveBeenCalled();
+      expect(fitSelection).not.toHaveBeenCalled();
+      expect(spies.resetCamera).not.toHaveBeenCalled();
+      runEditorShortcut("zoom.in", {});
+      expect(spies.setCamera).toHaveBeenCalledTimes(1);
+    } finally {
+      useEditorStore.setState({ presenting: null });
+    }
+  });
+
   it("steps_through_pages_in_sidebar_order_within_the_section", () => {
     expect(sectionPageOrder(useNotebookStore.getState().tree.pages, "s1")).toEqual(["a", "a1", "b"]);
     runEditorShortcut("page.prev", {});

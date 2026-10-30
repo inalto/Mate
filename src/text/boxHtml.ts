@@ -5,10 +5,12 @@ import { esc, n } from "../export/svgUtil";
 import { mapInkColor } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import i18n from "../i18n";
-import type { CodeOutput } from "../model/content";
+import { noteBackground } from "../components/noteColors";
+import { CARD_PADDING, cardOf, type CardStyle, type CodeOutput } from "../model/content";
 import type { Element } from "../model/types";
 import type { Rect } from "../tools/spatialIndex";
 import { isMathBox } from "../math/mathBox";
+import { CARD_BORDER_ALPHA } from "../renderers/boxDraw";
 import { mathForeignObject, textBoxForeignObject } from "./foreignObject";
 import { safeColor } from "./sanitize";
 import { FONT_STACKS, LINE_HEIGHT } from "./style";
@@ -70,6 +72,26 @@ export const FALLBACK_INK = "#000000";
 /** The element's colour when safe for CSS, else black. */
 const inkOf = (el: Pick<Element, "color">): string => safeColor(el.color, FALLBACK_INK);
 
+/** Soft shadow of a card (canvas `shadowBlur` 12, offset 0 4) and the hard "paper" one (offset 3 3), as CSS. */
+export const CARD_SHADOW_CSS = { soft: "0 4px 12px rgba(0,0,0,0.18)", paper: "3px 3px 0 rgba(0,0,0,0.25)" } as const;
+
+/**
+ * CSS of a card for the DOM box editor: background (resolved for `theme`), radius, shadow, 1 px
+ * border and the 12 px padding. The bitmap and SVG draw the same fill, radius, shadow and border
+ * themselves (renderers/boxDraw) and inset the text by the same padding, so editor and bitmap agree.
+ */
+export function cardCss(card: CardStyle, theme: ThemeName, ink: string): Record<string, string> {
+  const css: Record<string, string> = {
+    "box-sizing": "border-box",
+    padding: `${CARD_PADDING}px`,
+    background: noteBackground(card.background, theme),
+    "border-radius": `${card.radius}px`,
+  };
+  if (card.shadow !== "none") css["box-shadow"] = CARD_SHADOW_CSS[card.shadow];
+  if (card.border) css.border = `1px solid color-mix(in srgb, ${ink} ${CARD_BORDER_ALPHA * 100}%, transparent)`;
+  return css;
+}
+
 /** Appearance of a text box, table or code block; null for other types. */
 export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | null {
   const width = el.boxWidth ?? 0;
@@ -87,11 +109,15 @@ export function boxAppearance(el: Element, theme: ThemeName): BoxAppearance | nu
           sharedCss: "katex",
         };
       }
+      // A card insets the text by its padding; the card itself (fill, shadow) is drawn under the bitmap.
+      const card = cardOf(el);
+      const inset = (r: Rect): Rect =>
+        card ? { x: r.x + CARD_PADDING, y: r.y + CARD_PADDING, width: Math.max(1, r.width - 2 * CARD_PADDING), height: Math.max(1, r.height - 2 * CARD_PADDING) } : r;
       return {
-        key: JSON.stringify([content.contentHtml, content.textAttributes, width, height, color]),
+        key: JSON.stringify([content.contentHtml, content.textAttributes, width, height, color, card ? CARD_PADDING : 0]),
         width,
         height,
-        foreignObject: (r) => textBoxForeignObject(content, r, color),
+        foreignObject: (r) => textBoxForeignObject(content, inset(r), color),
       };
     }
     case "table": {

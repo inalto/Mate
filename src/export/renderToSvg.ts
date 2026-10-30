@@ -6,6 +6,7 @@ import type { Element, Page } from "../model/types";
 import { getEmbeddedKatexCss } from "../math/katexCss";
 import { elementSvg } from "../renderers/registry";
 import { useSettingsStore } from "../stores/settings";
+import { elementBounds, rectsOverlap } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 import { exportRegion, pageElements, surfaceFor, type ExportOptions } from "./scene";
 import { circle, esc, n } from "./svgUtil";
@@ -16,7 +17,7 @@ function backgroundSvg(page: Page, region: Rect, sheet: BackgroundPage, opts: Ex
   const out: string[] = [];
   const rect = (r: Rect, fill: string, rx?: number) =>
     `<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}"${rx ? ` rx="${rx}"` : ""} fill="${fill}"/>`;
-  if (sheet.mode === "page" && opts.pageFrame) {
+  if (sheet.mode === "page" && opts.pageFrame && !opts.region) {
     out.push(rect(region, surface.desk));
     const stride = sheet.height + PAGE_GAP;
     for (let i = 0; i < (sheet.count ?? 1); i++) {
@@ -38,10 +39,12 @@ function backgroundSvg(page: Page, region: Rect, sheet: BackgroundPage, opts: Ex
 export function renderToSvg(elements: Iterable<Element>, page: Page, opts: ExportOptions): string {
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
   const list = pageElements(page, elements);
-  const { region, sheet } = exportRegion(page, list, aspect);
+  const { region, sheet } = exportRegion(page, list, aspect, opts.region);
   const svgStyles = new Set<string>();
   const ropts = { theme: opts.theme, zoomBucket: opts.scale, svgStyles };
-  const ink = renderOrder(list)
+  // A region export carries only what it shows (as the PDF does): nothing outside it is in the file.
+  const shown = opts.region ? list.filter((el) => rectsOverlap(elementBounds(el), region)) : list;
+  const ink = renderOrder(shown)
     .map((el) => elementSvg(el, ropts))
     .join("");
   // katex.css (fonts embedded) once for every math box: it applies across the SVG document.

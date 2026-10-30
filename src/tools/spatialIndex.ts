@@ -1,4 +1,6 @@
 // Uniform-grid spatial index over element bounds (world units) for eraser / lasso candidate queries.
+import { connectorBounds } from "../connectors/geometry";
+import { mindmapBounds } from "../mindmap/cache";
 import { contentOf, isBoxedType } from "../model/content";
 import type { Element } from "../model/types";
 import { rendererFor } from "../renderers/registry";
@@ -15,18 +17,19 @@ export const CELL_SIZE = 256;
 export const rectsOverlap = (a: Rect, b: Rect): boolean =>
   a.x <= b.x + b.width && b.x <= a.x + a.width && a.y <= b.y + b.height && b.y <= a.y + a.height;
 
-/** Element metadata stored in `content` (JSON object): z-order and rotation (radians). */
-export const contentMeta = (el: Element): { zIndex?: number; rotation?: number } =>
-  contentOf<{ zIndex: number; rotation: number }>(el);
+/** Element metadata stored in `content` (JSON object): z-order, rotation (radians) and lock. */
+export const contentMeta = (el: Element): { zIndex?: number; rotation?: number; locked?: boolean } =>
+  contentOf<{ zIndex: number; rotation: number; locked: boolean }>(el);
 
 /** Merge `patch` into `el.content` when it is an object (or empty); other content is left untouched. */
-export function withMeta(el: Element, patch: { zIndex?: number; rotation?: number }): Element {
+export function withMeta(el: Element, patch: { zIndex?: number; rotation?: number; locked?: boolean }): Element {
   const c = el.content;
   if (c !== undefined && c !== null && (typeof c !== "object" || Array.isArray(c))) return el;
   return { ...el, content: { ...((c as object | null) ?? {}), ...patch } };
 }
 
-function rotatedBox(r: Rect, rad: number): Rect {
+/** Axis-aligned bounds of `r` turned by `rad` about its centre. */
+export function rotatedBox(r: Rect, rad: number): Rect {
   if (!rad) return r;
   const cx = r.x + r.width / 2;
   const cy = r.y + r.height / 2;
@@ -59,11 +62,14 @@ export const isBoxed = (el: Element): boolean =>
 /**
  * World bounds: a renderer's own `bounds` when registered; boxed elements span their box from the
  * first point (see `boxRect`); others the points' bbox expanded by width/2. `content.rotation`
- * rotates the box about its centre.
+ * rotates the box about its centre (never a frame's). Connectors span their cached route, caps and label (never rotated);
+ * mind maps their memoised layout padded by 2 (never rotated).
  */
 export function elementBounds(el: Element): Rect {
   const pts = el.points;
   if (pts.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+  if (el.type === "connector") return connectorBounds(el);
+  if (el.type === "mindmap") return mindmapBounds(el);
   const custom = rendererFor(el.type)?.bounds;
   let r: Rect;
   if (custom) {
@@ -84,7 +90,8 @@ export function elementBounds(el: Element): Rect {
     const h = el.width / 2;
     r = { x: minX - h, y: minY - h, width: maxX - minX + el.width, height: maxY - minY + el.width };
   }
-  return rotatedBox(r, contentMeta(el).rotation ?? 0);
+  // Frames ignore rotation.
+  return el.type === "frame" ? r : rotatedBox(r, contentMeta(el).rotation ?? 0);
 }
 
 export class SpatialIndex {

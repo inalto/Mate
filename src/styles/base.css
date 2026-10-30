@@ -752,6 +752,80 @@ button.card:hover {
   cursor: ew-resize;
 }
 
+/* Rotate handle 24 px above the top-centre (constant screen size); the ::before widens the hit area
+   to 28 px (slop >= 8 px). The ::after is the stem down to the frame. */
+.box-frame-rotate {
+  --size: calc(12px * var(--overlay-inv-z, 1));
+  position: absolute;
+  left: 50%;
+  top: calc(-24px * var(--overlay-inv-z, 1));
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #ffffff;
+  border: calc(1px * var(--overlay-inv-z, 1)) solid var(--color-primary);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+
+.box-frame-rotate::before {
+  content: "";
+  position: absolute;
+  inset: calc(-8px * var(--overlay-inv-z, 1));
+  border-radius: 50%;
+}
+
+.box-frame-rotate::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: calc(1px * var(--overlay-inv-z, 1));
+  height: calc(18px * var(--overlay-inv-z, 1));
+  background: var(--color-primary);
+  pointer-events: none;
+}
+
+/* Angle badge at the box centre while the rotate handle is dragged (kept upright). */
+.box-frame-angle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  padding: calc(2px * var(--overlay-inv-z, 1)) calc(6px * var(--overlay-inv-z, 1));
+  border-radius: calc(4px * var(--overlay-inv-z, 1));
+  background: rgba(26, 29, 27, 0.85);
+  color: #ffffff;
+  font: calc(12px * var(--overlay-inv-z, 1)) var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* A locked box: no handles, a small padlock just outside its top-right corner. */
+.box-frame.locked {
+  outline-style: dashed;
+}
+
+.box-frame-lock {
+  position: absolute;
+  left: calc(100% + 4px * var(--overlay-inv-z, 1));
+  top: calc(-14px * var(--overlay-inv-z, 1));
+  width: calc(10px * var(--overlay-inv-z, 1));
+  height: calc(12px * var(--overlay-inv-z, 1));
+  color: var(--color-primary);
+  pointer-events: none;
+}
+
+/* Smart guides are painted on the live canvas layer in this colour (GUIDE_COLOR in
+   canvas/toolInteractions.ts); the class is for DOM previews of the same lines. */
+.guide {
+  color: #e0218a;
+  background: #e0218a;
+}
+
 /* Text box editor: the slot grows with its content (the box height is committed at the end). */
 .box-editor[data-editor-type="text-box"] {
   height: auto !important;
@@ -1150,6 +1224,12 @@ button.card:hover {
   background: var(--color-surface-2);
 }
 
+/* A narrow menu opener beside its button (the mobile toolbar rule below widens it to 40 px). */
+.tb-btn.tb-caret {
+  min-width: 16px;
+  padding: 0;
+}
+
 .tb-btn.active {
   color: var(--color-primary);
   box-shadow: inset 0 0 0 1px var(--color-primary);
@@ -1203,11 +1283,17 @@ button.card:hover {
 }
 
 /* Zoom badge in a pane's bottom-right corner (settings.showZoomIndicator). */
-.zoom-indicator {
+/* Zoom badge (click resets) and its caret (opens the zoom menu), in the pane's bottom-right corner. */
+.zoom-indicator-group {
   position: absolute;
   right: var(--space-2);
   bottom: var(--space-2);
   z-index: 3;
+  display: flex;
+  gap: 2px;
+}
+
+.zoom-indicator {
   padding: 2px var(--space-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -1222,6 +1308,32 @@ button.card:hover {
 .zoom-indicator:hover {
   color: var(--color-text);
   opacity: 1;
+}
+
+.zoom-indicator-caret {
+  padding: 2px var(--space-1);
+}
+
+/* Opens upwards from the corner, so it always stays inside the pane. */
+.tb-popover.zoom-menu {
+  top: auto;
+  left: auto;
+  right: 0;
+  bottom: calc(100% + var(--space-1));
+  min-width: 160px;
+}
+
+.zoom-menu-header {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tb-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: transparent;
 }
 
 .tb-popover {
@@ -2043,4 +2155,29 @@ html.mobile .sb-resize {
 
 .line-caps-menu {
   min-width: 0;
+}
+
+.label-popover {
+  position: absolute;
+  z-index: 4;
+  padding: var(--space-1);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+
+.label-popover-input {
+  width: 200px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.connector-menu {
+  min-width: 200px;
 }

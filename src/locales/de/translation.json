@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "Am Raster ausrichten",
         "hint": "Formen und Striche am Rasterhintergrund ausrichten"
+      },
+      "smartGuides": {
+        "label": "Intelligente Hilfslinien",
+        "hint": "Beim Verschieben oder Skalieren an Kanten, Mitten und Abständen anderer Elemente einrasten; Strg (Cmd) gedrückt halten, um es zu unterbrechen"
       }
     },
     "pen": {
@@ -378,7 +382,111 @@
     "dot": "Punkt",
     "bar": "Strich",
     "settingsToggle": "Linienenden nach dem Einrasten anbieten",
-    "settingsHint": "Beim Umwandeln eines Strichs in eine Linie oder einen Pfeil eine kleine Auswahl für Pfeil-, Punkt- oder Strichenden zeigen."
+    "settingsHint": "Beim Umwandeln eines Strichs in eine Linie oder einen Pfeil eine kleine Auswahl für Pfeil-, Punkt- oder Strichenden zeigen.",
+    "diamond": "Raute"
+  },
+  "connector": {
+    "tool": "Verbinder",
+    "mode": "Verlauf",
+    "straight": "Gerade",
+    "curve": "Gebogen",
+    "elbow": "Winkel",
+    "dashed": "Gestrichelt",
+    "label": "Beschriftung",
+    "addLabel": "Beschriftung hinzufügen",
+    "editLabel": "Beschriftung bearbeiten",
+    "width": "Verbinderstärke",
+    "colour": "Verbinderfarbe"
+  },
+  "shapeText": {
+    "edit": "Text bearbeiten",
+    "placeholder": "Text eingeben",
+    "addText": "Text hinzufügen",
+    "colour": "Textfarbe"
+  },
+  "autoComplete": {
+    "add": "Verbundenes Element hinzufügen",
+    "text": "Text",
+    "note": "Notiz"
+  },
+  "frame": {
+    "tool": "Rahmen",
+    "draw": "Rahmen zeichnen",
+    "preset169": "Folie 16:9",
+    "preset43": "Folie 4:3",
+    "presetSquare": "Quadrat",
+    "presetA4": "A4 Hochformat",
+    "rename": "Umbenennen",
+    "background": "Hintergrund",
+    "selectContents": "Inhalt auswählen",
+    "export": "Rahmen exportieren…",
+    "present": "Ab hier präsentieren",
+    "untitled": "Rahmen {{n}}"
+  },
+  "note": {
+    "tool": "Notiz",
+    "card": "Karte",
+    "none": "Keine",
+    "radius": "Eckenradius",
+    "shadow": "Schatten",
+    "soft": "Weich",
+    "paper": "Papier",
+    "border": "Rand",
+    "yellow": "Gelb",
+    "orange": "Orange",
+    "pink": "Rosa",
+    "green": "Grün",
+    "blue": "Blau",
+    "purple": "Violett",
+    "grey": "Grau",
+    "white": "Weiss"
+  },
+  "present": {
+    "start": "Präsentieren",
+    "exit": "Präsentation beenden",
+    "next": "Nächster Rahmen",
+    "previous": "Vorheriger Rahmen",
+    "counter": "{{n}} / {{total}}",
+    "fullscreen": "Vollbild",
+    "blackBackground": "Schwarzer Hintergrund",
+    "fill": "Füllen",
+    "fit": "Einpassen",
+    "order": "Reihenfolge der Rahmen",
+    "noFrames": "Füge einen Rahmen zum Präsentieren hinzu"
+  },
+  "mindmap": {
+    "tool": "Mindmap",
+    "options": "Mindmap-Optionen",
+    "style": "Stil",
+    "style1": "Umriss",
+    "style2": "Gefüllt",
+    "style3": "Minimal",
+    "style4": "Weich",
+    "layout": "Anordnung",
+    "left": "Links",
+    "right": "Rechts",
+    "balance": "Ausgewogen",
+    "branchColor": "Zweigfarbe",
+    "autoColor": "Automatisch",
+    "addChild": "Unterthema hinzufügen",
+    "addSibling": "Thema auf gleicher Ebene hinzufügen",
+    "collapse": "Einklappen",
+    "expand": "Ausklappen",
+    "edit": "Thema bearbeiten",
+    "import": "Importieren…",
+    "importFailed": "Diese Datei konnte nicht importiert werden",
+    "tooLarge": "Die Datei ist grösser als 2 MB",
+    "topic": "Thema",
+    "collapsed": "{{n}} ausgeblendet"
+  },
+  "lock": {
+    "lock": "Sperren",
+    "unlock": "Entsperren",
+    "locked": "Gesperrt"
+  },
+  "rotate": {
+    "handle": "Drehen",
+    "angle": "Drehung {{degrees}}"
   },
   "keys": {
     "title": "Tastenkürzel",
@@ -411,6 +519,10 @@
       "cursor": "Auswählen (Cursor)",
       "lasso": "Lasso",
       "shape": "Form",
+      "connector": "Verbinder",
+      "frame": "Rahmen",
+      "note": "Notiz",
+      "mindmap": "Mindmap",
       "text": "Text",
       "insertSpace": "Platz einfügen",
       "presetSlot": "Voreinstellung 1 bis 9",
@@ -435,6 +547,10 @@
       "zoomIn": "Vergrößern",
       "zoomOut": "Verkleinern",
       "zoomReset": "Zoom zurücksetzen",
+      "zoomFit": "Seite an Bildschirm anpassen",
+      "zoomSelection": "Auf Auswahl zoomen",
+      "presentStart": "Präsentation starten",
+      "toggleLock": "Auswahl sperren oder entsperren",
       "toggleSidebar": "Seitenleiste ein-/ausblenden",
       "prevPage": "Vorherige Seite",
       "nextPage": "Nächste Seite",
@@ -487,6 +603,7 @@
       "cursor": "Zu Auswählen (Cursor) wechseln",
       "lasso": "Zu Lasso wechseln",
       "shape": "Zu Form wechseln",
+      "connector": "Zum Verbinder wechseln",
       "text": "Zu Text wechseln",
       "insertSpace": "Zu Platz einfügen wechseln"
     },
@@ -603,6 +720,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}} %, zurücksetzen",
+    "zoomMenu": "Zoom-Optionen",
     "pageFull": "Diese Seite ist voll ({{max}} Elemente). Beginne eine neue Seite.",
     "tableLimit": "Die Tabelle hat ihre Größengrenze erreicht ({{max}} Zellen)",
     "insertImageFailed": "Dieses Bild konnte nicht eingefügt werden.",
@@ -706,6 +824,13 @@
     "shareInstead": "Stattdessen teilen…",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
     "boxMissing": "Feld {{id}} wurde für den Export nicht gerendert."
+  },
+  "exportRegion": {
+    "selectionOnly": "Nur Auswahl",
+    "copyImage": "Als Bild kopieren",
+    "copyImageFailed": "Das Bild konnte nicht kopiert werden",
+    "fitPage": "Seite einpassen",
+    "fitSelection": "Auswahl einpassen"
   },
   "selection": {
     "label": "Auswahl",

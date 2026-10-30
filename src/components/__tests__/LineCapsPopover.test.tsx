@@ -7,6 +7,7 @@ vi.mock("../../ipc/elementsQueue", () => ({
 }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
 
+import { connectorCaps } from "../../connectors/geometry";
 import { effectiveCaps } from "../../model/content";
 import { shapeFromDrag } from "../../shapes/geometry";
 import { useEditorStore } from "../../stores/editor";
@@ -51,6 +52,18 @@ describe("LineCapsPopover", () => {
     expect(effectiveCaps(s().elements.get(id)!)).toEqual({ start: "none", end: "dot" });
   });
 
+  it("closes_when_the_pane_starts_presenting", async () => {
+    const id = await addLine();
+    useEditorStore.getState().addFrame({ x: 0, y: 0, width: 600, height: 400 });
+    render(<LineCapsPopover store={useEditorStore} />);
+    act(() => openLineCaps(useEditorStore, id));
+    expect(screen.getByRole("toolbar", { name: "Line ends" })).toBeTruthy();
+    act(() => useEditorStore.getState().startPresentation());
+    expect(screen.queryByRole("toolbar", { name: "Line ends" })).toBeNull();
+    expect(useLineCapsStore.getState().target).toBeNull();
+    act(() => useEditorStore.getState().stopPresentation());
+  });
+
   it("closes_on_escape_outside_pointerdown_and_idle", async () => {
     const id = await addLine("arrow");
     render(<LineCapsPopover store={useEditorStore} />);
@@ -89,5 +102,17 @@ describe("LineCapsPopover", () => {
     fireEvent.click(screen.getByRole("button", { name: "End: None" }));
     expect(effectiveCaps(useEditorStore.getState().elements.get(id)!)).toEqual({ start: "none", end: "none" });
     expect(useEditorStore.getState().elements.get(id)!.shapeType).toBe("arrow");
+  });
+
+  it("connector_ends_offer_10_options_with_diamond", async () => {
+    await addLine();
+    const id = useEditorStore.getState().addConnector({ start: { x: 100, y: 500 }, end: { x: 400, y: 500 }, mode: "straight" })!;
+    useEditorStore.getState().select([id]);
+    render(<SelectionBar />);
+    fireEvent.click(screen.getByRole("button", { name: "Line ends" }));
+    const dialog = screen.getByRole("dialog", { name: "Line ends" });
+    expect(within(dialog).getAllByRole("button")).toHaveLength(10);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Start: Diamond" }));
+    expect(connectorCaps(useEditorStore.getState().elements.get(id)!)).toEqual({ start: "diamond", end: "arrow" });
   });
 });

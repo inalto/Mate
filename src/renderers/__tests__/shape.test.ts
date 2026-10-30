@@ -4,6 +4,7 @@ import { renderToSvg } from "../../export/renderToSvg";
 import { elementBounds } from "../../tools/spatialIndex";
 import "../builtins";
 import { drawElement, elementSvg } from "../registry";
+import { SHAPE_LABEL_FONT, withShapeLabel } from "../../shapes/label";
 
 type Call = [string, ...unknown[]];
 
@@ -17,6 +18,9 @@ function stubCtx() {
     strokeStyle: "#000",
     lineCap: "butt",
     lineJoin: "miter",
+    font: "10px sans-serif",
+    textAlign: "start",
+    textBaseline: "alphabetic",
   };
   const stack: Record<string, unknown>[] = [];
   const rec =
@@ -39,6 +43,13 @@ function stubCtx() {
     closePath: rec("closePath"),
     stroke: () => calls.push(["stroke", state.lineWidth, state.strokeStyle, state.lineJoin, state.globalAlpha]),
     fill: () => calls.push(["fill", state.fillStyle, state.globalAlpha]),
+    clip: rec("clip"),
+    translate: rec("translate"),
+    rotate: rec("rotate"),
+    fillText: (text: string, x: number, y: number) =>
+      calls.push(["fillText", text, x, y, state.fillStyle, state.font, state.textAlign, state.textBaseline]),
+    // 7 px per character.
+    measureText: (s: string) => ({ width: s.length * 7 }),
   };
   for (const key of Object.keys(state)) {
     Object.defineProperty(ctx, key, {
@@ -203,5 +214,94 @@ describe("shape renderer", () => {
   it("page_svg_export_includes_shapes", () => {
     const svg = renderToSvg([rect], page, { scale: 1, theme: "light", background: "transparent", pageFrame: false });
     expect(svg).toContain('fill="#C62828"');
+  });
+});
+
+describe("shape labels", () => {
+  // Rectangle 0,0 → 100,50, stroke 3: inner rect 9,9 82×32 (11 characters at 7 px).
+  const labelled = withShapeLabel(rect, { text: "one two three", fontSize: 10, color: "#1565C0", align: "center" });
+
+  it("canvas_draws_wrapped_lines_centred_and_clipped", () => {
+    const { ctx, calls } = stubCtx();
+    drawElement(ctx, labelled, opts);
+    const texts = calls.filter((c) => c[0] === "fillText");
+    // Two lines, 12.5 apart, vertically centred on y 25, horizontally on x 50.
+    expect(texts).toEqual([
+      ["fillText", "one two", 50, 18.75, "#1565C0", `10px ${SHAPE_LABEL_FONT}`, "center", "middle"],
+      ["fillText", "three", 50, 31.25, "#1565C0", `10px ${SHAPE_LABEL_FONT}`, "center", "middle"],
+    ]);
+    const clip = calls.findIndex((c) => c[0] === "clip");
+    expect(clip).toBeGreaterThan(calls.findIndex((c) => c[0] === "stroke"));
+    expect(clip).toBeLessThan(calls.findIndex((c) => c[0] === "fillText"));
+    expect(calls.filter((c) => c[0] === "rotate")).toEqual([]);
+    expect(calls[calls.length - 1]).toEqual(["restore"]);
+  });
+
+  it("canvas_aligns_left_and_right_to_the_inner_rect", () => {
+    for (const [align, x] of [
+      ["left", 9],
+      ["right", 91],
+    ] as const) {
+      const { ctx, calls } = stubCtx();
+      drawElement(ctx, withShapeLabel(rect, { text: "hi", fontSize: 10, color: "#1565C0", align }), opts);
+      expect(calls.filter((c) => c[0] === "fillText")).toEqual([["fillText", "hi", x, 25, "#1565C0", `10px ${SHAPE_LABEL_FONT}`, align, "middle"]]);
+    }
+  });
+
+  it("canvas_rotates_the_label_about_the_box_centre", () => {
+    const { ctx, calls } = stubCtx();
+    drawElement(ctx, { ...labelled, content: { ...(labelled.content as object), rotation: 0.5 } }, opts);
+    expect(calls.filter((c) => c[0] === "rotate")).toEqual([["rotate", 0.5]]);
+    expect(calls.filter((c) => c[0] === "translate")).toEqual([
+      ["translate", 50, 25],
+      ["translate", -50, -25],
+    ]);
+  });
+
+  it("label_colour_remaps_in_dark_theme_and_unsafe_falls_back_to_the_stroke", () => {
+    const dark = stubCtx();
+    drawElement(dark.ctx, withShapeLabel(rect, { text: "x", fontSize: 10, color: "#000000", align: "center" }), { ...opts, theme: "dark" });
+    expect(dark.calls.find((c) => c[0] === "fillText")?.[4]).toBe("#FFFFFF");
+    const bad = elementSvg(withShapeLabel({ ...rect, color: "#1565C0" }, { text: "x", fontSize: 10, color: "url(#x)", align: "center" }), opts);
+    expect(bad).not.toContain("url(");
+    expect(bad).toMatch(/<text [^>]*fill="#1565C0"/);
+  });
+
+  it("empty_label_draws_nothing", () => {
+    const { ctx, calls } = stubCtx();
+    drawElement(ctx, withShapeLabel(rect, { text: "", fontSize: 10, color: "#1565C0", align: "center" }), opts);
+    expect(calls.filter((c) => c[0] === "fillText" || c[0] === "clip")).toEqual([]);
+    expect(elementSvg(withShapeLabel(rect, { text: " ", fontSize: 10, color: "#1565C0", align: "center" }), opts)).not.toContain("<text");
+  });
+
+  it("svg_emits_one_tspan_per_line", () => {
+    // No canvas in jsdom: SVG measures 0.55 × font size per character (14 characters fit in 82).
+    const svg = elementSvg(withShapeLabel(rect, { text: "alpha beta gamma delta", fontSize: 10, color: "#1565C0", align: "center" }), opts);
+    expect(svg).toMatch(/^<path /);
+    expect((svg.match(/<tspan /g) ?? []).length).toBe(2);
+    expect(svg).toContain('<tspan x="50" dy="0">alpha beta</tspan><tspan x="50" dy="12.5">gamma delta</tspan>');
+    expect(svg).toContain('y="18.75"');
+    expect(svg).toContain('text-anchor="middle"');
+    expect(svg).toContain('dominant-baseline="central"'); // the canvas "middle" baseline (em box)
+    expect(svg).toContain('font-size="10"');
+    expect(svg).toContain('fill="#1565C0"');
+  });
+
+  it("svg_escapes_text_keeps_empty_lines_and_rotates", () => {
+    const el = withShapeLabel(
+      { ...rect, content: { fillOpacity: 1, rotation: Math.PI / 2 } },
+      { text: "a<b\n\n&c", fontSize: 10, color: "#1565C0", align: "left" },
+    );
+    const svg = elementSvg(el, opts);
+    expect(svg).toContain("a&lt;b");
+    expect(svg).toContain("&amp;c");
+    expect((svg.match(/<tspan /g) ?? []).length).toBe(3);
+    expect(svg).toContain('text-anchor="start"');
+    expect(svg).toMatch(/<text [^>]*transform="rotate\(90 50 25\)"/);
+  });
+
+  it("lines_and_arrows_ignore_a_stored_label", () => {
+    const ln = { ...rect, shapeType: "line" as const, content: { fillOpacity: 1, label: { text: "x", fontSize: 10, color: "#000", align: "center" } } };
+    expect(elementSvg(ln, opts)).not.toContain("<text");
   });
 });

@@ -16,6 +16,7 @@ import { GState, jsPDF } from "jspdf";
 import { degrees, PDFDocument, type PDFPage } from "pdf-lib";
 import { getStroke } from "perfect-freehand";
 import { buildBackgroundPattern, type Rect } from "../canvas/background";
+import { CONNECTOR_LABEL_SIZE, connectorCapOutlines, connectorRoute, labelPill } from "../connectors/geometry";
 import { sheetSize } from "../canvas/camera";
 import { graphScene } from "../renderers/graph";
 import { capsuleRuns } from "../ink/capsuleRuns";
@@ -27,14 +28,22 @@ import type { ThemeName } from "../ink/types";
 import { readAsset } from "../ipc/assets";
 import { isMathBox } from "../math/mathBox";
 import { PAGE_GAP } from "../model/constants";
-import { contentOf, isPdfPlacement, type ImageContent } from "../model/content";
+import { cardOf, contentOf, isPdfPlacement, type ImageContent } from "../model/content";
 import type { Element, Page } from "../model/types";
 import type { TextBitmapSet } from "../overlay/snapshot";
 import { preparePdfPages, type PdfTileSet } from "../pdf/render";
-import { PLACEHOLDER_COLOR } from "../renderers/boxDraw";
+import { noteBackground } from "../components/noteColors";
+import { CARD_BORDER_ALPHA, cardInk, PLACEHOLDER_COLOR, type BoxRenderOptions } from "../renderers/boxDraw";
+import { connectorDash, labelPaper } from "../renderers/connector";
+import { frameBorder, frameFill, frameTitleColour } from "../renderers/frame";
+import { lineY, mindmapScene, nodeRadius } from "../renderers/mindmap";
+import { FRAME_RADIUS, frameTitle, frameTitleHidden, frameTitleRect, isNestedFrame } from "../frames/contain";
 import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
-import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline } from "../shapes/geometry";
+import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
+import { LABEL_LINE_HEIGHT, labelLines, labelMeasure, shapeInnerRect, shapeLabelOf } from "../shapes/label";
+import { FALLBACK_INK } from "../text/boxHtml";
+import { safeColor } from "../text/sanitize";
 import { useSettingsStore } from "../stores/settings";
 import { LINE_HEIGHT } from "../text/style";
 import { textContentOf } from "../text/textBox";
@@ -65,6 +74,8 @@ export interface PdfExportOptions {
   textBitmaps?: TextBitmapSet;
   /** Deflate page content (default true; tests read the raw operators). */
   compress?: boolean;
+  /** One page of exactly this page-unit rectangle (selection export). */
+  region?: Rect;
 }
 
 export interface PdfDeps {
@@ -88,7 +99,8 @@ function rasterizeElement(el: Element, theme: ThemeName, pdfTiles: PdfTileSet, t
   if (!ctx) return null;
   ctx.scale(canvas.width / r.width, canvas.height / r.height);
   ctx.translate(-r.x, -r.y);
-  drawElement(ctx, contentMeta(el).rotation ? withMeta(el, { rotation: 0 }) : el, { theme, zoomBucket: scale, pdfTiles, textBitmaps });
+  const opts: BoxRenderOptions = { theme, zoomBucket: scale, pdfTiles, textBitmaps, noCard: true };
+  drawElement(ctx, contentMeta(el).rotation ? withMeta(el, { rotation: 0 }) : el, opts);
   return canvas;
 }
 
@@ -158,8 +170,8 @@ function backingOf(el: Element): Backing | null {
 /** The sheets to export, with the PDF placement each page-mode sheet is backed by (if any). */
 function layoutSheets(page: Page, list: Element[], opts: PdfExportOptions): Sheet[] {
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
-  if (page.mode !== "page") {
-    const { region } = exportRegion(page, list, aspect);
+  if (page.mode !== "page" || opts.region) {
+    const { region } = exportRegion(page, list, aspect, opts.region);
     return [{ rect: region, k: fitK(region), backing: null }];
   }
   const { sheet } = exportRegion(page, list, aspect);
@@ -369,6 +381,166 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
       p.pdf.stroke();
     }
   }
+  if (closed) paintShapeLabel(p, el, theme);
+}
+
+/**
+ * A closed shape's label: the same wrapped lines as the canvas (1.25 x size apart, the block centred
+ * in the inner rectangle), each line placed about the box centre so rotation matches the outline.
+ */
+function paintShapeLabel(p: Painter, el: Element, theme: ThemeName): void {
+  const label = shapeLabelOf(el);
+  const inner = shapeInnerRect(el);
+  if (!label || !inner) return;
+  const lines = labelLines(el, labelMeasure(label.fontSize));
+  if (!lines.some((l) => l.trim() !== "")) return;
+  const r = shapeRectOf(el);
+  const cx = r.x + r.width / 2;
+  const cy = r.y + r.height / 2;
+  const rot = contentOf<{ rotation?: number }>(el).rotation ?? 0;
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  const step = label.fontSize * LABEL_LINE_HEIGHT;
+  const top = inner.y + inner.height / 2 - (lines.length * step) / 2;
+  p.colour(mapInkColor(safeColor(label.color, safeColor(el.color, FALLBACK_INK)), theme), "text");
+  p.pdf.setFont("helvetica", "normal");
+  p.pdf.setFontSize(label.fontSize * p.k);
+  // jsPDF's baseline "middle" shifts down the page, not along the rotated line normal: place the
+  // alphabetic baseline in the shape frame instead (the same offset jsPDF would use), then rotate.
+  const baseline = label.fontSize * (0.5 - (p.pdf.getLineHeightFactor() - 1));
+  lines.forEach((line, i) => {
+    const text = latin1(line);
+    if (text.trim() === "") return;
+    const w = p.pdf.getTextWidth(text) / p.k;
+    const x0 = label.align === "left" ? inner.x : label.align === "right" ? inner.x + inner.width - w : inner.x + (inner.width - w) / 2;
+    const y0 = top + i * step + step / 2 + baseline;
+    const dx = x0 - cx;
+    const dy = y0 - cy;
+    const [x, y] = p.pt(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+    p.pdf.text(text, x, y, { angle: (-rot * 180) / Math.PI });
+  });
+}
+
+/** A connector: its cached route (dashed when set), caps like line shapes, then the label pill. */
+function paintConnector(p: Painter, el: Element, theme: ThemeName): void {
+  const route = connectorRoute(el);
+  if (route.length < 2) return;
+  const stroke = mapInkColor(el.color, theme);
+  p.pdf.setLineCap("round");
+  p.pdf.setLineJoin("round");
+  p.pdf.setLineWidth(el.width * p.k);
+  p.colour(stroke, "draw");
+  const dash = connectorDash(el);
+  if (dash) p.pdf.setLineDashPattern([dash[0] * p.k, dash[1] * p.k], 0);
+  p.polyline(route, false);
+  p.pdf.stroke();
+  if (dash) p.pdf.setLineDashPattern([], 0);
+  for (const cap of connectorCapOutlines(el)) {
+    if (isFilledCap(cap)) {
+      p.colour(stroke, "fill");
+      p.polyline(cap, true);
+      p.pdf.fillStroke();
+    } else {
+      p.polyline(cap, false);
+      p.pdf.stroke();
+    }
+  }
+  const pill = labelPill(el);
+  if (!pill) return;
+  const [x, y] = p.pt(pill.x, pill.y);
+  const r = (pill.height / 2) * p.k;
+  p.colour(labelPaper(theme), "fill");
+  p.colour(stroke, "draw");
+  p.pdf.setLineWidth(0.75);
+  p.pdf.roundedRect(x, y, pill.width * p.k, pill.height * p.k, r, r, "FD");
+  p.colour(stroke, "text");
+  p.pdf.setFont("helvetica", "normal");
+  p.pdf.setFontSize(CONNECTOR_LABEL_SIZE * p.k);
+  const [cx, cy] = p.pt(pill.centre.x, pill.centre.y);
+  p.pdf.text(latin1(pill.text), cx, cy, { align: "center", baseline: "middle" });
+}
+
+/** A frame: its rounded rect (fill and 1 px border) and the title as at zoom 1 (rotation ignored). */
+function paintFrame(p: Painter, el: Element, theme: ThemeName): void {
+  const r = boxRect(el);
+  if (r.width <= 0 || r.height <= 0) return;
+  p.colour(frameFill(el, theme), "fill");
+  p.colour(frameBorder(theme), "draw");
+  p.pdf.setLineWidth(0.75);
+  // Frames ignore rotation.
+  const [x, y] = p.pt(r.x, r.y);
+  const k = Math.min(FRAME_RADIUS, r.width / 2, r.height / 2) * p.k;
+  p.pdf.roundedRect(x, y, r.width * p.k, r.height * p.k, k, k, "FD");
+  const text = latin1(frameTitle(el).trim());
+  if (text.trim() === "" || frameTitleHidden(el, 1)) return;
+  const t = frameTitleRect(el, 1, isNestedFrame(el));
+  p.colour(frameTitleColour(theme), "text");
+  p.pdf.setFont("helvetica", "bold");
+  p.pdf.setFontSize((t.height / 1.4) * p.k);
+  const [tx, ty] = p.pt(t.x, t.y + t.height / 2);
+  p.pdf.text(text, tx, ty, { baseline: "middle", maxWidth: t.width * p.k });
+}
+
+/**
+ * A mind map: the renderer's scene (edges, node boxes or underlines, centred text lines, count
+ * badges) painted as paths, rounded rects and Helvetica text. Rotation is ignored.
+ */
+function paintMindmap(p: Painter, el: Element, theme: ThemeName): void {
+  const scene = mindmapScene(el, theme);
+  p.pdf.setLineCap("round");
+  p.pdf.setLineJoin("round");
+  for (const e of scene.edges) {
+    if (e.path.length < 2) continue;
+    p.pdf.setLineWidth(e.paint.strokeWidth * p.k);
+    p.colour(e.paint.stroke, "draw");
+    if (e.paint.dash) p.pdf.setLineDashPattern(e.paint.dash.map((d) => d * p.k), 0);
+    p.polyline(e.path, false);
+    p.pdf.stroke();
+    if (e.paint.dash) p.pdf.setLineDashPattern([], 0);
+  }
+  for (const { box, paint, lines, fontSize, bold } of scene.nodes) {
+    p.setOpacity(1);
+    if (paint.underline) {
+      p.pdf.setLineWidth(paint.strokeWidth * p.k);
+      p.colour(paint.stroke, "draw");
+      p.polyline([{ x: box.x, y: box.y + box.height }, { x: box.x + box.width, y: box.y + box.height }], false);
+      p.pdf.stroke();
+    } else {
+      const filled = paint.fill !== "transparent";
+      const outlined = paint.strokeWidth > 0;
+      if (filled || outlined) {
+        if (filled) p.colour(paint.fill, "fill");
+        if (outlined) {
+          p.colour(paint.stroke, "draw");
+          p.pdf.setLineWidth(paint.strokeWidth * p.k);
+          if (paint.dash) p.pdf.setLineDashPattern(paint.dash.map((d) => d * p.k), 0);
+        }
+        const [x, y] = p.pt(box.x, box.y);
+        const k = nodeRadius(box, paint.radius) * p.k;
+        p.pdf.roundedRect(x, y, box.width * p.k, box.height * p.k, k, k, filled && outlined ? "FD" : filled ? "F" : "S");
+        if (outlined && paint.dash) p.pdf.setLineDashPattern([], 0);
+      }
+    }
+    p.colour(paint.text, "text");
+    p.pdf.setFont("helvetica", bold ? "bold" : "normal");
+    p.pdf.setFontSize(fontSize * p.k);
+    const cx = box.x + box.width / 2;
+    lines.forEach((line, i) => {
+      const text = latin1(line);
+      if (text.trim() === "") return;
+      const [tx, ty] = p.pt(cx, lineY(box, lines.length, i, fontSize));
+      p.pdf.text(text, tx, ty, { align: "center", baseline: "middle" });
+    });
+  }
+  for (const b of scene.badges) {
+    p.colour(b.fill, "fill");
+    p.circle(b.centre.x, b.centre.y, b.radius);
+    p.colour(b.text, "text");
+    p.pdf.setFont("helvetica", "bold");
+    p.pdf.setFontSize(b.radius * 1.2 * p.k);
+    const [tx, ty] = p.pt(b.centre.x, b.centre.y);
+    p.pdf.text(b.label, tx, ty, { align: "center", baseline: "middle" });
+  }
 }
 
 /** Maps box-local (unrotated) coordinates of `el` to world coordinates, rotation applied. */
@@ -451,6 +623,32 @@ function placeBitmap(p: Painter, el: Element, bmp: HTMLCanvasElement, alias: str
   p.pdf.addImage(bmp, "PNG", bx, by - h, w, h, alias, "FAST", (-rot * 180) / Math.PI);
 }
 
+/** The flat card (fill with radius, optional border, no shadow) under a note's text bitmap. */
+function paintCard(p: Painter, el: Element, theme: ThemeName): void {
+  const card = cardOf(el);
+  const r = boxRect(el);
+  if (!card || r.width <= 0 || r.height <= 0) return;
+  const at = boxLocal(el);
+  const rotated = !!contentMeta(el).rotation;
+  const [x, y] = p.pt(r.x, r.y);
+  const k = Math.min(card.radius, r.width / 2, r.height / 2) * p.k;
+  // Fill first, then the border on its own: the border's 25 % alpha must not thin the fill.
+  const pass = (style: "F" | "S") => {
+    if (rotated) {
+      p.polyline([at(0, 0), at(r.width, 0), at(r.width, r.height), at(0, r.height)].map(([px, py]) => ({ x: px, y: py })), true);
+      if (style === "F") p.pdf.fill();
+      else p.pdf.stroke();
+    } else p.pdf.roundedRect(x, y, r.width * p.k, r.height * p.k, k, k, style);
+  };
+  p.colour(noteBackground(card.background, theme), "fill");
+  pass("F");
+  if (card.border) {
+    p.colour(cardInk(el, theme), "draw", CARD_BORDER_ALPHA);
+    p.pdf.setLineWidth(0.75);
+    pass("S");
+  }
+}
+
 function paintPlaceholder(p: Painter, el: Element): void {
   const r = boxRect(el);
   p.colour(PLACEHOLDER_COLOR, "draw");
@@ -516,6 +714,15 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
       case "graph":
         paintGraph(p, el, theme);
         break;
+      case "connector":
+        paintConnector(p, el, theme);
+        break;
+      case "frame":
+        paintFrame(p, el, theme);
+        break;
+      case "mindmap":
+        paintMindmap(p, el, theme);
+        break;
       default: {
         const key = `${el.id}|${theme}`; // backed sheets draw in light, others in the export theme
         let bmp = ctx.bitmaps.get(key);
@@ -523,6 +730,7 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
           bmp = ctx.deps.rasterize(el, theme, ctx.pdfTiles, ctx.opts.textBitmaps);
           ctx.bitmaps.set(key, bmp);
         }
+        if (el.type === "text-box") paintCard(p, el, theme);
         if (bmp) placeBitmap(p, el, bmp, `${el.id}|${theme}`);
         else paintPlaceholder(p, el);
       }

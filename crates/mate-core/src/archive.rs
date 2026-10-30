@@ -523,6 +523,32 @@ impl<'a> AssetImport<'a> {
     }
 }
 
+/// Points connector `e`'s bound ends (`content.source.id` / `content.target.id`) at the imported
+/// copies; an end bound to an element that was not imported becomes free.
+fn rebind_connector(e: &mut Element, ids: &HashMap<String, String>) {
+    let Some(serde_json::Value::Object(c)) = e.content.as_mut() else {
+        return;
+    };
+    for key in ["source", "target"] {
+        let old = c
+            .get(key)
+            .and_then(|end| end.get("id"))
+            .and_then(|id| id.as_str())
+            .map(str::to_owned);
+        let Some(old) = old else { continue };
+        match ids.get(&old) {
+            Some(new) => {
+                if let Some(serde_json::Value::Object(end)) = c.get_mut(key) {
+                    end.insert("id".into(), serde_json::Value::String(new.clone()));
+                }
+            }
+            None => {
+                c.remove(key);
+            }
+        }
+    }
+}
+
 fn write_unit(
     storage: &mut Storage,
     zip: &mut ZipArchive<Cursor<&[u8]>>,
@@ -617,23 +643,35 @@ fn write_unit(
         let elements: Vec<Element> = serde_json::from_slice(&raw)
             .map_err(|e| limit(format!("bad pages/{old_page}.json: {e}")))?;
         let new_page = &page_ids[old_page];
-        let mut batch = Vec::new();
-        for mut e in elements {
+        // Fresh ids first, so connector ends can follow the elements they are bound to.
+        let mut kept = Vec::new();
+        for e in elements {
             if e.deleted_at.is_some() {
                 continue;
             }
-            if e.points.len() > MAX_POINTS_PER_STROKE || batch.len() as i64 >= MAX_ELEMENTS_PER_PAGE
+            if e.points.len() > MAX_POINTS_PER_STROKE || kept.len() as i64 >= MAX_ELEMENTS_PER_PAGE
             {
                 skipped += 1;
                 continue;
             }
+            kept.push((new_id(), e));
+        }
+        let element_ids: HashMap<String, String> = kept
+            .iter()
+            .map(|(new, e)| (e.id.clone(), new.clone()))
+            .collect();
+        let mut batch = Vec::new();
+        for (id, mut e) in kept {
             imported.rewrite(zip, &mut e)?;
+            if e.r#type == ElementType::Connector {
+                rebind_connector(&mut e, &element_ids);
+            }
             let ui_group_id = e
                 .ui_group_id
                 .as_ref()
                 .map(|g| group_ids.entry(g.clone()).or_insert_with(new_id).clone());
             batch.push(Element {
-                id: new_id(),
+                id,
                 page_id: new_page.clone(),
                 ui_group_id,
                 created_at: now.clone(),

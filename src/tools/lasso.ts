@@ -1,7 +1,9 @@
 // Lasso selection and selection transforms (pure). The loop's direction picks the rule: drawn
 // clockwise (as seen on screen) it selects what it encloses ("inside"); anticlockwise it selects
 // everything it touches ("touch").
-import { isPdfPlacement } from "../model/content";
+import { connectorRoute } from "../connectors/geometry";
+import { mindmapView } from "../mindmap/cache";
+import { contentOf, isLocked, isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
 import { fillOpacityOf, hasFill, isClosedShape, normalizeShape, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
@@ -106,10 +108,27 @@ function rotatePoints(pts: readonly Vec2[], c: Vec2, rad: number): Vec2[] {
   });
 }
 
-/** The polylines a "touch" lasso tests against: stroke points, shape outlines, box edges. */
+/** Closed outline of rect `r`. */
+const rectRing = (r: Rect): Vec2[] => [
+  { x: r.x, y: r.y },
+  { x: r.x + r.width, y: r.y },
+  { x: r.x + r.width, y: r.y + r.height },
+  { x: r.x, y: r.y + r.height },
+  { x: r.x, y: r.y },
+];
+
+/** A mind map's node outlines (first) and edges, from its memoised layout. */
+function mindmapPolylines(el: Element): Vec2[][] {
+  const { nodes, edges } = mindmapView(el).layout;
+  return [...[...nodes.values()].map(rectRing), ...edges.map((e) => e.path)];
+}
+
+/** The polylines a "touch" lasso tests against: stroke points, shape outlines, box edges, mind-map nodes and edges. */
 function touchPolylines(el: Element): readonly (readonly Vec2[])[] {
   if (isBoxed(el)) return [boxPolyline(el)];
+  if (el.type === "mindmap") return mindmapPolylines(el);
   if (el.type === "shape") return shapeElementOutline(el);
+  if (el.type === "connector") return [connectorRoute(el)];
   return [el.points];
 }
 
@@ -141,15 +160,29 @@ function touches(el: Element, polygon: readonly Vec2[], bounds: Rect): boolean {
     }
   }
   // No crossing and no vertex inside: the lasso is either wholly outside or wholly inside the
-  // element's outline, which counts for a box or a filled shape (not for an empty ring).
+  // element's outline, which counts for a box or a filled shape (not for an empty ring), and for a
+  // mind-map node box.
+  if (el.type === "mindmap") return [...mindmapView(el).layout.nodes.values()].some((r) => pointInPolygon(polygon[0], rectRing(r)));
   return (isBoxed(el) || isFilledShape(el)) && lines.length > 0 && pointInPolygon(polygon[0], lines[0]);
+}
+
+/** The polygon encloses frame `el`'s rect entirely: every corner inside and no edge crossing it. */
+function enclosesFrame(el: Element, polygon: readonly Vec2[]): boolean {
+  const ring = boxPolyline(el);
+  for (let i = 0; i + 1 < ring.length; i++) if (!pointInPolygon(ring[i], polygon)) return false;
+  const n = polygon.length;
+  for (let i = 0; i + 1 < ring.length; i++)
+    for (let j = 0; j < n; j++) if (segmentsIntersect(ring[i], ring[i + 1], polygon[j], polygon[(j + 1) % n])) return false;
+  return true;
 }
 
 /**
  * Ids of the elements the lasso picks. "inside" (clockwise loop): bbox centre inside `polygon` or
  * ≥ 50 % of the points inside. "touch" (anticlockwise loop): any point inside, any segment of the
  * element's polyline (strokes: points; shapes: outline; boxed elements: box edges) crossing the
- * lasso, or the lasso drawn entirely within a boxed element or a filled shape. PDF placements are never selected.
+ * lasso, or the lasso drawn entirely within a boxed element or a filled shape. PDF placements and
+ * locked elements are never selected. Frames are picked, in either mode, only when the lasso
+ * encloses their whole rect.
  */
 export function lassoSelect(
   elements: ReadonlyMap<string, Element>,
@@ -163,7 +196,11 @@ export function lassoSelect(
   const out: string[] = [];
   for (const id of index.query(bounds)) {
     const el = elements.get(id);
-    if (!el || el.points.length === 0 || isPdfPlacement(el)) continue;
+    if (!el || el.points.length === 0 || isPdfPlacement(el) || isLocked(el)) continue;
+    if (el.type === "frame") {
+      if (enclosesFrame(el, polygon)) out.push(id);
+      continue;
+    }
     if (mode === "touch") {
       if (touches(el, polygon, bounds)) out.push(id);
       continue;
@@ -202,10 +239,14 @@ export function selectionBounds(elements: ReadonlyMap<string, Element>, ids: Ite
   return r;
 }
 
-const mapPoints = (el: Element, fn: (p: Point) => Vec2): Element => ({
-  ...el,
-  points: el.points.map((p) => ({ ...p, ...fn(p) })),
-});
+/** `el` with its points mapped; a connector's cached route follows (the store reroutes it on commit). */
+function mapPoints(el: Element, fn: (p: Point) => Vec2): Element {
+  const out = { ...el, points: el.points.map((p) => ({ ...p, ...fn(p) })) };
+  if (el.type !== "connector") return out;
+  const c = contentOf<{ route: Vec2[] }>(el);
+  if (!Array.isArray(c.route)) return out;
+  return { ...out, content: { ...c, route: connectorRoute(el).map((p) => fn({ ...p, pressure: 0.5, timestamp: 0 })) } };
+}
 
 export function translateElements(els: readonly Element[], dx: number, dy: number): Element[] {
   return els.map((el) => mapPoints(el, (p) => ({ x: p.x + dx, y: p.y + dy })));
@@ -263,28 +304,41 @@ export function withBoxRect(el: Element, r: Rect): Element {
   return out;
 }
 
+const rotateAbout = (p: Vec2, c: Vec2, cos: number, sin: number): Vec2 => {
+  const x = p.x - c.x;
+  const y = p.y - c.y;
+  return { x: c.x + x * cos - y * sin, y: c.y + x * sin + y * cos };
+};
+
+/** `el` translated so the point `from` lands on its rotation about `centre`, with `rad` added to `content.rotation`. */
+function orbit(el: Element, from: Vec2, centre: Vec2, cos: number, sin: number, rad: number): Element {
+  const to = rotateAbout(from, centre, cos, sin);
+  const moved = mapPoints(el, (p) => ({ x: p.x + to.x - from.x, y: p.y + to.y - from.y }));
+  return withMeta(moved, { rotation: (contentMeta(el).rotation ?? 0) + rad });
+}
+
 /**
- * Rotate points about `centre`; boxed elements also accumulate `content.rotation`. Box-like shapes
- * move their box centre and accumulate `content.rotation` (lines and arrows rotate their points).
+ * Rotate by `rad` about `centre`. Strokes, lines and arrows (and other point lists) rotate their
+ * points, so later scaling stays exact. Closed shapes and boxed elements keep their anchor box: it
+ * moves so its centre orbits `centre`, and `rad` is added to `content.rotation` (turned about the
+ * box centre when drawn). Frames and mind maps ignore rotation: they come back unchanged.
  */
 export function rotateElements(els: readonly Element[], centre: Vec2, rad: number): Element[] {
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
   return els.map((el) => {
-    if (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle")) {
-      const b = shapeRectOf(el);
-      const cx = b.x + b.width / 2 - centre.x;
-      const cy = b.y + b.height / 2 - centre.y;
-      const dx = centre.x + cx * cos - cy * sin - (b.x + b.width / 2);
-      const dy = centre.y + cx * sin + cy * cos - (b.y + b.height / 2);
-      const moved = mapPoints(el, (p) => ({ x: p.x + dx, y: p.y + dy }));
-      return withMeta(moved, { rotation: (contentMeta(el).rotation ?? 0) + rad });
+    if (el.type === "frame" || el.type === "mindmap") return el;
+    if (el.type === "shape" && !isClosedShape(el.shapeType ?? "rectangle")) {
+      return normalizeShape(mapPoints(el, (p) => rotateAbout(p, centre, cos, sin)));
     }
-    const out = mapPoints(el, (p) => {
-      const x = p.x - centre.x;
-      const y = p.y - centre.y;
-      return { x: centre.x + x * cos - y * sin, y: centre.y + x * sin + y * cos };
-    });
-    return isBoxed(el) ? withMeta(out, { rotation: (contentMeta(el).rotation ?? 0) + rad }) : out;
+    if (el.type === "shape") {
+      const b = shapeRectOf(el);
+      return orbit(el, { x: b.x + b.width / 2, y: b.y + b.height / 2 }, centre, cos, sin, rad);
+    }
+    if (isBoxed(el)) {
+      const b = boxRect(el);
+      return orbit(el, { x: b.x + b.width / 2, y: b.y + b.height / 2 }, centre, cos, sin, rad);
+    }
+    return mapPoints(el, (p) => rotateAbout(p, centre, cos, sin));
   });
 }

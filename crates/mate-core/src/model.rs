@@ -34,6 +34,9 @@ pub enum ElementType {
     Slide,
     Table,
     Media,
+    Connector,
+    Frame,
+    Mindmap,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -264,4 +267,33 @@ pub(crate) fn format_iso(at: OffsetDateTime) -> String {
 /// A fresh random (v4) UUID in hyphenated string form.
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connector_element_type_round_trips() {
+        let json = serde_json::to_string(&ElementType::Connector).unwrap();
+        assert_eq!(json, "\"connector\"");
+        let back: ElementType = serde_json::from_str("\"connector\"").unwrap();
+        assert_eq!(back, ElementType::Connector);
+    }
+
+    #[test]
+    fn frame_element_type_round_trips() {
+        let json = serde_json::to_string(&ElementType::Frame).unwrap();
+        assert_eq!(json, "\"frame\"");
+        let back: ElementType = serde_json::from_str("\"frame\"").unwrap();
+        assert_eq!(back, ElementType::Frame);
+    }
+
+    #[test]
+    fn mindmap_element_type_round_trips() {
+        let json = serde_json::to_string(&ElementType::Mindmap).unwrap();
+        assert_eq!(json, "\"mindmap\"");
+        let back: ElementType = serde_json::from_str("\"mindmap\"").unwrap();
+        assert_eq!(back, ElementType::Mindmap);
+    }
 }

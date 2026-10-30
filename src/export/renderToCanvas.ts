@@ -1,4 +1,5 @@
 // Raster page export: the page's region drawn into an offscreen canvas at `scale` px per unit.
+import type { Rect } from "../canvas/background";
 import type { Element, Page } from "../model/types";
 import { useSettingsStore } from "../stores/settings";
 import type { PdfTileSet } from "../pdf/render";
@@ -15,10 +16,10 @@ export function fitScale(width: number, height: number, scale: number): number {
 }
 
 /** Elements, region, sheet stack and the (canvas-limit fitted) scale a PNG export of `page` paints at. */
-export function canvasExportLayout(elements: Iterable<Element>, page: Page, scale: number) {
+export function canvasExportLayout(elements: Iterable<Element>, page: Page, scale: number, override?: Rect) {
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
   const list = pageElements(page, elements);
-  const { region, sheet } = exportRegion(page, list, aspect);
+  const { region, sheet } = exportRegion(page, list, aspect, override);
   return { list, region, sheet, scale: fitScale(region.width, region.height, scale) };
 }
 
@@ -33,7 +34,7 @@ export function renderToCanvas(
   pdfTiles?: PdfTileSet,
   textBitmaps?: TextBitmapSet,
 ): HTMLCanvasElement {
-  const { list, region, sheet, scale } = canvasExportLayout(elements, page, opts.scale);
+  const { list, region, sheet, scale } = canvasExportLayout(elements, page, opts.scale, opts.region);
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(region.width * scale));
   canvas.height = Math.max(1, Math.round(region.height * scale));

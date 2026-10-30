@@ -6,15 +6,28 @@ import type { Element, Page, PenPreset } from "../model/types";
 import { DEFAULT_SETTINGS, LIMITS, PAGE_GAP } from "../model/constants";
 import {
   contentOf,
+  isAttachable,
+  cardOf,
   effectiveCaps,
+  isLocked,
   isPdfPlacement,
+  type CardStyle,
+  type ConnectorContent,
+  type ConnectorEnd,
+  type FrameContent,
   type LineCaps,
+  mindmapOf,
+  type MindmapContent,
   type ShapeContent,
+  type Side,
   type TableContent,
   type TextAttributes,
   type TextBoxContent,
 } from "../model/content";
-import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
+import { isClosedShape, shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
+import { withShapeLabel, type ShapeLabel } from "../shapes/label";
+import { boundIds, connectorEnds, routeConnector } from "../connectors";
+import { connectorCaps, connectorLabel, connectorMode, DEFAULT_CONNECTOR_CAPS, DEFAULT_CONNECTOR_MODE } from "../connectors/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
@@ -30,12 +43,17 @@ import { alignElements, distributeElements, type AlignMode, type DistributeAxis 
 import { eraseAt } from "../tools/eraser";
 import { clampShift, shiftBelow, type SpaceOptions } from "../tools/insertSpace";
 import { History, type Action } from "../tools/history";
-import { scaleElements, translateElements } from "../tools/lasso";
-import { elementBounds, isBoxed, SpatialIndex, withMeta } from "../tools/spatialIndex";
+import { AUTO_NOTE_SIZE, placeNext, type AutoCompleteChoice } from "../tools/autoComplete";
+import { noteCard } from "../components/noteColors";
+import { rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
+import { elementBounds, isBoxed, SpatialIndex, withMeta, type Rect } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
 import type { ElementsChange } from "../tutor/types";
+import type { Guide } from "../tools/smartGuides";
 import {
+  animateCamera,
   clampCamera,
+  fitBounds,
   initialCamera,
   screenToWorld,
   sheetCountFor,
@@ -48,8 +66,14 @@ import {
 } from "../canvas/camera";
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
+import i18n from "../i18n";
+import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
+import { frameCamera } from "../canvas/presentCamera";
+import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tree";
+import type { MindmapLayoutMode } from "../mindmap/layout";
+import type { MindmapStyle } from "../mindmap/styles";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "text" | "insert-space";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -58,6 +82,10 @@ export const INK_TYPES: readonly InkType[] = ["pen", "highlighter", "fountain-pe
 export const isInkTool = (t: string): t is InkType => (INK_TYPES as readonly string[]).includes(t);
 /** Offset applied by duplicate / paste (world units). */
 export const DUPLICATE_OFFSET = 20;
+/** Gap between a duplicated frame (with its contents) and its source, to the right of it (world units). */
+export const FRAME_DUPLICATE_GAP = 24;
+/** Camera tween of the presentation (frame to frame, and back on exit). */
+export const PRESENT_CAMERA_MS = 300;
 
 export interface EditorState {
   pageId: string | null;
@@ -75,8 +103,12 @@ export interface EditorState {
   camera: Camera;
   viewport: Viewport;
   selection: Set<string>;
+  /** Smart guides of the selection move/resize in progress (page units), drawn by the live layer. */
+  guides: Guide[];
   /** Boxed element whose DOM editor is open (overlay layer), else null. */
   editingId: string | null;
+  /** True while a pointer drag moves, resizes, rotates or draws a connector (set by the tool controller). */
+  dragging: boolean;
   /** Largest element y (world units), for the page-mode sheet count. */
   contentBottom: number;
   /** Temporary tool while a pen button / eraser end is held. */
@@ -91,6 +123,25 @@ export interface EditorState {
   limitReached: boolean;
   /** What limitReached refers to: the page item limit or a table cell limit. */
   limitKind: "page" | "table";
+  /**
+   * Presentation in progress: the index of the frame shown (in `orderedFrames()`) and whether it
+   * fills the viewport (else fits). While set the page is read-only: no tool change, no edit, no
+   * selection; only panning and zooming. Not persisted; loading a page ends it.
+   */
+  presenting: { index: number; fill: boolean } | null;
+  /** The page's frames in presentation order (`content.order`, then `createdAt`). */
+  orderedFrames(): Element[];
+  /** Present the frames from `index` (clamped): cursor tool, selection cleared, camera on the frame. Nothing without frames. */
+  startPresentation(index?: number): void;
+  /** Next / previous frame, clamped at the ends (no wrap). */
+  presentNext(): void;
+  presentPrev(): void;
+  /** Show frame `i` (clamped to the frames). */
+  presentGo(i: number): void;
+  /** Fit (false) or fill (true) the current frame; the camera follows. */
+  setPresentFill(fill: boolean): void;
+  /** End the presentation: the camera and tool from before it come back. */
+  stopPresentation(): void;
   loadPage(pageId: string): Promise<void>;
   /** Adopt an edited page record (mode, sheet size, background) without reloading elements. */
   refreshPage(page: Page): void;
@@ -104,8 +155,97 @@ export interface EditorState {
    * shape". Undo removes the shape and restores the original stroke; redo swaps them back.
    */
   replaceStrokeWithShape(stroke: Element, shape: Element): boolean;
+  /**
+   * Add a connector from `start` to `end` (one "Connector" entry), its ends bound to `source` /
+   * `target` when given (ignored unless they name attachable elements), routed at once. Style
+   * defaults: curve mode, the shape stroke colour, width 2, an arrow at the end. Its id, or null.
+   */
+  addConnector(input: {
+    start: Vec2;
+    end: Vec2;
+    source?: ConnectorEnd;
+    target?: ConnectorEnd;
+    mode?: ConnectorContent["mode"];
+    color?: string;
+    width?: number;
+    caps?: LineCaps;
+    dash?: "solid" | "dashed";
+  }): string | null;
+  /**
+   * Auto-complete drag released in empty space: add a connector in the default style from `side`
+   * of `sourceId` to the free point `end` ("Connector"). A later `autoComplete` with its id
+   * joins that entry, so one undo takes back the connector and the element. Its id, or null.
+   */
+  autoCompleteConnector(sourceId: string, side: Side, start: Vec2, end: Vec2): string | null;
+  /**
+   * Auto-complete: add the element `choice` beyond `side` of `sourceId` (centred on `at` when
+   * given) and a connector in the default style from that side to the facing side of the new
+   * element, as ONE history entry "Auto-complete". With `connectorId` (the free-ended connector
+   * drawn from a handle), that connector is bound to the new element instead of adding one. The
+   * new element is selected and its editor opened. Its id, or null when refused.
+   */
+  autoComplete(sourceId: string, side: Side, choice: AutoCompleteChoice, at?: Vec2, connectorId?: string): string | null;
+  /**
+   * Bind (`end`) or free (null) one end of connector `id`, optionally moving that end's point to
+   * `point`, then reroute; one "Connector end" entry. False when nothing changed or it is locked.
+   */
+  setConnectorEnd(id: string, which: "source" | "target", end: ConnectorEnd | null, point?: Vec2): boolean;
+  /** Restyle connector `id` (mode, caps, dash, colour, width) as one "Connector style" entry. */
+  setConnectorProps(
+    id: string,
+    patch: Partial<Pick<ConnectorContent, "mode" | "caps" | "dash">> & { color?: string; width?: number },
+  ): boolean;
+  /** Set (empty text removes) or remove the label of connector `id`; one "Label" entry (moves of `t` merge). */
+  setConnectorLabel(id: string, label: { text: string; t: number } | null): boolean;
+  /**
+   * Add a frame over `rect` (page units), titled `title` or "Frame n" (n = frames + 1), last in the
+   * presentation order and on top of the other frames; one "Frame" entry. The frame is selected and
+   * the tool returns to the cursor. Its id, or null when refused.
+   */
+  addFrame(rect: Rect, title?: string): string | null;
+  /** Rename frame `id` (trimmed; empty is refused); one "Rename frame" entry. */
+  renameFrame(id: string, title: string): boolean;
+  /** Set (or, with null, clear to the paper tint) the background of frame `id`; one "Frame background" entry. */
+  setFrameBackground(id: string, color: string | null): boolean;
+  /**
+   * Presentation order: `ids` lists frames first to last (frames left out follow in their current
+   * order); every frame whose `order` changes is written in one "Reorder frames" entry.
+   */
+  reorderFrames(ids: string[]): boolean;
+  /** Select what frame `id` contains (nested frames and their contents included; locked ones left out). */
+  selectFrameContents(id: string): void;
+  /**
+   * The focused node of a mind map (the overlay's add/edit/keys target), or null. Cleared when the
+   * element or the node goes away (edits, undo, delete) and when a page loads.
+   */
+  mindmapFocus: { elementId: string; nodeId: string } | null;
+  /** Focus node `nodeId` of mind map `elementId` (null clears); ignored when it does not exist. */
+  focusMindNode(elementId: string, nodeId: string | null): void;
+  /**
+   * Add a mind map (layout "right", `style`) whose root node "Topic" is centred on `at` (default:
+   * the view centre), on top of the stack; one "Mind map" entry. It is selected, its root focused,
+   * and the tool returns to the cursor. Its id, or null when refused.
+   */
+  addMindmap(at?: Vec2, style?: MindmapStyle): string | null;
+  /**
+   * The one write path of a mind map's tree: `fn` maps the current root to the new one (returning
+   * the same tree means nothing changed); one `label` entry, consecutive edits with the same
+   * `mergeKey` merging (typing). Refused (false) when locked, presenting or unchanged.
+   */
+  editMindmap(id: string, fn: (root: MindNode) => MindNode, label: string, mergeKey?: string): boolean;
+  /**
+   * Revert and drop the newest history entry when its merge key is `mergeKey` (a cancelled node
+   * editing session: no undo step is left behind). False when the newest entry has another key.
+   */
+  discardMindmapEdit(mergeKey: string): boolean;
+  /** Set the layout and/or style of mind map `id`; one "Mind map style" entry; false when unchanged or locked. */
+  setMindmapProps(id: string, patch: { layout?: MindmapLayoutMode; style?: MindmapStyle }): boolean;
+  /** Insert the imported tree `root` as a new mind map (style 1) centred on `at` or the view centre; one "Import mind map" entry. */
+  importMindmap(root: MindNode, at?: Vec2): string | null;
   /** Set the end caps of line/arrow shape `id` as one "Line ends" entry; false when not applicable. */
   setLineCaps(id: string, caps: LineCaps): boolean;
+  /** Set (or, for empty text / null, remove) a closed shape's label; one "Shape text" history entry. */
+  setShapeLabel(id: string, label: ShapeLabel | null): boolean;
   /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
   scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
@@ -114,6 +254,13 @@ export interface EditorState {
    * setting is on) and open its editor; its id, or null when refused.
    */
   addTextBox(at: Vec2): string | null;
+  /** A 200×200 sticky note (a text box with a card in the default colour) centred on `at` (default: the view centre); starts editing it and returns to the cursor. */
+  addNote(at?: Vec2): string | null;
+  /**
+   * Set (or with null, remove) the card style of every unlocked text box in `ids`. With `patch`, each
+   * box keeps its own card and only the patched fields change (a box without a card starts from `card`).
+   */
+  setCard(ids: string[], card: CardStyle | null, patch?: Partial<CardStyle>): boolean;
   /** Insert an empty 3x3 table / code block at the viewport centre and edit it (one "Table"/"Code" entry). */
   addTable(): string | null;
   addCodespace(): string | null;
@@ -155,7 +302,16 @@ export interface EditorState {
   setPreset(preset: PenPreset): void;
   setCamera(camera: Camera): void;
   setViewport(viewport: Viewport): void;
+  /** Publish the smart guides of the drag in progress ([] clears them). */
+  setGuides(guides: Guide[]): void;
   resetCamera(): void;
+  /**
+   * Animate the camera to show the page: canvas mode all elements (reset when empty), page mode the
+   * sheet at the viewport centre; 48 px margin.
+   */
+  fitPage(): void;
+  /** Animate the camera to the selection bounds (48 px margin); nothing when the selection is empty. */
+  fitSelection(): void;
   pushTempTool(tool: TempTool): void;
   popTempTool(): void;
   setPanHold(held: boolean): void;
@@ -168,7 +324,13 @@ export interface EditorState {
   /** Selecting anything that excludes the edited element closes its editor. */
   select(ids: Iterable<string>): void;
   selectAll(): void;
-  moveSelection(dx: number, dy: number): void;
+  /**
+   * Move the unlocked selected elements, and what the selected frames contain (computed now; locked
+   * elements and PDF placements stay); one "Move" entry. `opts` renames the entry and merges it
+   * with the newest entry of the same key (an Alt+drag copy and its move are one "Duplicate");
+   * `children: false` moves the selection alone (the copies already include the frames' contents).
+   */
+  moveSelection(dx: number, dy: number, opts?: { label?: string; mergeKey?: string; children?: boolean }): void;
   setSpaceOptions(patch: { spaceMode?: "insert" | "remove"; spaceCutImages?: boolean }): void;
   /** Insert-space tool: shift everything below `lineY` by `dy` (clamped); one "Insert space" entry, none when it is 0. */
   insertSpace(lineY: number, dy: number): void;
@@ -181,10 +343,23 @@ export interface EditorState {
   /** Add a graph below the single selected equation, plotting its LaTeX; one "Graph" entry. */
   graphFromSelectedEquation(): string | null;
   scaleSelection(origin: Vec2, sx: number, sy: number): void;
+  /** Rotate the selection by `rad` about `centre`; one "Rotate" entry (locked elements skipped). */
+  rotateSelection(centre: Vec2, rad: number): void;
+  /** Lock the selected elements (`content.locked`); one "Lock" entry. */
+  lockSelection(): void;
+  /** Unlock the selected locked elements; one "Unlock" entry. */
+  unlockSelection(): void;
   /** Stroke colour applies to all; width to strokes and shapes; fill colour to shapes only. */
   restyleSelection(patch: { color?: string; width?: number; fillColor?: string }): void;
   deleteSelection(): void;
+  /** Duplicate the selection, with what the selected frames contain (unlocked), offset by 20. */
   duplicateSelection(): void;
+  /**
+   * Duplicate the selection (and the selected frames' unlocked contents) with zero offset (Alt+drag) and select the copies; their ids ([] when
+   * refused). `mergeKey` lets the following move join the same "Duplicate" entry.
+   */
+  duplicateSelectionInPlace(mergeKey?: string): string[];
+  /** Copies are unlocked. */
   copySelection(): void;
   cutSelection(): void;
   paste(): void;
@@ -205,7 +380,7 @@ export interface EditorState {
 }
 
 const maxY = (el: Element): number => {
-  if (isBoxed(el) || el.type === "shape") {
+  if (isBoxed(el) || el.type === "shape" || el.type === "connector" || el.type === "mindmap") {
     const b = elementBounds(el);
     return b.y + b.height;
   }
@@ -243,7 +418,7 @@ export function spaceShift(s: EditorState, lineY: number, dy: number): number {
 
 /** Clamp a camera to the current page bounds (no overscroll). */
 export function clampToPage(c: Camera, s: EditorState): Camera {
-  if (!s.page) return c;
+  if (!s.page || s.presenting) return c; // presenting: frames may sit anywhere
   return clampCamera(c, s.page, s.viewport, sheetStack(s));
 }
 
@@ -296,6 +471,17 @@ let pasteCount = 0;
 
 const stamp = (el: Element, now = new Date().toISOString()): Element => ({ ...el, updatedAt: now });
 
+const MINDMAP_LAYOUTS: readonly MindmapLayoutMode[] = ["right", "left", "balance"];
+const MINDMAP_STYLE_IDS: readonly MindmapStyle[] = [1, 2, 3, 4];
+
+/** `el` without `content.locked` (the same object when it is not locked). */
+function unlocked(el: Element): Element {
+  if (!isLocked(el)) return el;
+  const content = { ...(el.content as Record<string, unknown>) };
+  delete content.locked;
+  return { ...el, content };
+}
+
 /** Append to the erase batch; a delete of an element added earlier in the batch cancels both. */
 function appendCompact(batch: Action[], actions: Action[]): void {
   for (const a of actions) {
@@ -327,11 +513,20 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
   onElementsChanged(cb: (change: ElementsChange) => void): () => void;
 };
 
+/** A sticky note (a text box with `content.card`): kept when its text is emptied. */
+const hasCard = (el: Element): boolean => cardOf(el) !== null;
+
+/** A closed shape: its text is edited in place (shapes are not boxed). */
+const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle");
+
 export function createEditorStore(): EditorStore {
   let loadToken = 0;
   // Page-scoped helpers (reset by loadPage).
   const history = new History();
   const index = new SpatialIndex();
+  /** Connector ids bound to each element id, and the element ids each connector is bound to. */
+  const bindings = new Map<string, Set<string>>();
+  const boundTo = new Map<string, string[]>();
   const changeListeners = new Set<(change: ElementsChange) => void>();
   /** Actions of the eraser drag in progress (pushed as one entry by endEraser). */
   let eraseBatch: Action[] = [];
@@ -345,6 +540,18 @@ export function createEditorStore(): EditorStore {
     const fn = editCommit;
     editCommit = null;
     fn?.();
+  };
+  /** Camera and tool from before the presentation in progress (restored by stopPresentation). */
+  let presentFrom: { camera: Camera; tool: ToolId } | null = null;
+  /** Show frame `i` (clamped) of the presentation, fitted or filled; the camera animates there. */
+  const showFrame = (i: number, fill: boolean) => {
+    const s = store.getState();
+    const frames = s.orderedFrames();
+    if (frames.length === 0) return;
+    const index = Math.max(0, Math.min(frames.length - 1, Math.round(i)));
+    const cur = s.presenting;
+    if (!cur || cur.index !== index || cur.fill !== fill) store.setState({ presenting: { index, fill } });
+    animateCamera(store, frameCamera(frames[index], s.viewport, fill), PRESENT_CAMERA_MS);
   };
 
   const store = create<EditorState>((set, get) => ({
@@ -360,7 +567,9 @@ export function createEditorStore(): EditorStore {
     camera: { x: 0, y: 0, z: 1 },
     viewport: { width: 0, height: 0 },
     selection: new Set(),
+    guides: [],
     editingId: null,
+    dragging: false,
     contentBottom: 0,
     tempTool: null,
     panHold: false,
@@ -368,6 +577,48 @@ export function createEditorStore(): EditorStore {
     canRedo: false,
     limitReached: false,
     limitKind: "page",
+    presenting: null,
+    mindmapFocus: null,
+
+    orderedFrames() {
+      return framesInOrder(get().elements.values());
+    },
+
+    startPresentation(index = 0) {
+      const s = get();
+      if (s.orderedFrames().length === 0) return;
+      if (!s.presenting) {
+        closeEdit();
+        flushEraseBatch();
+        presentFrom = { camera: get().camera, tool: get().tool };
+        set({ tool: "cursor", selection: new Set(), editingId: null, guides: [], tempTool: null, dragging: false });
+      }
+      const fill = get().presenting?.fill ?? useSettingsStore.getState().settings.presentFill;
+      showFrame(index, fill);
+    },
+    presentNext() {
+      const p = get().presenting;
+      if (p) showFrame(p.index + 1, p.fill);
+    },
+    presentPrev() {
+      const p = get().presenting;
+      if (p) showFrame(p.index - 1, p.fill);
+    },
+    presentGo(i) {
+      const p = get().presenting;
+      if (p) showFrame(i, p.fill);
+    },
+    setPresentFill(fill) {
+      const p = get().presenting;
+      if (p) showFrame(p.index, fill);
+    },
+    stopPresentation() {
+      if (!get().presenting) return;
+      const from = presentFrom;
+      presentFrom = null;
+      set({ presenting: null, ...(from ? { tool: from.tool } : {}) });
+      if (from) animateCamera(store, from.camera, PRESENT_CAMERA_MS);
+    },
 
     async loadPage(pageId) {
       closeEdit();
@@ -376,8 +627,12 @@ export function createEditorStore(): EditorStore {
       const preset = defaultPreset();
       history.clear();
       index.clear();
+      clearBindings();
       eraseBatch = [];
+      presentFrom = null;
       set({
+        presenting: null,
+        mindmapFocus: null,
         canUndo: false,
         canRedo: false,
         tempTool: null,
@@ -386,7 +641,9 @@ export function createEditorStore(): EditorStore {
         loadError: null,
         elements: new Map(),
         selection: new Set(),
+        guides: [],
         editingId: null,
+        dragging: false,
         contentBottom: 0,
         limitReached: false,
         preset,
@@ -405,7 +662,10 @@ export function createEditorStore(): EditorStore {
       if (token !== loadToken) return;
       const resolved = page ?? fallbackPage(pageId, "canvas");
       const elements = new Map(els.map((e) => [e.id, e]));
-      for (const e of els) index.insert(e.id, elementBounds(e));
+      for (const e of els) {
+        index.insert(e.id, elementBounds(e));
+        bind(e);
+      }
       const contentBottom = bottomOf(elements.values());
       const vp = get().viewport;
       const viewport = vp.width > 0 ? vp : { width: 1280, height: 800 };
@@ -417,6 +677,7 @@ export function createEditorStore(): EditorStore {
         camera: clampCamera(initialCamera(resolved, viewport, stack), resolved, viewport, stack),
         loadedPageId: pageId,
       });
+      setPageFrames(pageId, els.filter(isFrame));
     },
 
     refreshPage(page) {
@@ -459,18 +720,268 @@ export function createEditorStore(): EditorStore {
       return record("Ink to shape", actions, undefined, [{ type: "add", el: added }]);
     },
 
+    addConnector(input) {
+      const el = connectorDraft(input);
+      return el && record("Connector", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    autoCompleteConnector(sourceId, side, start, end) {
+      const src = get().elements.get(sourceId);
+      if (!src || !bindable(src)) return null;
+      const el = connectorDraft({ start, end, source: { id: sourceId, side }, ...autoConnectorStyle() });
+      return el && record("Connector", [{ type: "add", el }], autoCompleteKey(el.id)) ? el.id : null;
+    },
+
+    autoComplete(sourceId, side, choice, at, connectorId) {
+      closeEdit();
+      const s = get();
+      const src = s.elements.get(sourceId);
+      if (!s.pageId || !src || isLocked(src) || isPdfPlacement(src)) return null;
+      const cfg = useSettingsStore.getState().settings;
+      const placed = placeNext(src, side, choice.kind, choice.kind === "shape" ? choice.shapeType : undefined, {
+        pageId: s.pageId,
+        at,
+        textAttributes: defaultTextAttributes(cfg.defaultTextColor, cfg.defaultTextSize),
+        noteColor: cfg.defaultNoteColor,
+      });
+      const top = topZ(s.elements.values());
+      const el = top > 0 ? withMeta(placed.element, { zIndex: top }) : placed.element;
+      const resolve = (id: string) => (id === el.id ? el : s.elements.get(id));
+      const pending = connectorId ? s.elements.get(connectorId) : undefined;
+      let ok: boolean;
+      if (pending && pending.type === "connector" && !isLocked(pending)) {
+        // The connector drawn from the handle: its free end binds to the new element, merged into
+        // the connector's own entry so one undo takes back both.
+        const content = { ...contentOf<ConnectorContent>(pending), target: placed.connector.target };
+        const after = stamp(routeConnector({ ...pending, content }, resolve));
+        ok = record(
+          "Auto-complete",
+          [
+            { type: "add", el },
+            { type: "update", before: pending, after },
+          ],
+          autoCompleteKey(pending.id),
+        );
+      } else {
+        const conn = connectorDraft({ ...placed.connector, ...autoConnectorStyle() }, resolve);
+        if (!conn) return null;
+        ok = record("Auto-complete", [
+          { type: "add", el },
+          { type: "add", el: conn },
+        ]);
+      }
+      if (!ok) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      get().beginEdit(el.id);
+      return el.id;
+    },
+
+    setConnectorEnd(id, which, end, point) {
+      const cur = editableConnector(id);
+      if (!cur) return false;
+      const els = get().elements;
+      const b = end ? els.get(end.id) : undefined;
+      if (end && (!b || !bindable(b))) return false;
+      const content = { ...contentOf<ConnectorContent>(cur) };
+      if (end) content[which] = { id: end.id, side: end.side };
+      else delete content[which];
+      const i = which === "source" ? 0 : 1;
+      const points = point ? cur.points.map((p, k) => (k === i ? { ...p, x: point.x, y: point.y } : p)) : cur.points;
+      const next = routeConnector({ ...cur, points, content }, (x) => els.get(x));
+      if (sameElement(next, cur)) return false;
+      return record("Connector end", [{ type: "update", before: cur, after: stamp(next) }]);
+    },
+
+    setConnectorProps(id, patch) {
+      const cur = editableConnector(id);
+      if (!cur) return false;
+      const content: Partial<ConnectorContent> = {
+        ...contentOf<ConnectorContent>(cur),
+        mode: patch.mode ?? connectorMode(cur),
+        caps: patch.caps ? { start: patch.caps.start, end: patch.caps.end } : connectorCaps(cur),
+      };
+      if (patch.dash === "dashed") content.dash = "dashed";
+      else if (patch.dash === "solid") delete content.dash;
+      const restyled: Element = {
+        ...cur,
+        ...(patch.color !== undefined ? { color: patch.color } : {}),
+        ...(patch.width !== undefined ? { width: patch.width } : {}),
+        content,
+      };
+      const next = routeConnector(restyled, (x) => get().elements.get(x)); // a mode change reroutes
+      if (sameElement(next, cur)) return false;
+      // Consecutive width changes (a slider drag) merge into one entry.
+      const widthOnly = Object.keys(patch).every((k) => k === "width");
+      return record("Connector style", [{ type: "update", before: cur, after: stamp(next) }], widthOnly ? `connector-width:${id}` : undefined);
+    },
+
+    setConnectorLabel(id, label) {
+      const cur = editableConnector(id);
+      if (!cur) return false;
+      const content = { ...contentOf<ConnectorContent>(cur) };
+      const text = label?.text.trim() ?? "";
+      if (label && text !== "") content.label = { text, t: Number.isFinite(label.t) ? Math.max(0, Math.min(1, label.t)) : 0.5 };
+      else delete content.label;
+      const next: Element = { ...cur, content };
+      if (sameElement(next, cur)) return false;
+      // Dragging the label along the route (same text) merges into one entry.
+      const was = connectorLabel(cur);
+      const key = was && content.label && was.text === content.label.text ? `label-t:${id}` : undefined;
+      return record("Label", [{ type: "update", before: cur, after: stamp(next) }], key);
+    },
+
     setLineCaps(id, caps) {
       const cur = get().elements.get(id);
       if (!cur || cur.type !== "shape" || (cur.shapeType !== "line" && cur.shapeType !== "arrow")) return false;
+      if (isLocked(cur)) return false;
       const was = effectiveCaps(cur);
       if (was.start === caps.start && was.end === caps.end) return false;
       const after = stamp({ ...cur, content: { ...contentOf<ShapeContent>(cur), caps: { start: caps.start, end: caps.end } } });
       return record("Line ends", [{ type: "update", before: cur, after }]);
     },
 
+    setShapeLabel(id, label) {
+      const cur = get().elements.get(id);
+      if (!cur || cur.type !== "shape" || !isClosedShape(cur.shapeType ?? "rectangle") || isLocked(cur)) return false;
+      const next = withShapeLabel(cur, label && label.text.trim() !== "" ? label : null);
+      if (sameElement(next, cur)) return false;
+      return record("Shape text", [{ type: "update", before: cur, after: stamp(next) }]);
+    },
+
+    addFrame(rect, title) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const x = Math.min(rect.x, rect.x + rect.width);
+      const y = Math.min(rect.y, rect.y + rect.height);
+      const width = Math.max(1, Math.abs(rect.width));
+      const height = Math.max(1, Math.abs(rect.height));
+      const all = [...s.elements.values()];
+      const frames = all.filter(isFrame);
+      const name = title?.trim() || nextFrameTitle(all, (n) => i18n.t("frame.untitled", { n }));
+      const now = new Date().toISOString();
+      const top = topZ(frames);
+      const content: FrameContent = { title: name, order: frames.length, ...(frames.length > 0 ? { zIndex: top + 1 } : {}) };
+      const el: Element = {
+        id: crypto.randomUUID(),
+        pageId: s.pageId,
+        type: "frame",
+        points: [{ x, y, pressure: 0.5, timestamp: 0 }],
+        color: "#000000",
+        width: 1,
+        isHighlighter: false,
+        boxWidth: width,
+        boxHeight: height,
+        content,
+        createdAt: now,
+        updatedAt: now,
+        version: 0,
+      };
+      if (!record("Frame", [{ type: "add", el }])) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      return el.id;
+    },
+
+    renameFrame(id, title) {
+      const cur = editableFrame(id);
+      const name = title.trim();
+      if (!cur || name === "" || contentOf<FrameContent>(cur).title === name) return false;
+      return record("Rename frame", [{ type: "update", before: cur, after: stamp({ ...cur, content: { ...contentOf<FrameContent>(cur), title: name } }) }]);
+    },
+
+    setFrameBackground(id, color) {
+      const cur = editableFrame(id);
+      if (!cur) return false;
+      const content: Partial<FrameContent> = { ...contentOf<FrameContent>(cur) };
+      if (color === null || color === "") delete content.background;
+      else content.background = color;
+      if ((content.background ?? null) === (contentOf<FrameContent>(cur).background ?? null)) return false;
+      return record("Frame background", [{ type: "update", before: cur, after: stamp({ ...cur, content }) }]);
+    },
+
+    reorderFrames(ids) {
+      const frames = framesInOrder(get().elements.values());
+      const byId = new Map(frames.map((f) => [f.id, f]));
+      const wanted = ids.filter((id, i) => byId.has(id) && ids.indexOf(id) === i);
+      const listed = new Set(wanted);
+      const order = [...wanted.map((id) => byId.get(id)!), ...frames.filter((f) => !listed.has(f.id))];
+      const now = new Date().toISOString();
+      const actions: Action[] = [];
+      order.forEach((f, i) => {
+        if (contentOf<FrameContent>(f).order === i) return;
+        actions.push({ type: "update", before: f, after: stamp({ ...f, content: { ...contentOf<FrameContent>(f), order: i } }, now) });
+      });
+      // Allowed while presenting (the order panel), which keeps showing the same frame.
+      const shown = get().presenting ? get().orderedFrames()[get().presenting!.index]?.id : undefined;
+      if (!commitEntry("Reorder frames", actions)) return false;
+      const p = get().presenting;
+      const at = shown ? get().orderedFrames().findIndex((f) => f.id === shown) : -1;
+      if (p && at >= 0 && at !== p.index) set({ presenting: { ...p, index: at } });
+      return true;
+    },
+
+    focusMindNode(elementId, nodeId) {
+      if (get().presenting) return;
+      if (nodeId === null) {
+        if (get().mindmapFocus) set({ mindmapFocus: null });
+        return;
+      }
+      const el = get().elements.get(elementId);
+      const c = el ? mindmapOf(el) : null;
+      if (!c || !findNode(c.root, nodeId)) return;
+      const cur = get().mindmapFocus;
+      if (cur?.elementId === elementId && cur.nodeId === nodeId) return;
+      set({ mindmapFocus: { elementId, nodeId } });
+    },
+
+    addMindmap(at, style = 1) {
+      return insertMindmap("Mind map", newNode(i18n.t("mindmap.topic", { defaultValue: "Topic" })), style, at);
+    },
+
+    editMindmap(id, fn, label, mergeKey) {
+      const cur = editableMindmap(id);
+      if (!cur) return false;
+      const c = mindmapOf(cur)!;
+      const root = fn(c.root);
+      if (root === c.root) return false;
+      const after = bumped({ ...cur, content: { ...contentOf<MindmapContent>(cur), root } }, cur);
+      return record(label, [{ type: "update", before: cur, after }], mergeKey);
+    },
+
+    discardMindmapEdit(mergeKey) {
+      const inverse = history.peekUndo();
+      if (!inverse || !history.discardTop(mergeKey)) return false;
+      applyActions(inverse);
+      syncHistoryFlags();
+      return true;
+    },
+
+    setMindmapProps(id, patch) {
+      const cur = editableMindmap(id);
+      if (!cur) return false;
+      const c = mindmapOf(cur)!;
+      const layout = patch.layout && MINDMAP_LAYOUTS.includes(patch.layout) ? patch.layout : c.layout;
+      const style = patch.style && MINDMAP_STYLE_IDS.includes(patch.style) ? patch.style : c.style;
+      if (layout === c.layout && style === c.style) return false;
+      const after = bumped({ ...cur, content: { ...contentOf<MindmapContent>(cur), layout, style } }, cur);
+      return record("Mind map style", [{ type: "update", before: cur, after }]);
+    },
+
+    importMindmap(root, at) {
+      return insertMindmap("Import mind map", root, 1, at);
+    },
+
+    selectFrameContents(id) {
+      const s = get();
+      const frame = s.elements.get(id);
+      if (!frame || !isFrame(frame)) return;
+      get().select(frameChildren(frame, s.elements.values()).filter((e) => !isLocked(e)).map((e) => e.id));
+    },
+
     scribbleErase(ids) {
       const cur = get().elements;
-      record("Scribble erase", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!);
+      record("Scribble erase", ids.filter(ok).map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
     updateElements(els) {
@@ -482,9 +993,13 @@ export function createEditorStore(): EditorStore {
         clamped = true;
         return { ...e, content: { ...contentOf<TableContent>(e), subtype: "table", tableData: { rows: clampRows(tableRowsOf(e)) } } };
       };
+      // Locked elements are never edited (only unlockSelection changes them).
       record(
         "Edit",
-        els.filter((e) => cur.has(e.id)).map((e) => fit(e)).map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
+        els
+          .filter((e) => cur.has(e.id) && !isLocked(cur.get(e.id)!))
+          .map((e) => fit(e))
+          .map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
       );
       if (clamped) set({ limitReached: true, limitKind: "table" });
     },
@@ -524,6 +1039,43 @@ export function createEditorStore(): EditorStore {
       return el.id;
     },
 
+    addNote(at) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+      const c = at ?? screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+      const cfg = useSettingsStore.getState().settings;
+      const attrs = defaultTextAttributes(cfg.defaultTextColor, cfg.defaultTextSize);
+      const base = textBoxElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), { x: c.x - AUTO_NOTE_SIZE.width / 2, y: c.y - AUTO_NOTE_SIZE.height / 2 }, attrs);
+      const top = topZ(s.elements.values());
+      const note: Element = { ...base, boxWidth: AUTO_NOTE_SIZE.width, boxHeight: AUTO_NOTE_SIZE.height, content: { ...(base.content as object), card: noteCard(cfg.defaultNoteColor) } };
+      const el = top > 0 ? withMeta(note, { zIndex: top }) : note;
+      if (!record("Note", [{ type: "add", el }])) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      get().beginEdit(el.id);
+      return el.id;
+    },
+
+    setCard(ids, card, patch) {
+      closeEdit();
+      const els = get().elements;
+      const now = new Date().toISOString();
+      const actions: Action[] = [];
+      for (const id of ids) {
+        const cur = els.get(id);
+        if (!cur || cur.type !== "text-box" || isLocked(cur) || isMathBox(cur)) continue;
+        const content: Record<string, unknown> = { ...(cur.content as object) };
+        const own = patch ? (cardOf(cur) ?? card) : card;
+        if (own) content.card = { ...own, ...patch };
+        else delete content.card;
+        const after = { ...cur, content, updatedAt: now };
+        if (sameElement(after, { ...cur, updatedAt: now })) continue;
+        actions.push({ type: "update", before: cur, after });
+      }
+      return record("Card", actions);
+    },
+
     addImage(assetId, natural, at) {
       closeEdit();
       const s = get();
@@ -561,19 +1113,20 @@ export function createEditorStore(): EditorStore {
       const cur = get().elements.get(after.id);
       const fresh = freshText === after.id;
       if (fresh) freshText = null;
-      if (!cur || cur.type !== "text-box") return;
+      if (!cur || cur.type !== "text-box" || isLocked(cur)) return; // locked boxes are never edited or deleted
       const c = contentOf<TextBoxContent>(after);
       const contentHtml = sanitizeHtml(c.contentHtml);
       const rawContent = plainText(contentHtml);
       const textAttributes = textAttrsOf(after);
       const next: Element = { ...after, color: textAttributes.color, content: { ...c, contentHtml, rawContent, textAttributes } };
-      if (rawContent.trim() === "") {
+      if (rawContent.trim() === "" && !hasCard(cur)) {
         // A new box left empty disappears with its creation entry; an emptied box is deleted.
         if (fresh && history.discardTop(textKey(cur.id))) {
           applyActions([{ type: "delete", el: cur }]);
           syncHistoryFlags();
           return;
         }
+        // Connectors bound to it keep their end at its last point, freed (record does it).
         record("Delete", [{ type: "delete", el: cur }]);
         return;
       }
@@ -592,7 +1145,7 @@ export function createEditorStore(): EditorStore {
       const now = new Date().toISOString();
       const actions: Action[] = [];
       for (const cur of selectedElements()) {
-        if (cur.type !== "text-box") continue;
+        if (cur.type !== "text-box" || isLocked(cur)) continue;
         const before = textAttrsOf(cur);
         const attrs = { ...before, ...patch };
         let html = sanitizeHtml(contentOf<TextBoxContent>(cur).contentHtml);
@@ -610,7 +1163,10 @@ export function createEditorStore(): EditorStore {
 
     removeElements(ids, label = "Delete") {
       const cur = get().elements;
-      record(label, ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!); // locked elements are never deleted
+      const gone = new Set(ids.filter(ok));
+      // Connectors bound to a deleted element keep their end at its last point, freed (by record).
+      record(label, [...gone].map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
     addElements(label, els) {
@@ -620,26 +1176,61 @@ export function createEditorStore(): EditorStore {
     },
 
     setTool(tool) {
+      if (get().presenting) return; // the presentation keeps the cursor
       if (isInkTool(tool)) {
         get().selectInk(tool);
         return;
       }
-      if (tool === "eraser" || tool === "shape" || tool === "text" || tool === "insert-space") {
+      if (tool === "eraser" || tool === "shape" || tool === "connector" || tool === "frame" || tool === "note" || tool === "text" || tool === "insert-space") {
         closeEdit();
         set({ tool, selection: new Set(), editingId: null });
       } else set({ tool });
     },
     setPreset: (preset) => {
+      if (get().presenting) return;
       closeEdit();
       set({ preset, tool: preset.type, selection: new Set(), editingId: null });
     },
     setCamera: (camera) => set({ camera }),
-    setViewport: (viewport) => set({ viewport }),
+    setViewport(viewport) {
+      const prev = get().viewport;
+      set({ viewport });
+      // Presenting: the chrome hiding (or a window resize) re-fits the frame shown.
+      const p = get().presenting;
+      if (p && (prev.width !== viewport.width || prev.height !== viewport.height)) showFrame(p.index, p.fill);
+    },
+    setGuides(guides) {
+      if (guides.length === 0 && get().guides.length === 0) return;
+      set({ guides });
+    },
     resetCamera() {
       const s = get();
       if (!s.page) return;
       const stack = sheetStack(s);
       set({ camera: clampCamera(initialCamera(s.page, s.viewport, stack), s.page, s.viewport, stack) });
+    },
+    fitPage() {
+      const s = get();
+      if (!s.page) return;
+      let bounds: Rect | null;
+      if (s.page.mode === "page") {
+        const stack = sheetStack(s);
+        const pitch = stack.height + PAGE_GAP;
+        const centreY = screenToWorld(s.camera, { x: 0, y: s.viewport.height / 2 }).y;
+        const i = Math.max(0, Math.min(stack.count - 1, Math.floor(centreY / pitch)));
+        bounds = { x: 0, y: i * pitch, width: stack.width, height: stack.height };
+      } else bounds = selectionBounds(s.elements, s.elements.keys());
+      if (!bounds) {
+        s.resetCamera();
+        return;
+      }
+      animateCamera(store, clampToPage(fitBounds(bounds, s.viewport), s));
+    },
+    fitSelection() {
+      const s = get();
+      const bounds = selectionBounds(s.elements, s.selection);
+      if (!bounds) return;
+      animateCamera(store, clampToPage(fitBounds(bounds, s.viewport), s));
     },
 
     pushTempTool: (tempTool) => set({ tempTool }),
@@ -651,6 +1242,7 @@ export function createEditorStore(): EditorStore {
     },
 
     eraser(center) {
+      if (get().presenting) return;
       const s = get();
       const cfg = useSettingsStore.getState().settings;
       const radius = cfg.defaultEraserWidth / 2 / s.camera.z;
@@ -671,6 +1263,8 @@ export function createEditorStore(): EditorStore {
           (id): Action => ({ type: "delete", el: s.elements.get(id)! }),
         );
       }
+      // Connectors bound to an erased element keep their end at its last point, freed (as removeElements).
+      actions.push(...freeEnds(new Set([...r.removed, ...r.replaced.map((x) => x.removedId)])));
       appendCompact(eraseBatch, actions);
       applyActions(actions);
     },
@@ -680,8 +1274,9 @@ export function createEditorStore(): EditorStore {
     },
 
     beginEdit(id) {
+      if (get().presenting) return;
       const el = get().elements.get(id);
-      if (!el || !isBoxed(el) || isPdfPlacement(el)) return;
+      if (!el || !(isBoxed(el) || isLabelShape(el)) || isPdfPlacement(el) || isLocked(el)) return;
       if (get().editingId !== id) closeEdit();
       set({ selection: new Set([id]), editingId: id });
     },
@@ -690,6 +1285,7 @@ export function createEditorStore(): EditorStore {
       if (get().editingId !== null) set({ editingId: null });
     },
     select(ids) {
+      if (get().presenting) return; // nothing is selected while presenting
       const wanted = [...ids];
       const prev = get().editingId;
       if (prev !== null && !wanted.includes(prev)) closeEdit(); // may remove an empty box
@@ -703,12 +1299,14 @@ export function createEditorStore(): EditorStore {
       set({ selection, editingId });
     },
     selectAll() {
+      if (get().presenting) return;
       set({ selection: new Set([...get().elements.values()].filter((el) => !isPdfPlacement(el)).map((el) => el.id)) });
     },
 
-    moveSelection(dx, dy) {
+    moveSelection(dx, dy, opts) {
       if (dx === 0 && dy === 0) return;
-      transformSelection("Move", (els) => translateElements(els, dx, dy));
+      const before = opts?.children === false ? unlockedSelection() : withChildren(unlockedSelection());
+      transformSelection(opts?.label ?? "Move", (els) => translateElements(els, dx, dy), opts?.mergeKey, before);
     },
     setSpaceOptions(patch) {
       set(patch);
@@ -720,22 +1318,31 @@ export function createEditorStore(): EditorStore {
       const now = new Date().toISOString();
       const all = [...s.elements.values()];
       const after = shiftBelow(all, lineY, d, spaceOptions(s));
-      const actions: Action[] = [];
+      const shifted: Element[] = [];
+      const befores: Element[] = [];
       all.forEach((before, i) => {
-        if (after[i] !== before) actions.push({ type: "update", before, after: stamp(after[i], now) });
+        if (after[i] !== before && !isLocked(before)) {
+          befores.push(before);
+          shifted.push(after[i]);
+        }
       });
-      record("Insert space", actions);
+      // Shifted connectors bound to an element that stays put follow it (settled, not just translated).
+      const settled = settleConnectors(shifted);
+      record(
+        "Insert space",
+        befores.map((before, i): Action => ({ type: "update", before, after: stamp(settled[i], now) })),
+      );
     },
     alignSelection(mode) {
-      if (get().selection.size < 2) return;
-      transformSelection("Align", (els) => alignElements(els, mode));
+      if (unlockedSelection().length < 2) return;
+      transformCarrying("Align", (els) => alignElements(els, mode));
     },
     distributeSelection(axis) {
-      if (get().selection.size < 3) return;
-      transformSelection("Distribute", (els) => distributeElements(els, axis));
+      if (unlockedSelection().length < 3) return;
+      transformCarrying("Distribute", (els) => distributeElements(els, axis));
     },
     groupSelection() {
-      if (get().selection.size < 2) return;
+      if (unlockedSelection().length < 2) return;
       const uiGroupId = crypto.randomUUID();
       transformSelection("Group", (els) => els.map((el) => ({ ...el, uiGroupId })));
     },
@@ -766,11 +1373,26 @@ export function createEditorStore(): EditorStore {
       if (sx === 1 && sy === 1) return;
       transformSelection("Scale", (els) => scaleElements(els, origin, sx, sy));
     },
+    rotateSelection(centre, rad) {
+      if (rad === 0) return;
+      // Frames and mind maps ignore rotation: they stay out of the entry.
+      const before = unlockedSelection().filter((el) => el.type !== "frame" && el.type !== "mindmap");
+      transformSelection("Rotate", (els) => rotateElements(els, centre, rad), undefined, before);
+    },
+    lockSelection() {
+      transformSelection("Lock", (els) => els.map((el) => withMeta(el, { locked: true })));
+    },
+    unlockSelection() {
+      const locked = selectedElements().filter(isLocked);
+      if (locked.length === 0) return;
+      const now = new Date().toISOString();
+      record("Unlock", locked.map((before): Action => ({ type: "update", before, after: stamp(unlocked(before), now) })));
+    },
     restyleSelection(patch) {
       // Consecutive width changes (a slider drag) on the same selection merge into one entry.
       const widthOnly = patch.color === undefined && patch.fillColor === undefined;
       const key = widthOnly ? `width:${[...get().selection].sort().join(",")}` : undefined;
-      const sized = (el: Element) => el.type === "stroke" || el.type === "shape";
+      const sized = (el: Element) => el.type === "stroke" || el.type === "shape" || el.type === "connector";
       transformSelection(
         "Style",
         (els) =>
@@ -789,17 +1411,25 @@ export function createEditorStore(): EditorStore {
     },
 
     duplicateSelection() {
-      pasteElements(selectedElements(), DUPLICATE_OFFSET, "Duplicate");
+      const src = withChildren(selectedElements());
+      // A frame copy goes beside its source (never overlapping it), so containment cannot split the contents.
+      const b = src.some(isFrame) ? selectionBounds(new Map(src.map((e) => [e.id, e])), src.map((e) => e.id)) : null;
+      pasteElements(src, b ? { dx: b.width + FRAME_DUPLICATE_GAP, dy: 0 } : DUPLICATE_OFFSET, "Duplicate");
+    },
+    duplicateSelectionInPlace(mergeKey) {
+      return pasteElements(withChildren(selectedElements()), 0, "Duplicate", mergeKey);
     },
     copySelection() {
-      const els = selectedElements();
+      // A frame is copied with its contents, as duplicate takes them.
+      const els = withChildren(selectedElements());
       if (els.length === 0) return;
-      clipboard = els;
+      clipboard = els.map(unlocked);
       pasteCount = 0;
     },
     cutSelection() {
       get().copySelection();
-      get().deleteSelection();
+      // What was copied goes (a frame with its contents; locked elements stay).
+      get().removeElements(withChildren(selectedElements()).map((el) => el.id));
     },
     paste() {
       if (clipboard.length === 0) return;
@@ -808,6 +1438,7 @@ export function createEditorStore(): EditorStore {
     },
 
     undo() {
+      if (get().presenting) return;
       flushEraseBatch();
       const peek = history.peekUndo();
       if (peek && exceedsLimit(peek)) {
@@ -819,6 +1450,7 @@ export function createEditorStore(): EditorStore {
       syncHistoryFlags();
     },
     redo() {
+      if (get().presenting) return;
       flushEraseBatch();
       const peek = history.peekRedo();
       if (peek && exceedsLimit(peek)) {
@@ -840,6 +1472,7 @@ export function createEditorStore(): EditorStore {
       if (p) get().setPreset(p);
     },
     selectInk(type) {
+      if (get().presenting) return;
       const s = get();
       if (s.preset.type === type) {
         closeEdit();
@@ -902,6 +1535,166 @@ export function createEditorStore(): EditorStore {
     if (s.canUndo !== canUndo || s.canRedo !== canRedo) store.setState({ canUndo, canRedo });
   }
 
+  function clearBindings(): void {
+    bindings.clear();
+    boundTo.clear();
+  }
+
+  /** Drop connector `id` from the bindings index. */
+  function unbind(id: string): void {
+    for (const target of boundTo.get(id) ?? []) {
+      const set = bindings.get(target);
+      if (!set) continue;
+      set.delete(id);
+      if (set.size === 0) bindings.delete(target);
+    }
+    boundTo.delete(id);
+  }
+
+  /** Index the ends of `el` (a no-op for non-connectors). */
+  function bind(el: Element): void {
+    if (el.type !== "connector") return;
+    unbind(el.id);
+    const ids = boundIds(el);
+    if (ids.length === 0) return;
+    boundTo.set(el.id, ids);
+    for (const target of ids) {
+      let set = bindings.get(target);
+      if (!set) bindings.set(target, (set = new Set()));
+      set.add(el.id);
+    }
+  }
+
+  const sameElement = (a: Element, b: Element): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+  /** Connector `id` when it exists and is not locked. */
+  function editableConnector(id: string): Element | null {
+    const el = S().elements.get(id);
+    return el && el.type === "connector" && !isLocked(el) ? el : null;
+  }
+
+  /**
+   * Updates freeing the ends of connectors (outside `gone`) bound to an element in `gone`; each end
+   * keeps its last absolute point and the connector is rerouted without it.
+   */
+  /** The connector tool's style from the settings (`defaultConnector*`), as auto-complete uses it. */
+  function autoConnectorStyle(): { mode: ConnectorContent["mode"]; color: string; width: number; dash: "solid" | "dashed" } {
+    const cfg = useSettingsStore.getState().settings;
+    const mode = (["straight", "curve", "elbow"] as const).includes(cfg.defaultConnectorMode) ? cfg.defaultConnectorMode : DEFAULT_CONNECTOR_MODE;
+    return { mode, color: cfg.defaultConnectorColor, width: cfg.defaultConnectorWidth, dash: cfg.defaultConnectorDash === "dashed" ? "dashed" : "solid" };
+  }
+
+  /** A connector end may newly bind to `el`: attachable, not locked, not a PDF placement (as the tool). */
+  function bindable(el: Element): boolean {
+    return isAttachable(el) && !isLocked(el) && !isPdfPlacement(el);
+  }
+
+  /** History merge key joining a handle-drawn connector and the element auto-complete adds for it. */
+  function autoCompleteKey(connectorId: string): string {
+    return `auto-complete:${connectorId}`;
+  }
+
+  /**
+   * A new connector element from `input`, routed (ends resolved through `resolve`), on top of the
+   * stack; ends naming a missing, non-attachable, locked or PDF-placement element are dropped. Null without a page.
+   */
+  function connectorDraft(input: Parameters<EditorState["addConnector"]>[0], resolve = (id: string) => S().elements.get(id)): Element | null {
+    const s = S();
+    if (!s.pageId) return null;
+    const cfg = useSettingsStore.getState().settings;
+    const now = new Date().toISOString();
+    const valid = (end: ConnectorEnd | undefined): ConnectorEnd | undefined => {
+      const b = end ? resolve(end.id) : undefined;
+      return end && b && bindable(b) ? { id: end.id, side: end.side } : undefined;
+    };
+    const source = valid(input.source);
+    const target = valid(input.target);
+    const top = topZ(s.elements.values());
+    const content: Partial<ConnectorContent> = {
+      mode: input.mode ?? DEFAULT_CONNECTOR_MODE,
+      caps: { ...(input.caps ?? DEFAULT_CONNECTOR_CAPS) },
+      route: [],
+      ...(input.dash === "dashed" ? { dash: "dashed" as const } : {}),
+      ...(source ? { source } : {}),
+      ...(target ? { target } : {}),
+      ...(top > 0 ? { zIndex: top } : {}),
+    };
+    const draft: Element = {
+      id: crypto.randomUUID(),
+      pageId: s.pageId,
+      type: "connector",
+      points: [
+        { x: input.start.x, y: input.start.y, pressure: 0.5, timestamp: 0 },
+        { x: input.end.x, y: input.end.y, pressure: 0.5, timestamp: 1 },
+      ],
+      color: input.color ?? cfg.defaultShapeStrokeColor,
+      width: input.width ?? 2,
+      isHighlighter: false,
+      content,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    };
+    return routeConnector(draft, resolve);
+  }
+
+  function freeEnds(gone: ReadonlySet<string>): Action[] {
+    const els = S().elements;
+    const touched = new Set<string>();
+    for (const id of gone) for (const c of bindings.get(id) ?? []) if (!gone.has(c)) touched.add(c);
+    const now = new Date().toISOString();
+    const out: Action[] = [];
+    for (const cid of touched) {
+      const cur = els.get(cid);
+      if (!cur) continue;
+      const content = { ...contentOf<ConnectorContent>(cur) };
+      const { source, target } = connectorEnds(cur);
+      if (source && gone.has(source.id)) delete content.source;
+      if (target && gone.has(target.id)) delete content.target;
+      const next = routeConnector({ ...cur, content }, (x) => (gone.has(x) ? undefined : els.get(x)));
+      out.push({ type: "update", before: cur, after: stamp(next, now) });
+    }
+    return out;
+  }
+
+  /**
+   * `freeEnds` for the elements `actions` leaves deleted, minus connectors the actions already carry.
+   */
+  function freedBy(actions: readonly Action[]): Action[] {
+    const gone = new Set<string>();
+    const inEntry = new Set<string>();
+    for (const a of actions) {
+      const id = a.type === "update" ? a.after.id : a.el.id;
+      inEntry.add(id);
+      if (a.type === "delete") gone.add(id);
+      else gone.delete(id);
+    }
+    if (gone.size === 0) return [];
+    return freeEnds(gone).filter((a) => a.type !== "update" || !inEntry.has(a.after.id));
+  }
+
+  /**
+   * Reroute connectors bound to an element changed by `actions` (connectors the actions already
+   * carry are left alone); their updates, for the same history entry.
+   */
+  function rerouteBound(actions: readonly Action[]): Action[] {
+    const inEntry = new Set<string>();
+    for (const a of actions) inEntry.add(a.type === "update" ? a.after.id : a.el.id);
+    const conns = new Set<string>();
+    for (const id of inEntry) for (const c of bindings.get(id) ?? []) if (!inEntry.has(c)) conns.add(c);
+    if (conns.size === 0) return [];
+    const els = S().elements;
+    const now = new Date().toISOString();
+    const out: Action[] = [];
+    for (const cid of conns) {
+      const cur = els.get(cid);
+      if (!cur) continue;
+      const next = routeConnector(cur, (x) => els.get(x));
+      if (next !== cur) out.push({ type: "update", before: cur, after: stamp(next, now) });
+    }
+    return out;
+  }
+
   /** Apply actions to the element map, spatial index and persistence queue (no history). */
   function applyActions(actions: Action[]): void {
     if (actions.length === 0) return;
@@ -924,6 +1717,7 @@ export function createEditorStore(): EditorStore {
       if (a.type === "delete") {
         elements.delete(a.el.id);
         index.remove(a.el.id);
+        if (a.el.type === "connector") unbind(a.el.id);
         elementsQueue.enqueueDelete(a.el.id, a.el.pageId);
         if (selection.has(a.el.id)) {
           selection = new Set(selection);
@@ -936,18 +1730,31 @@ export function createEditorStore(): EditorStore {
         if (a.type === "update") grewOnly = false;
         elements.set(el.id, el);
         index.insert(el.id, elementBounds(el));
+        bind(el);
         elementsQueue.enqueueUpsert(el);
         bottom = Math.max(bottom, maxY(el));
       }
+    }
+    // A focused mind-map node that is gone (node removed, element deleted, undo) loses the focus;
+    // one hidden by a collapsed ancestor hands it to that ancestor (the nearest visible node).
+    let mindmapFocus = s.mindmapFocus;
+    if (mindmapFocus && (added.has(mindmapFocus.elementId) || updated.has(mindmapFocus.elementId) || removed.has(mindmapFocus.elementId))) {
+      const el = elements.get(mindmapFocus.elementId);
+      const c = el ? mindmapOf(el) : null;
+      const visible = c ? visibleAncestor(c.root, mindmapFocus.nodeId) : null;
+      if (!visible) mindmapFocus = null;
+      else if (visible !== mindmapFocus.nodeId) mindmapFocus = { elementId: mindmapFocus.elementId, nodeId: visible };
     }
     store.setState({
       elements,
       selection,
       editingId,
+      mindmapFocus,
       contentBottom: grewOnly ? bottom : bottomOf(elements.values()),
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });
     syncHistoryFlags();
+    publishFrames(actions.some((a) => (a.type === "update" ? isFrame(a.after) || isFrame(a.before) : isFrame(a.el))));
     if (changeListeners.size > 0 && added.size + updated.size + removed.size > 0) {
       const change: ElementsChange = { added: [...added], updated: [...updated], removed: [...removed] };
       for (const cb of [...changeListeners]) cb(change);
@@ -988,14 +1795,31 @@ export function createEditorStore(): EditorStore {
    * never committed (ink to shape: the stroke replaced before it was added).
    */
   function record(label: string, actions: Action[], mergeKey?: string, applied: Action[] = actions): boolean {
+    if (S().presenting) return false; // the page is read-only while presenting
+    return commitEntry(label, actions, mergeKey, applied);
+  }
+
+  /** `record` without the presentation guard (the presentation may reorder its frames). */
+  function commitEntry(label: string, actions: Action[], mergeKey?: string, applied: Action[] = actions): boolean {
     if (actions.length === 0) return false;
     if (exceedsLimit(applied)) {
       store.setState({ limitReached: true, limitKind: "page" });
       return false;
     }
     flushEraseBatch();
-    history.push({ label, actions, mergeKey });
+    // Connectors bound to a deleted element keep that end at its last point, freed (every delete path).
+    const freed = freedBy(applied);
+    if (freed.length > 0) {
+      const same = applied === actions;
+      actions = [...actions, ...freed];
+      applied = same ? actions : [...applied, ...freed];
+    }
     applyActions(applied);
+    // Connectors bound to anything that changed follow it, in the same entry (undo restores their rows).
+    const rerouted = rerouteBound(applied);
+    if (rerouted.length > 0) applyActions(rerouted);
+    history.push({ label, actions: rerouted.length > 0 ? [...actions, ...rerouted] : actions, mergeKey });
+    syncHistoryFlags();
     return true;
   }
 
@@ -1022,11 +1846,82 @@ export function createEditorStore(): EditorStore {
     return [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e);
   }
 
-  function transformSelection(label: string, fn: (els: Element[]) => Element[], mergeKey?: string): void {
-    const before = selectedElements();
+  /** Selected elements that are not locked (the ones transforms may change). */
+  function unlockedSelection(): Element[] {
+    return selectedElements().filter((el) => !isLocked(el));
+  }
+
+  /**
+   * `base` plus what its frames contain (nested frames included), the added elements filtered to
+   * unlocked ones that are not PDF placements.
+   */
+  function withChildren(base: Element[]): Element[] {
+    if (!base.some(isFrame)) return base;
+    const ids = new Set(base.map((e) => e.id));
+    return withFrameChildren(base, S().elements.values()).filter((e) => ids.has(e.id) || (!isLocked(e) && !isPdfPlacement(e)));
+  }
+
+  /** Frame `id` when it exists and is not locked. */
+  /** Mind map `id` when it exists, is not locked and the page is not presenting. */
+  function editableMindmap(id: string): Element | null {
+    if (S().presenting) return null;
+    const el = S().elements.get(id);
+    return el && el.type === "mindmap" && !isLocked(el) ? el : null;
+  }
+
+  /** `next` stamped with an `updatedAt` later than `prev`'s (the layout memo keys on it). */
+  function bumped(next: Element, prev: Element): Element {
+    const now = Date.now();
+    const last = Date.parse(prev.updatedAt);
+    const t = Number.isFinite(last) && last >= now ? last + 1 : now;
+    return { ...next, updatedAt: new Date(t).toISOString() };
+  }
+
+  /** Add a mind map rooted at `root` centred on `at` (default: the view centre) as one `label` entry. */
+  function insertMindmap(label: string, root: MindNode, style: MindmapStyle, at?: Vec2): string | null {
+    closeEdit();
+    const s = S();
+    if (!s.pageId) return null;
+    const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+    const c = at ?? screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+    const now = new Date().toISOString();
+    const top = topZ(s.elements.values());
+    const content: MindmapContent = { layout: "right", style, root, ...(top > 0 ? { zIndex: top } : {}) };
+    const el: Element = {
+      id: crypto.randomUUID(),
+      pageId: s.pageId,
+      type: "mindmap",
+      points: [{ x: c.x, y: c.y, pressure: 0.5, timestamp: 0 }],
+      color: "#000000",
+      width: 1,
+      isHighlighter: false,
+      content,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    };
+    if (!record(label, [{ type: "add", el }])) return null;
+    store.setState({ tool: "cursor", selection: new Set([el.id]), editingId: null, mindmapFocus: { elementId: el.id, nodeId: root.id } });
+    return el.id;
+  }
+
+  function editableFrame(id: string): Element | null {
+    const el = S().elements.get(id);
+    return el && isFrame(el) && !isLocked(el) ? el : null;
+  }
+
+  /** Publish the page's frames for the renderer (nested titles), when `touched` says frames changed. */
+  function publishFrames(touched: boolean): void {
+    const s = S();
+    if (!touched || !s.pageId) return;
+    setPageFrames(s.pageId, [...s.elements.values()].filter(isFrame));
+  }
+
+  /** Apply `fn` to `before` (default: the unlocked selected elements) as one history entry. */
+  function transformSelection(label: string, fn: (els: Element[]) => Element[], mergeKey?: string, before: Element[] = unlockedSelection()): void {
     if (before.length === 0) return;
     const now = new Date().toISOString();
-    const after = fn(before);
+    const after = settleConnectors(fn(before));
     record(
       label,
       before.map((b, i): Action => ({ type: "update", before: b, after: stamp(after[i], now) })),
@@ -1034,19 +1929,94 @@ export function createEditorStore(): EditorStore {
     );
   }
 
-  function pasteElements(src: Element[], offset: number, label: string): void {
+  /**
+   * `fn` (a translation per element: align, distribute) applied to the unlocked selection as one
+   * entry; each selected frame's contents that are not selected themselves (unlocked, no PDF
+   * placements) move by that frame's delta, the innermost selected frame winning.
+   */
+  function transformCarrying(label: string, fn: (els: Element[]) => Element[]): void {
+    const sel = unlockedSelection();
+    if (!sel.some(isFrame)) {
+      transformSelection(label, fn, undefined, sel);
+      return;
+    }
+    const moved = fn(sel);
+    const all = [...S().elements.values()];
+    const selected = new Set(sel.map((e) => e.id));
+    const shift = new Map<string, Vec2>();
+    const frames = sel.map((f, i) => ({ f, i })).filter(({ f }) => isFrame(f));
+    const area = (f: Element) => (f.boxWidth ?? 0) * (f.boxHeight ?? 0);
+    frames.sort((a, b) => area(a.f) - area(b.f));
+    for (const { f, i } of frames) {
+      const d = { x: moved[i].points[0].x - f.points[0].x, y: moved[i].points[0].y - f.points[0].y };
+      for (const c of frameChildren(f, all)) {
+        if (selected.has(c.id) || shift.has(c.id) || isLocked(c) || isPdfPlacement(c)) continue;
+        shift.set(c.id, d);
+      }
+    }
+    const children = all.filter((c) => {
+      const d = shift.get(c.id);
+      return !!d && (d.x !== 0 || d.y !== 0);
+    });
+    transformSelection(
+      label,
+      () => [...moved, ...children.map((c) => translateElements([c], shift.get(c.id)!.x, shift.get(c.id)!.y)[0])],
+      undefined,
+      [...sel, ...children],
+    );
+  }
+
+  /**
+   * Reroute the connectors among transformed elements `els`: free ends keep their transformed
+   * points, bound ends follow their element (moved with `els` or not). A connector whose ends are
+   * both in the set (or free) therefore just translates with a move.
+   */
+  function settleConnectors(els: Element[]): Element[] {
+    if (!els.some((e) => e.type === "connector")) return els;
+    const moved = new Map(els.map((e) => [e.id, e]));
+    const cur = S().elements;
+    const resolve = (id: string) => moved.get(id) ?? cur.get(id);
+    return els.map((e) => (e.type === "connector" ? routeConnector(e, resolve) : e));
+  }
+
+  /** Add unlocked copies of `src` shifted by `offset` (on both axes, or by {dx, dy}) and select them; their ids ([] when refused). */
+  function pasteElements(src: Element[], offset: number | { dx: number; dy: number }, label: string, mergeKey?: string): string[] {
     const s = S();
     const pageId = s.pageId;
-    if (src.length === 0 || !pageId) return;
+    if (src.length === 0 || !pageId) return [];
     const now = new Date().toISOString();
     const top = topZ(s.elements.values());
-    const copies = translateElements(src, offset, offset).map((el, i) => {
-      const copy: Element = { ...el, id: crypto.randomUUID(), pageId, createdAt: now, updatedAt: now, version: 0 };
+    const ids = new Map(src.map((el) => [el.id, crypto.randomUUID()]));
+    const { dx, dy } = typeof offset === "number" ? { dx: offset, dy: offset } : offset;
+    const placed = translateElements(src.map(unlocked), dx, dy).map((el, i) => {
+      const copy: Element = { ...el, id: ids.get(el.id)!, pageId, createdAt: now, updatedAt: now, version: 0 };
       return top > 0 ? withMeta(copy, { zIndex: top + 1 + i }) : copy;
     });
-    if (record(label, copies.map((el): Action => ({ type: "add", el })))) {
-      store.setState({ selection: new Set(copies.map((c) => c.id)) });
-    }
+    const copies = rebindCopies(placed, ids);
+    if (!record(label, copies.map((el): Action => ({ type: "add", el })), mergeKey)) return [];
+    const added = copies.map((c) => c.id);
+    store.setState({ selection: new Set(added) });
+    return added;
+  }
+
+  /**
+   * Copied connectors bind to the copies of their elements; an end whose element was not copied is
+   * freed at its (shifted) point. Then they are rerouted among the copies.
+   */
+  function rebindCopies(copies: Element[], ids: ReadonlyMap<string, string>): Element[] {
+    if (!copies.some((e) => e.type === "connector")) return copies;
+    const byId = new Map(copies.map((e) => [e.id, e]));
+    return copies.map((el) => {
+      if (el.type !== "connector") return el;
+      const content = { ...contentOf<ConnectorContent>(el) };
+      for (const which of ["source", "target"] as const) {
+        const end = connectorEnds(el)[which];
+        const to = end ? ids.get(end.id) : undefined;
+        if (end && to) content[which] = { id: to, side: end.side };
+        else delete content[which];
+      }
+      return routeConnector({ ...el, content }, (x) => byId.get(x));
+    });
   }
 
   function arrange(op: ZOp): void {

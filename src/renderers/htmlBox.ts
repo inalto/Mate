@@ -6,7 +6,7 @@ import type { Element } from "../model/types";
 import { requestTextSnapshot, snapshotScale, textBitmapKey, textSnapshotFor } from "../overlay/snapshot";
 import { boxAppearance } from "../text/boxHtml";
 import { boxRect } from "../tools/spatialIndex";
-import { drawBoxBitmap, rotatedSvg } from "./boxDraw";
+import { cardSvg, drawBoxBitmap, rotatedSvg } from "./boxDraw";
 import { boxSnapshots } from "./boxSnapshot";
 import type { ElementRenderer } from "./registry";
 
@@ -33,6 +33,6 @@ export const htmlBoxRenderer: ElementRenderer = {
     if (!a) return "";
     const shared = !!(o.svgStyles && a.sharedCss);
     if (shared) o.svgStyles!.add(a.sharedCss!);
-    return rotatedSvg(el, a.foreignObject(boxRect(el), { sharedCss: shared }));
+    return rotatedSvg(el, cardSvg(el, o.theme) + a.foreignObject(boxRect(el), { sharedCss: shared }));
   },
 };

@@ -119,6 +119,10 @@
       "snapToGrid": {
         "label": "Snap to grid",
         "hint": "Snap shapes and strokes to the grid background"
+      },
+      "smartGuides": {
+        "label": "Smart guides",
+        "hint": "Snap to the edges, centres and spacing of other elements while moving or resizing; hold Ctrl (Cmd) to suspend"
       }
     },
     "pen": {
@@ -375,7 +379,111 @@
     "dot": "Dot",
     "bar": "Bar",
     "settingsToggle": "Offer line ends after snapping",
-    "settingsHint": "Show a small picker for arrow, dot or bar ends when a stroke becomes a line or arrow."
+    "settingsHint": "Show a small picker for arrow, dot or bar ends when a stroke becomes a line or arrow.",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
+  },
+  "shapeText": {
+    "edit": "Edit text",
+    "placeholder": "Type text",
+    "addText": "Add text",
+    "colour": "Text colour"
+  },
+  "autoComplete": {
+    "add": "Add connected element",
+    "text": "Text",
+    "note": "Note"
+  },
+  "frame": {
+    "tool": "Frame",
+    "draw": "Draw frame",
+    "preset169": "Slide 16:9",
+    "preset43": "Slide 4:3",
+    "presetSquare": "Square",
+    "presetA4": "A4 portrait",
+    "rename": "Rename",
+    "background": "Background",
+    "selectContents": "Select contents",
+    "export": "Export frame…",
+    "present": "Present from here",
+    "untitled": "Frame {{n}}"
+  },
+  "note": {
+    "tool": "Note",
+    "card": "Card",
+    "none": "None",
+    "radius": "Corner radius",
+    "shadow": "Shadow",
+    "soft": "Soft",
+    "paper": "Paper",
+    "border": "Border",
+    "yellow": "Yellow",
+    "orange": "Orange",
+    "pink": "Pink",
+    "green": "Green",
+    "blue": "Blue",
+    "purple": "Purple",
+    "grey": "Grey",
+    "white": "White"
+  },
+  "present": {
+    "start": "Present",
+    "exit": "Exit presentation",
+    "next": "Next frame",
+    "previous": "Previous frame",
+    "counter": "{{n}} / {{total}}",
+    "fullscreen": "Full screen",
+    "blackBackground": "Black background",
+    "fill": "Fill",
+    "fit": "Fit",
+    "order": "Frame order",
+    "noFrames": "Add a frame to present"
+  },
+  "mindmap": {
+    "tool": "Mind map",
+    "options": "Mind map options",
+    "style": "Style",
+    "style1": "Outline",
+    "style2": "Filled",
+    "style3": "Minimal",
+    "style4": "Soft",
+    "layout": "Layout",
+    "left": "Left",
+    "right": "Right",
+    "balance": "Balanced",
+    "branchColor": "Branch colour",
+    "autoColor": "Automatic",
+    "addChild": "Add child topic",
+    "addSibling": "Add sibling topic",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "edit": "Edit topic",
+    "import": "Import…",
+    "importFailed": "Could not import this file",
+    "tooLarge": "The file is larger than 2 MB",
+    "topic": "Topic",
+    "collapsed": "{{n}} hidden"
+  },
+  "lock": {
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "locked": "Locked"
+  },
+  "rotate": {
+    "handle": "Rotate",
+    "angle": "Rotation {{degrees}}"
   },
   "keys": {
     "title": "Keyboard shortcuts",
@@ -408,6 +516,10 @@
       "cursor": "Select (cursor)",
       "lasso": "Lasso",
       "shape": "Shape",
+      "connector": "Connector",
+      "frame": "Frame",
+      "note": "Note",
+      "mindmap": "Mind map",
       "text": "Text",
       "insertSpace": "Insert space",
       "presetSlot": "Preset 1 to 9",
@@ -432,6 +544,10 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "zoomReset": "Reset zoom",
+      "zoomFit": "Fit page to screen",
+      "zoomSelection": "Zoom to selection",
+      "presentStart": "Start presentation",
+      "toggleLock": "Lock or unlock selection",
       "toggleSidebar": "Toggle sidebar",
       "prevPage": "Previous page",
       "nextPage": "Next page",
@@ -484,6 +600,7 @@
       "cursor": "Switch to select (cursor)",
       "lasso": "Switch to lasso",
       "shape": "Switch to shape",
+      "connector": "Switch to connector",
       "text": "Switch to text",
       "insertSpace": "Switch to insert space"
     },
@@ -600,6 +717,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}}%, reset",
+    "zoomMenu": "Zoom options",
     "pageFull": "This page is full ({{max}} items) — start a new page.",
     "tableLimit": "Table is at its size limit ({{max}} cells)",
     "insertImageFailed": "Could not insert that image.",
@@ -703,6 +821,13 @@
     "shareInstead": "Share instead…",
     "boxRender": "Could not render the content of box {{id}} for export.",
     "boxMissing": "Box {{id}} was not rendered for export."
+  },
+  "exportRegion": {
+    "selectionOnly": "Selection only",
+    "copyImage": "Copy as image",
+    "copyImageFailed": "Could not copy the image",
+    "fitPage": "Fit page",
+    "fitSelection": "Fit selection"
   },
   "selection": {
     "label": "Selection",

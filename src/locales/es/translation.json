@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "Ajustar a la cuadrícula",
         "hint": "Ajusta formas y trazos al fondo de cuadrícula"
+      },
+      "smartGuides": {
+        "label": "Guías inteligentes",
+        "hint": "Se ajusta a los bordes, centros y espaciados de otros elementos al mover o redimensionar; mantén pulsado Ctrl (Cmd) para suspenderlo"
       }
     },
     "pen": {
@@ -378,7 +382,111 @@
     "dot": "Punto",
     "bar": "Barra",
     "settingsToggle": "Ofrecer extremos de línea tras ajustar",
-    "settingsHint": "Mostrar un pequeño selector de extremos de flecha, punto o barra cuando un trazo se convierte en línea o flecha."
+    "settingsHint": "Mostrar un pequeño selector de extremos de flecha, punto o barra cuando un trazo se convierte en línea o flecha.",
+    "diamond": "Rombo"
+  },
+  "connector": {
+    "tool": "Conector",
+    "mode": "Trazado",
+    "straight": "Recto",
+    "curve": "Curvo",
+    "elbow": "En ángulo",
+    "dashed": "Discontinuo",
+    "label": "Etiqueta",
+    "addLabel": "Añadir etiqueta",
+    "editLabel": "Editar etiqueta",
+    "width": "Grosor del conector",
+    "colour": "Color del conector"
+  },
+  "shapeText": {
+    "edit": "Editar texto",
+    "placeholder": "Escribe el texto",
+    "addText": "Añadir texto",
+    "colour": "Color del texto"
+  },
+  "autoComplete": {
+    "add": "Añadir elemento conectado",
+    "text": "Texto",
+    "note": "Nota"
+  },
+  "frame": {
+    "tool": "Marco",
+    "draw": "Dibujar marco",
+    "preset169": "Diapositiva 16:9",
+    "preset43": "Diapositiva 4:3",
+    "presetSquare": "Cuadrado",
+    "presetA4": "A4 vertical",
+    "rename": "Renombrar",
+    "background": "Fondo",
+    "selectContents": "Seleccionar contenido",
+    "export": "Exportar marco…",
+    "present": "Presentar desde aquí",
+    "untitled": "Marco {{n}}"
+  },
+  "note": {
+    "tool": "Nota",
+    "card": "Tarjeta",
+    "none": "Ninguna",
+    "radius": "Radio de las esquinas",
+    "shadow": "Sombra",
+    "soft": "Suave",
+    "paper": "Papel",
+    "border": "Borde",
+    "yellow": "Amarillo",
+    "orange": "Naranja",
+    "pink": "Rosa",
+    "green": "Verde",
+    "blue": "Azul",
+    "purple": "Morado",
+    "grey": "Gris",
+    "white": "Blanco"
+  },
+  "present": {
+    "start": "Presentar",
+    "exit": "Salir de la presentación",
+    "next": "Marco siguiente",
+    "previous": "Marco anterior",
+    "counter": "{{n}} / {{total}}",
+    "fullscreen": "Pantalla completa",
+    "blackBackground": "Fondo negro",
+    "fill": "Rellenar",
+    "fit": "Ajustar",
+    "order": "Orden de los marcos",
+    "noFrames": "Añade un marco para presentar"
+  },
+  "mindmap": {
+    "tool": "Mapa mental",
+    "options": "Opciones del mapa mental",
+    "style": "Estilo",
+    "style1": "Contorno",
+    "style2": "Relleno",
+    "style3": "Minimalista",
+    "style4": "Suave",
+    "layout": "Disposición",
+    "left": "Izquierda",
+    "right": "Derecha",
+    "balance": "Equilibrado",
+    "branchColor": "Color de la rama",
+    "autoColor": "Automático",
+    "addChild": "Añadir subtema",
+    "addSibling": "Añadir tema del mismo nivel",
+    "collapse": "Contraer",
+    "expand": "Expandir",
+    "edit": "Editar tema",
+    "import": "Importar…",
+    "importFailed": "No se pudo importar este archivo",
+    "tooLarge": "El archivo supera los 2 MB",
+    "topic": "Tema",
+    "collapsed": "{{n}} ocultos"
+  },
+  "lock": {
+    "lock": "Bloquear",
+    "unlock": "Desbloquear",
+    "locked": "Bloqueado"
+  },
+  "rotate": {
+    "handle": "Girar",
+    "angle": "Rotación {{degrees}}"
   },
   "keys": {
     "title": "Atajos de teclado",
@@ -411,6 +519,10 @@
       "cursor": "Seleccionar (cursor)",
       "lasso": "Lazo",
       "shape": "Forma",
+      "connector": "Conector",
+      "frame": "Marco",
+      "note": "Nota",
+      "mindmap": "Mapa mental",
       "text": "Texto",
       "insertSpace": "Insertar espacio",
       "presetSlot": "Preajuste 1 a 9",
@@ -435,6 +547,10 @@
       "zoomIn": "Acercar",
       "zoomOut": "Alejar",
       "zoomReset": "Restablecer zoom",
+      "zoomFit": "Ajustar la página a la pantalla",
+      "zoomSelection": "Ampliar a la selección",
+      "presentStart": "Iniciar presentación",
+      "toggleLock": "Bloquear o desbloquear la selección",
       "toggleSidebar": "Mostrar u ocultar la barra lateral",
       "prevPage": "Página anterior",
       "nextPage": "Página siguiente",
@@ -487,6 +603,7 @@
       "cursor": "Cambiar a seleccionar (cursor)",
       "lasso": "Cambiar a lazo",
       "shape": "Cambiar a forma",
+      "connector": "Cambiar al conector",
       "text": "Cambiar a texto",
       "insertSpace": "Cambiar a insertar espacio"
     },
@@ -603,6 +720,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}}%, restablecer",
+    "zoomMenu": "Opciones de zoom",
     "pageFull": "Esta página está llena ({{max}} elementos): empieza una página nueva.",
     "tableLimit": "La tabla ha llegado a su límite de tamaño ({{max}} celdas)",
     "insertImageFailed": "No se pudo insertar esa imagen.",
@@ -706,6 +824,13 @@
     "shareInstead": "Compartir en su lugar…",
     "boxRender": "No se pudo generar el contenido del cuadro {{id}} para exportar.",
     "boxMissing": "El cuadro {{id}} no se generó para exportar."
+  },
+  "exportRegion": {
+    "selectionOnly": "Solo la selección",
+    "copyImage": "Copiar como imagen",
+    "copyImageFailed": "No se pudo copiar la imagen",
+    "fitPage": "Ajustar a la página",
+    "fitSelection": "Ajustar a la selección"
   },
   "selection": {
     "label": "Selección",

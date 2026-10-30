@@ -11,6 +11,8 @@ export interface RenderOptions {
   theme: ThemeName;
   /** Output scale (device pixels per page unit; the live canvas passes the camera zoom). */
   zoomBucket: number;
+  /** Paper colour behind the page on the live canvas (theme `--canvas-page`); exports use the surfaces. */
+  paper?: string;
   /** Device pixels per CSS pixel of the live canvas (default 1: exports already include it). */
   pixelRatio?: number;
   /** Snapshot source for boxed elements (default: the shared `boxSnapshots`). */

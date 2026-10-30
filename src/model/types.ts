@@ -15,7 +15,10 @@ export type ElementType =
   | "graph"
   | "slide"
   | "table"
-  | "media";
+  | "media"
+  | "connector"
+  | "frame"
+  | "mindmap";
 export type BackgroundType =
   | "blank"
   | "ruled"
@@ -359,6 +362,17 @@ export interface Settings {
   defaultShapeFillColor: string;
   defaultShapeStrokeWidth: number;
   defaultShapeFillOpacity: number;
+  /** Connector tool defaults: routing mode, stroke colour, width (page units) and dash. */
+  defaultConnectorMode: "straight" | "curve" | "elbow";
+  defaultConnectorColor: string;
+  defaultConnectorWidth: number;
+  defaultConnectorDash: "solid" | "dashed";
+  /** Swatch id (yellow, orange, pink, green, blue, purple, grey, white) of a new sticky note. */
+  defaultNoteColor: string;
+  /** Presentation: paint the desk and paper black outside the current frame. */
+  presentBlackBackground: boolean;
+  /** Presentation: the frame fills the viewport (cropped) instead of fitting whole. */
+  presentFill: boolean;
   defaultEraserType: string;
   defaultEraserWidth: number;
   eraserEraseShapes: boolean;
@@ -374,6 +388,8 @@ export interface Settings {
   fountainPenNibFlatness: number;
   palmRejection: string;
   snapToGrid: boolean;
+  /** Snap a moved or resized selection to other elements' edges and centres. */
+  smartGuides: boolean;
   penBarrelButtonAction: string;
   penEraserButtonAction: string;
   scrollBehavior: string;

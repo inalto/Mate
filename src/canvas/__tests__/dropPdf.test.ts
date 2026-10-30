@@ -53,4 +53,22 @@ describe("dropping a PDF", () => {
     offWindow();
     expect(drop.handlers.size).toBe(0);
   });
+
+  it("does_nothing_when_dropped_on_a_presenting_pane", async () => {
+    vi.clearAllMocks();
+    const store = createEditorStore();
+    store.setState({ page: { id: "pg", sectionId: "sec-9" } as never, presenting: { index: 0, fill: false } });
+    const host = document.createElement("div");
+    host.getBoundingClientRect = () => ({ left: 0, top: 0, width: 500, height: 500 }) as DOMRect;
+    const detach = attachDropPaste(host, store);
+    const offWindow = attachWindowPdfDrop();
+    await vi.waitFor(() => expect(drop.handlers.size).toBe(2));
+    fire(10, ["C:/a/notes.pdf", "C:/a/pic.png"]);
+    await Promise.resolve();
+    expect(importPdfFromPath).not.toHaveBeenCalled();
+    expect(insertImageFromPath).not.toHaveBeenCalled();
+    expect(navigateTo).not.toHaveBeenCalled();
+    detach();
+    offWindow();
+  });
 });
