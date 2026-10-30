@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 import { mindmapOf } from "../../model/content";
-import { addChild, findNode, newNode, removeNode, setText, type MindNode } from "../../mindmap/tree";
+import { addChild, findNode, newNode, removeNode, setText, toggleCollapsed, type MindNode } from "../../mindmap/tree";
 import { mindmapView } from "../../mindmap/cache";
 import { elementBounds } from "../../tools/spatialIndex";
 
@@ -147,6 +147,27 @@ describe("mind-map store", () => {
     s().focusMindNode(id, rootId);
     s().removeElements([id]);
     expect(s().mindmapFocus).toBeNull();
+  });
+
+  it("collapsing_an_ancestor_moves_the_focus_to_the_nearest_visible_ancestor", async () => {
+    await load();
+    const id = s().addMindmap({ x: 0, y: 0 })!;
+    const rootId = mm(id).root.id;
+    const a = newNode("A");
+    const leaf = newNode("Leaf");
+    s().editMindmap(id, (r) => addChild(addChild(r, rootId, a), a.id, leaf), "Add nodes");
+    s().focusMindNode(id, leaf.id);
+    s().editMindmap(id, (r) => toggleCollapsed(r, a.id), "Collapse");
+    expect(s().mindmapFocus).toEqual({ elementId: id, nodeId: a.id });
+    // Collapsing the root hides `a` too: the focus goes up again.
+    s().editMindmap(id, (r) => toggleCollapsed(r, rootId), "Collapse");
+    expect(s().mindmapFocus).toEqual({ elementId: id, nodeId: rootId });
+    // A focused node outside the collapsed subtree keeps its focus.
+    s().undo();
+    s().undo();
+    s().focusMindNode(id, a.id);
+    s().editMindmap(id, (r) => toggleCollapsed(r, leaf.id), "Collapse");
+    expect(s().mindmapFocus).toEqual({ elementId: id, nodeId: a.id });
   });
 
   it("moving_a_mind_map_translates_its_root_centre", async () => {

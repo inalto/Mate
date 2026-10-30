@@ -4,13 +4,12 @@
 // and one <text> per node); the PDF export paints it too (export/renderToPdf). Rotation is ignored.
 // `bounds` = the layout bounds (plus badges) padded by 2, from the shared memo (mindmap/cache).
 import { esc, n } from "../export/svgUtil";
-import { isDarkTheme } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import type { Vec2 } from "../canvas/camera";
 import type { Element } from "../model/types";
 import { BADGE_RADIUS, badgeCentre, mindmapBounds, mindmapFont, MINDMAP_FONT, mindmapView } from "../mindmap/cache";
 import { LINE_HEIGHT, ROOT_FONT, type NodeBox } from "../mindmap/layout";
-import { edgePaint, nodePaint, type EdgePaint, type NodePaint } from "../mindmap/styles";
+import { contrastText, edgePaint, nodePaint, type EdgePaint, type NodePaint } from "../mindmap/styles";
 import type { ElementRenderer } from "./registry";
 
 export interface SceneNode {
@@ -55,8 +54,9 @@ export function mindmapScene(el: Element, theme: ThemeName): MindmapScene {
     out.push({ box, paint, lines: v.lines.get(box.id) ?? [""], fontSize, bold: box.depth === 0 });
     const hidden = v.hidden.get(box.id);
     if (hidden) {
-      const fill = paint.strokeWidth > 0 || paint.fill === "transparent" ? paint.stroke : paint.fill;
-      badges.push({ centre: badgeCentre(box), radius: BADGE_RADIUS, fill, text: isDarkTheme(theme) ? "#000000" : "#ffffff", label: badgeLabel(hidden) });
+      // The branch colour in every style (soft and filled nodes have it as `stroke`, not `fill`).
+      const fill = paint.stroke;
+      badges.push({ centre: badgeCentre(box), radius: BADGE_RADIUS, fill, text: contrastText(fill), label: badgeLabel(hidden) });
     }
   }
   return { edges, nodes: out, badges };

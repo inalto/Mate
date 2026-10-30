@@ -10,6 +10,8 @@ import { hitMindNode, mindmapHit } from "../../mindmap/hit";
 import type { MindNode } from "../../mindmap/tree";
 import "../builtins";
 import { drawElement, elementSvg } from "../registry";
+import { mindmapScene } from "../mindmap";
+import { contrastText } from "../../mindmap/styles";
 
 const STAMP = "2026-01-01T00:00:00.000Z";
 
@@ -86,6 +88,27 @@ describe("mind-map renderer", () => {
     expect(count(svg, "path")).toBe(2);
     expect(svg).toContain("<circle");
     expect(svg).toMatch(/>1<\/text>/);
+  });
+
+  it("badges_are_filled_with_the_branch_colour_in_every_style_and_theme", () => {
+    const root = tree();
+    root.children[0] = { ...root.children[0], collapsed: true };
+    for (const theme of ["light", "sepia", "dark", "high-contrast"] as const) {
+      for (const style of [1, 2, 3, 4] as const) {
+        const scene = mindmapScene(mindmap({ root, style }), theme);
+        const node = scene.nodes.find((x) => x.box.id === "a")!;
+        expect(scene.badges).toHaveLength(1);
+        const badge = scene.badges[0];
+        expect(badge.fill).toBe(node.paint.stroke);
+        expect(badge.text).toBe(contrastText(badge.fill));
+        if (style === 4) expect(badge.fill).not.toBe(node.paint.fill);
+      }
+    }
+    const svg = elementSvg(mindmap({ root, style: 4 }), { theme: "light", zoomBucket: 1 });
+    const soft = mindmapScene(mindmap({ root, style: 4 }), "light");
+    const fill = soft.nodes.find((x) => x.box.id === "a")!.paint.fill;
+    expect(svg).toMatch(new RegExp(`<circle [^>]*fill="${soft.badges[0].fill}"`));
+    expect(svg).not.toMatch(new RegExp(`<circle [^>]*fill="${fill}"`));
   });
 
   it("draws_edges_nodes_and_text", () => {

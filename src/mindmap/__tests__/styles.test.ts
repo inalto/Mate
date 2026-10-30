@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mapInkColor } from "../../ink/theme";
-import { BRANCH_PALETTE, branchColor, edgePaint, MINDMAP_STYLES, nodePaint } from "../styles";
+import { BRANCH_PALETTE, branchColor, contrastText, edgePaint, MINDMAP_STYLES, nodePaint } from "../styles";
 
 const root = { depth: 0, branch: -1, height: 41 };
 const child = (branch: number) => ({ depth: 1, branch, height: 36 });
@@ -23,6 +23,7 @@ describe("mind-map styles", () => {
     const p = nodePaint(1, child(1), "light");
     expect(p).toMatchObject({ fill: "#ffffff", stroke: BRANCH_PALETTE[1], strokeWidth: 2, text: "#000000", radius: 8 });
     expect(nodePaint(1, root, "light").radius).toBe(20.5);
+    expect(nodePaint(1, root, "light").strokeWidth).toBe(2);
     expect(edgePaint(1, 1, "light")).toEqual({ stroke: BRANCH_PALETTE[1], strokeWidth: 2 });
   });
 
@@ -35,7 +36,8 @@ describe("mind-map styles", () => {
   it("minimal: transparent with an underline, thin grey edges", () => {
     const p = nodePaint(3, child(0), "light");
     expect(p).toMatchObject({ fill: "transparent", underline: true });
-    expect(nodePaint(3, root, "light").underline).toBeUndefined();
+    // The root is text only too: underlined, never outlined.
+    expect(nodePaint(3, root, "light")).toMatchObject({ fill: "transparent", underline: true });
     expect(edgePaint(3, 0, "light")).toEqual({ stroke: "#999999", strokeWidth: 1 });
   });
 
@@ -54,5 +56,12 @@ describe("mind-map styles", () => {
     expect(p.text).toBe("#ffffff");
     expect(nodePaint(1, child(0), "light", "#0277BD").stroke).toBe("#0277BD");
     expect(edgePaint(1, 0, "dark").stroke).toBe(mapInkColor(BRANCH_PALETTE[0], "dark"));
+  });
+
+  it("contrastText picks black or white for legibility", () => {
+    expect(contrastText("#ffffff")).toBe("#000000");
+    expect(contrastText("#000000")).toBe("#ffffff");
+    expect(contrastText("#C62828")).toBe("#ffffff");
+    expect(contrastText("#ffd54f")).toBe("#000000");
   });
 });

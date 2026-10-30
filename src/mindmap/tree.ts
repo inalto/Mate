@@ -52,6 +52,24 @@ export function parentOf(root: MindNode, id: string): MindNode | null {
   return null;
 }
 
+/**
+ * The node drawn in place of `id`: `id` itself when no ancestor is collapsed, else the
+ * outermost collapsed ancestor (the nearest visible one). Null when `id` is absent.
+ */
+export function visibleAncestor(root: MindNode, id: string): string | null {
+  const path: MindNode[] = [];
+  const find = (node: MindNode): boolean => {
+    path.push(node);
+    if (node.id === id) return true;
+    for (const child of node.children) if (find(child)) return true;
+    path.pop();
+    return false;
+  };
+  if (!find(root)) return null;
+  for (let i = 0; i < path.length - 1; i++) if (path[i].collapsed) return path[i].id;
+  return id;
+}
+
 /** `root` with the node `id` replaced by `fn(node)`; the same tree when `id` is absent. */
 function mapNode(root: MindNode, id: string, fn: (node: MindNode) => MindNode): MindNode {
   if (root.id === id) return fn(root);

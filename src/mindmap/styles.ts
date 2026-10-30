@@ -96,14 +96,25 @@ export function nodePaint(
         radius,
       };
     case "minimal":
-      return isRoot
-        ? { fill: "transparent", stroke: colour, strokeWidth: 2, text: ink, radius }
-        : { fill: "transparent", stroke: colour, strokeWidth: 2, text: ink, radius, underline: true };
+      // Text only with an underline (the root too: it differs by its bold, larger text).
+      return { fill: "transparent", stroke: colour, strokeWidth: 2, text: ink, radius, underline: true };
     case "soft":
       return { fill: mix(colour, paper, isDarkTheme(theme) ? 0.65 : 0.78), stroke: colour, strokeWidth: 0, text: ink, radius };
     default:
-      return { fill: paper, stroke: colour, strokeWidth: isRoot ? 3 : 2, text: ink, radius };
+      return { fill: paper, stroke: colour, strokeWidth: 2, text: ink, radius };
   }
+}
+
+/** `#000000` or `#ffffff`, whichever reads better on `#rrggbb` `bg` (WCAG relative luminance). */
+export function contrastText(bg: string): string {
+  if (!HEX6.test(bg)) return "#ffffff";
+  const lin = (i: number) => {
+    const c = parseInt(bg.slice(1 + 2 * i, 3 + 2 * i), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const l = 0.2126 * lin(0) + 0.7152 * lin(1) + 0.0722 * lin(2);
+  // Contrast against white (1.05 / (l + 0.05)) vs against black ((l + 0.05) / 0.05).
+  return 1.05 / (l + 0.05) >= (l + 0.05) / 0.05 ? "#ffffff" : "#000000";
 }
 
 export function edgePaint(style: MindmapStyle, branch: number, theme: ThemeName, override?: string): EdgePaint {
