@@ -10,7 +10,7 @@ Write with a pen on an endless canvas or on paged sheets, organise pages into bo
 
 Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core crate) and a React 19 / TypeScript frontend. The ink pipeline is tuned for low-latency pen input: pressure, tilt, palm rejection, stroke stabilisation and a snapshot-cached Canvas2D renderer.
 
-> Status: **v1.1.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). Version 0.8.0 adds finger drawing and six more paper templates. Version 0.9.0 adds nested library folders, graph presets and running code in code blocks. Version 1.0.0 adds line ends (arrow, dot, bar), a toolbar that docks to any edge with the paper picker inside it, SVG, audio and video on the page, and dictation. Version 1.1.0 turns dictated equations into notation (six languages), adds an anticlockwise lasso that selects what it touches, and swipe-to-turn pages on touch screens. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/1.1.0.md).
+> Status: **v1.2.0**. The app is feature-complete for its original roadmap (ink editor, rich content, an optional AI tutor, importers for GoodNotes, Notability, OneNote, Freenotes and Samsung Notes, a full settings pane, rebindable shortcuts, multi-window pages, an in-app updater). Version 0.6.0 adds many more AI providers including local models, sharing of `.mate` files, offline and Wolfram|Alpha maths engines, and a translated interface (English and Italian reviewed; the rest machine translated, still being reviewed). Version 0.7.0 brings Mate to Android tablets (see [Android](#android)). Version 0.8.0 adds finger drawing and six more paper templates. Version 0.9.0 adds nested library folders, graph presets and running code in code blocks. Version 1.0.0 adds line ends (arrow, dot, bar), a toolbar that docks to any edge with the paper picker inside it, SVG, audio and video on the page, and dictation. Version 1.1.0 turns dictated equations into notation (six languages), adds an anticlockwise lasso that selects what it touches, and swipe-to-turn pages on touch screens. Version 1.2.0 turns the page into a whiteboard: connectors that follow what they join, text inside shapes, sticky notes, frames and a presentation mode, mind maps, and rotate, lock and smart guides. See the [roadmap](https://github.com/inalto/Mate/wiki/Roadmap) and the [release notes](src/whatsnew/1.2.0.md).
 
 ## Features
 
@@ -19,6 +19,9 @@ Mate is built with [Tauri 2](https://tauri.app) (Rust shell + a pure-Rust core c
 - **Line ends** — arrow, dot or bar at either end of a straightened line or arrow, from a small panel after the snap
 - **Toolbar** — docks to the top, bottom, left or right of the page, with the paper picker inside it
 - **Media** — SVG images, audio (mp3, m4a, wav, ogg) and video (mp4, webm) on the page with built-in players
+- **Whiteboard** — connectors (straight, curved, elbow) that stay attached, text inside shapes, auto-complete arrows, sticky notes, titled frames and a presentation mode over the frames
+- **Mind maps** — keyboard-driven topic trees in four styles and three layouts, drag to re-parent, FreeMind and OPML import
+- **Selection** — rotate handle, lock, smart guides, Alt+drag to duplicate, fit page and zoom to selection, export the selection, copy as image
 - **Dictation** — record your voice and get text in a text box, through OpenAI, Groq, Mistral or a speech server of your own
 - **Editing** — whole/partial eraser, lasso select, move, scale, arrange, duplicate, undo/redo (100 entries / 50 MiB), keyboard shortcuts
 - **Organisation** — folders and subfolders → books → sections → nestable pages; favourites; recent; trash with retention; thumbnails
@@ -116,6 +119,22 @@ The **Dictate** button records your voice (up to 5 minutes) and turns it into a 
 - **Local server**: any OpenAI-compatible speech server on this computer or network (for example whisper.cpp or speaches), no key needed, or **Custom** for any other address.
 
 Audio is sent to the chosen service only after you allow it; answering **Not now** means Mate asks again next time. Mate keeps no recording. Microphone access on macOS and Linux and on Android needs the system's permission; see [Dictation](https://github.com/inalto/Mate/wiki/Dictation).
+
+## Whiteboard tools
+
+- **Connector (C):** drag between two elements and the line stays attached to them; it follows when either one moves. Straight, curved or elbow routing, an arrow, dot, bar or diamond at either end, dashed or solid, and an optional label that slides along the line (double-click to edit). Drag an end handle to re-attach it.
+- **Text in shapes:** double-click a shape, or select it and type. Colour, size and alignment are in the selection bar.
+- **Auto-complete arrows:** four small arrows around a selected shape, text box or note add a connected shape, text or note in that direction, or connect to an element you drop them on.
+- **Notes (Shift+N) and cards:** a note is a text box with a card (colour, corner radius, shadow, border); any text box can get one.
+- **Frames (F):** titled rectangles (slide 16:9 and 4:3, square, A4 portrait or drawn freely) that carry their contents when moved or duplicated. Rename, set a background, select the contents, or export just the frame.
+- **Presentation (Ctrl+Shift+P):** steps through the frames in order with arrow keys or the bar, optional full screen and black background, fit or fill, and a drag-to-reorder frame list.
+- **Selection:** a rotate handle above the selection (Shift for 15° steps), Lock (Ctrl+Shift+L), smart guides (Ctrl suspends them; a setting turns them off), Alt+drag to drag a copy, Shift to keep a move to one axis, Fit page (Shift+1), Zoom to selection (Shift+2), Export selection only and Copy as image.
+
+See the wiki page [Whiteboard](https://github.com/inalto/Mate/wiki/Whiteboard).
+
+## Mind maps
+
+Press **M** or use the Mind map button. Tab adds a child, Enter a sibling, arrow keys move between topics, F2 edits, Delete removes. Choose one of four styles and a left, right or balanced layout, colour a branch, collapse it, or drag a topic onto another to move it with its subtree. **Import…** reads FreeMind (`.mm`) and OPML files up to 2 MB. See [Mind maps](https://github.com/inalto/Mate/wiki/Mind-Maps).
 
 ## Maths engines
 
