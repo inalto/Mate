@@ -69,7 +69,7 @@ import { useSettingsStore } from "./settings";
 import i18n from "../i18n";
 import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
 import { frameCamera } from "../canvas/presentCamera";
-import { findNode, newNode, type MindNode } from "../mindmap/tree";
+import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tree";
 import type { MindmapLayoutMode } from "../mindmap/layout";
 import type { MindmapStyle } from "../mindmap/styles";
 
@@ -233,6 +233,11 @@ export interface EditorState {
    * `mergeKey` merging (typing). Refused (false) when locked, presenting or unchanged.
    */
   editMindmap(id: string, fn: (root: MindNode) => MindNode, label: string, mergeKey?: string): boolean;
+  /**
+   * Revert and drop the newest history entry when its merge key is `mergeKey` (a cancelled node
+   * editing session: no undo step is left behind). False when the newest entry has another key.
+   */
+  discardMindmapEdit(mergeKey: string): boolean;
   /** Set the layout and/or style of mind map `id`; one "Mind map style" entry; false when unchanged or locked. */
   setMindmapProps(id: string, patch: { layout?: MindmapLayoutMode; style?: MindmapStyle }): boolean;
   /** Insert the imported tree `root` as a new mind map (style 1) centred on `at` or the view centre; one "Import mind map" entry. */
@@ -941,6 +946,14 @@ export function createEditorStore(): EditorStore {
       if (root === c.root) return false;
       const after = bumped({ ...cur, content: { ...contentOf<MindmapContent>(cur), root } }, cur);
       return record(label, [{ type: "update", before: cur, after }], mergeKey);
+    },
+
+    discardMindmapEdit(mergeKey) {
+      const inverse = history.peekUndo();
+      if (!inverse || !history.discardTop(mergeKey)) return false;
+      applyActions(inverse);
+      syncHistoryFlags();
+      return true;
     },
 
     setMindmapProps(id, patch) {
@@ -1704,12 +1717,15 @@ export function createEditorStore(): EditorStore {
         bottom = Math.max(bottom, maxY(el));
       }
     }
-    // A focused mind-map node that is gone (node removed, element deleted, undo) loses the focus.
+    // A focused mind-map node that is gone (node removed, element deleted, undo) loses the focus;
+    // one hidden by a collapsed ancestor hands it to that ancestor (the nearest visible node).
     let mindmapFocus = s.mindmapFocus;
     if (mindmapFocus && (added.has(mindmapFocus.elementId) || updated.has(mindmapFocus.elementId) || removed.has(mindmapFocus.elementId))) {
       const el = elements.get(mindmapFocus.elementId);
       const c = el ? mindmapOf(el) : null;
-      if (!c || !findNode(c.root, mindmapFocus.nodeId)) mindmapFocus = null;
+      const visible = c ? visibleAncestor(c.root, mindmapFocus.nodeId) : null;
+      if (!visible) mindmapFocus = null;
+      else if (visible !== mindmapFocus.nodeId) mindmapFocus = { elementId: mindmapFocus.elementId, nodeId: visible };
     }
     store.setState({
       elements,

@@ -76,7 +76,7 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
           )}
           {mindmap && <MindmapOverlay key={mindmap.id} el={mindmap} store={store} />}
           {mindEdited?.type === "mindmap" && (
-            <MindNodeEditor key={`${mindEdited.id}:${mindEdit.nodeId}`} el={mindEdited} store={store} />
+            <MindNodeEditor key={`${mindEdited.id}:${mindEdit.nodeId}:${mindEdit.session}`} el={mindEdited} store={store} />
           )}
           {framed.map((el) => (
             <BoxFrame key={el.id} el={el} store={store} zoom={camera.z} handles={selection.size === 1} />

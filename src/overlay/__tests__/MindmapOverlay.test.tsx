@@ -17,7 +17,8 @@ import { mindmapView } from "../../mindmap/cache";
 import { beginMindNodeEdit, endMindNodeEdit, useMindEdit } from "../../mindmap/editSession";
 import { addChild, findNode, newNode, parentOf, type MindNode } from "../../mindmap/tree";
 import { mindmapOf } from "../../model/content";
-import { createEditorStore, type EditorStore } from "../../stores/editor";
+import { createEditorStore, useEditorStore, type EditorStore } from "../../stores/editor";
+import "../../keys/editorCommands"; // the window mind-map keys, as in the app
 import { useNotebookStore } from "../../stores/notebook";
 import MindmapOverlay from "../MindmapOverlay";
 import MindNodeEditor from "../MindNodeEditor";
@@ -86,6 +87,28 @@ describe("MindmapOverlay", () => {
     expect(container.querySelector("[data-mindmap-drop]")).toBeNull();
   });
 
+  it("escape_cancels_a_node_drag_before_the_mind_map_keys_see_it", async () => {
+    store = useEditorStore; // the focused pane's store, which the window mind-map keys act on
+    const id = await load();
+    const { canvas, container } = mount(id);
+    const to = centreOf(id, "a");
+    act(() => void fireEvent.pointerDown(canvas, { ...centreOf(id, "b"), pointerId: 1, button: 0, isPrimary: true }));
+    act(() => void fireEvent.pointerMove(canvas, { ...to, pointerId: 1, isPrimary: true }));
+    expect(container.querySelector('[data-mindmap-drop="a"]')).not.toBeNull();
+    const esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    act(() => void document.body.dispatchEvent(esc));
+    expect(esc.defaultPrevented).toBe(true);
+    expect(container.querySelector("[data-mindmap-drop]")).toBeNull();
+    // The drag is dropped, the focus stays on the pressed node.
+    expect(s().mindmapFocus).toEqual({ elementId: id, nodeId: "b" });
+    expect(s().dragging).toBe(false);
+    act(() => void fireEvent.pointerUp(canvas, { ...to, pointerId: 1, isPrimary: true }));
+    expect(parentOf(root(id), "b")?.id).toBe(root(id).id);
+    // With the drag over, Escape is the mind-map key again (it clears the focus).
+    act(() => void document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(s().mindmapFocus).toBeNull();
+  });
+
   it("a_drop_inside_the_dragged_subtree_shows_no_indicator_and_changes_nothing", async () => {
     const id = await load();
     s().editMindmap(id, (r) => addChild(r, "a", { ...newNode("C"), id: "c" }), "seed");
@@ -119,6 +142,30 @@ describe("MindmapOverlay", () => {
     fireEvent.click(container.querySelector('[data-mindmap-add="sibling"]')!);
     expect(root(id).children.map((c) => c.id).slice(0, 1)).toEqual(["a"]);
     expect(root(id).children).toHaveLength(3);
+  });
+
+  it("buttons_have_8px_of_slop_and_stay_off_the_node_box", async () => {
+    const id = await load();
+    s().focusMindNode(id, "a");
+    const { container } = mount(id);
+    const nodes = mindmapView(s().elements.get(id)!).layout.nodes;
+    const rect = (node: globalThis.Element | null) => {
+      const st = (node as HTMLElement).style;
+      return { x: parseFloat(st.left), y: parseFloat(st.top), w: parseFloat(st.width), h: parseFloat(st.height) };
+    };
+    const overlaps = (a: ReturnType<typeof rect>, b: { x: number; y: number; width: number; height: number }) =>
+      a.x < b.x + b.width && b.x < a.x + a.w && a.y < b.y + b.height && b.y < a.y + a.h;
+    const buttons = [...container.querySelectorAll("button[data-mindmap-ui]")];
+    expect(buttons.length).toBeGreaterThanOrEqual(3); // root toggle, "+" child, "+" sibling
+    for (const b of buttons) {
+      const r = rect(b);
+      const dot = rect(b.querySelector("span"));
+      expect(r.w).toBeGreaterThanOrEqual(dot.w + 16);
+      expect(r.h).toBeGreaterThanOrEqual(dot.h + 16);
+      // A toggle stays off its own node, a "+" off the focused node.
+      const owner = nodes.get(b.getAttribute("data-mindmap-toggle") ?? "a")!;
+      expect(overlaps(r, owner)).toBe(false);
+    }
   });
 
   it("the_collapse_toggle_hides_the_children", async () => {
@@ -169,6 +216,77 @@ describe("MindNodeEditor", () => {
     expect(findNode(root(id), "a")!.text).toBe("Apple");
     s().undo();
     expect(findNode(root(id), "a")!.text).toBe("A");
+  });
+
+  it("escape_after_typing_leaves_no_undo_step", async () => {
+    const id = await load();
+    beginMindNodeEdit(store, id, "a");
+    const { container } = editor(id);
+    const area = container.querySelector("textarea")!;
+    fireEvent.change(area, { target: { value: "Apples" } });
+    fireEvent.keyDown(area, { key: "Escape" });
+    expect(findNode(root(id), "a")!.text).toBe("A");
+    expect(s().canRedo).toBe(false);
+    // The next undo is the seeding edit, not an empty step.
+    s().undo();
+    expect(findNode(root(id), "a")).toBeNull();
+  });
+
+  it("escape_with_a_starting_key_restores_the_text_and_leaves_no_step", async () => {
+    const id = await load();
+    beginMindNodeEdit(store, id, "a", "z");
+    const { container } = editor(id);
+    expect(findNode(root(id), "a")!.text).toBe("z");
+    fireEvent.keyDown(container.querySelector("textarea")!, { key: "Escape" });
+    expect(findNode(root(id), "a")!.text).toBe("A");
+    s().undo();
+    expect(findNode(root(id), "a")).toBeNull();
+  });
+
+  it("two_editing_sessions_on_one_node_are_two_undo_steps", async () => {
+    const id = await load();
+    beginMindNodeEdit(store, id, "a");
+    let r = editor(id);
+    fireEvent.change(r.container.querySelector("textarea")!, { target: { value: "Apple" } });
+    fireEvent.keyDown(r.container.querySelector("textarea")!, { key: "Enter" });
+    r.unmount();
+    beginMindNodeEdit(store, id, "a");
+    r = editor(id);
+    fireEvent.change(r.container.querySelector("textarea")!, { target: { value: "Apples" } });
+    fireEvent.keyDown(r.container.querySelector("textarea")!, { key: "Enter" });
+    expect(findNode(root(id), "a")!.text).toBe("Apples");
+    s().undo();
+    expect(findNode(root(id), "a")!.text).toBe("Apple");
+    s().undo();
+    expect(findNode(root(id), "a")!.text).toBe("A");
+  });
+
+  it("tab_commits_and_adds_a_child_without_moving_the_browser_focus", async () => {
+    const id = await load();
+    beginMindNodeEdit(store, id, "a");
+    const { container } = editor(id);
+    const area = container.querySelector("textarea")!;
+    fireEvent.change(area, { target: { value: "Apple" } });
+    const notPrevented = fireEvent.keyDown(area, { key: "Tab" });
+    expect(notPrevented).toBe(false);
+    const a = findNode(root(id), "a")!;
+    expect(a.text).toBe("Apple");
+    expect(a.children).toHaveLength(1);
+    const child = a.children[0].id;
+    expect(useMindEdit.getState()).toMatchObject({ store, elementId: id, nodeId: child });
+    expect(s().mindmapFocus).toEqual({ elementId: id, nodeId: child });
+  });
+
+  it("shift_tab_commits_and_focuses_the_parent", async () => {
+    const id = await load();
+    beginMindNodeEdit(store, id, "a");
+    const { container } = editor(id);
+    const area = container.querySelector("textarea")!;
+    fireEvent.change(area, { target: { value: "Apple" } });
+    expect(fireEvent.keyDown(area, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(findNode(root(id), "a")!.text).toBe("Apple");
+    expect(useMindEdit.getState().store).toBeNull();
+    expect(s().mindmapFocus).toEqual({ elementId: id, nodeId: root(id).id });
   });
 
   it("a_starting_key_replaces_the_text", async () => {

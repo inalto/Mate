@@ -15,7 +15,17 @@ import { modalAllows } from "./modalGuard";
 import { isClosedShape } from "../shapes/geometry";
 import { isTypingTarget } from "./shortcuts";
 import { beginShapeTyping } from "../overlay/ShapeLabelEditor";
-import { addMindChild, addMindmapAndEdit, addMindSibling, beginMindNodeEdit, focusAfterRemove, isMindNodeEditing, mindNeighbour, type MindDirection } from "../mindmap/editSession";
+import {
+  addMindChild,
+  addMindmapAndEdit,
+  addMindSibling,
+  beginMindNodeEdit,
+  focusAfterRemove,
+  isMindDragging,
+  isMindNodeEditing,
+  mindNeighbour,
+  type MindDirection,
+} from "../mindmap/editSession";
 import { parentOf, removeNode } from "../mindmap/tree";
 import i18n from "../i18n";
 
@@ -202,6 +212,8 @@ export function handleMindmapKey(e: KeyboardEvent): boolean {
   const s = store.getState();
   const f = s.mindmapFocus;
   if (!f || s.presenting || s.editingId !== null || isMindNodeEditing(store)) return false;
+  // A node drag (the overlay cancels it on Escape) or a canvas drag owns the keys until it ends.
+  if (s.dragging || isMindDragging(store)) return false;
   if (s.selection.size !== 1 || !s.selection.has(f.elementId)) return false;
   const el = s.elements.get(f.elementId);
   const c = el ? mindmapOf(el) : null;

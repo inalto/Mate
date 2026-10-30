@@ -15,12 +15,14 @@ interface MindEditState {
   nodeId: string;
   /** Text the session starts with instead of the stored one (the key that started it), or null. */
   initial: string | null;
+  /** Number of the editing session (a fresh one per `beginMindNodeEdit`), part of its merge key. */
+  session: number;
 }
 
-export const useMindEdit = create<MindEditState>(() => ({ store: null, elementId: "", nodeId: "", initial: null }));
+export const useMindEdit = create<MindEditState>(() => ({ store: null, elementId: "", nodeId: "", initial: null, session: 0 }));
 
-/** Merge key of one node's typing (one history entry per editing run). */
-export const mindTextKey = (elementId: string, nodeId: string): string => `mindmap:${elementId}:${nodeId}`;
+/** Merge key of one editing session's typing (one history entry per session, never shared by two). */
+export const mindTextKey = (elementId: string, nodeId: string, session: number): string => `mindmap:${elementId}:${nodeId}:${session}`;
 
 /** The mind map `id` of `store` when it can be edited (exists, unlocked, not presenting). */
 function editableMap(store: EditorStore, id: string): Element | null {
@@ -40,7 +42,7 @@ export function beginMindNodeEdit(store: EditorStore, elementId: string, nodeId:
   if (!c || !findNode(c.root, nodeId)) return false;
   if (store.getState().editingId !== null) store.getState().endEdit();
   store.getState().focusMindNode(elementId, nodeId);
-  useMindEdit.setState({ store, elementId, nodeId, initial });
+  useMindEdit.setState((m) => ({ store, elementId, nodeId, initial, session: m.session + 1 }));
   return true;
 }
 
@@ -48,8 +50,19 @@ export function beginMindNodeEdit(store: EditorStore, elementId: string, nodeId:
 export function endMindNodeEdit(store?: EditorStore): void {
   const cur = useMindEdit.getState();
   if (!cur.store || (store && cur.store !== store)) return;
-  useMindEdit.setState({ store: null, elementId: "", nodeId: "", initial: null });
+  useMindEdit.setState({ store: null, elementId: "", nodeId: "", initial: null }); // `session` keeps counting
 }
+
+/** The store whose mind-map overlay holds a node press or drag (the mind-map keys leave Escape to it). */
+let dragStore: EditorStore | null = null;
+
+/** Mark (or, with null, clear) the node press or drag of `store`'s mind-map overlay. */
+export function setMindDrag(store: EditorStore | null): void {
+  dragStore = store;
+}
+
+/** True while `store`'s mind-map overlay holds a node press or drag. */
+export const isMindDragging = (store: EditorStore): boolean => dragStore === store;
 
 /** True while `store` has a node editor open. */
 export const isMindNodeEditing = (store: EditorStore): boolean => useMindEdit.getState().store === store;

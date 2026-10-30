@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { useTranslation } from "react-i18next";
 import { screenToWorld, type Vec2 } from "../canvas/camera";
 import { mindmapView } from "../mindmap/cache";
-import { addMindChild, addMindSibling, beginMindNodeEdit, isMindNodeEditing } from "../mindmap/editSession";
+import { addMindChild, addMindSibling, beginMindNodeEdit, isMindDragging, isMindNodeEditing, setMindDrag } from "../mindmap/editSession";
 import { hitMindNode } from "../mindmap/hit";
 import type { NodeBox } from "../mindmap/layout";
 import { findNode, moveNode, toggleCollapsed } from "../mindmap/tree";
@@ -20,11 +20,15 @@ import { isLocked, mindmapOf } from "../model/content";
 import type { Element } from "../model/types";
 import type { EditorStore } from "../stores/editor";
 
-/** Hit size of the overlay buttons (screen px) and of their visible dot. */
-const BUTTON_PX = 24;
-const DOT_PX = 18;
-/** Gap between a node and its "+" buttons (screen px). */
-const BUTTON_GAP_PX = 16;
+/** Hit size of the overlay buttons (screen px) and of their visible dot: 8 px of slop all round. */
+const BUTTON_PX = 36;
+const DOT_PX = 20;
+/**
+ * Gap (screen px) between a node and the hit target of its "+" buttons. Every button target sits
+ * wholly outside its node's box (the collapse toggle starts at the outer edge), so none of them
+ * takes the presses and drags of the node itself.
+ */
+const BUTTON_GAP_PX = 4;
 /** Pointer travel (screen px) before a press on a node becomes a drag. */
 const DRAG_START_PX = 4;
 /** Slop of a node hit (screen px). */
@@ -88,6 +92,7 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
     const end = () => {
       const d = drag.current;
       drag.current = null;
+      if (isMindDragging(store)) setMindDrag(null);
       setDrop(null);
       if (d) {
         try {
@@ -117,6 +122,7 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
         // Not an active pointer (synthetic press): moves still arrive over the pane.
       }
       drag.current = { pointerId: e.pointerId, nodeId: id, start: { x: e.clientX, y: e.clientY }, moved: false, target: null };
+      setMindDrag(store);
     };
     const onMove = (e: PointerEvent) => {
       const d = drag.current;
@@ -284,11 +290,12 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
     if (focused) parts.push(ring(focused, "focus", "focus"));
     const showButtons = cursor && !locked && !isMindNodeEditing(store);
     if (showButtons) {
-      // Collapse toggles at the outer edge of every node with children (over a collapsed node's badge).
+      // Collapse toggles just outside the outer edge of every node with children (over the outer half of a collapsed node's badge).
       for (const box of nodes.values()) {
         const node = findNode(c.root, box.id);
         if (!node || node.children.length === 0) continue;
-        const outer = { x: box.side === "left" ? box.x : box.x + box.width, y: box.y + box.height / 2 };
+        const half = px(BUTTON_PX / 2);
+        const outer = { x: box.side === "left" ? box.x - half : box.x + box.width + half, y: box.y + box.height / 2 };
         const label = node.collapsed ? t("mindmap.expand") : t("mindmap.collapse");
         parts.push(
           button(
@@ -304,12 +311,12 @@ export default function MindmapOverlay({ el, store }: { el: Element; store: Edit
       if (focused) {
         const node = findNode(c.root, focused.id);
         const hasToggle = !!node && node.children.length > 0;
-        const out = px(BUTTON_GAP_PX + (hasToggle ? BUTTON_PX : 0));
+        const out = px((hasToggle ? BUTTON_PX : 0) + BUTTON_GAP_PX + BUTTON_PX / 2);
         const side = focused.id === c.root.id && c.layout === "left" ? "left" : focused.side;
         const childAt = { x: side === "left" ? focused.x - out : focused.x + focused.width + out, y: focused.y + focused.height / 2 };
         parts.push(button("add-child", childAt, t("mindmap.addChild"), () => void addMindChild(store, el.id, focused.id), dot("+"), { "data-mindmap-add": "child" }));
         if (focused.id !== c.root.id) {
-          const siblingAt = { x: focused.x + focused.width / 2, y: focused.y + focused.height + px(BUTTON_GAP_PX) };
+          const siblingAt = { x: focused.x + focused.width / 2, y: focused.y + focused.height + px(BUTTON_GAP_PX + BUTTON_PX / 2) };
           parts.push(
             button("add-sibling", siblingAt, t("mindmap.addSibling"), () => void addMindSibling(store, el.id, focused.id), dot("+"), { "data-mindmap-add": "sibling" }),
           );

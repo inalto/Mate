@@ -1,15 +1,16 @@
 // Mind-map node text editor (spec D5): a textarea over the edited node's box, in the node font.
-// Typing writes through `editMindmap` with the merge key `mindmap:<elementId>:<nodeId>`, so the
-// node grows as it is typed and one session is one history entry. Enter commits (closes), Shift+Enter
-// adds a newline, Escape restores the text the session started with; a blur or a press outside also
-// closes. Which node is edited lives in `useMindEdit` (per editor store), set by the overlay, the
+// Typing writes through `editMindmap` with the session's merge key `mindmap:<elementId>:<nodeId>:<n>`,
+// so the node grows as it is typed and one session is one history entry. Enter commits (closes),
+// Shift+Enter adds a newline, Tab commits and adds a child (Shift+Tab commits and focuses the parent),
+// Escape restores the text the session started with and drops its history entry; a blur or a press
+// outside also closes. Which node is edited lives in `useMindEdit` (per editor store), set by the overlay, the
 // toolbar and the mind-map keys (src/mindmap/editSession.ts); OverlayLayer mounts the editor for its own store.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { mindmapFont, mindmapView } from "../mindmap/cache";
-import { endMindNodeEdit, mindTextKey, useMindEdit } from "../mindmap/editSession";
+import { addMindChild, endMindNodeEdit, mindTextKey, useMindEdit } from "../mindmap/editSession";
 import { LINE_HEIGHT, PAD_X, PAD_Y } from "../mindmap/layout";
-import { findNode, setText } from "../mindmap/tree";
+import { findNode, parentOf, setText } from "../mindmap/tree";
 import { mindmapOf } from "../model/content";
 import type { Element } from "../model/types";
 import type { EditorStore } from "../stores/editor";
@@ -21,13 +22,16 @@ export default function MindNodeEditor({ el, store }: { el: Element; store: Edit
   const c = mindmapOf(el);
   const node = c ? findNode(c.root, nodeId) : null;
   // The text the session started with (Escape restores it) and the key that started it, if any.
-  const [start] = useState(() => ({ text: node?.text ?? "", initial: useMindEdit.getState().initial }));
+  const [start] = useState(() => {
+    const m = useMindEdit.getState();
+    return { text: node?.text ?? "", initial: m.initial, key: mindTextKey(el.id, nodeId, m.session) };
+  });
   const view = mindmapView(el);
   const box = view.layout.nodes.get(nodeId);
   const done = useRef(false);
 
   const write = (text: string) => {
-    store.getState().editMindmap(el.id, (root) => setText(root, nodeId, text), "Edit topic", mindTextKey(el.id, nodeId));
+    store.getState().editMindmap(el.id, (root) => setText(root, nodeId, text), "Edit topic", start.key);
   };
   const close = () => {
     if (done.current) return;
@@ -104,10 +108,25 @@ export default function MindNodeEditor({ el, store }: { el: Element; store: Edit
         if (e.key === "Escape") {
           e.preventDefault();
           e.stopPropagation();
-          const cur = store.getState().elements.get(el.id);
-          const now = cur ? mindmapOf(cur) : null;
-          if (now && findNode(now.root, nodeId)?.text !== start.text) write(start.text);
+          // The session's own entry is reverted and dropped (no empty undo step is left behind).
+          if (!store.getState().discardMindmapEdit(start.key)) {
+            const cur = store.getState().elements.get(el.id);
+            const now = cur ? mindmapOf(cur) : null;
+            if (now && findNode(now.root, nodeId)?.text !== start.text) write(start.text);
+          }
           close();
+        } else if (e.key === "Tab") {
+          // Never the browser's focus move: commit, then add a child (Shift: focus the parent).
+          e.preventDefault();
+          e.stopPropagation();
+          close();
+          if (!e.shiftKey) addMindChild(store, el.id, nodeId);
+          else {
+            const cur = store.getState().elements.get(el.id);
+            const now = cur ? mindmapOf(cur) : null;
+            const up = now ? parentOf(now.root, nodeId) : null;
+            if (up) store.getState().focusMindNode(el.id, up.id);
+          }
         } else if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           e.stopPropagation();
