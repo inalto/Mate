@@ -78,4 +78,16 @@ describe("LabelPopover", () => {
     fireEvent.keyDown(again, { key: "Enter" });
     expect(connectorLabel(useEditorStore.getState().elements.get(id)!)).toBeNull();
   });
+
+  it("closes_when_the_pane_starts_presenting", async () => {
+    const id = await addConnector();
+    useEditorStore.getState().addFrame({ x: 0, y: 0, width: 600, height: 400 });
+    render(<ConnectorLabelPopover store={useEditorStore} />);
+    act(() => openLabelPopover(useEditorStore, id));
+    expect(screen.getByRole("textbox")).toBeTruthy();
+    act(() => useEditorStore.getState().startPresentation());
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(useLabelPopoverStore.getState().target).toBeNull();
+    act(() => useEditorStore.getState().stopPresentation());
+  });
 });

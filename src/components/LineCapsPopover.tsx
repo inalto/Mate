@@ -91,9 +91,10 @@ export default function LineCapsPopover({ store }: { store: EditorStore }) {
   const viewport = store((s) => s.viewport);
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(EST);
-  const valid = !!el && el.type === "shape" && (el.shapeType === "line" || el.shapeType === "arrow");
+  const presenting = store((s) => s.presenting !== null);
+  const valid = !!el && el.type === "shape" && (el.shapeType === "line" || el.shapeType === "arrow") && !presenting;
 
-  // The shape went away (undo, erase, page change): nothing left to edit.
+  // The shape went away (undo, erase, page change) or the pane started presenting: nothing left to edit.
   useEffect(() => {
     if (target && !valid) closeLineCaps();
   }, [target, valid]);

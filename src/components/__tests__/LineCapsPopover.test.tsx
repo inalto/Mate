@@ -52,6 +52,18 @@ describe("LineCapsPopover", () => {
     expect(effectiveCaps(s().elements.get(id)!)).toEqual({ start: "none", end: "dot" });
   });
 
+  it("closes_when_the_pane_starts_presenting", async () => {
+    const id = await addLine();
+    useEditorStore.getState().addFrame({ x: 0, y: 0, width: 600, height: 400 });
+    render(<LineCapsPopover store={useEditorStore} />);
+    act(() => openLineCaps(useEditorStore, id));
+    expect(screen.getByRole("toolbar", { name: "Line ends" })).toBeTruthy();
+    act(() => useEditorStore.getState().startPresentation());
+    expect(screen.queryByRole("toolbar", { name: "Line ends" })).toBeNull();
+    expect(useLineCapsStore.getState().target).toBeNull();
+    act(() => useEditorStore.getState().stopPresentation());
+  });
+
   it("closes_on_escape_outside_pointerdown_and_idle", async () => {
     const id = await addLine("arrow");
     render(<LineCapsPopover store={useEditorStore} />);

@@ -80,11 +80,12 @@ export async function pasteImageFile(store: EditorStore, file: File): Promise<vo
 
 /**
  * Wire paste and file drops for the pane shown in `host`. Paste acts only in the focused pane and
- * never while a text field or text editor has focus. Returns a detach function.
+ * never while a text field or text editor has focus; neither acts while the pane presents. Returns a
+ * detach function.
  */
 export function attachDropPaste(host: HTMLElement, store: EditorStore): () => void {
   const onPaste = (e: ClipboardEvent) => {
-    if (isEditable(e.target) || getFocusedEditor() !== store) return;
+    if (isEditable(e.target) || getFocusedEditor() !== store || store.getState().presenting) return;
     const files = imageFilesOf(e.clipboardData);
     const media = mediaFilesOf(e.clipboardData);
     const svg = files.length + media.length === 0 ? svgTextOf(e.clipboardData) : null;
@@ -98,7 +99,8 @@ export function attachDropPaste(host: HTMLElement, store: EditorStore): () => vo
 
   panes.add(host);
   const stopDrops = onFileDrop((paths, x, y) => {
-    if (!inside(host, x, y)) return;
+    // Presenting: the page is read-only, and a drop on the pane is swallowed (no PDF import either).
+    if (!inside(host, x, y) || store.getState().presenting) return;
     const rect = host.getBoundingClientRect();
     const at = screenToWorld(store.getState().camera, { x: x - rect.left, y: y - rect.top });
     paths.filter(isImagePath).forEach((path, i) => {

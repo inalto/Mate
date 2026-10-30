@@ -1,12 +1,13 @@
 // Presentation controls of one pane (bottom centre while it presents): previous, "n / total", next,
-// fullscreen, settings (black background, fit / fill), frame order and exit. Auto-hides after 2 s
-// without pointer movement. Owns the presentation keys while its pane has focus (capture phase, not
+// fullscreen (not on mobile), settings (black background, fit / fill), frame order and exit. Auto-hides
+// after 2 s without pointer movement or press (a tap brings it back on touch). Owns the presentation keys while its pane has focus (capture phase, not
 // rebindable): → / PageDown / Space next, ← / PageUp previous, Home / End first / last, Esc exit.
 // Space still pans when held and dragged: only a press without a pointer drag turns the frame.
 import { ArrowLeft, ArrowRight, ArrowsIn, ArrowsOut, GearSix, ListNumbers, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { isFullscreen, setFullscreen } from "../ipc/window";
+import { isMobile } from "../platform";
 import { isTypingTarget } from "../keys/shortcuts";
 import { useChromeStore } from "../stores/chrome";
 import type { EditorStore } from "../stores/editor";
@@ -32,7 +33,8 @@ function Bar({ store, index, fill }: { store: EditorStore; index: number; fill: 
   const ownFullscreen = useRef(false);
   useDismiss(menuRef, menuOpen, () => setMenuOpen(false));
 
-  // Auto-hide: shown on pointer movement, hidden 2 s later unless the pointer rests on the bar.
+  // Auto-hide: shown on pointer movement or a press (a touch tap fires no move), hidden 2 s later
+  // unless the pointer rests on the bar.
   const keepOpen = menuOpen;
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -48,8 +50,10 @@ function Bar({ store, index, fill }: { store: EditorStore; index: number; fill: 
     };
     if (!keepOpen) arm();
     window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerdown", onMove, true);
     return () => {
       window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerdown", onMove, true);
       if (timer !== null) clearTimeout(timer);
     };
   }, [keepOpen]);
@@ -160,16 +164,19 @@ function Bar({ store, index, fill }: { store: EditorStore; index: number; fill: 
         <ArrowRight size={16} />
       </button>
       <span className="tb-sep" />
-      <button
-        type="button"
-        className={full ? "tb-btn active" : "tb-btn"}
-        aria-pressed={full}
-        aria-label={t("present.fullscreen")}
-        title={t("present.fullscreen")}
-        onClick={() => void toggleFullscreen()}
-      >
-        {full ? <ArrowsIn size={16} /> : <ArrowsOut size={16} />}
-      </button>
+      {/* The mobile shells have no window fullscreen to toggle. */}
+      {!isMobile() && (
+        <button
+          type="button"
+          className={full ? "tb-btn active" : "tb-btn"}
+          aria-pressed={full}
+          aria-label={t("present.fullscreen")}
+          title={t("present.fullscreen")}
+          onClick={() => void toggleFullscreen()}
+        >
+          {full ? <ArrowsIn size={16} /> : <ArrowsOut size={16} />}
+        </button>
+      )}
       <div ref={menuRef} className="tb-anchor">
         <button
           type="button"

@@ -183,8 +183,8 @@ export function startShapeTyping(e: KeyboardEvent): boolean {
 // Capture phase on the window, so the key wins over single-letter tool shortcuts.
 if (typeof window !== "undefined") window.addEventListener("keydown", (e) => void startShapeTyping(e), true);
 
-/** Shortcuts that still work while the focused pane presents. */
-const PRESENTING_ACTIONS = new Set<string>(["zoom.in", "zoom.out", "zoom.reset", "zoom.fit", "pan", "save", "help.shortcuts"]);
+/** Shortcuts that still work while the focused pane presents (zoom in/out and pan; fit/reset/selection would leave the frame). */
+const PRESENTING_ACTIONS = new Set<string>(["zoom.in", "zoom.out", "pan", "save", "help.shortcuts"]);
 
 export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   // While any dialog, overlay, palette or menu is open it owns the keyboard (see modalAllows:

@@ -112,9 +112,11 @@ export function ConnectorLabelPopover({ store }: { store: EditorStore }) {
   const el = store((s) => (target ? s.elements.get(target.id) : undefined));
   const camera = store((s) => s.camera);
   const viewport = store((s) => s.viewport);
-  const valid = !!el && (el.type === "connector" || el.type === "frame") && !isLocked(el);
+  const presenting = store((s) => s.presenting !== null);
+  const valid = !!el && (el.type === "connector" || el.type === "frame") && !isLocked(el) && !presenting;
 
-  // The connector went away (undo, erase, page change) or got locked: nothing left to edit.
+  // The connector went away (undo, erase, page change), got locked, or the pane started presenting
+  // (read-only): nothing left to edit.
   useEffect(() => {
     if (target && !valid) closeLabelPopover();
   }, [target, valid]);

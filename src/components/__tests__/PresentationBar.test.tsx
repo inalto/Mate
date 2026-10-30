@@ -18,6 +18,7 @@ vi.mock("../../ipc/window", () => ({
 }));
 
 import PresentationBar, { PRESENT_BAR_HIDE_MS } from "../PresentationBar";
+import { setPlatformForTests } from "../../platform";
 import FrameOrderPanel from "../FrameOrderPanel";
 import { closeFrameOrder } from "../../stores/frameOrder";
 import { DEFAULT_SETTINGS } from "../../model/constants";
@@ -155,6 +156,32 @@ describe("PresentationBar", () => {
     expect(bar.dataset.hidden).toBeUndefined();
   });
 
+  it("a_tap_without_movement_brings_the_hidden_bar_back", async () => {
+    await present();
+    vi.useFakeTimers();
+    render(<PresentationBar store={useEditorStore} />);
+    const bar = screen.getByRole("toolbar");
+    act(() => void vi.advanceTimersByTime(PRESENT_BAR_HIDE_MS + 10));
+    expect(bar.dataset.hidden).toBe("true");
+    act(() => void fireEvent.pointerDown(document.body, { pointerType: "touch" }));
+    expect(bar.dataset.hidden).toBeUndefined();
+    // Re-armed: it hides again after the delay.
+    act(() => void vi.advanceTimersByTime(PRESENT_BAR_HIDE_MS + 10));
+    expect(bar.dataset.hidden).toBe("true");
+  });
+
+  it("has_no_fullscreen_button_on_mobile", async () => {
+    await present();
+    setPlatformForTests(true);
+    try {
+      render(<PresentationBar store={useEditorStore} />);
+      expect(screen.queryByRole("button", { name: "Full screen" })).toBeNull();
+      expect(screen.getByRole("button", { name: "Exit presentation" })).toBeTruthy();
+    } finally {
+      setPlatformForTests(false);
+    }
+  });
+
   it("settings_menu_toggles_black_background_and_fill", async () => {
     await present();
     render(<PresentationBar store={useEditorStore} />);
@@ -184,5 +211,46 @@ describe("PresentationBar", () => {
     key("Escape");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(s().presenting).not.toBeNull();
+  });
+
+  it("frame_order_rows_reorder_by_dragging_the_grip_with_pointer_events", async () => {
+    await present();
+    render(
+      <>
+        <PresentationBar store={useEditorStore} />
+        <FrameOrderPanel />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Frame order" }));
+    // Rows 30 px tall stacked from y = 0 (jsdom has no layout).
+    const layout = () =>
+      screen.getAllByRole("option").forEach((r, i) => {
+        r.getBoundingClientRect = () => ({ top: i * 30, height: 30, left: 0, width: 200, bottom: i * 30 + 30, right: 200, x: 0, y: i * 30, toJSON: () => ({}) }) as DOMRect;
+      });
+    const grip = (id: string) => document.querySelector<HTMLElement>(`[data-frame-id="${id}"] [data-grip]`)!;
+    const drag = (id: string, fromY: number, toY: number) => {
+      layout();
+      const g = grip(id);
+      fireEvent.pointerDown(g, { button: 0, pointerId: 1, clientY: fromY });
+      fireEvent.pointerMove(g, { pointerId: 1, clientY: (fromY + toY) / 2 });
+      fireEvent.pointerMove(g, { pointerId: 1, clientY: toY });
+      fireEvent.pointerUp(g, { pointerId: 1, clientY: toY });
+    };
+    // a to the end (below the last row's middle).
+    drag("a", 15, 85);
+    expect(s().orderedFrames().map((f) => f.id)).toEqual(["b", "c", "a"]);
+    // c to the top.
+    drag("c", 45, 5);
+    expect(s().orderedFrames().map((f) => f.id)).toEqual(["c", "b", "a"]);
+    // Dropped back on its own slot: no write (still one entry per real move).
+    const before = s().elements;
+    drag("b", 45, 40);
+    expect(s().elements).toBe(before);
+    // A cancelled drag writes nothing.
+    layout();
+    fireEvent.pointerDown(grip("a"), { button: 0, pointerId: 2, clientY: 75 });
+    fireEvent.pointerCancel(grip("a"), { pointerId: 2 });
+    fireEvent.pointerUp(grip("a"), { pointerId: 2, clientY: 0 });
+    expect(s().orderedFrames().map((f) => f.id)).toEqual(["c", "b", "a"]);
   });
 });
