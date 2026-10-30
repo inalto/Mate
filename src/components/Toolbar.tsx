@@ -1,7 +1,11 @@
-// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options), text,
-// cursor, lasso, undo/redo, zoom.
+// Editor toolbar: preset slots, add-pen menu, eraser (with options), shapes (with options),
+// connectors (with options), text, cursor, lasso, undo/redo, zoom.
 import {
+  ArrowElbowRight,
   ArrowUUpLeft,
+  BezierCurve,
+  FlowArrow,
+  LineSegment,
   ArrowUUpRight,
   Cursor,
   ArrowsVertical,
@@ -25,7 +29,7 @@ import {
   HandPointing,
   HandGrabbing,
 } from "@phosphor-icons/react";
-import { useRef, useState, type ReactNode, type WheelEvent } from "react";
+import { useEffect, useRef, useState, type ReactNode, type WheelEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 import type { TKey } from "../i18n";
@@ -34,7 +38,8 @@ import { pickAndInsertMedia } from "../media/insert";
 import { DictateButton } from "./DictateButton";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
-import type { FingerAction, PenPreset } from "../model/types";
+import type { FingerAction, PenPreset, Settings } from "../model/types";
+import { CONNECTOR_MODES } from "../connectors/route";
 import { isInkTool, type InkType } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
@@ -49,6 +54,7 @@ import { SHAPE_LABEL_KEY } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
 import { useShortcutHint } from "./shortcutHints";
 import { useDismiss } from "./useDismiss";
+import { PEN_PALETTE } from "./inkColors";
 
 const INK_LABEL = {
   pen: "toolbar.ink.pen",
@@ -250,6 +256,118 @@ function ShapeButton() {
       {open && (
         <DockPopover anchorRef={ref}>
           <ShapeMenu />
+        </DockPopover>
+      )}
+    </div>
+  );
+}
+
+type ConnectorSettings = Pick<Settings, "defaultConnectorMode" | "defaultConnectorColor" | "defaultConnectorWidth" | "defaultConnectorDash">;
+
+const pickConnector = (s: Settings): ConnectorSettings => ({
+  defaultConnectorMode: s.defaultConnectorMode,
+  defaultConnectorColor: s.defaultConnectorColor,
+  defaultConnectorWidth: s.defaultConnectorWidth,
+  defaultConnectorDash: s.defaultConnectorDash,
+});
+
+const CONNECTOR_MODE_ICON = { straight: LineSegment, curve: BezierCurve, elbow: ArrowElbowRight } as const;
+
+/** Connector tool options: routing mode, colour, width, dashed. Live in the settings, saved on close. */
+function ConnectorMenu() {
+  const { t } = useTranslation();
+  const cfg = useSettingsStore((s) => s.settings);
+  const local = (patch: Partial<ConnectorSettings>) => useSettingsStore.setState((s) => ({ settings: { ...s.settings, ...patch } }));
+  const initial = useRef(pickConnector(cfg));
+  useEffect(
+    () => () => {
+      const now = pickConnector(useSettingsStore.getState().settings);
+      if (JSON.stringify(now) === JSON.stringify(initial.current)) return;
+      useSettingsStore
+        .getState()
+        .update(now)
+        .catch((err) => console.error("saving connector settings failed", err));
+    },
+    [],
+  );
+  const dashed = cfg.defaultConnectorDash === "dashed";
+  return (
+    <div className="tb-popover connector-menu" role="dialog" aria-label={t("connector.tool")}>
+      <div className="tb-row" role="radiogroup" aria-label={t("connector.mode")}>
+        {CONNECTOR_MODES.map((m) => {
+          const Icon = CONNECTOR_MODE_ICON[m];
+          return (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={cfg.defaultConnectorMode === m}
+              aria-label={t(`connector.${m}`)}
+              title={t(`connector.${m}`)}
+              className={cfg.defaultConnectorMode === m ? "tb-btn active" : "tb-btn"}
+              onClick={() => local({ defaultConnectorMode: m })}
+            >
+              <Icon size={18} />
+            </button>
+          );
+        })}
+      </div>
+      <span className="tb-label">{t("connector.colour")}</span>
+      <div className="tb-row">
+        {PEN_PALETTE.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className={cfg.defaultConnectorColor.toUpperCase() === c.toUpperCase() ? "tb-swatch active" : "tb-swatch"}
+            style={{ background: c }}
+            aria-label={t("toolbar.strokeColor", { color: c })}
+            onClick={() => local({ defaultConnectorColor: c })}
+          />
+        ))}
+      </div>
+      <label className="tb-row tb-width" title={t("connector.width")}>
+        <input
+          type="range"
+          min={0.5}
+          max={15}
+          step={0.5}
+          value={cfg.defaultConnectorWidth}
+          aria-label={t("connector.width")}
+          onChange={(e) => local({ defaultConnectorWidth: Number(e.target.value) })}
+        />
+        <span>{cfg.defaultConnectorWidth}</span>
+      </label>
+      <label className="tb-row">
+        <input type="checkbox" checked={dashed} onChange={(e) => local({ defaultConnectorDash: e.target.checked ? "dashed" : "solid" })} />
+        {t("connector.dashed")}
+      </label>
+    </div>
+  );
+}
+
+function ConnectorButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.tool === "connector");
+  useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.connector", t("connector.tool"));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-pressed={active}
+        aria-label={t("connector.tool")}
+        {...hint}
+        onClick={() => (active ? setOpen((o) => !o) : ed.getState().setTool("connector"))}
+      >
+        <FlowArrow size={18} />
+      </button>
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <ConnectorMenu />
         </DockPopover>
       )}
     </div>
@@ -496,6 +614,7 @@ export default function Toolbar() {
       <span className="tb-sep" />
       <EraserButton />
       <ShapeButton />
+      <ConnectorButton />
       {toolBtn("text", "tool.text", t("toolbar.text"), <TextT size={18} />)}
       <button
         type="button"

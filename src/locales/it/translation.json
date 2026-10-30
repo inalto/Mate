@@ -379,7 +379,21 @@
     "dot": "Punto",
     "bar": "Barra",
     "settingsToggle": "Proponi le estremità delle linee riconosciute",
-    "settingsHint": "Mostra un piccolo selettore di estremità a freccia, punto o barra quando un tratto diventa una linea o una freccia."
+    "settingsHint": "Mostra un piccolo selettore di estremità a freccia, punto o barra quando un tratto diventa una linea o una freccia.",
+    "diamond": "Rombo"
+  },
+  "connector": {
+    "tool": "Connettore",
+    "mode": "Percorso",
+    "straight": "Dritto",
+    "curve": "Curvo",
+    "elbow": "A gomito",
+    "dashed": "Tratteggiato",
+    "label": "Etichetta",
+    "addLabel": "Aggiungi etichetta",
+    "editLabel": "Modifica etichetta",
+    "width": "Spessore del connettore",
+    "colour": "Colore del connettore"
   },
   "lock": {
     "lock": "Blocca",
@@ -421,6 +435,7 @@
       "cursor": "Seleziona (cursore)",
       "lasso": "Lazo",
       "shape": "Forma",
+      "connector": "Connettore",
       "text": "Testo",
       "insertSpace": "Inserisci spazio",
       "presetSlot": "Preimpostazione da 1 a 9",

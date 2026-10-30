@@ -382,7 +382,21 @@
     "dot": "Punkt",
     "bar": "Strich",
     "settingsToggle": "Linienenden nach dem Einrasten anbieten",
-    "settingsHint": "Beim Umwandeln eines Strichs in eine Linie oder einen Pfeil eine kleine Auswahl für Pfeil-, Punkt- oder Strichenden zeigen."
+    "settingsHint": "Beim Umwandeln eines Strichs in eine Linie oder einen Pfeil eine kleine Auswahl für Pfeil-, Punkt- oder Strichenden zeigen.",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
   },
   "lock": {
     "lock": "Lock",
@@ -424,6 +438,7 @@
       "cursor": "Auswählen (Cursor)",
       "lasso": "Lasso",
       "shape": "Form",
+      "connector": "Connector",
       "text": "Text",
       "insertSpace": "Platz einfügen",
       "presetSlot": "Voreinstellung 1 bis 9",

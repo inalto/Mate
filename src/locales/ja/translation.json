@@ -381,7 +381,21 @@
     "dot": "点",
     "bar": "バー",
     "settingsToggle": "スナップ後に線の端を選べるようにする",
-    "settingsHint": "ストロークが線や矢印に変わったときに、矢印・点・バーの端を選ぶ小さなパネルを表示します。"
+    "settingsHint": "ストロークが線や矢印に変わったときに、矢印・点・バーの端を選ぶ小さなパネルを表示します。",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
   },
   "lock": {
     "lock": "Lock",
@@ -423,6 +437,7 @@
       "cursor": "選択（カーソル）",
       "lasso": "投げ縄選択",
       "shape": "図形",
+      "connector": "Connector",
       "text": "テキスト",
       "insertSpace": "スペースを挿入",
       "presetSlot": "プリセット 1〜9",

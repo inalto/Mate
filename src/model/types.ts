@@ -360,6 +360,11 @@ export interface Settings {
   defaultShapeFillColor: string;
   defaultShapeStrokeWidth: number;
   defaultShapeFillOpacity: number;
+  /** Connector tool defaults: routing mode, stroke colour, width (page units) and dash. */
+  defaultConnectorMode: "straight" | "curve" | "elbow";
+  defaultConnectorColor: string;
+  defaultConnectorWidth: number;
+  defaultConnectorDash: "solid" | "dashed";
   defaultEraserType: string;
   defaultEraserWidth: number;
   eraserEraseShapes: boolean;

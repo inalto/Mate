@@ -381,7 +381,21 @@
     "dot": "圆点",
     "bar": "竖线",
     "settingsToggle": "吸附后提供线条端点选项",
-    "settingsHint": "笔画变为直线或箭头时,显示一个可选择箭头、圆点或竖线端点的小面板。"
+    "settingsHint": "笔画变为直线或箭头时,显示一个可选择箭头、圆点或竖线端点的小面板。",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
   },
   "lock": {
     "lock": "Lock",
@@ -423,6 +437,7 @@
       "cursor": "选择（光标）",
       "lasso": "套索",
       "shape": "形状",
+      "connector": "Connector",
       "text": "文字",
       "insertSpace": "插入空白",
       "presetSlot": "预设 1 至 9",

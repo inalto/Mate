@@ -58,7 +58,7 @@ import {
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "text" | "insert-space";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -810,7 +810,7 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      if (tool === "eraser" || tool === "shape" || tool === "text" || tool === "insert-space") {
+      if (tool === "eraser" || tool === "shape" || tool === "connector" || tool === "text" || tool === "insert-space") {
         closeEdit();
         set({ tool, selection: new Set(), editingId: null });
       } else set({ tool });

@@ -17,6 +17,7 @@ import { renderOrder } from "../tools/zorder";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
 import LineCapsPopover from "../components/LineCapsPopover";
+import { ConnectorLabelPopover } from "../components/LabelPopover";
 import { openLineCaps } from "../stores/lineCaps";
 import MediaLayer from "../media/MediaLayer";
 import { paintBackground, type SurfaceColors } from "./background";
@@ -605,6 +606,7 @@ export default function CanvasView({ pageId, store = useEditorStore }: { pageId:
       <MediaLayer store={store} />
       <ZoomIndicator store={store} />
       <LineCapsPopover store={store} />
+      <ConnectorLabelPopover store={store} />
     </>
   );
 }

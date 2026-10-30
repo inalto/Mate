@@ -183,6 +183,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.setTool("lasso");
     case "tool.shape":
       return s.setTool("shape");
+    case "tool.connector":
+      return s.setTool("connector");
     case "tool.text":
       return s.setTool("text");
     case "tool.insertSpace":

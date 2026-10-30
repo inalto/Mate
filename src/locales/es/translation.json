@@ -382,7 +382,21 @@
     "dot": "Punto",
     "bar": "Barra",
     "settingsToggle": "Ofrecer extremos de línea tras ajustar",
-    "settingsHint": "Mostrar un pequeño selector de extremos de flecha, punto o barra cuando un trazo se convierte en línea o flecha."
+    "settingsHint": "Mostrar un pequeño selector de extremos de flecha, punto o barra cuando un trazo se convierte en línea o flecha.",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
   },
   "lock": {
     "lock": "Lock",
@@ -424,6 +438,7 @@
       "cursor": "Seleccionar (cursor)",
       "lasso": "Lazo",
       "shape": "Forma",
+      "connector": "Connector",
       "text": "Texto",
       "insertSpace": "Insertar espacio",
       "presetSlot": "Preajuste 1 a 9",

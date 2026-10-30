@@ -120,6 +120,13 @@ pub struct Settings {
     pub default_shape_fill_color: String,
     pub default_shape_stroke_width: f64,
     pub default_shape_fill_opacity: f64,
+    // Connectors
+    /// `"straight" | "curve" | "elbow"`.
+    pub default_connector_mode: String,
+    pub default_connector_color: String,
+    pub default_connector_width: f64,
+    /// `"solid" | "dashed"`.
+    pub default_connector_dash: String,
     // Eraser
     pub default_eraser_type: String,
     pub default_eraser_width: f64,
@@ -235,6 +242,10 @@ impl Default for Settings {
             default_shape_fill_color: s("transparent"),
             default_shape_stroke_width: 2.0,
             default_shape_fill_opacity: 1.0,
+            default_connector_mode: s("curve"),
+            default_connector_color: s("#000000"),
+            default_connector_width: 3.0,
+            default_connector_dash: s("solid"),
             default_eraser_type: s("stroke"),
             default_eraser_width: 20.0,
             eraser_erase_shapes: true,

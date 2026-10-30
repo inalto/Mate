@@ -382,7 +382,21 @@
     "dot": "Ponto",
     "bar": "Barra",
     "settingsToggle": "Oferecer extremidades de linha após o ajuste",
-    "settingsHint": "Mostrar um pequeno seletor de extremidades em seta, ponto ou barra quando um traço se torna uma linha ou seta."
+    "settingsHint": "Mostrar um pequeno seletor de extremidades em seta, ponto ou barra quando um traço se torna uma linha ou seta.",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
   },
   "lock": {
     "lock": "Lock",
@@ -424,6 +438,7 @@
       "cursor": "Selecionar (cursor)",
       "lasso": "Laço",
       "shape": "Forma",
+      "connector": "Connector",
       "text": "Texto",
       "insertSpace": "Inserir espaço",
       "presetSlot": "Predefinição 1 a 9",

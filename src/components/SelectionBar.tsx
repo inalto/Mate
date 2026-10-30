@@ -1,11 +1,16 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, line ends (one
-// line/arrow), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
+// line/arrow), connector controls (one connector: routing mode, ends, dash, label), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width; a single math box also gets Graph and Compute; a single runnable code block gets Run. Hidden while a text box is
 // being edited (its editor has its own bar). Lock (nothing locked) / Unlock (anything locked) and Copy as image are always
 // offered; when every selected element is locked the buttons that would change them are disabled.
 import {
   AlignLeft,
+  ArrowElbowRight,
   ArrowRight,
+  BezierCurve,
+  LineSegment,
+  LineSegments,
+  Tag,
   ChartLine,
   Copy,
   CopySimple,
@@ -30,7 +35,10 @@ import { getRuntime } from "../code/runtime";
 import { runCodeElement } from "../code/runElement";
 import type { EditorStore } from "../stores/editor";
 import type { Element } from "../model/types";
-import { effectiveCaps, isLocked } from "../model/content";
+import { CONNECTOR_CAPS, effectiveCaps, isLocked, type ConnectorContent } from "../model/content";
+import { connectorCaps, connectorLabel, connectorMode } from "../connectors/geometry";
+import { CONNECTOR_MODES } from "../connectors/route";
+import { openLabelPopover } from "../stores/labelPopover";
 import { copySelectionAsImage } from "../export/copyImage";
 import { showToast } from "./Toast";
 import { LineCapsPicker } from "./LineCapsPopover";
@@ -110,7 +118,7 @@ function ArrangeMenu({ disabled }: { disabled: boolean }) {
   );
 }
 
-/** End caps of the single selected line/arrow. */
+/** End caps of the single selected line/arrow or connector (connectors also offer a diamond). */
 function LineEndsMenu({ shape }: { shape: Element }) {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
@@ -124,10 +132,84 @@ function LineEndsMenu({ shape }: { shape: Element }) {
       </button>
       {open && (
         <div className="tb-popover line-caps-menu" role="dialog" aria-label={t("lineCaps.title")}>
-          <LineCapsPicker caps={effectiveCaps(shape)} onPick={(caps) => ed.getState().setLineCaps(shape.id, caps)} />
+          {shape.type === "connector" ? (
+            <LineCapsPicker caps={connectorCaps(shape)} options={CONNECTOR_CAPS} onChange={(caps) => ed.getState().setConnectorProps(shape.id, { caps })} />
+          ) : (
+            <LineCapsPicker caps={effectiveCaps(shape)} onChange={(caps) => ed.getState().setLineCaps(shape.id, caps)} />
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+const MODE_ICON: Record<ConnectorContent["mode"], typeof LineSegment> = { straight: LineSegment, curve: BezierCurve, elbow: ArrowElbowRight };
+
+/** Routing mode menu, dash toggle and label button of the single selected connector. */
+function ConnectorControls({ connector }: { connector: Element }) {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  const locked = isLocked(connector);
+  const mode = connectorMode(connector);
+  const Icon = MODE_ICON[mode];
+  const dashed = (connector.content as Partial<ConnectorContent>).dash === "dashed";
+  const label = connectorLabel(connector);
+  const set = (patch: Partial<Pick<ConnectorContent, "mode" | "dash">>) => ed.getState().setConnectorProps(connector.id, patch);
+  return (
+    <>
+      <div ref={ref} className="tb-anchor">
+        <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} aria-label={t("connector.mode")} title={t("connector.mode")} disabled={locked} onClick={() => setOpen((o) => !o)}>
+          <Icon size={16} />
+        </button>
+        {open && (
+          <div className="tb-popover tb-menu" role="menu" aria-label={t("connector.mode")}>
+            {CONNECTOR_MODES.map((m) => {
+              const ItemIcon = MODE_ICON[m];
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={mode === m}
+                  className={mode === m ? "tb-menu-item active" : "tb-menu-item"}
+                  onClick={() => {
+                    set({ mode: m });
+                    setOpen(false);
+                  }}
+                >
+                  <ItemIcon size={16} /> {t(`connector.${m}`)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <LineEndsMenu shape={connector} />
+      <button
+        type="button"
+        className={dashed ? "tb-btn active" : "tb-btn"}
+        aria-pressed={dashed}
+        aria-label={t("connector.dashed")}
+        title={t("connector.dashed")}
+        disabled={locked}
+        onClick={() => set({ dash: dashed ? "solid" : "dashed" })}
+      >
+        <LineSegments size={16} />
+      </button>
+      <button
+        type="button"
+        className="tb-btn"
+        aria-label={label ? t("connector.editLabel") : t("connector.addLabel")}
+        title={label ? t("connector.editLabel") : t("connector.addLabel")}
+        disabled={locked}
+        onClick={() => openLabelPopover(ed, connector.id)}
+      >
+        <Tag size={16} />
+      </button>
+    </>
   );
 }
 
@@ -242,7 +324,7 @@ export default function SelectionBar() {
   if (top < TOP_RESERVED) top = Math.min(tl.y + h + BAR_GAP, viewport.height - BAR_HEIGHT - BAR_GAP);
 
   const selected = [...selection].map((id) => elements.get(id));
-  const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape");
+  const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape" || e?.type === "connector");
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
   const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
@@ -253,6 +335,7 @@ export default function SelectionBar() {
   const codeLanguage = codeBlock ? codeOf(codeBlock).language : undefined;
   const lineShape =
     selected.length === 1 && selected[0]?.type === "shape" && (selected[0].shapeType === "line" || selected[0].shapeType === "arrow") ? selected[0] : undefined;
+  const connector = selected.length === 1 && selected[0]?.type === "connector" ? selected[0] : undefined;
   const lockedCount = selected.filter((e) => !!e && isLocked(e)).length;
   /** Every selected element is locked: nothing here may change them. */
   const allLocked = lockedCount > 0 && lockedCount === selected.length;
@@ -299,6 +382,7 @@ export default function SelectionBar() {
       {math && math.length === 1 && <MathCompute store={ed} source={math[0]} />}
       {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} />}
       {lineShape && <LineEndsMenu shape={lineShape} />}
+      {connector && <ConnectorControls connector={connector} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} disabled={selected.length - lockedCount < 2} />}
       <span className="tb-sep" />
       {textBox && !allLocked && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}

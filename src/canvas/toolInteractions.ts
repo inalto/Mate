@@ -2,12 +2,18 @@
 // clockwise = select what it encloses, drawn solid; anticlockwise = select what it touches, drawn
 // dashed), selection drag-move (smart guides, grid snap, Shift axis lock, Alt+drag copies, Ctrl/Cmd
 // suspends snapping), corner-handle scaling and the rotate handle, click/double-click on boxed
-// elements (select / open the editor), shape tool (drag a box, Shift constrains, live preview), text
+// elements (select / open the editor), shape tool (drag a box, Shift constrains, live preview),
+// connector tool (drag between elements, ends bind to anchors, live preview), a lone selected
+// connector's endpoint handles and label drag, double-click on a connector (label popover), text
 // tool (click adds or edits a text box). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
-import { connectorHit } from "../connectors/geometry";
+import { connectorHit, connectorRoute, DEFAULT_CONNECTOR_CAPS, labelPill } from "../connectors/geometry";
+import { anchors, nearestAnchor, SIDES } from "../connectors/anchors";
+import { routeConnector } from "../connectors";
+import { CONNECTOR_MODES, nearestT } from "../connectors/route";
+import { openLabelPopover } from "../stores/labelPopover";
 import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
@@ -15,9 +21,9 @@ import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/s
 import { shiftBelow } from "../tools/insertSpace";
 import { spaceShift } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
-import { isLocked, isPdfPlacement } from "../model/content";
+import { contentOf, isAttachable, isLocked, isPdfPlacement, type ConnectorContent, type ConnectorEnd, type Side } from "../model/content";
 import { equalSpacing, snapMove, type Guide } from "../tools/smartGuides";
-import { worldToScreen, type Camera, type Vec2 } from "./camera";
+import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import type { PointerInfo } from "./input";
 import { gridSpacingOf, snapDelta, snapPoint } from "./snap";
 
@@ -45,6 +51,14 @@ export const ROTATE_STEP = Math.PI / 12;
 export const GUIDE_SNAP_PX = 8;
 /** Smart guide colour (magenta). */
 export const GUIDE_COLOR = "#e0218a";
+/** A connector end snaps to an anchor within this distance (screen px). */
+export const ANCHOR_SNAP_PX = 10;
+/** Connector endpoint handle half-size (a 10 px square, screen px); its hit slop is HIT_SLOP_PX. */
+export const ENDPOINT_HANDLE_PX = 5;
+/** Anchor dot radius and the highlighted (snapped) one's (screen px). */
+const ANCHOR_DOT_PX = 3;
+const ANCHOR_HOT_PX = 5;
+const ACCENT = "#4a5d4e";
 
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
 
@@ -196,6 +210,27 @@ export interface Tap {
 export const isDoubleTap = (prev: Tap | null, next: Tap): boolean =>
   !!prev && prev.id === next.id && next.t - prev.t <= DOUBLE_TAP_MS && Math.hypot(next.x - prev.x, next.y - prev.y) <= DOUBLE_TAP_PX;
 
+/** The single selected element when it is a connector, else null. */
+export function loneConnector(elements: ReadonlyMap<string, Element>, selection: ReadonlySet<string>): Element | null {
+  if (selection.size !== 1) return null;
+  const el = elements.get(selection.values().next().value!);
+  return el && el.type === "connector" ? el : null;
+}
+
+/**
+ * Topmost element a connector end may bind to under `p` (attachable, not locked, not a PDF
+ * placement, not in `exclude`): shapes by outline or interior, others by bounds, within `tol`.
+ */
+export function attachableAt(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number, exclude?: string): Element | null {
+  const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
+  const hits = renderOrder(
+    ids
+      .map((id) => elements.get(id))
+      .filter((e): e is Element => !!e && e.id !== exclude && isAttachable(e) && !isLocked(e) && !isPdfPlacement(e)),
+  ).filter((el) => (el.type === "shape" ? shapeHit(el, p, tol) : rectContains(elementBounds(el), p, tol)));
+  return hits.length > 0 ? hits[hits.length - 1] : null;
+}
+
 /** The selection is a single boxed element: the DOM overlay (BoxFrame) frames it, not the canvas. */
 export function framedByOverlay(elements: ReadonlyMap<string, Element>, selection: ReadonlySet<string>): boolean {
   if (selection.size !== 1) return false;
@@ -219,6 +254,28 @@ type Gesture =
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
   | { kind: "shape"; start: Vec2; end: Vec2 }
   | {
+      kind: "connector";
+      /** The pointer-down point (the drag length is measured from it) and the source end's point. */
+      press: Vec2;
+      start: Vec2;
+      source: ConnectorEnd | undefined;
+      /** Where the free end is (the pointer), its binding, and the element under it. */
+      end: Vec2;
+      at: EndAt;
+    }
+  | {
+      kind: "endpoint";
+      id: string;
+      which: "source" | "target";
+      orig: Element;
+      /** The element the other end is bound to (this end never binds to it as well). */
+      other: string | undefined;
+      start: Vec2;
+      end: Vec2;
+      at: EndAt;
+    }
+  | { kind: "label"; id: string; orig: Element; text: string; t: number; start: Vec2; moved: boolean }
+  | {
       kind: "move";
       start: Vec2;
       delta: Vec2;
@@ -237,6 +294,15 @@ type Gesture =
     }
   | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } }
   | { kind: "rotate"; centre: Vec2; from: number; angle: number; orig: Element[] };
+
+/** A connector end under the pointer: the element it would bind to (`end`), the snapped anchor. */
+interface EndAt {
+  over: Element | null;
+  end: ConnectorEnd | undefined;
+  snapped: Side | null;
+  /** The end's point when free (grid-snapped when that is on). */
+  point: Vec2;
+}
 
 export interface ToolDeps {
   /** The editor instance (pane) this controller drives. */
@@ -266,12 +332,15 @@ export function createToolController(deps: ToolDeps) {
   let lastTap: Tap | null = null;
   const now = deps.now ?? (() => performance.now());
 
-  /** Double-click on a boxed element opens its editor (never a locked one); returns true when it did. */
+  /**
+   * Double-click on a boxed element opens its editor, on a connector its label popover (never on a
+   * locked one); returns true when it did.
+   */
   const tapEdit = (p: Vec2): boolean => {
     const s = st();
     const id = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
     const el = id ? s.elements.get(id) : undefined;
-    if (!id || !el || !isBoxed(el) || isLocked(el)) {
+    if (!id || !el || !(isBoxed(el) || el.type === "connector") || isLocked(el)) {
       lastTap = null;
       return false;
     }
@@ -279,7 +348,8 @@ export function createToolController(deps: ToolDeps) {
     const tap: Tap = { id, t: now(), x: scr.x, y: scr.y };
     if (isDoubleTap(lastTap, tap)) {
       lastTap = null;
-      s.beginEdit(id);
+      if (el.type === "connector") openLabelPopover(deps.store, id);
+      else s.beginEdit(id);
       return true;
     }
     lastTap = tap;
@@ -338,11 +408,120 @@ export function createToolController(deps: ToolDeps) {
     return [shapeElement(style, drag, st().pageId ?? "", "shape-preview", "")];
   };
 
+  /**
+   * The connector end under world `p`, ignoring element `exclude`: bound to the attachable element
+   * there (to the anchor within ANCHOR_SNAP_PX, else "auto"), else free at `p` (grid-snapped).
+   */
+  const endAt = (p: Vec2, exclude?: string): EndAt => {
+    const s = st();
+    const r = ANCHOR_SNAP_PX / s.camera.z;
+    const over = attachableAt(deps.store.spatialIndex(), s.elements, p, r, exclude);
+    if (!over) return { over: null, end: undefined, snapped: null, point: snap(p) };
+    const near = nearestAnchor(over, p, r);
+    return { over, end: { id: over.id, side: near?.side ?? "auto" }, snapped: near?.side ?? null, point: near?.point ?? p };
+  };
+
+  /** Connector tool style from the settings (read live). */
+  const connectorStyle = () => {
+    const cfg = deps.getSettings();
+    const mode: ConnectorContent["mode"] = CONNECTOR_MODES.includes(cfg.defaultConnectorMode) ? cfg.defaultConnectorMode : "curve";
+    const dash: "solid" | "dashed" = cfg.defaultConnectorDash === "dashed" ? "dashed" : "solid";
+    return { mode, color: cfg.defaultConnectorColor, width: cfg.defaultConnectorWidth, dash };
+  };
+
+  /** Connector `el` rerouted against the page (the live preview). */
+  const reroute = (el: Element): Element => {
+    const els = st().elements;
+    return routeConnector(el, (id) => els.get(id));
+  };
+
+  /** The connector being drawn from `start` (bound to `source`) to the end `at`, as an element. */
+  const connectorPreview = (start: Vec2, source: ConnectorEnd | undefined, at: EndAt): Element[] => {
+    const style = connectorStyle();
+    const content: Partial<ConnectorContent> = {
+      mode: style.mode,
+      caps: { ...DEFAULT_CONNECTOR_CAPS },
+      route: [],
+      ...(style.dash === "dashed" ? { dash: "dashed" as const } : {}),
+      ...(source ? { source } : {}),
+      ...(at.end ? { target: at.end } : {}),
+    };
+    const draft: Element = {
+      id: "connector-preview",
+      pageId: st().pageId ?? "",
+      type: "connector",
+      points: [
+        { x: start.x, y: start.y, pressure: 0.5, timestamp: 0 },
+        { x: at.point.x, y: at.point.y, pressure: 0.5, timestamp: 1 },
+      ],
+      color: style.color,
+      width: style.width,
+      isHighlighter: false,
+      content,
+      createdAt: "",
+      updatedAt: "",
+      version: 0,
+    };
+    return [reroute(draft)];
+  };
+
+  /** Connector `el` with end `which` moved to `at` (bound or free), rerouted. */
+  const withEnd = (el: Element, which: "source" | "target", at: EndAt): Element => {
+    const content = { ...contentOf<ConnectorContent>(el) };
+    if (at.end) content[which] = at.end;
+    else delete content[which];
+    const i = which === "source" ? 0 : 1;
+    const points = el.points.map((q, k) => (k === i ? { ...q, x: at.point.x, y: at.point.y } : q));
+    return reroute({ ...el, points, content });
+  };
+
+  /** Endpoint handle of the lone selected (unlocked) connector `el` under world `p`, or null. */
+  const endpointAt = (el: Element, p: Vec2): "source" | "target" | null => {
+    const r = Math.max(ENDPOINT_HANDLE_PX, HIT_SLOP_PX) / st().camera.z;
+    const near = (q: Vec2 | undefined) => !!q && Math.abs(p.x - q.x) <= r && Math.abs(p.y - q.y) <= r;
+    // The end drawn on top (the target) wins when both overlap.
+    if (near(el.points[1])) return "target";
+    if (near(el.points[0])) return "source";
+    return null;
+  };
+
   const eraseAlong = (from: Vec2, to: Vec2) => {
     const s = st();
     const step = Math.max(0.5, deps.getSettings().defaultEraserWidth / 4 / s.camera.z);
     const n = Math.min(200, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / step));
     for (let i = 1; i <= n; i++) st().eraser({ x: from.x + ((to.x - from.x) * i) / n, y: from.y + ((to.y - from.y) * i) / n });
+  };
+
+  /** The lone selected connector when it may be edited (not locked), else null. */
+  const editableLone = (): Element | null => {
+    const s = st();
+    const el = loneConnector(s.elements, s.selection);
+    return el && !isLocked(el) ? el : null;
+  };
+
+  /** Pointer-down on an endpoint handle of the lone selected connector: start dragging that end. */
+  const startEndpoint = (p: Vec2): boolean => {
+    const el = editableLone();
+    const which = el ? endpointAt(el, p) : null;
+    if (!el || !which) return false;
+    const ends = contentOf<ConnectorContent>(el);
+    const other = (which === "source" ? ends.target : ends.source)?.id;
+    const at: EndAt = { over: null, end: ends[which], snapped: null, point: p };
+    g = { kind: "endpoint", id: el.id, which, orig: el, other, start: p, end: p, at };
+    preview = [el];
+    lift([el]);
+    lastTap = null;
+    return true;
+  };
+
+  /** Pointer-down on the label pill of the lone selected connector: start sliding the label. */
+  const startLabel = (p: Vec2): boolean => {
+    const el = editableLone();
+    const pill = el ? labelPill(el) : null;
+    const label = el ? contentOf<ConnectorContent>(el).label : undefined;
+    if (!el || !pill || !label || !rectContains(pill, p, 2 / st().camera.z)) return false;
+    g = { kind: "label", id: el.id, orig: el, text: label.text, t: label.t, start: p, moved: false };
+    return true;
   };
 
   const down = (p: Vec2, tool: PointerTool) => {
@@ -357,20 +536,30 @@ export function createToolController(deps: ToolDeps) {
       const q = snap(p);
       g = { kind: "shape", start: q, end: q };
       preview = [];
+    } else if (tool === "connector") {
+      const at = endAt(p);
+      g = { kind: "connector", press: p, start: at.point, source: at.end, end: p, at: { over: null, end: undefined, snapped: null, point: p } };
+      preview = [];
     } else if (tool === "text") {
       // Text tool: a text box under the pointer opens for editing; empty canvas gets a new box.
       const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
       if (hit && s.elements.get(hit)?.type === "text-box") s.beginEdit(hit);
       else s.addTextBox(snap(p));
       g = { kind: "idle" };
+    } else if ((tool === "cursor" || tool === "lasso") && startEndpoint(p)) {
+      // A lone connector's endpoint handle: re-bind or free that end.
     } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
       g = { kind: "idle" };
+    } else if ((tool === "cursor" || tool === "lasso") && startLabel(p)) {
+      // A lone connector's label pill: slide it along the route.
     } else if (tool === "cursor" || tool === "lasso") {
       const b = selectionBounds(s.elements, s.selection);
+      // A lone connector has no bounds box: no corner or rotate handles, and only its route moves it.
+      const lone = loneConnector(s.elements, s.selection);
       // Locked elements are never transformed: only the unlocked part of the selection moves.
       const orig = [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e && !isLocked(e));
-      const corner = b && orig.length > 0 ? hitHandle(b, p, s.camera.z) : null;
-      if (b && orig.length > 0 && !framedByOverlay(s.elements, s.selection) && hitRotateHandle(b, p, s.camera.z)) {
+      const corner = b && orig.length > 0 && !lone ? hitHandle(b, p, s.camera.z) : null;
+      if (b && orig.length > 0 && !lone && !framedByOverlay(s.elements, s.selection) && hitRotateHandle(b, p, s.camera.z)) {
         const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
         g = { kind: "rotate", centre, from: Math.atan2(p.y - centre.y, p.x - centre.x), angle: 0, orig };
         preview = orig;
@@ -379,7 +568,7 @@ export function createToolController(deps: ToolDeps) {
         g = { kind: "scale", corner, bounds: b, orig, t: { origin: p, sx: 1, sy: 1 } };
         preview = orig;
         lift(orig);
-      } else if (b && rectContains(b, p, HIT_SLOP_PX / s.camera.z)) {
+      } else if (b && (lone ? connectorHit(lone, p, HIT_SLOP_PX / s.camera.z) : rectContains(b, p, HIT_SLOP_PX / s.camera.z))) {
         g = startMove(p);
       } else {
         const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
@@ -435,6 +624,25 @@ export function createToolController(deps: ToolDeps) {
         g.end = snap(p);
         preview = shapePreview(g.start, g.end);
         break;
+      case "connector":
+        g.end = p;
+        // Never back onto the element the connector starts from.
+        g.at = endAt(p, g.source?.id);
+        preview = connectorPreview(g.start, g.source, g.at);
+        break;
+      case "endpoint":
+        g.end = p;
+        g.at = endAt(p, g.other);
+        preview = [withEnd(g.orig, g.which, g.at)];
+        break;
+      case "label": {
+        if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) * z < MOVE_START_PX) break;
+        if (!g.moved) lift([g.orig]);
+        g.moved = true;
+        g.t = nearestT(connectorRoute(g.orig), p);
+        preview = [{ ...g.orig, content: { ...contentOf<ConnectorContent>(g.orig), label: { text: g.text, t: g.t } } }];
+        break;
+      }
       case "move": {
         const raw = { x: p.x - g.start.x, y: p.y - g.start.y };
         if (!g.started && Math.hypot(raw.x, raw.y) * z < MOVE_START_PX) break;
@@ -501,6 +709,23 @@ export function createToolController(deps: ToolDeps) {
       case "space":
         drop();
         s.insertSpace(g.lineY, g.dy);
+        break;
+      case "connector":
+        drop();
+        if (Math.hypot(g.end.x - g.press.x, g.end.y - g.press.y) * s.camera.z >= MIN_SHAPE_DRAG_PX) {
+          s.addConnector({ start: g.start, end: g.at.point, source: g.source, target: g.at.end, ...connectorStyle() });
+        }
+        break;
+      case "endpoint":
+        drop();
+        // One "Connector end" entry on release; a tap on the handle changes nothing.
+        if (Math.hypot(g.end.x - g.start.x, g.end.y - g.start.y) * s.camera.z >= MIN_SHAPE_DRAG_PX) {
+          s.setConnectorEnd(g.id, g.which, g.at.end ?? null, g.at.point);
+        }
+        break;
+      case "label":
+        drop();
+        if (g.moved) s.setConnectorLabel(g.id, { text: g.text, t: g.t });
         break;
       case "lasso":
         if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points, lassoMode(g.points)));
@@ -575,7 +800,11 @@ export function createToolController(deps: ToolDeps) {
       const live = new Map(preview.map((e) => [e.id, e]));
       const sel = [...s.selection].map((id) => live.get(id) ?? s.elements.get(id)).filter((e): e is Element => !!e);
       const b = selectionBounds(new Map(sel.map((e) => [e.id, e])), s.selection);
-      if (b) {
+      const lone = sel.length === 1 && sel[0].type === "connector" ? sel[0] : null;
+      if (lone) {
+        // A lone connector: its route is highlighted and its ends get handles (no bounds box).
+        drawConnectorSelection(ctx, lone, c, !isLocked(lone));
+      } else if (b) {
         const editable = sel.some((e) => !isLocked(e));
         const locks = sel.filter(isLocked).map(elementBounds);
         if (g.kind === "rotate") {
@@ -586,6 +815,14 @@ export function createToolController(deps: ToolDeps) {
         animate = true;
       }
     }
+    // The anchors of the element a connector end is over (while drawing or dragging an end, and on hover with the tool).
+    const at =
+      g.kind === "connector" || g.kind === "endpoint"
+        ? g.at
+        : g.kind === "idle" && hover && (s.tempTool ?? s.tool) === "connector"
+          ? endAt(screenToWorld(c, hover))
+          : null;
+    if (at?.over) drawAnchors(ctx, at.over, c, at.snapped);
     if (s.guides.length > 0) drawGuides(ctx, s.guides, c);
     if (hover && (s.tempTool ?? s.tool) === "eraser") {
       ctx.save();
@@ -608,7 +845,8 @@ export function createToolController(deps: ToolDeps) {
   const onHover = (e: PointerEvent) => {
     hover = local(e);
     const s = st();
-    if ((s.tempTool ?? s.tool) === "eraser") deps.requestLive();
+    const tool = s.tempTool ?? s.tool;
+    if (tool === "eraser" || tool === "connector") deps.requestLive();
   };
   const onLeave = () => {
     hover = null;
@@ -621,6 +859,11 @@ export function createToolController(deps: ToolDeps) {
   };
   const onKey = (e: KeyboardEvent) => {
     readMods(e);
+    // Escape drops a connector drag (drawing, an endpoint or the label) without changing anything.
+    if (e.type === "keydown" && e.key === "Escape" && (g.kind === "connector" || g.kind === "endpoint" || g.kind === "label")) {
+      cancel();
+      return;
+    }
     if (shift === e.shiftKey) return;
     shift = e.shiftKey;
     if (g.kind === "shape" && preview.length > 0) {
@@ -695,6 +938,52 @@ export function drawSelectionBounds(ctx: CanvasRenderingContext2D, b: Rect, c: C
     const q = worldToScreen(c, { x: r.x + r.width, y: r.y });
     drawLockGlyph(ctx, q.x, q.y);
   }
+}
+
+/** A lone selected connector: its route traced in the accent colour and, when editable, a square handle at each end. */
+export function drawConnectorSelection(ctx: CanvasRenderingContext2D, el: Element, c: Camera, handles: boolean): void {
+  const route = connectorRoute(el).map((q) => worldToScreen(c, q));
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = ACCENT;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath();
+  route.forEach((q, i) => (i === 0 ? ctx.moveTo(q.x, q.y) : ctx.lineTo(q.x, q.y)));
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1;
+  ctx.fillStyle = "#ffffff";
+  if (handles)
+    for (const q of [route[0], route[route.length - 1]]) {
+      if (!q) continue;
+      ctx.fillRect(q.x - ENDPOINT_HANDLE_PX, q.y - ENDPOINT_HANDLE_PX, ENDPOINT_HANDLE_PX * 2, ENDPOINT_HANDLE_PX * 2);
+      ctx.strokeRect(q.x - ENDPOINT_HANDLE_PX + 0.5, q.y - ENDPOINT_HANDLE_PX + 0.5, ENDPOINT_HANDLE_PX * 2, ENDPOINT_HANDLE_PX * 2);
+    }
+  ctx.restore();
+  if (!handles) {
+    const b = elementBounds(el);
+    const q = worldToScreen(c, { x: b.x + b.width, y: b.y });
+    drawLockGlyph(ctx, q.x, q.y);
+  }
+}
+
+/** The four anchors of `el` as small dots, the `hot` one (the snapped anchor) larger and filled. */
+export function drawAnchors(ctx: CanvasRenderingContext2D, el: Element, c: Camera, hot: Side | null): void {
+  const a = anchors(el);
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = ACCENT;
+  for (const side of SIDES) {
+    const q = worldToScreen(c, a[side]);
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, side === hot ? ANCHOR_HOT_PX : ANCHOR_DOT_PX, 0, Math.PI * 2);
+    ctx.fillStyle = side === hot ? ACCENT : "#ffffff";
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** The rotate handle of bounds `b` (a stem and a round knob), with the angle badge while dragging. */

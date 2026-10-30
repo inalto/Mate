@@ -1,7 +1,8 @@
-// Line ends: a picker of start/end caps (none, arrow, dot, bar) for a line or arrow shape. The
-// popover opens by itself next to the end point after a stroke snaps to a line/arrow (see
-// stores/lineCaps); the selection bar reuses the picker in its "Line ends" menu.
-import { ArrowLeft, ArrowRight, Circle, LineVertical, Minus } from "@phosphor-icons/react";
+// Line ends: a picker of start/end caps (none, arrow, dot, bar; connectors also diamond) for a line
+// or arrow shape. The popover opens by itself next to the end point after a stroke snaps to a
+// line/arrow (see stores/lineCaps); the selection bar reuses the picker in its "Line ends" menu,
+// for connectors with CONNECTOR_CAPS.
+import { ArrowLeft, ArrowRight, Circle, Diamond, LineVertical, Minus } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
@@ -18,20 +19,33 @@ const icon = (cap: LineCap, side: keyof LineCaps): ReactNode => {
       return <Circle size={12} weight="fill" />;
     case "bar":
       return <LineVertical size={16} weight="bold" />;
+    case "diamond":
+      return <Diamond size={14} weight="fill" />;
     default:
       return <Minus size={16} />;
   }
 };
 
-/** Two rows (Start, End) of four cap buttons; `onPick` receives the full new caps. */
-export function LineCapsPicker({ caps, onPick }: { caps: LineCaps; onPick: (caps: LineCaps) => void }) {
+/**
+ * Two rows (Start, End) of cap buttons, one per cap in `options` (default LINE_CAPS; connectors pass
+ * CONNECTOR_CAPS); `onChange` receives the full new caps.
+ */
+export function LineCapsPicker({
+  caps,
+  options = LINE_CAPS,
+  onChange,
+}: {
+  caps: LineCaps;
+  options?: readonly LineCap[];
+  onChange: (caps: LineCaps) => void;
+}) {
   const { t } = useTranslation();
   const row = (side: keyof LineCaps) => {
     const sideLabel = side === "start" ? t("lineCaps.start") : t("lineCaps.end");
     return (
       <div className="line-caps-row" role="group" aria-label={sideLabel}>
         <span className="line-caps-label">{sideLabel}</span>
-        {LINE_CAPS.map((cap) => {
+        {options.map((cap) => {
           const label = t(`lineCaps.${cap}`);
           return (
             <button
@@ -41,7 +55,7 @@ export function LineCapsPicker({ caps, onPick }: { caps: LineCaps; onPick: (caps
               aria-pressed={caps[side] === cap}
               aria-label={`${sideLabel}: ${label}`}
               title={label}
-              onClick={() => onPick({ ...caps, [side]: cap })}
+              onClick={() => onChange({ ...caps, [side]: cap })}
             >
               {icon(cap, side)}
             </button>
@@ -146,7 +160,7 @@ export default function LineCapsPopover({ store }: { store: EditorStore }) {
     >
       <LineCapsPicker
         caps={effectiveCaps(el)}
-        onPick={(caps) => {
+        onChange={(caps) => {
           touchLineCaps();
           store.getState().setLineCaps(el.id, caps);
         }}

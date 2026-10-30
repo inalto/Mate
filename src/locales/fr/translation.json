@@ -382,7 +382,21 @@
     "dot": "Point",
     "bar": "Barre",
     "settingsToggle": "Proposer les extrémités de ligne après l'ajustement",
-    "settingsHint": "Afficher un petit sélecteur d'extrémités en flèche, point ou barre lorsqu'un trait devient une ligne ou une flèche."
+    "settingsHint": "Afficher un petit sélecteur d'extrémités en flèche, point ou barre lorsqu'un trait devient une ligne ou une flèche.",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
   },
   "lock": {
     "lock": "Lock",
@@ -424,6 +438,7 @@
       "cursor": "Sélectionner (curseur)",
       "lasso": "Lasso",
       "shape": "Forme",
+      "connector": "Connector",
       "text": "Texte",
       "insertSpace": "Insérer un espace",
       "presetSlot": "Préréglage 1 à 9",

@@ -379,7 +379,21 @@
     "dot": "Dot",
     "bar": "Bar",
     "settingsToggle": "Offer line ends after snapping",
-    "settingsHint": "Show a small picker for arrow, dot or bar ends when a stroke becomes a line or arrow."
+    "settingsHint": "Show a small picker for arrow, dot or bar ends when a stroke becomes a line or arrow.",
+    "diamond": "Diamond"
+  },
+  "connector": {
+    "tool": "Connector",
+    "mode": "Routing",
+    "straight": "Straight",
+    "curve": "Curved",
+    "elbow": "Elbow",
+    "dashed": "Dashed",
+    "label": "Label",
+    "addLabel": "Add label",
+    "editLabel": "Edit label",
+    "width": "Connector width",
+    "colour": "Connector colour"
   },
   "lock": {
     "lock": "Lock",
@@ -421,6 +435,7 @@
       "cursor": "Select (cursor)",
       "lasso": "Lasso",
       "shape": "Shape",
+      "connector": "Connector",
       "text": "Text",
       "insertSpace": "Insert space",
       "presetSlot": "Preset 1 to 9",
