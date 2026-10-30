@@ -86,6 +86,15 @@ describe("frame renderer", () => {
     expect(calls).toContain("fillText:Intro & <goals>");
   });
 
+  it("frames_ignore_a_stray_rotation_when_drawn_and_in_their_bounds", () => {
+    const turned = frame({ rotation: 0.5 });
+    const { ctx, calls } = stubCtx();
+    drawElement(ctx, turned, { theme: "light", zoomBucket: 1 });
+    expect(calls).not.toContain("rotate");
+    expect(elementSvg(turned, { theme: "light", zoomBucket: 1 })).not.toContain("rotate(");
+    expect(elementBounds(turned)).toEqual(elementBounds(frame()));
+  });
+
   it("bounds_include_the_title_band", () => {
     const b = elementBounds(frame());
     expect(b.y).toBeLessThan(0);

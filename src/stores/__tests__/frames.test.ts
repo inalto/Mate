@@ -146,6 +146,62 @@ describe("frames store", () => {
     expect(s().elements.has("kid")).toBe(true);
   });
 
+  it("rotating_a_selection_never_rotates_its_frames", async () => {
+    await load([stroke("kid", 50, 50), stroke("away", 900, 900)]);
+    const f = s().addFrame({ x: 0, y: 0, width: 200, height: 200 })!;
+    s().select([f, "away"]);
+    s().rotateSelection({ x: 500, y: 500 }, Math.PI / 2);
+    expect(at(f)).toMatchObject({ x: 0, y: 0 });
+    expect((s().elements.get(f)!.content as { rotation?: number }).rotation).toBeUndefined();
+    expect(at("away")).not.toMatchObject({ x: 900, y: 900 });
+    // Only the stroke is in the entry: undo puts it back and leaves the frame as it was.
+    s().undo();
+    expect(at("away")).toMatchObject({ x: 900, y: 900 });
+  });
+
+  it("align_and_distribute_carry_each_frames_contents", async () => {
+    await load([stroke("kid", 50, 50), stroke("pinned", 80, 80, { locked: true }), stroke("other", 600, 400)]);
+    const f = s().addFrame({ x: 0, y: 0, width: 200, height: 200 })!;
+    // Bottom-align the frame with the stroke below it: the frame drops by the same delta as its child.
+    s().select([f, "other"]);
+    s().alignSelection("bottom");
+    const dy = at(f).y;
+    expect(dy).toBeGreaterThan(0);
+    expect(at("kid")).toMatchObject({ x: 50, y: 50 + dy });
+    expect(at("pinned")).toMatchObject({ x: 80, y: 80 });
+    // One entry.
+    s().undo();
+    expect(at(f)).toMatchObject({ x: 0, y: 0 });
+    expect(at("kid")).toMatchObject({ x: 50, y: 50 });
+    // Distribute: the frame in the middle moves, its child with it.
+    await load([stroke("kid", 450, 50), stroke("left", 0, 0), stroke("right", 1000, 0)]);
+    const g = s().addFrame({ x: 400, y: 0, width: 200, height: 200 })!;
+    s().select(["left", g, "right"]);
+    s().distributeSelection("horizontal");
+    const dx = at(g).x - 400;
+    expect(dx).not.toBe(0);
+    expect(at("kid").x).toBeCloseTo(450 + dx);
+  });
+
+  it("copy_and_cut_of_a_frame_take_its_contents", async () => {
+    await load([stroke("kid", 50, 50), stroke("pinned", 80, 80, { locked: true })]);
+    const f = s().addFrame({ x: 0, y: 0, width: 200, height: 200 })!;
+    s().select([f]);
+    s().copySelection();
+    s().paste();
+    // Frame + unlocked child pasted (the locked child is no part of the copy).
+    expect(s().selection.size).toBe(2);
+    expect(s().elements.size).toBe(5);
+    s().undo();
+    s().select([f]);
+    s().cutSelection();
+    expect(s().elements.has(f)).toBe(false);
+    expect(s().elements.has("kid")).toBe(false);
+    expect(s().elements.has("pinned")).toBe(true);
+    s().paste();
+    expect(s().selection.size).toBe(2);
+  });
+
   it("rename_background_reorder_and_select_contents", async () => {
     await load([stroke("kid", 50, 50), stroke("pinned", 60, 60, { locked: true })]);
     const a = s().addFrame({ x: 0, y: 0, width: 200, height: 200 })!;

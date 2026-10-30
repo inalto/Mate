@@ -62,7 +62,7 @@ export const isBoxed = (el: Element): boolean =>
 /**
  * World bounds: a renderer's own `bounds` when registered; boxed elements span their box from the
  * first point (see `boxRect`); others the points' bbox expanded by width/2. `content.rotation`
- * rotates the box about its centre. Connectors span their cached route, caps and label (never rotated);
+ * rotates the box about its centre (never a frame's). Connectors span their cached route, caps and label (never rotated);
  * mind maps their memoised layout padded by 2 (never rotated).
  */
 export function elementBounds(el: Element): Rect {
@@ -90,7 +90,8 @@ export function elementBounds(el: Element): Rect {
     const h = el.width / 2;
     r = { x: minX - h, y: minY - h, width: maxX - minX + el.width, height: maxY - minY + el.width };
   }
-  return rotatedBox(r, contentMeta(el).rotation ?? 0);
+  // Frames ignore rotation.
+  return el.type === "frame" ? r : rotatedBox(r, contentMeta(el).rotation ?? 0);
 }
 
 export class SpatialIndex {

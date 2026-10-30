@@ -19,6 +19,8 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.f
 import { useEditorStore } from "../editor";
 import { useNotebookStore } from "../notebook";
 import { useSettingsStore } from "../settings";
+import { createToolController } from "../../canvas/toolInteractions";
+import { DEFAULT_SETTINGS } from "../../model/constants";
 
 const STAMP = "2026-01-01T00:00:00.000Z";
 const style = { shapeType: "rectangle" as const, color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 };
@@ -136,6 +138,76 @@ describe("connector store", () => {
     const c = contentOf<ConnectorContent>(conn);
     expect(c.source?.id).toBe(shape.id);
     expect(c.target).toBeUndefined();
+  });
+});
+
+describe("connector binding rules", () => {
+  it("store_binds_refuse_locked_and_pdf_placement_targets", async () => {
+    const pdf: Element = { ...rect("pdf", 0, 400), type: "image", boxWidth: 100, boxHeight: 100, content: { pdfSourceKey: "k", pdfPage: 1 } };
+    loaded.els = [rect("a", 0, 0), rect("b", 400, 0), pdf];
+    useNotebookStore.setState({ loaded: true });
+    await s().loadPage("pg");
+    s().select(["b"]);
+    s().lockSelection();
+    // A new connector drops ends naming a locked element or a PDF placement.
+    const id = s().addConnector({ start: { x: 100, y: 50 }, end: { x: 400, y: 50 }, source: { id: "pdf", side: "auto" }, target: { id: "b", side: "auto" } })!;
+    expect(content(id).source).toBeUndefined();
+    expect(content(id).target).toBeUndefined();
+    // An end is never re-bound to one either.
+    expect(s().setConnectorEnd(id, "target", { id: "b", side: "auto" })).toBe(false);
+    expect(s().setConnectorEnd(id, "source", { id: "pdf", side: "auto" })).toBe(false);
+    expect(s().setConnectorEnd(id, "source", { id: "a", side: "auto" })).toBe(true);
+    // Auto-complete never starts from a PDF placement (nor from a locked element).
+    expect(s().autoCompleteConnector("pdf", "right", { x: 100, y: 450 }, { x: 300, y: 450 })).toBeNull();
+    expect(s().autoCompleteConnector("b", "right", { x: 500, y: 50 }, { x: 700, y: 50 })).toBeNull();
+  });
+});
+
+describe("insert space and connectors", () => {
+  /** a (moves) bound to b, which is locked and stays: both below the line at y = 200. */
+  async function bound(): Promise<string> {
+    loaded.els = [rect("a", 0, 300), rect("b", 400, 300)];
+    useNotebookStore.setState({ loaded: true });
+    await s().loadPage("pg");
+    const id = s().addConnector({ start: { x: 100, y: 350 }, end: { x: 400, y: 350 }, source: { id: "a", side: "auto" }, target: { id: "b", side: "auto" }, mode: "straight" })!;
+    s().select(["b"]);
+    s().lockSelection();
+    s().select([]);
+    return id;
+  }
+
+  it("a_shifted_connector_bound_to_an_element_that_stays_follows_it", async () => {
+    const id = await bound();
+    s().insertSpace(200, 100);
+    const r = route(id);
+    expect(r[0]).toEqual(anchorPoint(s().elements.get("a")!, "right"));
+    expect(r[r.length - 1]).toEqual(anchorPoint(s().elements.get("b")!, "left"));
+    expect(s().elements.get(id)!.points[1]).toMatchObject(anchorPoint(s().elements.get("b")!, "left"));
+  });
+
+  it("the_insert_space_preview_settles_connectors_too", async () => {
+    const id = await bound();
+    const drawn: Element[] = [];
+    const tools = createToolController({
+      store: useEditorStore,
+      el: document.createElement("div"),
+      requestLive: () => {},
+      invalidate: () => {},
+      renderElement: (_ctx, e) => void drawn.push(e),
+      getSettings: () => DEFAULT_SETTINGS,
+    });
+    try {
+      tools.down({ x: 0, y: 200 }, "insert-space");
+      tools.move([{ x: 0, y: 300 }]);
+      const ctx = new Proxy({} as Record<string, unknown>, { get: (t, k) => (k in t ? t[k as string] : () => {}), set: (t, k, v) => ((t[k as string] = v), true) });
+      tools.draw(ctx as unknown as CanvasRenderingContext2D, s().camera, 1);
+      const conn = drawn.find((e) => e.id === id)!;
+      const r = contentOf<ConnectorContent>(conn).route!;
+      expect(r[r.length - 1]).toEqual(anchorPoint(s().elements.get("b")!, "left"));
+      tools.cancel();
+    } finally {
+      tools.dispose();
+    }
   });
 });
 

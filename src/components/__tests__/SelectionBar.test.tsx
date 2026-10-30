@@ -14,6 +14,8 @@ import { useNotebookStore } from "../../stores/notebook";
 import SelectionBar from "../SelectionBar";
 import { disposeAll, setWorkerFactory, type WorkerLike } from "../../code/runtime";
 import { codeOf } from "../../text/tableCode";
+import { runCodeElement } from "../../code/runElement";
+const store = () => useEditorStore;
 
 describe("SelectionBar", () => {
   afterEach(cleanup);
@@ -183,6 +185,16 @@ describe("SelectionBar align and math", () => {
       s().updateElements([{ ...s().elements.get(id)!, content: { subtype: "codespace", code: "x", language: "plain" } }]);
       render(<SelectionBar />);
       expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
+      cleanup();
+      // A locked block shows Run disabled, and running it writes nothing.
+      s().updateElements([{ ...s().elements.get(id)!, content: { subtype: "codespace", code: "1 + 1", language: "javascript" } }]);
+      s().lockSelection();
+      posted.length = 0;
+      render(<SelectionBar />);
+      const run = screen.getByRole("button", { name: "Run" }) as HTMLButtonElement;
+      expect(run.disabled).toBe(true);
+      await runCodeElement(store(), id);
+      expect(posted).toHaveLength(0);
     } finally {
       disposeAll();
       setWorkerFactory(null);

@@ -16,8 +16,7 @@ import type { ThemeName } from "../ink/types";
 import { contentOf, type FrameContent } from "../model/content";
 import type { Element } from "../model/types";
 import { safeColor } from "../text/sanitize";
-import { boxRect, contentMeta, type Rect } from "../tools/spatialIndex";
-import { rotatedSvg } from "./boxDraw";
+import { boxRect, type Rect } from "../tools/spatialIndex";
 import type { ElementRenderer } from "./registry";
 
 /** Paper and ink of each theme (the canvas surfaces). */
@@ -89,15 +88,8 @@ export const frameRenderer: ElementRenderer = {
   draw(ctx, el, o) {
     const r = boxRect(el);
     if (r.width <= 0 || r.height <= 0) return;
-    const rot = contentMeta(el).rotation ?? 0;
+    // Frames ignore rotation (a stray `content.rotation` is never drawn).
     ctx.save();
-    if (rot) {
-      const cx = r.x + r.width / 2;
-      const cy = r.y + r.height / 2;
-      ctx.translate(cx, cy);
-      ctx.rotate(rot);
-      ctx.translate(-cx, -cy);
-    }
     roundRectPath(ctx, r, FRAME_RADIUS);
     ctx.fillStyle = frameFill(el, o.theme);
     ctx.fill();
@@ -127,7 +119,7 @@ export const frameRenderer: ElementRenderer = {
         `<text x="${n(title.rect.x)}" y="${n(title.rect.y + title.rect.height / 2)}" dominant-baseline="central"` +
         ` font-size="${n(title.size)}" font-weight="600" font-family="${esc(FRAME_FONT)}" fill="${esc(titleColour(o.theme))}">${esc(title.text)}</text>`;
     }
-    return rotatedSvg(el, out);
+    return out;
   },
   bounds: frameBounds,
 };

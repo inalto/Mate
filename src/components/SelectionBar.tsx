@@ -91,15 +91,15 @@ function MathCompute(props: Omit<ComputeMenuProps, "extraItems">) {
   return <ComputeMenu {...props} extraItems={useWolframItem()} />;
 }
 
-/** Run a selected code block without entering edit mode (disabled while its runtime is busy). */
-function RunCodeButton({ store, id, language, pageId }: { store: EditorStore; id: string; language: RunnableLanguage; pageId: string }) {
+/** Run a selected code block without entering edit mode (disabled while its runtime is busy, or when the block is locked). */
+function RunCodeButton({ store, id, language, pageId, locked }: { store: EditorStore; id: string; language: RunnableLanguage; pageId: string; locked: boolean }) {
   const { t } = useTranslation();
   const rt = getRuntime(language, pageId);
   const subscribe = useCallback((fn: () => void) => rt.subscribe(fn), [rt]);
   const state = useSyncExternalStore(subscribe, () => rt.state);
   const title = state === "loading" ? t("code.loadingPython") : state === "running" ? t("code.running") : t("code.run");
   return (
-    <button type="button" className="tb-btn" aria-label={t("code.run")} title={title} disabled={state !== "idle"} onClick={() => void runCodeElement(store, id)}>
+    <button type="button" className="tb-btn" aria-label={t("code.run")} title={title} disabled={locked || state !== "idle"} onClick={() => void runCodeElement(store, id)}>
       <Play size={16} /> {t("code.run")}
     </button>
   );
@@ -762,7 +762,7 @@ export default function SelectionBar() {
         </button>
       )}
       {math && math.length === 1 && <MathCompute store={ed} source={math[0]} />}
-      {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} />}
+      {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} locked={isLocked(codeBlock)} />}
       {lineShape && <LineEndsMenu shape={lineShape} />}
       {connector && <ConnectorControls connector={connector} />}
       {frame && <FrameControls frame={frame} />}

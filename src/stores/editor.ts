@@ -727,7 +727,7 @@ export function createEditorStore(): EditorStore {
 
     autoCompleteConnector(sourceId, side, start, end) {
       const src = get().elements.get(sourceId);
-      if (!src || isLocked(src)) return null;
+      if (!src || !bindable(src)) return null;
       const el = connectorDraft({ start, end, source: { id: sourceId, side }, ...autoConnectorStyle() });
       return el && record("Connector", [{ type: "add", el }], autoCompleteKey(el.id)) ? el.id : null;
     },
@@ -781,7 +781,7 @@ export function createEditorStore(): EditorStore {
       if (!cur) return false;
       const els = get().elements;
       const b = end ? els.get(end.id) : undefined;
-      if (end && (!b || !isAttachable(b))) return false;
+      if (end && (!b || !bindable(b))) return false;
       const content = { ...contentOf<ConnectorContent>(cur) };
       if (end) content[which] = { id: end.id, side: end.side };
       else delete content[which];
@@ -1318,19 +1318,28 @@ export function createEditorStore(): EditorStore {
       const now = new Date().toISOString();
       const all = [...s.elements.values()];
       const after = shiftBelow(all, lineY, d, spaceOptions(s));
-      const actions: Action[] = [];
+      const shifted: Element[] = [];
+      const befores: Element[] = [];
       all.forEach((before, i) => {
-        if (after[i] !== before && !isLocked(before)) actions.push({ type: "update", before, after: stamp(after[i], now) });
+        if (after[i] !== before && !isLocked(before)) {
+          befores.push(before);
+          shifted.push(after[i]);
+        }
       });
-      record("Insert space", actions);
+      // Shifted connectors bound to an element that stays put follow it (settled, not just translated).
+      const settled = settleConnectors(shifted);
+      record(
+        "Insert space",
+        befores.map((before, i): Action => ({ type: "update", before, after: stamp(settled[i], now) })),
+      );
     },
     alignSelection(mode) {
       if (unlockedSelection().length < 2) return;
-      transformSelection("Align", (els) => alignElements(els, mode));
+      transformCarrying("Align", (els) => alignElements(els, mode));
     },
     distributeSelection(axis) {
       if (unlockedSelection().length < 3) return;
-      transformSelection("Distribute", (els) => distributeElements(els, axis));
+      transformCarrying("Distribute", (els) => distributeElements(els, axis));
     },
     groupSelection() {
       if (unlockedSelection().length < 2) return;
@@ -1366,7 +1375,9 @@ export function createEditorStore(): EditorStore {
     },
     rotateSelection(centre, rad) {
       if (rad === 0) return;
-      transformSelection("Rotate", (els) => rotateElements(els, centre, rad));
+      // Frames and mind maps ignore rotation: they stay out of the entry.
+      const before = unlockedSelection().filter((el) => el.type !== "frame" && el.type !== "mindmap");
+      transformSelection("Rotate", (els) => rotateElements(els, centre, rad), undefined, before);
     },
     lockSelection() {
       transformSelection("Lock", (els) => els.map((el) => withMeta(el, { locked: true })));
@@ -1409,14 +1420,16 @@ export function createEditorStore(): EditorStore {
       return pasteElements(withChildren(selectedElements()), 0, "Duplicate", mergeKey);
     },
     copySelection() {
-      const els = selectedElements();
+      // A frame is copied with its contents, as duplicate takes them.
+      const els = withChildren(selectedElements());
       if (els.length === 0) return;
       clipboard = els.map(unlocked);
       pasteCount = 0;
     },
     cutSelection() {
       get().copySelection();
-      get().deleteSelection();
+      // What was copied goes (a frame with its contents; locked elements stay).
+      get().removeElements(withChildren(selectedElements()).map((el) => el.id));
     },
     paste() {
       if (clipboard.length === 0) return;
@@ -1571,6 +1584,11 @@ export function createEditorStore(): EditorStore {
     return { mode, color: cfg.defaultConnectorColor, width: cfg.defaultConnectorWidth, dash: cfg.defaultConnectorDash === "dashed" ? "dashed" : "solid" };
   }
 
+  /** A connector end may newly bind to `el`: attachable, not locked, not a PDF placement (as the tool). */
+  function bindable(el: Element): boolean {
+    return isAttachable(el) && !isLocked(el) && !isPdfPlacement(el);
+  }
+
   /** History merge key joining a handle-drawn connector and the element auto-complete adds for it. */
   function autoCompleteKey(connectorId: string): string {
     return `auto-complete:${connectorId}`;
@@ -1578,7 +1596,7 @@ export function createEditorStore(): EditorStore {
 
   /**
    * A new connector element from `input`, routed (ends resolved through `resolve`), on top of the
-   * stack; ends naming a missing or non-attachable element are dropped. Null without a page.
+   * stack; ends naming a missing, non-attachable, locked or PDF-placement element are dropped. Null without a page.
    */
   function connectorDraft(input: Parameters<EditorState["addConnector"]>[0], resolve = (id: string) => S().elements.get(id)): Element | null {
     const s = S();
@@ -1587,7 +1605,7 @@ export function createEditorStore(): EditorStore {
     const now = new Date().toISOString();
     const valid = (end: ConnectorEnd | undefined): ConnectorEnd | undefined => {
       const b = end ? resolve(end.id) : undefined;
-      return end && b && isAttachable(b) ? { id: end.id, side: end.side } : undefined;
+      return end && b && bindable(b) ? { id: end.id, side: end.side } : undefined;
     };
     const source = valid(input.source);
     const target = valid(input.target);
@@ -1908,6 +1926,43 @@ export function createEditorStore(): EditorStore {
       label,
       before.map((b, i): Action => ({ type: "update", before: b, after: stamp(after[i], now) })),
       mergeKey,
+    );
+  }
+
+  /**
+   * `fn` (a translation per element: align, distribute) applied to the unlocked selection as one
+   * entry; each selected frame's contents that are not selected themselves (unlocked, no PDF
+   * placements) move by that frame's delta, the innermost selected frame winning.
+   */
+  function transformCarrying(label: string, fn: (els: Element[]) => Element[]): void {
+    const sel = unlockedSelection();
+    if (!sel.some(isFrame)) {
+      transformSelection(label, fn, undefined, sel);
+      return;
+    }
+    const moved = fn(sel);
+    const all = [...S().elements.values()];
+    const selected = new Set(sel.map((e) => e.id));
+    const shift = new Map<string, Vec2>();
+    const frames = sel.map((f, i) => ({ f, i })).filter(({ f }) => isFrame(f));
+    const area = (f: Element) => (f.boxWidth ?? 0) * (f.boxHeight ?? 0);
+    frames.sort((a, b) => area(a.f) - area(b.f));
+    for (const { f, i } of frames) {
+      const d = { x: moved[i].points[0].x - f.points[0].x, y: moved[i].points[0].y - f.points[0].y };
+      for (const c of frameChildren(f, all)) {
+        if (selected.has(c.id) || shift.has(c.id) || isLocked(c) || isPdfPlacement(c)) continue;
+        shift.set(c.id, d);
+      }
+    }
+    const children = all.filter((c) => {
+      const d = shift.get(c.id);
+      return !!d && (d.x !== 0 || d.y !== 0);
+    });
+    transformSelection(
+      label,
+      () => [...moved, ...children.map((c) => translateElements([c], shift.get(c.id)!.x, shift.get(c.id)!.y)[0])],
+      undefined,
+      [...sel, ...children],
     );
   }
 
