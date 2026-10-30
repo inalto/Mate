@@ -14,6 +14,7 @@ import {
   type ConnectorEnd,
   type LineCaps,
   type ShapeContent,
+  type Side,
   type TableContent,
   type TextAttributes,
   type TextBoxContent,
@@ -37,6 +38,7 @@ import { alignElements, distributeElements, type AlignMode, type DistributeAxis 
 import { eraseAt } from "../tools/eraser";
 import { clampShift, shiftBelow, type SpaceOptions } from "../tools/insertSpace";
 import { History, type Action } from "../tools/history";
+import { placeNext, type AutoCompleteChoice } from "../tools/autoComplete";
 import { rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, SpatialIndex, withMeta, type Rect } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
@@ -89,6 +91,13 @@ export interface EditorState {
   guides: Guide[];
   /** Boxed element whose DOM editor is open (overlay layer), else null. */
   editingId: string | null;
+  /** True while a pointer drag moves, resizes, rotates or draws a connector (set by the tool controller). */
+  dragging: boolean;
+  /**
+   * An auto-complete handle was pressed: the tool controller's next pointer-down starts a connector
+   * drag from this side of this element (see overlay/AutoCompleteHandles).
+   */
+  autoCompleteDrag: { sourceId: string; side: Side } | null;
   /** Largest element y (world units), for the page-mode sheet count. */
   contentBottom: number;
   /** Temporary tool while a pen button / eraser end is held. */
@@ -132,6 +141,20 @@ export interface EditorState {
     caps?: LineCaps;
     dash?: "solid" | "dashed";
   }): string | null;
+  /**
+   * Auto-complete drag released in empty space: add a connector in the default style from `side`
+   * of `sourceId` to the free point `end` ("Connector"). A later `autoComplete` with its id
+   * joins that entry, so one undo takes back the connector and the element. Its id, or null.
+   */
+  autoCompleteConnector(sourceId: string, side: Side, start: Vec2, end: Vec2): string | null;
+  /**
+   * Auto-complete: add the element `choice` beyond `side` of `sourceId` (centred on `at` when
+   * given) and a connector in the default style from that side to the facing side of the new
+   * element, as ONE history entry "Auto-complete". With `connectorId` (the free-ended connector
+   * drawn from a handle), that connector is bound to the new element instead of adding one. The
+   * new element is selected and its editor opened. Its id, or null when refused.
+   */
+  autoComplete(sourceId: string, side: Side, choice: AutoCompleteChoice, at?: Vec2, connectorId?: string): string | null;
   /**
    * Bind (`end`) or free (null) one end of connector `id`, optionally moving that end's point to
    * `point`, then reroute; one "Connector end" entry. False when nothing changed or it is locked.
@@ -402,6 +425,12 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
   onElementsChanged(cb: (change: ElementsChange) => void): () => void;
 };
 
+/** A sticky note (a text box with `content.card`): kept when its text is emptied. */
+const hasCard = (el: Element): boolean => {
+  const card = contentOf<{ card?: unknown }>(el).card;
+  return card !== null && typeof card === "object";
+};
+
 /** A closed shape: its text is edited in place (shapes are not boxed). */
 const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle");
 
@@ -443,6 +472,8 @@ export function createEditorStore(): EditorStore {
     selection: new Set(),
     guides: [],
     editingId: null,
+    dragging: false,
+    autoCompleteDrag: null,
     contentBottom: 0,
     tempTool: null,
     panHold: false,
@@ -471,6 +502,8 @@ export function createEditorStore(): EditorStore {
         selection: new Set(),
         guides: [],
         editingId: null,
+        dragging: false,
+        autoCompleteDrag: null,
         contentBottom: 0,
         limitReached: false,
         preset,
@@ -547,44 +580,58 @@ export function createEditorStore(): EditorStore {
     },
 
     addConnector(input) {
+      const el = connectorDraft(input);
+      return el && record("Connector", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    autoCompleteConnector(sourceId, side, start, end) {
+      const src = get().elements.get(sourceId);
+      if (!src || isLocked(src)) return null;
+      const el = connectorDraft({ start, end, source: { id: sourceId, side }, ...autoConnectorStyle() });
+      return el && record("Connector", [{ type: "add", el }], autoCompleteKey(el.id)) ? el.id : null;
+    },
+
+    autoComplete(sourceId, side, choice, at, connectorId) {
+      closeEdit();
       const s = get();
-      if (!s.pageId) return null;
+      const src = s.elements.get(sourceId);
+      if (!s.pageId || !src || isLocked(src) || isPdfPlacement(src)) return null;
       const cfg = useSettingsStore.getState().settings;
-      const now = new Date().toISOString();
-      const valid = (end: ConnectorEnd | undefined): ConnectorEnd | undefined => {
-        const b = end ? s.elements.get(end.id) : undefined;
-        return end && b && isAttachable(b) ? { id: end.id, side: end.side } : undefined;
-      };
-      const source = valid(input.source);
-      const target = valid(input.target);
-      const top = topZ(s.elements.values());
-      const content: Partial<ConnectorContent> = {
-        mode: input.mode ?? DEFAULT_CONNECTOR_MODE,
-        caps: { ...(input.caps ?? DEFAULT_CONNECTOR_CAPS) },
-        route: [],
-        ...(input.dash === "dashed" ? { dash: "dashed" as const } : {}),
-        ...(source ? { source } : {}),
-        ...(target ? { target } : {}),
-        ...(top > 0 ? { zIndex: top } : {}),
-      };
-      const draft: Element = {
-        id: crypto.randomUUID(),
+      const placed = placeNext(src, side, choice.kind, choice.kind === "shape" ? choice.shapeType : undefined, {
         pageId: s.pageId,
-        type: "connector",
-        points: [
-          { x: input.start.x, y: input.start.y, pressure: 0.5, timestamp: 0 },
-          { x: input.end.x, y: input.end.y, pressure: 0.5, timestamp: 1 },
-        ],
-        color: input.color ?? cfg.defaultShapeStrokeColor,
-        width: input.width ?? 2,
-        isHighlighter: false,
-        content,
-        createdAt: now,
-        updatedAt: now,
-        version: 0,
-      };
-      const el = routeConnector(draft, (id) => s.elements.get(id));
-      return record("Connector", [{ type: "add", el }]) ? el.id : null;
+        at,
+        textAttributes: defaultTextAttributes(cfg.defaultTextColor, cfg.defaultTextSize),
+      });
+      const top = topZ(s.elements.values());
+      const el = top > 0 ? withMeta(placed.element, { zIndex: top }) : placed.element;
+      const resolve = (id: string) => (id === el.id ? el : s.elements.get(id));
+      const pending = connectorId ? s.elements.get(connectorId) : undefined;
+      let ok: boolean;
+      if (pending && pending.type === "connector" && !isLocked(pending)) {
+        // The connector drawn from the handle: its free end binds to the new element, merged into
+        // the connector's own entry so one undo takes back both.
+        const content = { ...contentOf<ConnectorContent>(pending), target: placed.connector.target };
+        const after = stamp(routeConnector({ ...pending, content }, resolve));
+        ok = record(
+          "Auto-complete",
+          [
+            { type: "add", el },
+            { type: "update", before: pending, after },
+          ],
+          autoCompleteKey(pending.id),
+        );
+      } else {
+        const conn = connectorDraft({ ...placed.connector, ...autoConnectorStyle() }, resolve);
+        if (!conn) return null;
+        ok = record("Auto-complete", [
+          { type: "add", el },
+          { type: "add", el: conn },
+        ]);
+      }
+      if (!ok) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      get().beginEdit(el.id);
+      return el.id;
     },
 
     setConnectorEnd(id, which, end, point) {
@@ -763,14 +810,15 @@ export function createEditorStore(): EditorStore {
       const rawContent = plainText(contentHtml);
       const textAttributes = textAttrsOf(after);
       const next: Element = { ...after, color: textAttributes.color, content: { ...c, contentHtml, rawContent, textAttributes } };
-      if (rawContent.trim() === "") {
+      if (rawContent.trim() === "" && !hasCard(cur)) {
         // A new box left empty disappears with its creation entry; an emptied box is deleted.
         if (fresh && history.discardTop(textKey(cur.id))) {
           applyActions([{ type: "delete", el: cur }]);
           syncHistoryFlags();
           return;
         }
-        record("Delete", [{ type: "delete", el: cur }]);
+        // Connectors bound to it keep their end at its last point, freed (as removeElements does).
+        record("Delete", [{ type: "delete", el: cur }, ...freeEnds(new Set([cur.id]))]);
         return;
       }
       if (sameText(cur, next)) return;
@@ -1189,6 +1237,62 @@ export function createEditorStore(): EditorStore {
    * Updates freeing the ends of connectors (outside `gone`) bound to an element in `gone`; each end
    * keeps its last absolute point and the connector is rerouted without it.
    */
+  /** The connector tool's style from the settings (`defaultConnector*`), as auto-complete uses it. */
+  function autoConnectorStyle(): { mode: ConnectorContent["mode"]; color: string; width: number; dash: "solid" | "dashed" } {
+    const cfg = useSettingsStore.getState().settings;
+    const mode = (["straight", "curve", "elbow"] as const).includes(cfg.defaultConnectorMode) ? cfg.defaultConnectorMode : DEFAULT_CONNECTOR_MODE;
+    return { mode, color: cfg.defaultConnectorColor, width: cfg.defaultConnectorWidth, dash: cfg.defaultConnectorDash === "dashed" ? "dashed" : "solid" };
+  }
+
+  /** History merge key joining a handle-drawn connector and the element auto-complete adds for it. */
+  function autoCompleteKey(connectorId: string): string {
+    return `auto-complete:${connectorId}`;
+  }
+
+  /**
+   * A new connector element from `input`, routed (ends resolved through `resolve`), on top of the
+   * stack; ends naming a missing or non-attachable element are dropped. Null without a page.
+   */
+  function connectorDraft(input: Parameters<EditorState["addConnector"]>[0], resolve = (id: string) => S().elements.get(id)): Element | null {
+    const s = S();
+    if (!s.pageId) return null;
+    const cfg = useSettingsStore.getState().settings;
+    const now = new Date().toISOString();
+    const valid = (end: ConnectorEnd | undefined): ConnectorEnd | undefined => {
+      const b = end ? resolve(end.id) : undefined;
+      return end && b && isAttachable(b) ? { id: end.id, side: end.side } : undefined;
+    };
+    const source = valid(input.source);
+    const target = valid(input.target);
+    const top = topZ(s.elements.values());
+    const content: Partial<ConnectorContent> = {
+      mode: input.mode ?? DEFAULT_CONNECTOR_MODE,
+      caps: { ...(input.caps ?? DEFAULT_CONNECTOR_CAPS) },
+      route: [],
+      ...(input.dash === "dashed" ? { dash: "dashed" as const } : {}),
+      ...(source ? { source } : {}),
+      ...(target ? { target } : {}),
+      ...(top > 0 ? { zIndex: top } : {}),
+    };
+    const draft: Element = {
+      id: crypto.randomUUID(),
+      pageId: s.pageId,
+      type: "connector",
+      points: [
+        { x: input.start.x, y: input.start.y, pressure: 0.5, timestamp: 0 },
+        { x: input.end.x, y: input.end.y, pressure: 0.5, timestamp: 1 },
+      ],
+      color: input.color ?? cfg.defaultShapeStrokeColor,
+      width: input.width ?? 2,
+      isHighlighter: false,
+      content,
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    };
+    return routeConnector(draft, resolve);
+  }
+
   function freeEnds(gone: ReadonlySet<string>): Action[] {
     const els = S().elements;
     const touched = new Set<string>();

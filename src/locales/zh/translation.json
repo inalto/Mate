@@ -402,6 +402,11 @@
     "placeholder": "Type text",
     "addText": "Add text"
   },
+  "autoComplete": {
+    "add": "Add connected element",
+    "text": "Text",
+    "note": "Note"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -522,6 +527,7 @@
       "cursor": "切换到选择（光标）",
       "lasso": "切换到套索",
       "shape": "切换到形状",
+      "connector": "Switch to connector",
       "text": "切换到文字",
       "insertSpace": "切换到插入空白"
     },

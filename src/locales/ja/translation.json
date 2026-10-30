@@ -402,6 +402,11 @@
     "placeholder": "Type text",
     "addText": "Add text"
   },
+  "autoComplete": {
+    "add": "Add connected element",
+    "text": "Text",
+    "note": "Note"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -522,6 +527,7 @@
       "cursor": "選択（カーソル）に切り替え",
       "lasso": "投げ縄選択に切り替え",
       "shape": "図形に切り替え",
+      "connector": "Switch to connector",
       "text": "テキストに切り替え",
       "insertSpace": "スペース挿入に切り替え"
     },

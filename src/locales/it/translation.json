@@ -400,6 +400,11 @@
     "placeholder": "Scrivi il testo",
     "addText": "Aggiungi testo"
   },
+  "autoComplete": {
+    "add": "Aggiungi elemento collegato",
+    "text": "Testo",
+    "note": "Nota"
+  },
   "lock": {
     "lock": "Blocca",
     "unlock": "Sblocca",
@@ -520,6 +525,7 @@
       "cursor": "Passa alla selezione (cursore)",
       "lasso": "Passa al lazo",
       "shape": "Passa alle forme",
+      "connector": "Passa al connettore",
       "text": "Passa al testo",
       "insertSpace": "Passa a inserisci spazio"
     },

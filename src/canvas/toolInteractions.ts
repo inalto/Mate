@@ -5,15 +5,18 @@
 // elements (select / open the editor), shape tool (drag a box, Shift constrains, live preview),
 // connector tool (drag between elements, ends bind to anchors, live preview), a lone selected
 // connector's endpoint handles and label drag, double-click on a connector (label popover), text
-// tool (click adds or edits a text box). Geometry is pure; `createToolController` wires it
+// tool (click adds or edits a text box), auto-complete handle drags (a connector from a side of the
+// selected element: a tap opens the auto-complete popover, a release on an element binds to it, a
+// release in empty space adds a free-ended connector and opens the popover there). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
 import { connectorHit, connectorRoute, DEFAULT_CONNECTOR_CAPS, labelPill } from "../connectors/geometry";
-import { anchors, nearestAnchor, SIDES } from "../connectors/anchors";
+import { anchorPoint, anchors, nearestAnchor, SIDES } from "../connectors/anchors";
 import { routeConnector } from "../connectors";
 import { CONNECTOR_MODES, nearestT } from "../connectors/route";
 import { openLabelPopover } from "../stores/labelPopover";
+import { openAutoComplete } from "../stores/autoComplete";
 import { isClosedShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
@@ -262,6 +265,8 @@ type Gesture =
       /** Where the free end is (the pointer), its binding, and the element under it. */
       end: Vec2;
       at: EndAt;
+      /** Drawn from an auto-complete handle: from this side of this element. */
+      auto?: { sourceId: string; side: Side };
     }
   | {
       kind: "endpoint";
@@ -524,9 +529,33 @@ export function createToolController(deps: ToolDeps) {
     return true;
   };
 
+  /**
+   * Start a connector drag from `side` of element `sourceId` (an auto-complete handle was pressed);
+   * false when the element is gone or locked.
+   */
+  const beginAutoComplete = (p: Vec2, sourceId: string, side: Side): boolean => {
+    const src = st().elements.get(sourceId);
+    if (!src || isLocked(src)) return false;
+    const start = anchorPoint(src, side);
+    const source: ConnectorEnd = { id: sourceId, side };
+    g = { kind: "connector", press: p, start, source, end: p, at: { over: null, end: undefined, snapped: null, point: p }, auto: { sourceId, side } };
+    preview = [];
+    lastTap = null;
+    return true;
+  };
+
+  /** Publish whether a drag is in progress (auto-complete handles hide meanwhile). */
+  const setDragging = (on: boolean) => {
+    if (st().dragging !== on) deps.store.setState({ dragging: on });
+  };
+
   const down = (p: Vec2, tool: PointerTool) => {
     const s = st();
-    if (tool === "eraser") {
+    const auto = s.autoCompleteDrag;
+    if (auto) deps.store.setState({ autoCompleteDrag: null });
+    if (auto && (tool === "cursor" || tool === "lasso") && beginAutoComplete(p, auto.sourceId, auto.side)) {
+      // An auto-complete handle's press: a connector from that side (see up()).
+    } else if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
     } else if (tool === "insert-space") {
@@ -690,6 +719,8 @@ export function createToolController(deps: ToolDeps) {
         preview = rotateElements(g.orig, g.centre, g.angle);
         break;
     }
+    const k = g.kind;
+    if ((k === "move" && g.started) || k === "scale" || k === "rotate" || k === "connector" || k === "endpoint") setDragging(true);
     deps.requestLive();
   };
 
@@ -710,12 +741,13 @@ export function createToolController(deps: ToolDeps) {
         drop();
         s.insertSpace(g.lineY, g.dy);
         break;
-      case "connector":
+      case "connector": {
         drop();
-        if (Math.hypot(g.end.x - g.press.x, g.end.y - g.press.y) * s.camera.z >= MIN_SHAPE_DRAG_PX) {
-          s.addConnector({ start: g.start, end: g.at.point, source: g.source, target: g.at.end, ...connectorStyle() });
-        }
+        const dragged = Math.hypot(g.end.x - g.press.x, g.end.y - g.press.y) * s.camera.z >= MIN_SHAPE_DRAG_PX;
+        if (g.auto) autoCompleteUp(g.auto, g.start, g.end, g.at, dragged);
+        else if (dragged) s.addConnector({ start: g.start, end: g.at.point, source: g.source, target: g.at.end, ...connectorStyle() });
         break;
+      }
       case "endpoint":
         drop();
         // One "Connector end" entry on release; a tap on the handle changes nothing.
@@ -746,7 +778,30 @@ export function createToolController(deps: ToolDeps) {
         break;
     }
     g = { kind: "idle" };
+    setDragging(false);
     deps.requestLive();
+  };
+
+  /**
+   * Release of an auto-complete drag: a tap opens the popover next to the handle; on an element it
+   * binds a connector to it; inside the source nothing happens; in empty space a free-ended
+   * connector is added and the popover opens at the release point.
+   */
+  const autoCompleteUp = (auto: { sourceId: string; side: Side }, start: Vec2, end: Vec2, at: EndAt, dragged: boolean) => {
+    const s = st();
+    if (!dragged) {
+      openAutoComplete(deps.store, auto.sourceId, auto.side);
+      return;
+    }
+    const source: ConnectorEnd = { id: auto.sourceId, side: auto.side };
+    if (at.end) {
+      s.addConnector({ start, end: at.point, source, target: at.end, ...connectorStyle() });
+      return;
+    }
+    const src = s.elements.get(auto.sourceId);
+    if (!src || rectContains(elementBounds(src), end)) return;
+    const id = s.autoCompleteConnector(auto.sourceId, auto.side, start, at.point);
+    if (id) openAutoComplete(deps.store, auto.sourceId, auto.side, at.point, id);
   };
 
   const cancel = () => {
@@ -756,6 +811,7 @@ export function createToolController(deps: ToolDeps) {
     g = { kind: "idle" };
     drop();
     clearGuides();
+    setDragging(false);
     deps.requestLive();
   };
 
@@ -887,6 +943,7 @@ export function createToolController(deps: ToolDeps) {
     up,
     cancel,
     draw,
+    beginAutoComplete,
     dispose() {
       deps.el.removeEventListener("pointerdown", onPointerMods, true);
       deps.el.removeEventListener("pointermove", onPointerMods, true);

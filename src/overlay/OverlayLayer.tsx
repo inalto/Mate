@@ -3,8 +3,10 @@
 // element and the editor slot (`data-editor-for`) of the element being edited, when its type has
 // an editor (an empty slot would sit over the element and swallow its input). The layer itself
 // lets pointer events through to the canvas; only its frames, handles and editors take them.
-// Also hosts the search flash (page units) and the tutor card (screen space, beside the layer).
+// Also hosts the search flash (page units), the tutor card and the auto-complete arrows (screen
+// space, beside the layer), and the auto-complete popover (beside the clip, like the line-ends one).
 import { createElement, useCallback, type CSSProperties } from "react";
+import AutoCompletePopover from "../components/AutoCompletePopover";
 import FlashLayer from "../components/FlashLayer";
 import { contentOf } from "../model/content";
 import type { Element } from "../model/types";
@@ -14,6 +16,7 @@ import TutorCard from "../tutor/TutorCard";
 import { useTutorViews } from "../tutor/useTutor";
 import { boxRect, contentMeta, isBoxed } from "../tools/spatialIndex";
 import { isClosedShape } from "../shapes/geometry";
+import AutoCompleteHandles from "./AutoCompleteHandles";
 import BoxFrame from "./BoxFrame";
 import { boxStyle } from "./boxGeometry";
 import ShapeLabelEditor, { shapeBoxOf } from "./ShapeLabelEditor";
@@ -44,24 +47,28 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
   } as CSSProperties;
 
   return (
-    <div className="overlay-clip">
-      <div className="overlay-layer" data-testid="overlay-layer" style={layerStyle}>
-        {editing && (
-          <div className="box-editor" data-editor-for={editing.id} data-editor-type={editing.type} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
-            {createElement(editor, { el: editing, store })}
-          </div>
-        )}
-        {shapeEditing && (
-          <div className="box-editor" data-editor-for={shapeEditing.id} data-editor-type="shape" style={{ ...boxStyle(shapeBoxOf(shapeEditing), 0), transform: undefined }}>
-            <ShapeLabelEditor el={shapeEditing} store={store} />
-          </div>
-        )}
-        {framed.map((el) => (
-          <BoxFrame key={el.id} el={el} store={store} zoom={camera.z} handles={selection.size === 1} />
-        ))}
-        {pageId && <FlashLayer pageId={pageId} zoom={camera.z} boundsOf={boundsOf} />}
+    <>
+      <div className="overlay-clip">
+        <div className="overlay-layer" data-testid="overlay-layer" style={layerStyle}>
+          {editing && (
+            <div className="box-editor" data-editor-for={editing.id} data-editor-type={editing.type} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
+              {createElement(editor, { el: editing, store })}
+            </div>
+          )}
+          {shapeEditing && (
+            <div className="box-editor" data-editor-for={shapeEditing.id} data-editor-type="shape" style={{ ...boxStyle(shapeBoxOf(shapeEditing), 0), transform: undefined }}>
+              <ShapeLabelEditor el={shapeEditing} store={store} />
+            </div>
+          )}
+          {framed.map((el) => (
+            <BoxFrame key={el.id} el={el} store={store} zoom={camera.z} handles={selection.size === 1} />
+          ))}
+          {pageId && <FlashLayer pageId={pageId} zoom={camera.z} boundsOf={boundsOf} />}
+        </div>
+        <AutoCompleteHandles store={store} />
+        <TutorCard store={store} pane={pane} />
       </div>
-      <TutorCard store={store} pane={pane} />
-    </div>
+      <AutoCompletePopover store={store} />
+    </>
   );
 }

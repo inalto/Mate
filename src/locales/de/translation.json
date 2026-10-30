@@ -403,6 +403,11 @@
     "placeholder": "Type text",
     "addText": "Add text"
   },
+  "autoComplete": {
+    "add": "Add connected element",
+    "text": "Text",
+    "note": "Note"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -523,6 +528,7 @@
       "cursor": "Zu Auswählen (Cursor) wechseln",
       "lasso": "Zu Lasso wechseln",
       "shape": "Zu Form wechseln",
+      "connector": "Switch to connector",
       "text": "Zu Text wechseln",
       "insertSpace": "Zu Platz einfügen wechseln"
     },
