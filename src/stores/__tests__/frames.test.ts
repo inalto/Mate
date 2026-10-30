@@ -15,7 +15,7 @@ vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.els) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
-import { useEditorStore } from "../editor";
+import { DUPLICATE_OFFSET, FRAME_DUPLICATE_GAP, useEditorStore } from "../editor";
 import { useNotebookStore } from "../notebook";
 import { closeLabelPopover, useLabelPopoverStore } from "../labelPopover";
 import { createToolController } from "../../canvas/toolInteractions";
@@ -107,7 +107,34 @@ describe("frames store", () => {
     expect(s().elements.size).toBe(4);
     const copies = [...s().selection].map((id) => s().elements.get(id)!);
     expect(copies.map((e) => e.type).sort()).toEqual(["frame", "stroke"]);
-    expect(copies.find((e) => e.type === "stroke")!.points[0]).toMatchObject({ x: 70, y: 70 });
+    // Beside the source (its width plus the gap), never overlapping it.
+    expect(copies.find((e) => e.type === "stroke")!.points[0]).toMatchObject({ x: 50 + 200 + FRAME_DUPLICATE_GAP, y: 50 });
+    expect(boxRect(copies.find((e) => e.type === "frame")!)).toEqual({ x: 200 + FRAME_DUPLICATE_GAP, y: 0, width: 200, height: 200 });
+  });
+
+  it("moving_a_duplicated_frame_takes_only_its_own_copies", async () => {
+    await load([stroke("tl", 20, 20), stroke("br", 150, 150)]);
+    const f = s().addFrame({ x: 0, y: 0, width: 200, height: 200 })!;
+    s().select([f]);
+    s().duplicateSelection();
+    const copyFrame = [...s().selection].map((id) => s().elements.get(id)!).find((e) => e.type === "frame")!;
+    const copied = [...s().selection].filter((id) => id !== copyFrame.id);
+    const before = new Map(copied.map((id) => [id, at(id)]));
+    s().select([copyFrame.id]);
+    s().moveSelection(0, 500);
+    // Every original child stays; every copied child moved with the copy.
+    expect(at(f)).toMatchObject({ x: 0, y: 0 });
+    expect(at("tl")).toMatchObject({ x: 20, y: 20 });
+    expect(at("br")).toMatchObject({ x: 150, y: 150 });
+    for (const id of copied) expect(at(id)).toMatchObject({ x: before.get(id)!.x, y: before.get(id)!.y + 500 });
+  });
+
+  it("duplicating_without_a_frame_keeps_the_small_offset", async () => {
+    await load([stroke("a", 50, 50)]);
+    s().select(["a"]);
+    s().duplicateSelection();
+    const copy = s().elements.get([...s().selection][0])!;
+    expect(copy.points[0]).toMatchObject({ x: 50 + DUPLICATE_OFFSET, y: 50 + DUPLICATE_OFFSET });
   });
 
   it("deleting_a_frame_deletes_only_the_frame", async () => {
@@ -183,6 +210,44 @@ describe("frame tool", () => {
     tools.down({ x: 300, y: 250 }, "cursor");
     tools.up();
     expect(s().selection.size).toBe(0);
+    tools.dispose();
+  });
+
+  it("alt_drag_on_a_frame_moves_the_copies_with_their_children_and_leaves_the_originals", async () => {
+    await load([stroke("tl", 20, 20), stroke("br", 150, 150)]);
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 }, camera: { x: 0, y: 0, z: 1 } });
+    const f = s().addFrame({ x: 0, y: 0, width: 200, height: 200 })!;
+    const tools = createToolController({
+      store: useEditorStore,
+      el: document.createElement("div"),
+      requestLive: () => {},
+      invalidate: () => {},
+      renderElement: () => {},
+      getSettings: () => ({ ...DEFAULT_SETTINGS, snapToGrid: false, smartGuides: false }),
+      now: () => now,
+    });
+    s().select([f]);
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Alt", altKey: true }));
+    // Press on the frame's left border band, drag 300 down.
+    tools.down({ x: 2, y: 100 }, "cursor");
+    tools.move([{ x: 2, y: 400 }]);
+    tools.up();
+    window.dispatchEvent(new KeyboardEvent("keyup", { key: "Alt" }));
+    expect(s().elements.size).toBe(6);
+    expect(at(f)).toMatchObject({ x: 0, y: 0 });
+    expect(at("tl")).toMatchObject({ x: 20, y: 20 });
+    expect(at("br")).toMatchObject({ x: 150, y: 150 });
+    const copies = [...s().elements.values()].filter((e) => ![f, "tl", "br"].includes(e.id));
+    expect(copies.map((e) => e.type).sort()).toEqual(["frame", "stroke", "stroke"]);
+    expect(copies.map((e) => e.points[0]).map((p) => [p.x, p.y]).sort((a, b) => a[0] - b[0])).toEqual([
+      [0, 300],
+      [20, 320],
+      [150, 450],
+    ]);
+    // One undo removes the copies and the move together.
+    s().undo();
+    expect(s().elements.size).toBe(3);
+    expect(at(f)).toMatchObject({ x: 0, y: 0 });
     tools.dispose();
   });
 

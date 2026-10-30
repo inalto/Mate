@@ -82,6 +82,8 @@ export const INK_TYPES: readonly InkType[] = ["pen", "highlighter", "fountain-pe
 export const isInkTool = (t: string): t is InkType => (INK_TYPES as readonly string[]).includes(t);
 /** Offset applied by duplicate / paste (world units). */
 export const DUPLICATE_OFFSET = 20;
+/** Gap between a duplicated frame (with its contents) and its source, to the right of it (world units). */
+export const FRAME_DUPLICATE_GAP = 24;
 /** Camera tween of the presentation (frame to frame, and back on exit). */
 export const PRESENT_CAMERA_MS = 300;
 
@@ -249,8 +251,11 @@ export interface EditorState {
   addTextBox(at: Vec2): string | null;
   /** A 200×200 sticky note (a text box with a card in the default colour) centred on `at` (default: the view centre); starts editing it and returns to the cursor. */
   addNote(at?: Vec2): string | null;
-  /** Set (or with null, remove) the card style of every unlocked text box in `ids`. */
-  setCard(ids: string[], card: CardStyle | null): boolean;
+  /**
+   * Set (or with null, remove) the card style of every unlocked text box in `ids`. With `patch`, each
+   * box keeps its own card and only the patched fields change (a box without a card starts from `card`).
+   */
+  setCard(ids: string[], card: CardStyle | null, patch?: Partial<CardStyle>): boolean;
   /** Insert an empty 3x3 table / code block at the viewport centre and edit it (one "Table"/"Code" entry). */
   addTable(): string | null;
   addCodespace(): string | null;
@@ -1039,7 +1044,7 @@ export function createEditorStore(): EditorStore {
       return el.id;
     },
 
-    setCard(ids, card) {
+    setCard(ids, card, patch) {
       closeEdit();
       const els = get().elements;
       const now = new Date().toISOString();
@@ -1048,7 +1053,8 @@ export function createEditorStore(): EditorStore {
         const cur = els.get(id);
         if (!cur || cur.type !== "text-box" || isLocked(cur) || isMathBox(cur)) continue;
         const content: Record<string, unknown> = { ...(cur.content as object) };
-        if (card) content.card = { ...card };
+        const own = patch ? (cardOf(cur) ?? card) : card;
+        if (own) content.card = { ...own, ...patch };
         else delete content.card;
         const after = { ...cur, content, updatedAt: now };
         if (sameElement(after, { ...cur, updatedAt: now })) continue;
@@ -1381,7 +1387,10 @@ export function createEditorStore(): EditorStore {
     },
 
     duplicateSelection() {
-      pasteElements(withChildren(selectedElements()), DUPLICATE_OFFSET, "Duplicate");
+      const src = withChildren(selectedElements());
+      // A frame copy goes beside its source (never overlapping it), so containment cannot split the contents.
+      const b = src.some(isFrame) ? selectionBounds(new Map(src.map((e) => [e.id, e])), src.map((e) => e.id)) : null;
+      pasteElements(src, b ? { dx: b.width + FRAME_DUPLICATE_GAP, dy: 0 } : DUPLICATE_OFFSET, "Duplicate");
     },
     duplicateSelectionInPlace(mergeKey) {
       return pasteElements(withChildren(selectedElements()), 0, "Duplicate", mergeKey);
@@ -1899,15 +1908,16 @@ export function createEditorStore(): EditorStore {
     return els.map((e) => (e.type === "connector" ? routeConnector(e, resolve) : e));
   }
 
-  /** Add unlocked copies of `src` shifted by `offset` on both axes and select them; their ids ([] when refused). */
-  function pasteElements(src: Element[], offset: number, label: string, mergeKey?: string): string[] {
+  /** Add unlocked copies of `src` shifted by `offset` (on both axes, or by {dx, dy}) and select them; their ids ([] when refused). */
+  function pasteElements(src: Element[], offset: number | { dx: number; dy: number }, label: string, mergeKey?: string): string[] {
     const s = S();
     const pageId = s.pageId;
     if (src.length === 0 || !pageId) return [];
     const now = new Date().toISOString();
     const top = topZ(s.elements.values());
     const ids = new Map(src.map((el) => [el.id, crypto.randomUUID()]));
-    const placed = translateElements(src.map(unlocked), offset, offset).map((el, i) => {
+    const { dx, dy } = typeof offset === "number" ? { dx: offset, dy: offset } : offset;
+    const placed = translateElements(src.map(unlocked), dx, dy).map((el, i) => {
       const copy: Element = { ...el, id: ids.get(el.id)!, pageId, createdAt: now, updatedAt: now, version: 0 };
       return top > 0 ? withMeta(copy, { zIndex: top + 1 + i }) : copy;
     });

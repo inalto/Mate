@@ -493,7 +493,8 @@ function CardMenu({ ids, current, disabled }: { ids: string[]; current: CardStyl
   const [open, setOpen] = useState(false);
   useDismiss(ref, open, () => setOpen(false));
   const base = current ?? noteCard(useSettingsStore.getState().settings.defaultNoteColor);
-  const apply = (patch: Partial<CardStyle>) => ed.getState().setCard(ids, { ...base, ...patch });
+  // Only the chosen property changes on each box; a box without a card gets `base` with it.
+  const apply = (patch: Partial<CardStyle>) => ed.getState().setCard(ids, base, patch);
   return (
     <div ref={ref} className="tb-anchor">
       <button
@@ -516,7 +517,7 @@ function CardMenu({ ids, current, disabled }: { ids: string[]; current: CardStyl
                 key={sw.id}
                 type="button"
                 className={current?.background === sw.id ? "tb-swatch active" : "tb-swatch"}
-                style={{ background: theme === "dark" ? sw.dark : sw.light }}
+                style={{ background: noteBackground(sw.id, theme) }}
                 aria-label={t(`note.${sw.id}` as TKey)}
                 title={t(`note.${sw.id}` as TKey)}
                 onClick={() => apply({ background: sw.id })}

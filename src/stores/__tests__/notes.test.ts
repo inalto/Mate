@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 import { cardOf, contentOf, type TextBoxContent } from "../../model/content";
 import { boxRect } from "../../tools/spatialIndex";
+import { mapInkColor } from "../../ink/theme";
 import { noteBackground, noteCard, NOTE_SWATCHES } from "../../components/noteColors";
 
 const queue = vi.hoisted(() => ({
@@ -84,5 +85,33 @@ describe("sticky notes", () => {
     expect(noteBackground("yellow", "light")).not.toBe(noteBackground("yellow", "dark"));
     expect(noteBackground("#FDE047", "dark")).toBe("#FDE047");
     expect(noteCard("nope").background).toBe("yellow");
+  });
+
+  it("high_contrast_is_dark_so_notes_use_the_dark_variant", () => {
+    for (const sw of NOTE_SWATCHES) expect(noteBackground(sw.id, "high-contrast")).toBe(sw.dark);
+    // The remapped default ink (white on high-contrast) is not drawn on the light swatch.
+    expect(mapInkColor("#000000", "high-contrast")).toBe("#FFFFFF");
+    expect(noteBackground("white", "high-contrast")).not.toBe("#FFFFFF");
+  });
+
+  it("setCard_with_a_patch_changes_only_that_field_on_each_box", () => {
+    const a = s().addNote({ x: 0, y: 0 })!;
+    s().endEdit();
+    const b = s().addNote({ x: 400, y: 0 })!;
+    s().endEdit();
+    const c = s().addNote({ x: 800, y: 0 })!;
+    s().endEdit();
+    s().setCard([b], { background: "blue", radius: 0, shadow: "none", border: true });
+    s().setCard([c], null);
+    const base = cardOf(s().elements.get(a)!)!;
+    expect(s().setCard([a, b, c], base, { shadow: "paper" })).toBe(true);
+    expect(cardOf(s().elements.get(a)!)).toEqual({ ...base, shadow: "paper" });
+    expect(cardOf(s().elements.get(b)!)).toEqual({ background: "blue", radius: 0, shadow: "paper", border: true });
+    // A card-less box starts from the base card.
+    expect(cardOf(s().elements.get(c)!)).toEqual({ ...base, shadow: "paper" });
+    // One entry.
+    s().undo();
+    expect(cardOf(s().elements.get(b)!)?.shadow).toBe("none");
+    expect(cardOf(s().elements.get(c)!)).toBeNull();
   });
 });
