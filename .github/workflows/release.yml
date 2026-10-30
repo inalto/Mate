@@ -209,7 +209,7 @@ jobs:
 
   # Builds the iPad .ipa (App Store Connect export) and attaches it to the same draft release.
   # One-time setup: see README "iOS signing". Without IOS_CERTIFICATE the job still succeeds but
-  # skips every build step, so `publish` is never held up by it. Uploading the .ipa to TestFlight
+  # skips every build step, which `publish` accepts, but a failing build holds the release back. Uploading the .ipa to TestFlight
   # is a manual Transporter / `xcrun altool` step for now.
   ios:
     needs: prepare
@@ -272,8 +272,11 @@ jobs:
           echo "$IOS_MOBILE_PROVISION" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
           uuid=$(grep -a -A1 UUID "$RUNNER_TEMP/profile.mobileprovision" | grep -Eio '[0-9a-f]{8}-[0-9a-f-]{27}' | head -n 1)
           [ -n "$uuid" ] || { echo "no UUID found in the provisioning profile"; exit 1; }
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          cp "$RUNNER_TEMP/profile.mobileprovision" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+          # Xcode 16 reads profiles from either folder.
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$RUNNER_TEMP/profile.mobileprovision" "$dir/$uuid.mobileprovision"
+          done
 
           echo "$APPLE_API_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/AuthKey.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
@@ -312,13 +315,14 @@ jobs:
           path: ${{ steps.ipa.outputs.path }}
 
   # Publishes the draft only when all four desktop builds uploaded their installers, so updaters
-  # never see a release without latest.json. The Android job must not have failed; when it has no
-  # keystore it succeeds with its steps skipped, and a skipped job does not hold the release back.
+  # never see a release without latest.json. The Android and iOS jobs must not have failed; when they
+  # have no signing secrets they succeed with their steps skipped, and a skipped job does not hold the release back.
   publish:
-    needs: [prepare, release, android]
+    needs: [prepare, release, android, ios]
     if: >-
       always() && github.ref_type == 'tag' && needs.release.result == 'success' &&
-      (needs.android.result == 'success' || needs.android.result == 'skipped')
+      (needs.android.result == 'success' || needs.android.result == 'skipped') &&
+      (needs.ios.result == 'success' || needs.ios.result == 'skipped')
     runs-on: ubuntu-22.04
     steps:
       - name: Publish the release
