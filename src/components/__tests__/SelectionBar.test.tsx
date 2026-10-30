@@ -41,6 +41,27 @@ describe("SelectionBar", () => {
     expect(s().elements.get(id)!.width).toBe(4);
   });
 
+  it("a_labelled_shape_keeps_its_text_colour_behind_one_menu", async () => {
+    useNotebookStore.setState({ loaded: true });
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    const s = () => useEditorStore.getState();
+    const id = s().addShape(
+      { shapeType: "rectangle", color: "#000000", fillColor: "transparent", width: 2, fillOpacity: 1 },
+      shapeFromDrag("rectangle", { x: 100, y: 200 }, { x: 300, y: 300 }, false),
+    )!;
+    s().setShapeLabel(id, { text: "hi", fontSize: 16, color: "#000000", align: "center" });
+    s().select([id]);
+    render(<SelectionBar />);
+    // One swatch row (the stroke) on the bar; the text colours only in the menu.
+    expect(screen.queryByRole("button", { name: "Text colour #1565C0" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Colour #1565C0" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Text colour" }));
+    fireEvent.click(screen.getByRole("button", { name: "Text colour #1565C0" }));
+    expect((contentOf<{ label?: { color: string } }>(s().elements.get(id)!).label)?.color).toBe("#1565C0");
+    expect(screen.queryByRole("button", { name: "Text colour #1565C0" })).toBeNull(); // closed after the pick
+  });
+
   it("formats_a_selected_text_box_as_a_whole", async () => {
     useNotebookStore.setState({ loaded: true });
     await useEditorStore.getState().loadPage("pg");

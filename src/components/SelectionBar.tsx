@@ -340,21 +340,55 @@ function ShapeTextControls({ shape }: { shape: Element }) {
       <button type="button" className="tb-btn" aria-label={t("text.larger")} title={t("text.larger")} disabled={locked} onClick={() => set({ fontSize: stepFontSize(label.fontSize, 1) })}>
         <Plus size={14} />
       </button>
-      {PEN_PALETTE.map((c) => (
-        <button
-          key={c}
-          type="button"
-          className={label.color.toUpperCase() === c ? "tb-swatch active" : "tb-swatch"}
-          style={{ background: c }}
-          aria-label={t("text.colour", { color: c })}
-          disabled={locked}
-          onClick={() => set({ color: c })}
-        />
-      ))}
+      <LabelColourMenu current={label.color} disabled={locked} onPick={(color) => set({ color })} />
       {align("left", t("selection.alignLeft"), <TextAlignLeft size={16} />)}
       {align("center", t("text.alignCentre"), <TextAlignCenter size={16} />)}
       {align("right", t("selection.alignRight"), <TextAlignRight size={16} />)}
     </>
+  );
+}
+
+/** A shape label's text colour behind an "A" button (the stroke swatches sit next to it). */
+function LabelColourMenu({ current, disabled, onPick }: { current: string; disabled: boolean; onPick: (color: string) => void }) {
+  const { t } = useTranslation();
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className="tb-btn"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={t("shapeText.colour")}
+        title={t("shapeText.colour")}
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}>
+        <span aria-hidden="true" style={{ fontWeight: 700, borderBottom: `3px solid ${current}`, lineHeight: 1, paddingBottom: 1 }}>
+          A
+        </span>
+      </button>
+      {open && (
+        <div className="tb-popover fill-menu" role="dialog" aria-label={t("shapeText.colour")}>
+          <div className="tb-row">
+            {PEN_PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={current.toUpperCase() === c ? "tb-swatch active" : "tb-swatch"}
+                style={{ background: c }}
+                aria-label={t("text.colour", { color: c })}
+                onClick={() => {
+                  onPick(c);
+                  setOpen(false);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

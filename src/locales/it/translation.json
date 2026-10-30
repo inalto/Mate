@@ -398,7 +398,8 @@
   "shapeText": {
     "edit": "Modifica testo",
     "placeholder": "Scrivi il testo",
-    "addText": "Aggiungi testo"
+    "addText": "Aggiungi testo",
+    "colour": "Colore del testo"
   },
   "autoComplete": {
     "add": "Aggiungi elemento collegato",

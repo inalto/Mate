@@ -401,7 +401,8 @@
   "shapeText": {
     "edit": "Edit text",
     "placeholder": "Type text",
-    "addText": "Add text"
+    "addText": "Add text",
+    "colour": "Text colour"
   },
   "autoComplete": {
     "add": "Add connected element",
