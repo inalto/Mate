@@ -77,6 +77,29 @@ pub fn stash_opened_file(dir: &Path, name: &str, bytes: &[u8]) -> Result<PathBuf
     Ok(path)
 }
 
+/// Copies the local file `source` to `dir/<uuid>/<sanitised name>` (creating the folders) and
+/// returns that path; with `remove_source` the source is deleted once the copy succeeded (an iOS
+/// `Documents/Inbox` file). Refuses a file over [`MAX_INCOMING_BYTES`] from its metadata, before
+/// anything is read or created.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+pub fn stash_local_file(dir: &Path, source: &Path, name: &str, remove_source: bool) -> Result<PathBuf, String> {
+    let len = std::fs::metadata(source).map_err(|e| e.to_string())?.len();
+    if len > MAX_INCOMING_BYTES as u64 {
+        return Err(too_large());
+    }
+    let folder = dir.join(mate_core::model::new_id());
+    std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let path = folder.join(sanitize_name(name));
+    if let Err(e) = std::fs::copy(source, &path) {
+        let _ = std::fs::remove_dir_all(&folder);
+        return Err(e.to_string());
+    }
+    if remove_source && let Err(e) = std::fs::remove_file(source) {
+        log::warn!("mate: could not remove {}: {e}", source.display());
+    }
+    Ok(path)
+}
+
 /// When an entry of `incoming/` was last touched: a file's mtime; for a per-open folder the
 /// newest mtime of its entries, or the folder's own when it is empty.
 fn last_touched(path: &Path, meta: &std::fs::Metadata) -> Option<std::time::SystemTime> {
@@ -118,7 +141,7 @@ pub fn prune_incoming(dir: &Path, older_than: Duration) -> usize {
 /// The name to stash a received file under: the last segment of its URI (percent-decoded, last
 /// path component), sanitised; when that has no extension the router knows, the extension
 /// matching the content is appended. `None` when the content is nothing Mate opens.
-#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+#[cfg_attr(not(any(target_os = "android", target_os = "ios")), allow(dead_code))]
 pub fn name_for(uri_segment: &str, bytes: &[u8]) -> Option<String> {
     let name = segment_name(uri_segment);
     let is_pdf = Path::new(&name).extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
@@ -161,15 +184,53 @@ fn picked_name(uri_segment: &str, bytes: &[u8]) -> String {
 /// A path the commands can hand to `std::fs`: a picked `content://` URI (what the dialog plugin
 /// returns on Android) is read, stashed as `data_dir/incoming/<uuid>/<name>` (pruned like files
 /// opened from other apps) and the stashed path returned; anything else is a path already and
-/// comes back unchanged. On desktop nothing is ever read. Blocking: call it off the main thread.
+/// comes back unchanged. On iOS a picked file (a copy in the sandbox `tmp/`, as a `file://` URL
+/// or a path) is copied under `incoming/` too, see [`materialize_local`]. On desktop nothing is
+/// ever read. Blocking: call it off the main thread.
 pub fn materialize(app: &tauri::AppHandle, data_dir: &Path, path_or_uri: &str) -> Result<PathBuf, String> {
     #[cfg(target_os = "android")]
     return materialize_with(data_dir, path_or_uri, |url| read_content_uri(app, url));
-    #[cfg(not(target_os = "android"))]
+    #[cfg(target_os = "ios")]
+    {
+        let _ = app;
+        materialize_local(data_dir, path_or_uri)
+    }
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let _ = (app, data_dir);
         Ok(PathBuf::from(path_or_uri))
     }
+}
+
+/// [`materialize`] on iOS, without an `AppHandle` so it can be tested anywhere: a `file://` URL
+/// becomes a path; a path already under `data_dir` comes back unchanged; any other path (the
+/// picker's copy in the sandbox `tmp/`, which iOS may delete) is copied to
+/// `data_dir/incoming/<uuid>/<name>` and the copy returned, the source kept.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+fn materialize_local(data_dir: &Path, path_or_url: &str) -> Result<PathBuf, String> {
+    let path = if path_or_url.starts_with("file://") {
+        tauri::Url::parse(path_or_url)
+            .map_err(|e| e.to_string())?
+            .to_file_path()
+            .map_err(|()| format!("not a local file: {path_or_url}"))?
+    } else {
+        PathBuf::from(path_or_url)
+    };
+    if path.starts_with(data_dir) {
+        return Ok(path);
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let stashed = stash_local_file(&data_dir.join(INCOMING_DIR), &path, &name, false)?;
+    log::info!("mate: picked {} as {}", path.display(), stashed.display());
+    Ok(stashed)
+}
+
+/// Whether `path` sits directly in a folder named `Inbox`: the copy iOS makes in
+/// `Documents/Inbox/` of a document opened in Mate, which Mate must delete once stashed. A file
+/// opened anywhere else (in place, from a file provider) is the user's own and is never removed.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+fn is_inbox_file(path: &Path) -> bool {
+    path.parent().and_then(Path::file_name).is_some_and(|n| n == "Inbox")
 }
 
 /// [`materialize`] with the reader passed in, so it can be tested without a device.
@@ -258,6 +319,46 @@ pub fn content_uri_opened(app: &tauri::AppHandle, url: tauri::Url) {
         }
         Err(e) => log::warn!("mate: could not open {url}: {e}"),
     });
+}
+
+/// A document opened in Mate from another app on iOS (`RunEvent::Opened` with a `file://` URL,
+/// usually a copy iOS put in `Documents/Inbox/`): off the event loop, copy it under `incoming/`
+/// with a name the router knows, delete the Inbox copy and route the stashed path. Failures are
+/// logged like [`content_uri_opened`]; a file Mate does not open is still removed from the Inbox.
+#[cfg(target_os = "ios")]
+pub fn inbox_opened(app: &tauri::AppHandle, path: PathBuf) {
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || match receive_local(&app, &path) {
+        Ok(stashed) => {
+            log::info!("mate: received {} as {}", path.display(), stashed.display());
+            super::open_files::file_opened(&app, stashed.to_string_lossy().into_owned());
+        }
+        Err(e) => {
+            log::warn!("mate: could not open {}: {e}", path.display());
+            if is_inbox_file(&path) {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    });
+}
+
+/// Names `path` from its file name and first bytes and stashes it, removing an Inbox copy.
+#[cfg(target_os = "ios")]
+fn receive_local(app: &tauri::AppHandle, path: &Path) -> Result<PathBuf, String> {
+    use std::io::Read;
+    use tauri::Manager;
+    /// Enough of the file for [`name_for`] to sniff a format when the name has no extension.
+    const HEAD: u64 = 1024 * 1024;
+    let mut head = Vec::new();
+    std::fs::File::open(path)
+        .map_err(|e| e.to_string())?
+        .take(HEAD)
+        .read_to_end(&mut head)
+        .map_err(|e| e.to_string())?;
+    let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let name = name_for(&file_name, &head).ok_or("not a file Mate opens")?;
+    let dir = app.state::<crate::state::AppState>().data_dir.join(INCOMING_DIR);
+    stash_local_file(&dir, path, &name, is_inbox_file(path))
 }
 
 /// Reads `url` through the fs plugin (a file descriptor from the content resolver) and stashes it.
@@ -443,6 +544,85 @@ mod tests {
         let err = big.unwrap_err();
         assert!(err.ends_with(&format!("(max {})", mate_core::assets::MAX_ASSET_BYTES)), "{err}");
         let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn stash_local_copies_and_optionally_removes_the_source() {
+        let d = temp("stash-local");
+        let dir = d.join(INCOMING_DIR);
+        let src = d.join("Inbox");
+        fs::create_dir_all(&src).unwrap();
+        let kept = src.join("kept.pdf");
+        fs::write(&kept, b"%PDF-1.7 kept").unwrap();
+        let p = stash_local_file(&dir, &kept, "../My book.pdf", false).unwrap();
+        assert_eq!(p.parent().unwrap().parent().unwrap(), dir);
+        assert_eq!(p.file_name().unwrap().to_string_lossy(), "_My_book.pdf");
+        assert_eq!(fs::read(&p).unwrap(), b"%PDF-1.7 kept");
+        assert!(kept.exists(), "remove_source false keeps the source");
+        let gone = src.join("gone.mate");
+        fs::write(&gone, b"PK gone").unwrap();
+        let q = stash_local_file(&dir, &gone, "gone.mate", true).unwrap();
+        assert_eq!(fs::read(&q).unwrap(), b"PK gone");
+        assert!(!gone.exists(), "remove_source true removes the source");
+        assert!(stash_local_file(&dir, &src.join("missing.pdf"), "missing.pdf", false).is_err());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn stash_local_refuses_a_large_file_without_reading_it() {
+        let d = temp("stash-local-big");
+        let dir = d.join(INCOMING_DIR);
+        let big = d.join("big.pdf");
+        // Sparse: costs no disk, but its length is over the limit.
+        fs::File::create(&big).unwrap().set_len(MAX_INCOMING_BYTES as u64 + 1).unwrap();
+        let err = stash_local_file(&dir, &big, "big.pdf", true).unwrap_err();
+        assert!(err.ends_with(&format!("(max {MAX_INCOMING_BYTES})")), "{err}");
+        assert!(!dir.exists() || fs::read_dir(&dir).unwrap().count() == 0);
+        assert!(big.exists(), "a refused source is not removed");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn materialize_local_turns_a_file_url_into_a_stashed_copy() {
+        let d = temp("materialize-local");
+        let data = d.join("data");
+        let tmp = d.join("tmp");
+        fs::create_dir_all(&tmp).unwrap();
+        let src = tmp.join("x.pdf");
+        fs::write(&src, b"%PDF-1.7 picked").unwrap();
+        let url = tauri::Url::from_file_path(&src).unwrap();
+        assert!(url.as_str().starts_with("file:///"), "{url}");
+        let p = materialize_local(&data, url.as_str()).unwrap();
+        assert_eq!(p.parent().unwrap().parent().unwrap(), data.join(INCOMING_DIR));
+        assert_eq!(p.file_name().unwrap().to_string_lossy(), "x.pdf");
+        assert_eq!(fs::read(&p).unwrap(), b"%PDF-1.7 picked");
+        assert!(src.exists(), "the picker's copy is kept");
+        // A plain path outside the data dir is stashed the same way.
+        let q = materialize_local(&data, &src.to_string_lossy()).unwrap();
+        assert_ne!(p, q);
+        assert_eq!(q.parent().unwrap().parent().unwrap(), data.join(INCOMING_DIR));
+        assert_eq!(fs::read(&q).unwrap(), b"%PDF-1.7 picked");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn materialize_local_leaves_a_path_inside_the_data_dir_alone() {
+        let d = temp("materialize-local-inside");
+        let inside = d.join("books").join("b.pdf");
+        fs::create_dir_all(inside.parent().unwrap()).unwrap();
+        fs::write(&inside, b"%PDF").unwrap();
+        assert_eq!(materialize_local(&d, &inside.to_string_lossy()).unwrap(), inside);
+        let url = tauri::Url::from_file_path(&inside).unwrap();
+        assert_eq!(materialize_local(&d, url.as_str()).unwrap(), inside);
+        assert!(!d.join(INCOMING_DIR).exists());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn only_a_file_directly_in_an_inbox_folder_is_removed_after_opening() {
+        assert!(is_inbox_file(Path::new("/var/mobile/Containers/Data/Application/X/Documents/Inbox/a.pdf")));
+        assert!(!is_inbox_file(Path::new("/var/mobile/Containers/Shared/AppGroup/Y/File Provider Storage/a.pdf")));
+        assert!(!is_inbox_file(Path::new("a.pdf")));
     }
 
     /// A zip carrying a `manifest.json`, as a Mate archive does.
