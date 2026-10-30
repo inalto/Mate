@@ -24,9 +24,13 @@ export async function copySelectionAsImage(store: EditorStore): Promise<boolean>
     const region = paddedSelectionRegion(store);
     const pageId = store.getState().loadedPageId;
     if (!region || !pageId) return false;
-    const bytes = await renderPagePng(pageId, { region, scale: 2, theme: "light", background: "plain", pageFrame: false });
-    const blob = new Blob([bytes as BlobPart], { type: "image/png" });
-    await clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    // The item is built and written synchronously with a pending Blob: WebKit (macOS, iPad) only
+    // allows clipboard.write within the user activation, so nothing may be awaited before it.
+    const png = renderPagePng(pageId, { region, scale: 2, theme: "light", background: "plain", pageFrame: false }).then(
+      (bytes) => new Blob([bytes as BlobPart], { type: "image/png" }),
+    );
+    png.catch(() => undefined); // a failed render rejects the write below
+    await clipboard.write([new ClipboardItem({ "image/png": png })]);
     return true;
   } catch {
     return false;

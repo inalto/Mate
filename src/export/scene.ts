@@ -56,7 +56,9 @@ export function contentRegion(elements: Iterable<Element>, padding: number): Rec
 /**
  * Region and sheet stack of a page export. Canvas mode: content bounds + 40 units of padding.
  * Page mode: every sheet down to the last one holding content (at least one), stacked.
- * `override` (a selection export) wins over both: exactly that rectangle on one paper.
+ * `override` (a selection export) wins over both: exactly that rectangle on one paper. A page-mode
+ * page keeps its sheet stack for the pattern (lines restart at each sheet's top, as on screen and
+ * in the PDF); callers paint no desk or frames for a region.
  */
 export function exportRegion(
   page: Page,
@@ -64,16 +66,17 @@ export function exportRegion(
   defaultAspect: string,
   override?: Rect,
 ): { region: Rect; sheet: BackgroundPage } {
-  if (override) return { region: override, sheet: { mode: "canvas", width: override.width, height: override.height } };
+  if (override && page.mode !== "page") return { region: override, sheet: { mode: "canvas", width: override.width, height: override.height } };
   if (page.mode === "page") {
     const { width, height } = sheetSize(page, defaultAspect);
     const stride = height + PAGE_GAP;
-    let bottom = 0;
+    let bottom = override ? override.y + override.height : 0;
     for (const el of elements) {
       const b = elementBounds(el);
       bottom = Math.max(bottom, b.y + b.height);
     }
     const count = bottom > 0 ? Math.floor(bottom / stride) + 1 : 1;
+    if (override) return { region: override, sheet: { mode: "page", width, height, count } };
     return { region: { x: 0, y: 0, width, height: count * stride - PAGE_GAP }, sheet: { mode: "page", width, height, count } };
   }
   const region = contentRegion(elements, EXPORT_PADDING) ?? EMPTY_REGION;
@@ -94,7 +97,7 @@ export function paintScene(
 ): void {
   if (opts.background === "plain") {
     const surface = surfaceFor(opts.theme);
-    if (!opts.pageFrame) surface.desk = surface.paper;
+    if (!opts.pageFrame || opts.region) surface.desk = surface.paper; // a region shows no desk or frames
     paintBackground(ctx, page.backgroundConfig, clip, sheet, opts.theme, surface);
   }
   const ropts = { theme: opts.theme, zoomBucket: opts.zoomBucket, pdfTiles: opts.pdfTiles, textBitmaps: opts.textBitmaps };
