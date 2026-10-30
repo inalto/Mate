@@ -1,7 +1,8 @@
 // Lasso selection and selection transforms (pure). The loop's direction picks the rule: drawn
 // clockwise (as seen on screen) it selects what it encloses ("inside"); anticlockwise it selects
 // everything it touches ("touch").
-import { isLocked, isPdfPlacement } from "../model/content";
+import { connectorRoute } from "../connectors/geometry";
+import { contentOf, isLocked, isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
 import { fillOpacityOf, hasFill, isClosedShape, normalizeShape, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
@@ -110,6 +111,7 @@ function rotatePoints(pts: readonly Vec2[], c: Vec2, rad: number): Vec2[] {
 function touchPolylines(el: Element): readonly (readonly Vec2[])[] {
   if (isBoxed(el)) return [boxPolyline(el)];
   if (el.type === "shape") return shapeElementOutline(el);
+  if (el.type === "connector") return [connectorRoute(el)];
   return [el.points];
 }
 
@@ -203,10 +205,14 @@ export function selectionBounds(elements: ReadonlyMap<string, Element>, ids: Ite
   return r;
 }
 
-const mapPoints = (el: Element, fn: (p: Point) => Vec2): Element => ({
-  ...el,
-  points: el.points.map((p) => ({ ...p, ...fn(p) })),
-});
+/** `el` with its points mapped; a connector's cached route follows (the store reroutes it on commit). */
+function mapPoints(el: Element, fn: (p: Point) => Vec2): Element {
+  const out = { ...el, points: el.points.map((p) => ({ ...p, ...fn(p) })) };
+  if (el.type !== "connector") return out;
+  const c = contentOf<{ route: Vec2[] }>(el);
+  if (!Array.isArray(c.route)) return out;
+  return { ...out, content: { ...c, route: connectorRoute(el).map((p) => fn({ ...p, pressure: 0.5, timestamp: 0 })) } };
+}
 
 export function translateElements(els: readonly Element[], dx: number, dy: number): Element[] {
   return els.map((el) => mapPoints(el, (p) => ({ x: p.x + dx, y: p.y + dy })));

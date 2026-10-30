@@ -34,6 +34,7 @@ pub enum ElementType {
     Slide,
     Table,
     Media,
+    Connector,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -264,4 +265,17 @@ pub(crate) fn format_iso(at: OffsetDateTime) -> String {
 /// A fresh random (v4) UUID in hyphenated string form.
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connector_element_type_round_trips() {
+        let json = serde_json::to_string(&ElementType::Connector).unwrap();
+        assert_eq!(json, "\"connector\"");
+        let back: ElementType = serde_json::from_str("\"connector\"").unwrap();
+        assert_eq!(back, ElementType::Connector);
+    }
 }

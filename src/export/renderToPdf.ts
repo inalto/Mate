@@ -16,6 +16,7 @@ import { GState, jsPDF } from "jspdf";
 import { degrees, PDFDocument, type PDFPage } from "pdf-lib";
 import { getStroke } from "perfect-freehand";
 import { buildBackgroundPattern, type Rect } from "../canvas/background";
+import { CONNECTOR_LABEL_SIZE, connectorCapOutlines, connectorRoute, labelPill } from "../connectors/geometry";
 import { sheetSize } from "../canvas/camera";
 import { graphScene } from "../renderers/graph";
 import { capsuleRuns } from "../ink/capsuleRuns";
@@ -32,6 +33,7 @@ import type { Element, Page } from "../model/types";
 import type { TextBitmapSet } from "../overlay/snapshot";
 import { preparePdfPages, type PdfTileSet } from "../pdf/render";
 import { PLACEHOLDER_COLOR } from "../renderers/boxDraw";
+import { connectorDash, labelPaper } from "../renderers/connector";
 import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
 import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline } from "../shapes/geometry";
@@ -373,6 +375,45 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
   }
 }
 
+/** A connector: its cached route (dashed when set), caps like line shapes, then the label pill. */
+function paintConnector(p: Painter, el: Element, theme: ThemeName): void {
+  const route = connectorRoute(el);
+  if (route.length < 2) return;
+  const stroke = mapInkColor(el.color, theme);
+  p.pdf.setLineCap("round");
+  p.pdf.setLineJoin("round");
+  p.pdf.setLineWidth(el.width * p.k);
+  p.colour(stroke, "draw");
+  const dash = connectorDash(el);
+  if (dash) p.pdf.setLineDashPattern([dash[0] * p.k, dash[1] * p.k], 0);
+  p.polyline(route, false);
+  p.pdf.stroke();
+  if (dash) p.pdf.setLineDashPattern([], 0);
+  for (const cap of connectorCapOutlines(el)) {
+    if (isFilledCap(cap)) {
+      p.colour(stroke, "fill");
+      p.polyline(cap, true);
+      p.pdf.fillStroke();
+    } else {
+      p.polyline(cap, false);
+      p.pdf.stroke();
+    }
+  }
+  const pill = labelPill(el);
+  if (!pill) return;
+  const [x, y] = p.pt(pill.x, pill.y);
+  const r = (pill.height / 2) * p.k;
+  p.colour(labelPaper(theme), "fill");
+  p.colour(stroke, "draw");
+  p.pdf.setLineWidth(0.75);
+  p.pdf.roundedRect(x, y, pill.width * p.k, pill.height * p.k, r, r, "FD");
+  p.colour(stroke, "text");
+  p.pdf.setFont("helvetica", "normal");
+  p.pdf.setFontSize(CONNECTOR_LABEL_SIZE * p.k);
+  const [cx, cy] = p.pt(pill.centre.x, pill.centre.y);
+  p.pdf.text(latin1(pill.text), cx, cy, { align: "center", baseline: "middle" });
+}
+
 /** Maps box-local (unrotated) coordinates of `el` to world coordinates, rotation applied. */
 function boxLocal(el: Element): (x: number, y: number) => Pt {
   const r = boxRect(el);
@@ -517,6 +558,9 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
         break;
       case "graph":
         paintGraph(p, el, theme);
+        break;
+      case "connector":
+        paintConnector(p, el, theme);
         break;
       default: {
         const key = `${el.id}|${theme}`; // backed sheets draw in light, others in the export theme

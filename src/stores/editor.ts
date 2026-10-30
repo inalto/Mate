@@ -6,9 +6,12 @@ import type { Element, Page, PenPreset } from "../model/types";
 import { DEFAULT_SETTINGS, LIMITS, PAGE_GAP } from "../model/constants";
 import {
   contentOf,
+  isAttachable,
   effectiveCaps,
   isLocked,
   isPdfPlacement,
+  type ConnectorContent,
+  type ConnectorEnd,
   type LineCaps,
   type ShapeContent,
   type TableContent,
@@ -16,6 +19,8 @@ import {
   type TextBoxContent,
 } from "../model/content";
 import { shapeElement, type ShapeDrag, type ShapeStyle } from "../shapes/geometry";
+import { boundIds, connectorEnds, routeConnector } from "../connectors";
+import { connectorCaps, connectorLabel, connectorMode, DEFAULT_CONNECTOR_CAPS, DEFAULT_CONNECTOR_MODE } from "../connectors/geometry";
 import { alignToRuledLine, boxHeightFor, measureHtmlHeight, plainText } from "../text/measure";
 import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
@@ -110,6 +115,34 @@ export interface EditorState {
    * shape". Undo removes the shape and restores the original stroke; redo swaps them back.
    */
   replaceStrokeWithShape(stroke: Element, shape: Element): boolean;
+  /**
+   * Add a connector from `start` to `end` (one "Connector" entry), its ends bound to `source` /
+   * `target` when given (ignored unless they name attachable elements), routed at once. Style
+   * defaults: curve mode, the shape stroke colour, width 2, an arrow at the end. Its id, or null.
+   */
+  addConnector(input: {
+    start: Vec2;
+    end: Vec2;
+    source?: ConnectorEnd;
+    target?: ConnectorEnd;
+    mode?: ConnectorContent["mode"];
+    color?: string;
+    width?: number;
+    caps?: LineCaps;
+    dash?: "solid" | "dashed";
+  }): string | null;
+  /**
+   * Bind (`end`) or free (null) one end of connector `id`, optionally moving that end's point to
+   * `point`, then reroute; one "Connector end" entry. False when nothing changed or it is locked.
+   */
+  setConnectorEnd(id: string, which: "source" | "target", end: ConnectorEnd | null, point?: Vec2): boolean;
+  /** Restyle connector `id` (mode, caps, dash, colour, width) as one "Connector style" entry. */
+  setConnectorProps(
+    id: string,
+    patch: Partial<Pick<ConnectorContent, "mode" | "caps" | "dash">> & { color?: string; width?: number },
+  ): boolean;
+  /** Set (empty text removes) or remove the label of connector `id`; one "Label" entry (moves of `t` merge). */
+  setConnectorLabel(id: string, label: { text: string; t: number } | null): boolean;
   /** Set the end caps of line/arrow shape `id` as one "Line ends" entry; false when not applicable. */
   setLineCaps(id: string, caps: LineCaps): boolean;
   /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
@@ -236,7 +269,7 @@ export interface EditorState {
 }
 
 const maxY = (el: Element): number => {
-  if (isBoxed(el) || el.type === "shape") {
+  if (isBoxed(el) || el.type === "shape" || el.type === "connector") {
     const b = elementBounds(el);
     return b.y + b.height;
   }
@@ -371,6 +404,9 @@ export function createEditorStore(): EditorStore {
   // Page-scoped helpers (reset by loadPage).
   const history = new History();
   const index = new SpatialIndex();
+  /** Connector ids bound to each element id, and the element ids each connector is bound to. */
+  const bindings = new Map<string, Set<string>>();
+  const boundTo = new Map<string, string[]>();
   const changeListeners = new Set<(change: ElementsChange) => void>();
   /** Actions of the eraser drag in progress (pushed as one entry by endEraser). */
   let eraseBatch: Action[] = [];
@@ -416,6 +452,7 @@ export function createEditorStore(): EditorStore {
       const preset = defaultPreset();
       history.clear();
       index.clear();
+      clearBindings();
       eraseBatch = [];
       set({
         canUndo: false,
@@ -446,7 +483,10 @@ export function createEditorStore(): EditorStore {
       if (token !== loadToken) return;
       const resolved = page ?? fallbackPage(pageId, "canvas");
       const elements = new Map(els.map((e) => [e.id, e]));
-      for (const e of els) index.insert(e.id, elementBounds(e));
+      for (const e of els) {
+        index.insert(e.id, elementBounds(e));
+        bind(e);
+      }
       const contentBottom = bottomOf(elements.values());
       const vp = get().viewport;
       const viewport = vp.width > 0 ? vp : { width: 1280, height: 800 };
@@ -498,6 +538,101 @@ export function createEditorStore(): EditorStore {
       // shape is applied now.
       const actions: Action[] = [{ type: "delete", el: onTop(stroke) }, { type: "add", el: added }];
       return record("Ink to shape", actions, undefined, [{ type: "add", el: added }]);
+    },
+
+    addConnector(input) {
+      const s = get();
+      if (!s.pageId) return null;
+      const cfg = useSettingsStore.getState().settings;
+      const now = new Date().toISOString();
+      const valid = (end: ConnectorEnd | undefined): ConnectorEnd | undefined => {
+        const b = end ? s.elements.get(end.id) : undefined;
+        return end && b && isAttachable(b) ? { id: end.id, side: end.side } : undefined;
+      };
+      const source = valid(input.source);
+      const target = valid(input.target);
+      const top = topZ(s.elements.values());
+      const content: Partial<ConnectorContent> = {
+        mode: input.mode ?? DEFAULT_CONNECTOR_MODE,
+        caps: { ...(input.caps ?? DEFAULT_CONNECTOR_CAPS) },
+        route: [],
+        ...(input.dash === "dashed" ? { dash: "dashed" as const } : {}),
+        ...(source ? { source } : {}),
+        ...(target ? { target } : {}),
+        ...(top > 0 ? { zIndex: top } : {}),
+      };
+      const draft: Element = {
+        id: crypto.randomUUID(),
+        pageId: s.pageId,
+        type: "connector",
+        points: [
+          { x: input.start.x, y: input.start.y, pressure: 0.5, timestamp: 0 },
+          { x: input.end.x, y: input.end.y, pressure: 0.5, timestamp: 1 },
+        ],
+        color: input.color ?? cfg.defaultShapeStrokeColor,
+        width: input.width ?? 2,
+        isHighlighter: false,
+        content,
+        createdAt: now,
+        updatedAt: now,
+        version: 0,
+      };
+      const el = routeConnector(draft, (id) => s.elements.get(id));
+      return record("Connector", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    setConnectorEnd(id, which, end, point) {
+      const cur = editableConnector(id);
+      if (!cur) return false;
+      const els = get().elements;
+      const b = end ? els.get(end.id) : undefined;
+      if (end && (!b || !isAttachable(b))) return false;
+      const content = { ...contentOf<ConnectorContent>(cur) };
+      if (end) content[which] = { id: end.id, side: end.side };
+      else delete content[which];
+      const i = which === "source" ? 0 : 1;
+      const points = point ? cur.points.map((p, k) => (k === i ? { ...p, x: point.x, y: point.y } : p)) : cur.points;
+      const next = routeConnector({ ...cur, points, content }, (x) => els.get(x));
+      if (sameElement(next, cur)) return false;
+      return record("Connector end", [{ type: "update", before: cur, after: stamp(next) }]);
+    },
+
+    setConnectorProps(id, patch) {
+      const cur = editableConnector(id);
+      if (!cur) return false;
+      const content: Partial<ConnectorContent> = {
+        ...contentOf<ConnectorContent>(cur),
+        mode: patch.mode ?? connectorMode(cur),
+        caps: patch.caps ? { start: patch.caps.start, end: patch.caps.end } : connectorCaps(cur),
+      };
+      if (patch.dash === "dashed") content.dash = "dashed";
+      else if (patch.dash === "solid") delete content.dash;
+      const restyled: Element = {
+        ...cur,
+        ...(patch.color !== undefined ? { color: patch.color } : {}),
+        ...(patch.width !== undefined ? { width: patch.width } : {}),
+        content,
+      };
+      const next = routeConnector(restyled, (x) => get().elements.get(x)); // a mode change reroutes
+      if (sameElement(next, cur)) return false;
+      // Consecutive width changes (a slider drag) merge into one entry.
+      const widthOnly = Object.keys(patch).every((k) => k === "width");
+      return record("Connector style", [{ type: "update", before: cur, after: stamp(next) }], widthOnly ? `connector-width:${id}` : undefined);
+    },
+
+    setConnectorLabel(id, label) {
+      const cur = editableConnector(id);
+      if (!cur) return false;
+      const content = { ...contentOf<ConnectorContent>(cur) };
+      const text = label?.text.trim() ?? "";
+      if (label && text !== "") content.label = { text, t: Number.isFinite(label.t) ? Math.max(0, Math.min(1, label.t)) : 0.5 };
+      else delete content.label;
+      const next: Element = { ...cur, content };
+      if (sameElement(next, cur)) return false;
+      // Dragging the label along the route (same text) merges into one entry.
+      const was = connectorLabel(cur);
+      const key = was && content.label && was.text === content.label.text ? `label-t:${id}` : undefined;
+      return record("Label", [{ type: "update", before: cur, after: stamp(next) }], key);
     },
 
     setLineCaps(id, caps) {
@@ -657,7 +792,10 @@ export function createEditorStore(): EditorStore {
     removeElements(ids, label = "Delete") {
       const cur = get().elements;
       const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!); // locked elements are never deleted
-      record(label, ids.filter(ok).map((id) => ({ type: "delete", el: cur.get(id)! })));
+      const gone = new Set(ids.filter(ok));
+      const actions: Action[] = [...gone].map((id) => ({ type: "delete", el: cur.get(id)! }));
+      // Connectors bound to a deleted element keep their end at its last point, freed.
+      record(label, [...actions, ...freeEnds(gone)]);
     },
 
     addElements(label, els) {
@@ -857,7 +995,7 @@ export function createEditorStore(): EditorStore {
       // Consecutive width changes (a slider drag) on the same selection merge into one entry.
       const widthOnly = patch.color === undefined && patch.fillColor === undefined;
       const key = widthOnly ? `width:${[...get().selection].sort().join(",")}` : undefined;
-      const sized = (el: Element) => el.type === "stroke" || el.type === "shape";
+      const sized = (el: Element) => el.type === "stroke" || el.type === "shape" || el.type === "connector";
       transformSelection(
         "Style",
         (els) =>
@@ -992,6 +1130,89 @@ export function createEditorStore(): EditorStore {
     if (s.canUndo !== canUndo || s.canRedo !== canRedo) store.setState({ canUndo, canRedo });
   }
 
+  function clearBindings(): void {
+    bindings.clear();
+    boundTo.clear();
+  }
+
+  /** Drop connector `id` from the bindings index. */
+  function unbind(id: string): void {
+    for (const target of boundTo.get(id) ?? []) {
+      const set = bindings.get(target);
+      if (!set) continue;
+      set.delete(id);
+      if (set.size === 0) bindings.delete(target);
+    }
+    boundTo.delete(id);
+  }
+
+  /** Index the ends of `el` (a no-op for non-connectors). */
+  function bind(el: Element): void {
+    if (el.type !== "connector") return;
+    unbind(el.id);
+    const ids = boundIds(el);
+    if (ids.length === 0) return;
+    boundTo.set(el.id, ids);
+    for (const target of ids) {
+      let set = bindings.get(target);
+      if (!set) bindings.set(target, (set = new Set()));
+      set.add(el.id);
+    }
+  }
+
+  const sameElement = (a: Element, b: Element): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+  /** Connector `id` when it exists and is not locked. */
+  function editableConnector(id: string): Element | null {
+    const el = S().elements.get(id);
+    return el && el.type === "connector" && !isLocked(el) ? el : null;
+  }
+
+  /**
+   * Updates freeing the ends of connectors (outside `gone`) bound to an element in `gone`; each end
+   * keeps its last absolute point and the connector is rerouted without it.
+   */
+  function freeEnds(gone: ReadonlySet<string>): Action[] {
+    const els = S().elements;
+    const touched = new Set<string>();
+    for (const id of gone) for (const c of bindings.get(id) ?? []) if (!gone.has(c)) touched.add(c);
+    const now = new Date().toISOString();
+    const out: Action[] = [];
+    for (const cid of touched) {
+      const cur = els.get(cid);
+      if (!cur) continue;
+      const content = { ...contentOf<ConnectorContent>(cur) };
+      const { source, target } = connectorEnds(cur);
+      if (source && gone.has(source.id)) delete content.source;
+      if (target && gone.has(target.id)) delete content.target;
+      const next = routeConnector({ ...cur, content }, (x) => (gone.has(x) ? undefined : els.get(x)));
+      out.push({ type: "update", before: cur, after: stamp(next, now) });
+    }
+    return out;
+  }
+
+  /**
+   * Reroute connectors bound to an element changed by `actions` (connectors the actions already
+   * carry are left alone); their updates, for the same history entry.
+   */
+  function rerouteBound(actions: readonly Action[]): Action[] {
+    const inEntry = new Set<string>();
+    for (const a of actions) inEntry.add(a.type === "update" ? a.after.id : a.el.id);
+    const conns = new Set<string>();
+    for (const id of inEntry) for (const c of bindings.get(id) ?? []) if (!inEntry.has(c)) conns.add(c);
+    if (conns.size === 0) return [];
+    const els = S().elements;
+    const now = new Date().toISOString();
+    const out: Action[] = [];
+    for (const cid of conns) {
+      const cur = els.get(cid);
+      if (!cur) continue;
+      const next = routeConnector(cur, (x) => els.get(x));
+      if (next !== cur) out.push({ type: "update", before: cur, after: stamp(next, now) });
+    }
+    return out;
+  }
+
   /** Apply actions to the element map, spatial index and persistence queue (no history). */
   function applyActions(actions: Action[]): void {
     if (actions.length === 0) return;
@@ -1014,6 +1235,7 @@ export function createEditorStore(): EditorStore {
       if (a.type === "delete") {
         elements.delete(a.el.id);
         index.remove(a.el.id);
+        if (a.el.type === "connector") unbind(a.el.id);
         elementsQueue.enqueueDelete(a.el.id, a.el.pageId);
         if (selection.has(a.el.id)) {
           selection = new Set(selection);
@@ -1026,6 +1248,7 @@ export function createEditorStore(): EditorStore {
         if (a.type === "update") grewOnly = false;
         elements.set(el.id, el);
         index.insert(el.id, elementBounds(el));
+        bind(el);
         elementsQueue.enqueueUpsert(el);
         bottom = Math.max(bottom, maxY(el));
       }
@@ -1084,8 +1307,12 @@ export function createEditorStore(): EditorStore {
       return false;
     }
     flushEraseBatch();
-    history.push({ label, actions, mergeKey });
     applyActions(applied);
+    // Connectors bound to anything that changed follow it, in the same entry (undo restores their rows).
+    const rerouted = rerouteBound(applied);
+    if (rerouted.length > 0) applyActions(rerouted);
+    history.push({ label, actions: rerouted.length > 0 ? [...actions, ...rerouted] : actions, mergeKey });
+    syncHistoryFlags();
     return true;
   }
 
@@ -1122,12 +1349,25 @@ export function createEditorStore(): EditorStore {
     const before = unlockedSelection();
     if (before.length === 0) return;
     const now = new Date().toISOString();
-    const after = fn(before);
+    const after = settleConnectors(fn(before));
     record(
       label,
       before.map((b, i): Action => ({ type: "update", before: b, after: stamp(after[i], now) })),
       mergeKey,
     );
+  }
+
+  /**
+   * Reroute the connectors among transformed elements `els`: free ends keep their transformed
+   * points, bound ends follow their element (moved with `els` or not). A connector whose ends are
+   * both in the set (or free) therefore just translates with a move.
+   */
+  function settleConnectors(els: Element[]): Element[] {
+    if (!els.some((e) => e.type === "connector")) return els;
+    const moved = new Map(els.map((e) => [e.id, e]));
+    const cur = S().elements;
+    const resolve = (id: string) => moved.get(id) ?? cur.get(id);
+    return els.map((e) => (e.type === "connector" ? routeConnector(e, resolve) : e));
   }
 
   /** Add unlocked copies of `src` shifted by `offset` on both axes and select them; their ids ([] when refused). */
@@ -1137,14 +1377,36 @@ export function createEditorStore(): EditorStore {
     if (src.length === 0 || !pageId) return [];
     const now = new Date().toISOString();
     const top = topZ(s.elements.values());
-    const copies = translateElements(src.map(unlocked), offset, offset).map((el, i) => {
-      const copy: Element = { ...el, id: crypto.randomUUID(), pageId, createdAt: now, updatedAt: now, version: 0 };
+    const ids = new Map(src.map((el) => [el.id, crypto.randomUUID()]));
+    const placed = translateElements(src.map(unlocked), offset, offset).map((el, i) => {
+      const copy: Element = { ...el, id: ids.get(el.id)!, pageId, createdAt: now, updatedAt: now, version: 0 };
       return top > 0 ? withMeta(copy, { zIndex: top + 1 + i }) : copy;
     });
+    const copies = rebindCopies(placed, ids);
     if (!record(label, copies.map((el): Action => ({ type: "add", el })), mergeKey)) return [];
-    const ids = copies.map((c) => c.id);
-    store.setState({ selection: new Set(ids) });
-    return ids;
+    const added = copies.map((c) => c.id);
+    store.setState({ selection: new Set(added) });
+    return added;
+  }
+
+  /**
+   * Copied connectors bind to the copies of their elements; an end whose element was not copied is
+   * freed at its (shifted) point. Then they are rerouted among the copies.
+   */
+  function rebindCopies(copies: Element[], ids: ReadonlyMap<string, string>): Element[] {
+    if (!copies.some((e) => e.type === "connector")) return copies;
+    const byId = new Map(copies.map((e) => [e.id, e]));
+    return copies.map((el) => {
+      if (el.type !== "connector") return el;
+      const content = { ...contentOf<ConnectorContent>(el) };
+      for (const which of ["source", "target"] as const) {
+        const end = connectorEnds(el)[which];
+        const to = end ? ids.get(end.id) : undefined;
+        if (end && to) content[which] = { id: to, side: end.side };
+        else delete content[which];
+      }
+      return routeConnector({ ...el, content }, (x) => byId.get(x));
+    });
   }
 
   function arrange(op: ZOp): void {

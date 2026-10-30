@@ -15,7 +15,8 @@ export type ElementType =
   | "graph"
   | "slide"
   | "table"
-  | "media";
+  | "media"
+  | "connector";
 export type BackgroundType =
   | "blank"
   | "ruled"

@@ -7,6 +7,7 @@
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
+import { connectorHit } from "../connectors/geometry";
 import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
@@ -165,7 +166,10 @@ export function scaleFromDrag(b: Rect, corner: Corner, p: Vec2, uniform: boolean
   return { origin, sx, sy };
 }
 
-/** Topmost element under `p` (strokes by distance, shapes by outline or interior, others by bounds). */
+/**
+ * Topmost element under `p` (strokes by distance, shapes by outline or interior, connectors by
+ * route or label pill, others by bounds).
+ */
 export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Element>, p: Vec2, tol: number): string | null {
   const ids = index.query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol });
   const hits = renderOrder(ids.map((id) => elements.get(id)).filter((e): e is Element => !!e && !isPdfPlacement(e))).filter((el) =>
@@ -173,7 +177,9 @@ export function hitTest(index: SpatialIndex, elements: ReadonlyMap<string, Eleme
       ? polylineTouches(el.points, p, el.width / 2 + tol)
       : el.type === "shape"
         ? shapeHit(el, p, tol)
-        : rectContains(elementBounds(el), p, tol),
+        : el.type === "connector"
+          ? connectorHit(el, p, tol)
+          : rectContains(elementBounds(el), p, tol),
   );
   return hits.length > 0 ? hits[hits.length - 1].id : null;
 }

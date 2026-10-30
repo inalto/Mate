@@ -1,5 +1,6 @@
 // Typed views of `Element.content` per element type (phase 2 rich content), and the boxed-type set.
 // `content` is untyped JSON from storage: read it through `contentOf`, never by casting directly.
+import type { Vec2 } from "../canvas/camera";
 import type { GraphData } from "../graph/data";
 import type { Element, ElementType } from "./types";
 
@@ -71,10 +72,14 @@ export interface ImageContent extends ContentMeta {
   pdfPageIndex?: number;
 }
 
-/** End decoration of a line or arrow shape. */
-export type LineCap = "none" | "arrow" | "dot" | "bar";
+/** End decoration of a line or arrow shape, or of a connector (connectors also take "diamond"). */
+export type LineCap = "none" | "arrow" | "dot" | "bar" | "diamond";
 
-export const LINE_CAPS: readonly LineCap[] = ["none", "arrow", "dot", "bar"];
+/** Caps offered by the line-ends picker for line/arrow shapes (connectors add "diamond"). */
+export const LINE_CAPS: readonly Exclude<LineCap, "diamond">[] = ["none", "arrow", "dot", "bar"];
+
+/** Every cap kind: the picker's caps plus a filled diamond (connectors). */
+export const CONNECTOR_CAPS: readonly LineCap[] = [...LINE_CAPS, "diamond"];
 
 /** Start and end caps of a line/arrow shape. */
 export interface LineCaps {
@@ -95,13 +100,38 @@ export interface MediaContent extends ContentMeta {
   title?: string;
 }
 
+/** A side of an element's (rotated) bounds, where a connector end attaches. */
+export type Side = "top" | "right" | "bottom" | "left";
+
+/** A connector end bound to element `id`; "auto" picks the side facing the other end on every reroute. */
+export interface ConnectorEnd {
+  id: string;
+  side: Side | "auto";
+}
+
+/**
+ * connector (`points` = [start, end] absolute endpoints, always current; `color`, `width` the
+ * stroke). `route` caches the routed polyline in page units (curves flattened), so rendering,
+ * bounds and hit tests read the connector alone. `rotation` is ignored.
+ */
+export interface ConnectorContent extends ContentMeta {
+  mode: "straight" | "curve" | "elbow";
+  source?: ConnectorEnd;
+  target?: ConnectorEnd;
+  caps: LineCaps;
+  dash?: "solid" | "dashed";
+  /** `t` in [0, 1] along the route. */
+  label?: { text: string; t: number };
+  route: Vec2[];
+}
+
 /** `el.content` as a partial `T` when it is a JSON object, else `{}`. Never throws. */
 export function contentOf<T>(el: Pick<Element, "content">): Partial<T> {
   const c = el.content;
   return c !== null && typeof c === "object" && !Array.isArray(c) ? (c as Partial<T>) : {};
 }
 
-const asCap = (v: unknown, fallback: LineCap): LineCap => (LINE_CAPS as readonly unknown[]).includes(v) ? (v as LineCap) : fallback;
+const asCap = (v: unknown, fallback: LineCap): LineCap => (CONNECTOR_CAPS as readonly unknown[]).includes(v) ? (v as LineCap) : fallback;
 
 /**
  * Caps of a line/arrow shape: stored `content.caps` (unknown values fall back), else the type's
@@ -129,3 +159,13 @@ export const isPdfPlacement = (el: Pick<Element, "type" | "content">): boolean =
 export const BOXED_TYPES: readonly ElementType[] = ["text-box", "table", "codespace", "graph", "image", "media"];
 
 export const isBoxedType = (t: ElementType): boolean => BOXED_TYPES.includes(t);
+
+/** Container types a connector may also attach to (frames, mind maps) once they exist. */
+const ATTACHABLE_CONTAINERS: readonly string[] = ["frame", "mindmap"];
+
+/**
+ * True for elements a connector end may bind to: shapes (closed kinds and line/arrow), boxed
+ * types, frames and mind maps. Never strokes or connectors. Locks are not checked here.
+ */
+export const isAttachable = (el: Pick<Element, "type">): boolean =>
+  el.type === "shape" || isBoxedType(el.type) || ATTACHABLE_CONTAINERS.includes(el.type);

@@ -17,6 +17,7 @@ import { htmlBoxRenderer } from "./htmlBox";
 import "./shape";
 import "./image";
 import "./graph";
+import "./connector";
 import { mediaRenderer } from "./media";
 
 export { PLACEHOLDER_COLOR };

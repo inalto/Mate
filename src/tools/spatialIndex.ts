@@ -1,4 +1,5 @@
 // Uniform-grid spatial index over element bounds (world units) for eraser / lasso candidate queries.
+import { connectorBounds } from "../connectors/geometry";
 import { contentOf, isBoxedType } from "../model/content";
 import type { Element } from "../model/types";
 import { rendererFor } from "../renderers/registry";
@@ -26,7 +27,8 @@ export function withMeta(el: Element, patch: { zIndex?: number; rotation?: numbe
   return { ...el, content: { ...((c as object | null) ?? {}), ...patch } };
 }
 
-function rotatedBox(r: Rect, rad: number): Rect {
+/** Axis-aligned bounds of `r` turned by `rad` about its centre. */
+export function rotatedBox(r: Rect, rad: number): Rect {
   if (!rad) return r;
   const cx = r.x + r.width / 2;
   const cy = r.y + r.height / 2;
@@ -59,11 +61,12 @@ export const isBoxed = (el: Element): boolean =>
 /**
  * World bounds: a renderer's own `bounds` when registered; boxed elements span their box from the
  * first point (see `boxRect`); others the points' bbox expanded by width/2. `content.rotation`
- * rotates the box about its centre.
+ * rotates the box about its centre. Connectors span their cached route, caps and label (never rotated).
  */
 export function elementBounds(el: Element): Rect {
   const pts = el.points;
   if (pts.length === 0) return { x: 0, y: 0, width: 0, height: 0 };
+  if (el.type === "connector") return connectorBounds(el);
   const custom = rendererFor(el.type)?.bounds;
   let r: Rect;
   if (custom) {

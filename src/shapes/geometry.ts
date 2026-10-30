@@ -132,7 +132,8 @@ export const barCapLength = (strokeWidth: number): number => Math.max(10, 3 * st
 /**
  * Outline of one line cap at `at`, `dir` the unit direction pointing out of the line there: arrow
  * is a closed triangle (tip first), dot a closed 16-segment circle, bar an open two-point segment
- * across the line. Empty for `none`, and for arrow/bar without a direction (zero-length line).
+ * across the line, diamond a closed rhombus (tip first) `headLength` long and as wide. Empty for
+ * `none`, and for arrow/bar/diamond without a direction (zero-length line).
  */
 export function capOutline(kind: LineCap, at: Vec2, dir: Vec2, width: number, headLength = arrowHeadLength(width)): Vec2[] {
   const hasDir = dir.x !== 0 || dir.y !== 0;
@@ -148,6 +149,18 @@ export function capOutline(kind: LineCap, at: Vec2, dir: Vec2, width: number, he
       }
       return close(pts);
     }
+    case "diamond": {
+      if (!hasDir) return [];
+      const half = headLength / 2;
+      const mx = at.x - dir.x * half;
+      const my = at.y - dir.y * half;
+      return close([
+        { x: at.x, y: at.y },
+        { x: mx - dir.y * half, y: my + dir.x * half },
+        { x: at.x - dir.x * headLength, y: at.y - dir.y * headLength },
+        { x: mx + dir.y * half, y: my - dir.x * half },
+      ]);
+    }
     case "bar": {
       if (!hasDir) return [];
       const h = barCapLength(width) / 2;
@@ -161,7 +174,7 @@ export function capOutline(kind: LineCap, at: Vec2, dir: Vec2, width: number, he
   }
 }
 
-/** True for cap polylines painted as a filled area (arrow, dot), false for stroked ones (bar). */
+/** True for cap polylines painted as a filled area (arrow, dot, diamond), false for stroked ones (bar). */
 export const isFilledCap = (poly: readonly Vec2[]): boolean => poly.length > 2;
 
 function rotate(polys: Vec2[][], c: Vec2, rad: number): Vec2[][] {
