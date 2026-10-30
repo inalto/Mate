@@ -456,6 +456,7 @@
   },
   "mindmap": {
     "tool": "Mapa mental",
+    "options": "Opções do mapa mental",
     "style": "Estilo",
     "style1": "Contorno",
     "style2": "Preenchido",

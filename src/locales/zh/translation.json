@@ -455,6 +455,7 @@
   },
   "mindmap": {
     "tool": "思维导图",
+    "options": "思维导图选项",
     "style": "样式",
     "style1": "轮廓",
     "style2": "填充",

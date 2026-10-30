@@ -31,6 +31,7 @@ import {
   HandGrabbing,
   Presentation,
   TreeStructure,
+  CaretDown,
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ReactNode, type WheelEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -468,16 +469,32 @@ function MindmapButton() {
   const hint = useShortcutHint("tool.mindmap", t("mindmap.tool"));
   return (
     <div ref={ref} className="tb-anchor">
+      {/* The button always places a map; the caret beside it opens the styles and Import. */}
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
-        aria-haspopup="menu"
-        aria-expanded={open}
         aria-label={t("mindmap.tool")}
+        data-mindmap-place=""
         {...hint}
-        onClick={() => (active ? setOpen((o) => !o) : addMindmapAndEdit(ed, lastMindmapStyle))}
+        onClick={() => {
+          setOpen(false);
+          addMindmapAndEdit(ed, lastMindmapStyle);
+        }}
       >
         <TreeStructure size={18} />
+      </button>
+      <button
+        type="button"
+        className={open ? "tb-btn active" : "tb-btn"}
+        style={{ minWidth: 16, padding: 0 }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t("mindmap.options")}
+        title={t("mindmap.options")}
+        data-mindmap-menu=""
+        onClick={() => setOpen((o) => !o)}
+      >
+        <CaretDown size={10} weight="bold" />
       </button>
       <MindmapImportInput store={ed} inputRef={file} />
       {open && (

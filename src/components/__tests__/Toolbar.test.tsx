@@ -4,6 +4,9 @@ import { MemoryRouter } from "react-router";
 
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
+vi.mock("../../ipc/elementsQueue", () => ({
+  elementsQueue: { enqueueUpsert: vi.fn(), enqueueDelete: vi.fn(), flushAll: vi.fn(async () => {}), pending: () => 0, failed: () => 0 },
+}));
 
 const pick = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("../../images/insert", () => ({ pickAndInsertImage: pick }));
@@ -12,6 +15,10 @@ import { patchSettings } from "../../ipc/settings";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Page } from "../../model/types";
 import { useChromeStore } from "../../stores/chrome";
+import { endMindNodeEdit } from "../../mindmap/editSession";
+import { mindmapOf } from "../../model/content";
+import { useToastStore } from "../Toast";
+import { MINDMAP_IMPORT_MAX_BYTES } from "../MindmapMenu";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
@@ -228,5 +235,79 @@ describe("Toolbar", () => {
     expect(wheelToScroll({ deltaX: 0, deltaY: 40, deltaMode: 0 })).toBe(40);
     expect(wheelToScroll({ deltaX: 0, deltaY: 3, deltaMode: 1 })).toBe(48);
     expect(wheelToScroll({ deltaX: 30, deltaY: 5, deltaMode: 0 })).toBe(0);
+  });
+});
+
+describe("Toolbar mind-map button", () => {
+  const maps = () => [...useEditorStore.getState().elements.values()].filter((e) => e.type === "mindmap");
+  async function emptyPage(): Promise<void> {
+    useNotebookStore.setState({ loaded: true });
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.getState().setViewport({ width: 1000, height: 600 });
+    useToastStore.getState().dismiss();
+  }
+  afterEach(() => {
+    endMindNodeEdit();
+    cleanup();
+  });
+  const fileInput = () => document.querySelector("input[data-mindmap-import]") as HTMLInputElement;
+  const choose = (file: { name: string; size: number; text: () => Promise<string> }) => {
+    const input = fileInput();
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+  };
+
+  it("click_places_a_map_and_the_caret_opens_the_menu_without_a_selected_map", async () => {
+    await emptyPage();
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Mind map options" }));
+    expect(maps()).toHaveLength(0);
+    const menu = screen.getByRole("menu", { name: "Mind map" });
+    fireEvent.click(within(menu).getByRole("menuitem", { name: /Filled/ }));
+    expect(maps()).toHaveLength(1);
+    expect(mindmapOf(maps()[0])!.style).toBe(2);
+    expect(screen.queryByRole("menu")).toBeNull();
+    // The main button places a map (in the last picked style), also with a map selected.
+    endMindNodeEdit();
+    fireEvent.click(screen.getByRole("button", { name: "Mind map" }));
+    expect(maps()).toHaveLength(2);
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("button", { name: "Mind map" }).hasAttribute("aria-haspopup")).toBe(false);
+  });
+
+  it("import_opens_the_picker_and_inserts_the_file", async () => {
+    await emptyPage();
+    renderBar();
+    const click = vi.spyOn(fileInput(), "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Mind map options" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Import…" }));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(maps()).toHaveLength(0);
+    await act(async () => choose({ name: "plan.mm", size: 60, text: async () => '<map><node TEXT="Plan"><node TEXT="Step"/></node></map>' }));
+    expect(maps()).toHaveLength(1);
+    const root = mindmapOf(maps()[0])!.root;
+    expect(root.text).toBe("Plan");
+    expect(root.children.map((c) => c.text)).toEqual(["Step"]);
+  });
+
+  it("refuses_a_file_over_2_mb_with_a_toast", async () => {
+    await emptyPage();
+    renderBar();
+    const text = vi.fn(async () => "<map/>");
+    await act(async () => choose({ name: "big.mm", size: MINDMAP_IMPORT_MAX_BYTES + 1, text }));
+    expect(text).not.toHaveBeenCalled();
+    expect(maps()).toHaveLength(0);
+    expect(useToastStore.getState().message).toBe("The file is larger than 2 MB");
+  });
+
+  it("a_file_that_does_not_parse_shows_the_import_failed_toast", async () => {
+    await emptyPage();
+    renderBar();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    await act(async () => choose({ name: "bad.opml", size: 20, text: async () => "<opml><body>" }));
+    expect(maps()).toHaveLength(0);
+    expect(useToastStore.getState().message).toBe("Could not import this file");
+    expect(err).toHaveBeenCalled();
+    err.mockRestore();
   });
 });

@@ -453,6 +453,7 @@
   },
   "mindmap": {
     "tool": "Mind map",
+    "options": "Mind map options",
     "style": "Style",
     "style1": "Outline",
     "style2": "Filled",

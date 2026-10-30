@@ -456,6 +456,7 @@
   },
   "mindmap": {
     "tool": "Mindmap",
+    "options": "Mindmap-Optionen",
     "style": "Stil",
     "style1": "Umriss",
     "style2": "Gefüllt",
