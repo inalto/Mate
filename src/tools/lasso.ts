@@ -2,6 +2,7 @@
 // clockwise (as seen on screen) it selects what it encloses ("inside"); anticlockwise it selects
 // everything it touches ("touch").
 import { connectorRoute } from "../connectors/geometry";
+import { mindmapView } from "../mindmap/cache";
 import { contentOf, isLocked, isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
@@ -107,9 +108,25 @@ function rotatePoints(pts: readonly Vec2[], c: Vec2, rad: number): Vec2[] {
   });
 }
 
-/** The polylines a "touch" lasso tests against: stroke points, shape outlines, box edges. */
+/** Closed outline of rect `r`. */
+const rectRing = (r: Rect): Vec2[] => [
+  { x: r.x, y: r.y },
+  { x: r.x + r.width, y: r.y },
+  { x: r.x + r.width, y: r.y + r.height },
+  { x: r.x, y: r.y + r.height },
+  { x: r.x, y: r.y },
+];
+
+/** A mind map's node outlines (first) and edges, from its memoised layout. */
+function mindmapPolylines(el: Element): Vec2[][] {
+  const { nodes, edges } = mindmapView(el).layout;
+  return [...[...nodes.values()].map(rectRing), ...edges.map((e) => e.path)];
+}
+
+/** The polylines a "touch" lasso tests against: stroke points, shape outlines, box edges, mind-map nodes and edges. */
 function touchPolylines(el: Element): readonly (readonly Vec2[])[] {
   if (isBoxed(el)) return [boxPolyline(el)];
+  if (el.type === "mindmap") return mindmapPolylines(el);
   if (el.type === "shape") return shapeElementOutline(el);
   if (el.type === "connector") return [connectorRoute(el)];
   return [el.points];
@@ -143,7 +160,9 @@ function touches(el: Element, polygon: readonly Vec2[], bounds: Rect): boolean {
     }
   }
   // No crossing and no vertex inside: the lasso is either wholly outside or wholly inside the
-  // element's outline, which counts for a box or a filled shape (not for an empty ring).
+  // element's outline, which counts for a box or a filled shape (not for an empty ring), and for a
+  // mind-map node box.
+  if (el.type === "mindmap") return [...mindmapView(el).layout.nodes.values()].some((r) => pointInPolygon(polygon[0], rectRing(r)));
   return (isBoxed(el) || isFilledShape(el)) && lines.length > 0 && pointInPolygon(polygon[0], lines[0]);
 }
 

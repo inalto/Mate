@@ -24,6 +24,7 @@ import MediaLayer from "../media/MediaLayer";
 import { paintBackground, PRESENT_BACKDROP, presentBackdrop, type SurfaceColors } from "./background";
 import { boxRect, type Rect } from "../tools/spatialIndex";
 import { FRAME_RADIUS } from "../frames/contain";
+import { clearMindmapCache } from "../mindmap/cache";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
@@ -62,6 +63,13 @@ function surfaceColors(): SurfaceColors {
 }
 
 const asCtx = (ctx: SnapshotContext) => ctx as unknown as CanvasRenderingContext2D;
+
+/**
+ * Mind-map layouts measured before the web fonts finished loading keep fallback-font widths: the
+ * layout memo is cleared once when `document.fonts.ready` resolves (each mounted view then repaints).
+ */
+const mindmapFontsReady: Promise<void> | null =
+  typeof document !== "undefined" && document.fonts?.ready ? document.fonts.ready.then(() => clearMindmapCache()) : null;
 
 /** Imperative renderer + input wiring for one mounted page. Returns a handle for React effects. */
 function createEngine(
@@ -567,6 +575,12 @@ function createEngine(
   else window.addEventListener("resize", resize);
   resize();
   void st().loadPage(pageId);
+  void mindmapFontsReady?.then(() => {
+    if (disposed) return;
+    cache.invalidate();
+    requestStatic();
+    requestLive();
+  });
 
   return {
     /** Theme or token change: re-read colours and re-rasterise. */

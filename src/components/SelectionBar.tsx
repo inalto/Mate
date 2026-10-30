@@ -33,6 +33,7 @@ import {
   Play,
   Stack,
   Trash,
+  TreeStructure,
 } from "@phosphor-icons/react";
 import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -50,7 +51,10 @@ import { getRuntime } from "../code/runtime";
 import { runCodeElement } from "../code/runElement";
 import type { EditorStore } from "../stores/editor";
 import type { Element } from "../model/types";
-import { CARD_RADII, CARD_SHADOWS, CONNECTOR_CAPS, cardOf, effectiveCaps, isLocked, type CardStyle, type ConnectorContent } from "../model/content";
+import { CARD_RADII, CARD_SHADOWS, CONNECTOR_CAPS, cardOf, effectiveCaps, isLocked, mindmapOf, type CardStyle, type ConnectorContent } from "../model/content";
+import type { MindmapLayoutMode } from "../mindmap/layout";
+import { BRANCH_PALETTE, branchColor, type MindmapStyle } from "../mindmap/styles";
+import { findNode } from "../mindmap/tree";
 import { NOTE_SWATCHES, noteBackground, noteCard } from "./noteColors";
 import { connectorCaps, connectorLabel, connectorMode } from "../connectors/geometry";
 import { CONNECTOR_MODES } from "../connectors/route";
@@ -310,6 +314,128 @@ function FrameControls({ frame }: { frame: Element }) {
         <ListNumbers size={16} />
       </button>
     </>
+  );
+}
+
+const MINDMAP_LAYOUT_OPTIONS: readonly { value: MindmapLayoutMode; key: "mindmap.left" | "mindmap.right" | "mindmap.balance" }[] = [
+  { value: "left", key: "mindmap.left" },
+  { value: "right", key: "mindmap.right" },
+  { value: "balance", key: "mindmap.balance" },
+];
+const MINDMAP_STYLE_OPTIONS: readonly MindmapStyle[] = [1, 2, 3, 4];
+
+/**
+ * Layout, style and branch colour of the single selected mind map. The branch is the one of the
+ * focused node (its first-level ancestor, or itself); without a focused non-root node the colour
+ * is disabled.
+ */
+function MindmapControls({ map }: { map: Element }) {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const focus = ed((s) => (s.mindmapFocus?.elementId === map.id ? s.mindmapFocus.nodeId : null));
+  const [open, setOpen] = useState<"layout" | "style" | "color" | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+  useDismiss(ref, open !== null, () => setOpen(null));
+  const c = mindmapOf(map);
+  if (!c) return null;
+  const locked = isLocked(map);
+  const s = ed.getState;
+  const branch = focus && focus !== c.root.id ? c.root.children.find((k) => k.id === focus || findNode(k, focus) !== null) : undefined;
+  const branchIndex = branch ? c.root.children.indexOf(branch) : -1;
+  const current = branch ? branchColor(branchIndex, branch.color) : undefined;
+  const toggle = (which: "layout" | "style" | "color") => setOpen((o) => (o === which ? null : which));
+  const setBranchColor = (color: string | undefined) => {
+    if (!branch) return;
+    s().editMindmap(
+      map.id,
+      (root) => ({
+        ...root,
+        children: root.children.map((k) => {
+          if (k.id !== branch.id || k.color === color) return k;
+          const next = { ...k };
+          if (color) next.color = color;
+          else delete next.color;
+          return next;
+        }),
+      }),
+      "Branch colour",
+    );
+    setOpen(null);
+  };
+  const item = (key: string, label: ReactNode, active: boolean, run: () => void) => (
+    <button
+      key={key}
+      type="button"
+      role="menuitemradio"
+      aria-checked={active}
+      className={active ? "tb-menu-item active" : "tb-menu-item"}
+      onClick={() => {
+        run();
+        setOpen(null);
+      }}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div ref={ref} style={{ display: "contents" }}>
+      <div className="tb-anchor">
+        <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open === "layout"} disabled={locked} onClick={() => toggle("layout")}>
+          <TreeStructure size={16} /> {t("mindmap.layout")}
+        </button>
+        {open === "layout" && (
+          <div className="tb-popover tb-menu" role="menu" aria-label={t("mindmap.layout")}>
+            {MINDMAP_LAYOUT_OPTIONS.map((o) => item(o.value, t(o.key), c.layout === o.value, () => s().setMindmapProps(map.id, { layout: o.value })))}
+          </div>
+        )}
+      </div>
+      <div className="tb-anchor">
+        <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open === "style"} disabled={locked} onClick={() => toggle("style")}>
+          {t("mindmap.style")}
+        </button>
+        {open === "style" && (
+          <div className="tb-popover tb-menu" role="menu" aria-label={t("mindmap.style")}>
+            {MINDMAP_STYLE_OPTIONS.map((st) => item(String(st), t(`mindmap.style${st}`), c.style === st, () => s().setMindmapProps(map.id, { style: st })))}
+          </div>
+        )}
+      </div>
+      <div className="tb-anchor">
+        <button
+          type="button"
+          className="tb-swatch"
+          style={current ? { background: current } : undefined}
+          aria-haspopup="dialog"
+          aria-expanded={open === "color"}
+          aria-label={t("mindmap.branchColor")}
+          title={t("mindmap.branchColor")}
+          disabled={locked || !branch}
+          onClick={() => toggle("color")}
+        />
+        {open === "color" && branch && (
+          <div className="tb-popover fill-menu" role="dialog" aria-label={t("mindmap.branchColor")}>
+            <div className="tb-row">
+              <button
+                type="button"
+                className={branch.color ? "tb-swatch no-fill" : "tb-swatch no-fill active"}
+                aria-label={t("mindmap.autoColor")}
+                title={t("mindmap.autoColor")}
+                onClick={() => setBranchColor(undefined)}
+              />
+              {BRANCH_PALETTE.map((col) => (
+                <button
+                  key={col}
+                  type="button"
+                  className={branch.color?.toUpperCase() === col.toUpperCase() ? "tb-swatch active" : "tb-swatch"}
+                  style={{ background: col }}
+                  aria-label={t("library.colour", { color: col })}
+                  onClick={() => setBranchColor(col)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -591,6 +717,7 @@ export default function SelectionBar() {
     selected.length === 1 && selected[0]?.type === "shape" && isClosedShape(selected[0].shapeType ?? "rectangle") ? selected[0] : undefined;
   const connector = selected.length === 1 && selected[0]?.type === "connector" ? selected[0] : undefined;
   const frame = selected.length === 1 && selected[0]?.type === "frame" ? selected[0] : undefined;
+  const mindmap = selected.length === 1 && selected[0]?.type === "mindmap" ? selected[0] : undefined;
   const lockedCount = selected.filter((e) => !!e && isLocked(e)).length;
   /** Every selected element is locked: nothing here may change them. */
   const allLocked = lockedCount > 0 && lockedCount === selected.length;
@@ -639,12 +766,13 @@ export default function SelectionBar() {
       {lineShape && <LineEndsMenu shape={lineShape} />}
       {connector && <ConnectorControls connector={connector} />}
       {frame && <FrameControls frame={frame} />}
+      {mindmap && <MindmapControls map={mindmap} />}
       {closedShape && <ShapeTextControls shape={closedShape} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} disabled={selected.length - lockedCount < 2} />}
       <span className="tb-sep" />
       {textBox && !allLocked && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
       {cardBoxes.length > 0 && <CardMenu ids={cardBoxes.map((e) => e.id)} current={cardOf(cardBoxes[0])} disabled={allLocked} />}
-      {!textBox && !frame && PEN_PALETTE.map((c) => (
+      {!textBox && !frame && !mindmap && PEN_PALETTE.map((c) => (
         <button
           key={c}
           type="button"

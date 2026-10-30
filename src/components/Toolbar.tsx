@@ -30,6 +30,7 @@ import {
   HandPointing,
   HandGrabbing,
   Presentation,
+  TreeStructure,
 } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ReactNode, type WheelEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -56,6 +57,9 @@ import PaperPicker from "./PaperPicker";
 import PresetMenu from "./PresetMenu";
 import { SHAPE_LABEL_KEY } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
+import MindmapMenu, { MindmapImportInput } from "./MindmapMenu";
+import { addMindmapAndEdit } from "../mindmap/editSession";
+import type { MindmapStyle } from "../mindmap/styles";
 import { useShortcutHint } from "./shortcutHints";
 import { useDismiss } from "./useDismiss";
 import { PEN_PALETTE } from "./inkColors";
@@ -445,6 +449,53 @@ function NoteButton() {
   );
 }
 
+/** Style used by the mind-map button's plain click: the last one picked in its menu. */
+let lastMindmapStyle: MindmapStyle = 1;
+
+/**
+ * Mind-map button: adds a mind map at the view centre and opens its root's editor (key M,
+ * `tool.mindmap`). A second click while a lone mind map is selected opens its menu: the four styles
+ * and "Import…" (FreeMind / OPML).
+ */
+function MindmapButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const ref = useRef<HTMLDivElement>(null);
+  const file = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const active = ed((s) => s.selection.size === 1 && s.elements.get(s.selection.values().next().value!)?.type === "mindmap");
+  useDismiss(ref, open, () => setOpen(false));
+  const hint = useShortcutHint("tool.mindmap", t("mindmap.tool"));
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={active ? "tb-btn active" : "tb-btn"}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t("mindmap.tool")}
+        {...hint}
+        onClick={() => (active ? setOpen((o) => !o) : addMindmapAndEdit(ed, lastMindmapStyle))}
+      >
+        <TreeStructure size={18} />
+      </button>
+      <MindmapImportInput store={ed} inputRef={file} />
+      {open && (
+        <DockPopover anchorRef={ref}>
+          <MindmapMenu
+            store={ed}
+            onImport={() => file.current?.click()}
+            onClose={() => setOpen(false)}
+            onStyle={(style) => {
+              lastMindmapStyle = style;
+            }}
+          />
+        </DockPopover>
+      )}
+    </div>
+  );
+}
+
 /** Insert-space tool button; a second click opens its options (Insert / Remove, Cut images). */
 function InsertSpaceButton() {
   const { t } = useTranslation();
@@ -704,6 +755,7 @@ export default function Toolbar() {
       <ConnectorButton />
       <FrameButton />
       <NoteButton />
+      <MindmapButton />
       {toolBtn("text", "tool.text", t("toolbar.text"), <TextT size={18} />)}
       <button
         type="button"

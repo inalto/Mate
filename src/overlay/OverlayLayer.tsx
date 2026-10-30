@@ -5,7 +5,9 @@
 // lets pointer events through to the canvas; only its frames, handles and editors take them.
 // Also hosts the search flash (page units), the tutor card and the auto-complete arrows (screen
 // space, beside the layer), and the auto-complete popover (beside the clip, like the line-ends one).
-import { createElement, useCallback, type CSSProperties } from "react";
+// A lone selected mind map gets its MindmapOverlay (node focus, buttons, node drag), and the node
+// being edited (src/mindmap/editSession.ts) its MindNodeEditor, both in page units.
+import { createElement, useCallback, useEffect, type CSSProperties } from "react";
 import AutoCompletePopover from "../components/AutoCompletePopover";
 import FlashLayer from "../components/FlashLayer";
 import { contentOf } from "../model/content";
@@ -21,6 +23,9 @@ import BoxFrame from "./BoxFrame";
 import { boxStyle } from "./boxGeometry";
 import ShapeLabelEditor, { shapeBoxOf } from "./ShapeLabelEditor";
 import { editorFor, NoEditor } from "./editorRegistry";
+import { endMindNodeEdit, useMindEdit } from "../mindmap/editSession";
+import MindmapOverlay from "./MindmapOverlay";
+import MindNodeEditor from "./MindNodeEditor";
 
 export default function OverlayLayer({ store }: { store: EditorStore }) {
   const camera = store((s) => s.camera);
@@ -33,6 +38,15 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
   const regions = useTutorViews((s) => s.views[pane].regions);
   const boundsOf = useCallback((id: string) => recognitions.get(id)?.bounds ?? regions.get(id)?.bounds, [recognitions, regions]);
 
+  const mindEdit = useMindEdit();
+  const lone = selection.size === 1 ? elements.get(selection.values().next().value!) : undefined;
+  const mindmap = lone?.type === "mindmap" ? lone : undefined;
+  const mindEdited = mindEdit.store === store ? elements.get(mindEdit.elementId) : undefined;
+  // The edited map went away (undo, delete, page change): the session ends with it.
+  const staleEdit = mindEdit.store === store && mindEdited?.type !== "mindmap";
+  useEffect(() => {
+    if (staleEdit) endMindNodeEdit(store);
+  }, [staleEdit, store]);
   const framed = [...selection].map((id) => elements.get(id)).filter((el): el is Element => el !== undefined && isBoxed(el));
   const edited = editingId !== null ? elements.get(editingId) : undefined;
   const editor = edited ? editorFor(edited.type, contentOf<{ subtype?: string }>(edited).subtype) : NoEditor;
@@ -59,6 +73,10 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
             <div className="box-editor" data-editor-for={shapeEditing.id} data-editor-type="shape" style={{ ...boxStyle(shapeBoxOf(shapeEditing), 0), transform: undefined }}>
               <ShapeLabelEditor el={shapeEditing} store={store} />
             </div>
+          )}
+          {mindmap && <MindmapOverlay key={mindmap.id} el={mindmap} store={store} />}
+          {mindEdited?.type === "mindmap" && (
+            <MindNodeEditor key={`${mindEdited.id}:${mindEdit.nodeId}`} el={mindEdited} store={store} />
           )}
           {framed.map((el) => (
             <BoxFrame key={el.id} el={el} store={store} zoom={camera.z} handles={selection.size === 1} />

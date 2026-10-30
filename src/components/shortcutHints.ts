@@ -28,6 +28,7 @@ export const HINTED_ACTIONS: ReadonlySet<ShortcutAction> = new Set<ShortcutActio
   "tool.connector",
   "tool.frame",
   "tool.note",
+  "tool.mindmap",
   "tool.text",
   "tool.cursor",
   "tool.lasso",

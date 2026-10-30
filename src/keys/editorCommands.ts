@@ -1,7 +1,7 @@
 // Editor command dispatch for keyboard shortcuts (and toolbar zoom buttons).
 import { zoomBy } from "../canvas/gestures";
 import { elementsQueue } from "../ipc/elementsQueue";
-import { isLocked } from "../model/content";
+import { isLocked, mindmapOf } from "../model/content";
 import { clampToPage } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
@@ -15,6 +15,8 @@ import { modalAllows } from "./modalGuard";
 import { isClosedShape } from "../shapes/geometry";
 import { isTypingTarget } from "./shortcuts";
 import { beginShapeTyping } from "../overlay/ShapeLabelEditor";
+import { addMindChild, addMindmapAndEdit, addMindSibling, beginMindNodeEdit, focusAfterRemove, isMindNodeEditing, mindNeighbour, type MindDirection } from "../mindmap/editSession";
+import { parentOf, removeNode } from "../mindmap/tree";
 import i18n from "../i18n";
 
 export const ZOOM_STEP = 1.2;
@@ -183,6 +185,72 @@ export function startShapeTyping(e: KeyboardEvent): boolean {
 // Capture phase on the window, so the key wins over single-letter tool shortcuts.
 if (typeof window !== "undefined") window.addEventListener("keydown", (e) => void startShapeTyping(e), true);
 
+const ARROWS: Record<string, MindDirection> = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
+
+/**
+ * Mind-map keys (spec D5), while a node of the single selected mind map has the focus and no
+ * editor is open: Tab adds a child (Shift+Tab focuses the parent), Enter a sibling after (Shift+Enter
+ * before; on the root, a child), Delete/Backspace removes the node and its subtree (never the root:
+ * the key is taken and nothing changes), arrows move the focus, F2 edits, a printable key starts
+ * editing with that key, Escape clears the focus. True when the key was taken.
+ */
+export function handleMindmapKey(e: KeyboardEvent): boolean {
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return false;
+  if (isTypingTarget(e.target)) return false;
+  if (!modalAllows("tool.cursor", undefined)) return false;
+  const store = getFocusedEditor();
+  const s = store.getState();
+  const f = s.mindmapFocus;
+  if (!f || s.presenting || s.editingId !== null || isMindNodeEditing(store)) return false;
+  if (s.selection.size !== 1 || !s.selection.has(f.elementId)) return false;
+  const el = s.elements.get(f.elementId);
+  const c = el ? mindmapOf(el) : null;
+  if (!el || !c) return false;
+  const take = () => {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return true;
+  };
+  const { elementId, nodeId } = f;
+  const isRoot = nodeId === c.root.id;
+  const dir = ARROWS[e.key];
+  if (dir) {
+    const next = mindNeighbour(el, nodeId, dir);
+    if (next) s.focusMindNode(elementId, next);
+    return take();
+  }
+  switch (e.key) {
+    case "Escape":
+      s.focusMindNode(elementId, null);
+      return take();
+    case "Tab":
+      if (e.shiftKey) {
+        const up = parentOf(c.root, nodeId);
+        if (up) s.focusMindNode(elementId, up.id);
+      } else addMindChild(store, elementId, nodeId);
+      return take();
+    case "Enter":
+      addMindSibling(store, elementId, nodeId, e.shiftKey);
+      return take();
+    case "Delete":
+    case "Backspace": {
+      if (isRoot || isLocked(el)) return take();
+      const next = focusAfterRemove(c.root, nodeId);
+      if (s.editMindmap(elementId, (root) => removeNode(root, nodeId), "Delete topic") && next) s.focusMindNode(elementId, next);
+      return take();
+    }
+    case "F2":
+      beginMindNodeEdit(store, elementId, nodeId);
+      return take();
+  }
+  if (e.key.length !== 1 || e.key.trim() === "" || isLocked(el)) return false;
+  beginMindNodeEdit(store, elementId, nodeId, e.key);
+  return take();
+}
+
+// Capture phase on the window, before the global shortcuts (and the shape typing rule).
+if (typeof window !== "undefined") window.addEventListener("keydown", (e) => void handleMindmapKey(e), true);
+
 /** Shortcuts that still work while the focused pane presents (zoom in/out and pan; fit/reset/selection would leave the frame). */
 const PRESENTING_ACTIONS = new Set<string>(["zoom.in", "zoom.out", "pan", "save", "help.shortcuts"]);
 
@@ -218,6 +286,9 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.setTool("connector");
     case "tool.frame":
       return s.setTool("frame");
+    case "tool.mindmap":
+      addMindmapAndEdit(getFocusedEditor());
+      return;
     case "tool.note":
       return s.setTool("note");
     case "tool.text":

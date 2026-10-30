@@ -694,8 +694,10 @@ export function createToolController(deps: ToolDeps) {
       const orig = [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e && !isLocked(e));
       // A lone frame's handles are the overlay's (BoxFrame): its bounds also span the title, whose corner is no handle.
       const loneFrame = s.selection.size === 1 && orig.length === 1 && isFrame(orig[0]);
-      const corner = b && orig.length > 0 && !lone && !loneFrame ? hitHandle(b, p, s.camera.z) : null;
-      if (b && orig.length > 0 && !lone && !framedByOverlay(s.elements, s.selection) && hitRotateHandle(b, p, s.camera.z)) {
+      // A mind map is never scaled or rotated (zoom makes it bigger): a selection holding one only moves.
+      const moveOnly = orig.some((e) => e.type === "mindmap");
+      const corner = b && orig.length > 0 && !lone && !loneFrame && !moveOnly ? hitHandle(b, p, s.camera.z) : null;
+      if (b && orig.length > 0 && !lone && !moveOnly && !framedByOverlay(s.elements, s.selection) && hitRotateHandle(b, p, s.camera.z)) {
         const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
         g = { kind: "rotate", centre, from: Math.atan2(p.y - centre.y, p.x - centre.x), angle: 0, orig };
         preview = orig;
@@ -983,12 +985,14 @@ export function createToolController(deps: ToolDeps) {
         drawConnectorSelection(ctx, lone, c, !isLocked(lone));
       } else if (b) {
         const editable = sel.some((e) => !isLocked(e));
+        // Mind maps only move: no corner or rotate handles while one is selected.
+        const transformable = editable && !sel.some((e) => e.type === "mindmap" && !isLocked(e));
         const locks = sel.filter(isLocked).map(elementBounds);
         if (g.kind === "rotate") {
           // While rotating, the handle stays on the bounds the drag started from, with the angle badge.
           drawSelectionBounds(ctx, b, c, { handles: false, locks });
           drawRotateHandle(ctx, selectionBounds(s.elements, s.selection) ?? b, c, angleLabel(g.angle));
-        } else drawSelectionBounds(ctx, b, c, { handles: editable, rotate: editable, locks });
+        } else drawSelectionBounds(ctx, b, c, { handles: transformable, rotate: transformable, locks });
         animate = true;
       }
     }
