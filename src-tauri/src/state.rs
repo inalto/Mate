@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 use crate::commands::lifecycle::CloseGates;
 use crate::commands::recognize::{PageGates, ProviderCache};
 use mate_core::ai::keystore::KeyStore;
-#[cfg(desktop)]
+#[cfg(not(target_os = "android"))]
 use mate_core::ai::keystore::KeyringStore;
-#[cfg(mobile)]
+#[cfg(target_os = "android")]
 use mate_core::ai::keystore::FileKeyStore;
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
@@ -20,7 +20,7 @@ pub struct AppState {
     pub data_dir: PathBuf,
     /// Window-close attempt state machines, one per window label.
     pub close_attempt: CloseGates,
-    /// API keys (OS keychain on desktop, a file in the app sandbox on mobile); never exposed to
+    /// API keys (OS keychain on desktop and iOS, a file in the app sandbox on Android); never exposed to
     /// the frontend.
     pub keys: Arc<dyn KeyStore>,
     /// Per-page limit on concurrent AI checks.
@@ -44,9 +44,9 @@ impl AppState {
         if !settings_path.exists() {
             settings.save(&settings_path).map_err(|e| e.to_string())?;
         }
-        #[cfg(desktop)]
+        #[cfg(not(target_os = "android"))]
         let keys: Arc<dyn KeyStore> = Arc::new(KeyringStore);
-        #[cfg(mobile)]
+        #[cfg(target_os = "android")]
         let keys: Arc<dyn KeyStore> = Arc::new(FileKeyStore::new(data_dir.join("keys.json")));
         Ok(AppState {
             storage: Mutex::new(storage),
