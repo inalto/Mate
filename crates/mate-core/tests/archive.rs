@@ -535,3 +535,84 @@ fn json_entries_keep_their_own_smaller_cap() {
         other => panic!("expected Limit error, got {other:?}"),
     }
 }
+
+#[test]
+fn archive_round_trips_whiteboard_elements() {
+    use mate_core::model::ElementType;
+    use serde_json::json;
+    let mut src = Storage::open_in_memory().unwrap();
+    src.upsert_unit(&unit("u1", None)).unwrap();
+    src.upsert_section(&section("s", "u1")).unwrap();
+    src.upsert_page(&page("p", "s", None)).unwrap();
+
+    let mut card = stroke("card", "p", 1);
+    card.r#type = ElementType::TextBox;
+    card.box_width = Some(200.0);
+    card.box_height = Some(120.0);
+    let card_content = json!({
+        "card": { "background": "yellow", "radius": 8, "shadow": "soft", "border": false },
+        "contentHtml": "<p>Note</p>", "rawContent": "Note", "textAttributes": {}
+    });
+    card.content = Some(card_content.clone());
+    let mut frame = stroke("frame", "p", 1);
+    frame.r#type = ElementType::Frame;
+    frame.box_width = Some(800.0);
+    frame.box_height = Some(600.0);
+    let frame_content = json!({ "title": "Slide 1", "order": 0 });
+    frame.content = Some(frame_content.clone());
+    let mut map = stroke("map", "p", 1);
+    map.r#type = ElementType::Mindmap;
+    let map_content = json!({
+        "layout": "balance", "style": 4,
+        "root": { "id": "r", "text": "Topic", "children": [
+            { "id": "a", "text": "Alpha", "collapsed": true, "children": [
+                { "id": "a1", "text": "Leaf", "children": [] } ] },
+            { "id": "b", "text": "Beta", "color": "#0277BD", "children": [] } ] }
+    });
+    map.content = Some(map_content.clone());
+    let mut conn = stroke("conn", "p", 2);
+    conn.r#type = ElementType::Connector;
+    conn.content = Some(json!({
+        "mode": "elbow",
+        "source": { "id": "card", "side": "right" },
+        "target": { "id": "map", "side": "auto" },
+        "caps": { "start": "none", "end": "arrow" },
+        "label": { "text": "leads to", "t": 0.5 },
+        "route": [{ "x": 0.0, "y": 0.0 }, { "x": 10.0, "y": 0.0 }]
+    }));
+    // A connector bound to an element that is not in the archive comes back with a free end.
+    let mut dangling = stroke("dangling", "p", 2);
+    dangling.r#type = ElementType::Connector;
+    dangling.content = Some(json!({
+        "mode": "straight", "source": { "id": "gone", "side": "auto" },
+        "caps": { "start": "none", "end": "none" }, "route": []
+    }));
+    src.upsert_elements(&[card, frame, map, conn, dangling]).unwrap();
+
+    let bytes = export_unit(&src, "u1", &tmp("wb-src")).unwrap();
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &tmp("wb-dst")).unwrap();
+    assert_eq!(report.elements, 5);
+    let els = imported_elements(&dst, &report.unit_id);
+    let by_type = |t: ElementType| els.iter().filter(move |e| e.r#type == t);
+
+    let card = by_type(ElementType::TextBox).next().unwrap();
+    assert_eq!(card.content.as_ref(), Some(&card_content));
+    assert_eq!((card.box_width, card.box_height), (Some(200.0), Some(120.0)));
+    let frame = by_type(ElementType::Frame).next().unwrap();
+    assert_eq!(frame.content.as_ref(), Some(&frame_content));
+    assert_eq!((frame.box_width, frame.box_height), (Some(800.0), Some(600.0)));
+    let map = by_type(ElementType::Mindmap).next().unwrap();
+    assert_eq!(map.content.as_ref(), Some(&map_content));
+
+    let conns: Vec<_> = by_type(ElementType::Connector).collect();
+    assert_eq!(conns.len(), 2);
+    let bound = conns.iter().find(|c| c.content.as_ref().unwrap()["mode"] == "elbow").unwrap();
+    let c = bound.content.as_ref().unwrap();
+    assert_eq!(c["source"], json!({ "id": card.id, "side": "right" }));
+    assert_eq!(c["target"], json!({ "id": map.id, "side": "auto" }));
+    assert_eq!(c["label"], json!({ "text": "leads to", "t": 0.5 }));
+    assert_eq!(c["caps"], json!({ "start": "none", "end": "arrow" }));
+    let free = conns.iter().find(|c| c.content.as_ref().unwrap()["mode"] == "straight").unwrap();
+    assert!(free.content.as_ref().unwrap().get("source").is_none());
+}
