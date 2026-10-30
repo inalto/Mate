@@ -704,6 +704,13 @@
     "boxRender": "Impossibile renderizzare il contenuto della casella {{id}} per l'esportazione.",
     "boxMissing": "La casella {{id}} non è stata renderizzata per l'esportazione."
   },
+  "exportRegion": {
+    "selectionOnly": "Solo la selezione",
+    "copyImage": "Copia come immagine",
+    "copyImageFailed": "Impossibile copiare l'immagine",
+    "fitPage": "Adatta alla pagina",
+    "fitSelection": "Adatta alla selezione"
+  },
   "selection": {
     "label": "Selezione",
     "arrange": "Disponi ▸",

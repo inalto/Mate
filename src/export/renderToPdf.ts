@@ -65,6 +65,8 @@ export interface PdfExportOptions {
   textBitmaps?: TextBitmapSet;
   /** Deflate page content (default true; tests read the raw operators). */
   compress?: boolean;
+  /** One page of exactly this page-unit rectangle (selection export). */
+  region?: Rect;
 }
 
 export interface PdfDeps {
@@ -158,8 +160,8 @@ function backingOf(el: Element): Backing | null {
 /** The sheets to export, with the PDF placement each page-mode sheet is backed by (if any). */
 function layoutSheets(page: Page, list: Element[], opts: PdfExportOptions): Sheet[] {
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
-  if (page.mode !== "page") {
-    const { region } = exportRegion(page, list, aspect);
+  if (page.mode !== "page" || opts.region) {
+    const { region } = exportRegion(page, list, aspect, opts.region);
     return [{ rect: region, k: fitK(region), backing: null }];
   }
   const { sheet } = exportRegion(page, list, aspect);

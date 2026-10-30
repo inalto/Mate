@@ -23,6 +23,8 @@ export interface ExportOptions {
   background: "plain" | "transparent";
   /** Page mode: draw sheet rectangles on the desk colour (else the gaps are paper too). */
   pageFrame: boolean;
+  /** Paint exactly this page-unit rectangle (no sheets, no frame); set by selection exports. */
+  region?: Rect;
 }
 
 /** Paper/desk colours of exports (and thumbnails), matching the app's light and dark canvases. */
@@ -54,8 +56,15 @@ export function contentRegion(elements: Iterable<Element>, padding: number): Rec
 /**
  * Region and sheet stack of a page export. Canvas mode: content bounds + 40 units of padding.
  * Page mode: every sheet down to the last one holding content (at least one), stacked.
+ * `override` (a selection export) wins over both: exactly that rectangle on one paper.
  */
-export function exportRegion(page: Page, elements: Element[], defaultAspect: string): { region: Rect; sheet: BackgroundPage } {
+export function exportRegion(
+  page: Page,
+  elements: Element[],
+  defaultAspect: string,
+  override?: Rect,
+): { region: Rect; sheet: BackgroundPage } {
+  if (override) return { region: override, sheet: { mode: "canvas", width: override.width, height: override.height } };
   if (page.mode === "page") {
     const { width, height } = sheetSize(page, defaultAspect);
     const stride = height + PAGE_GAP;

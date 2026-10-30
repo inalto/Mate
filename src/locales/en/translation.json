@@ -704,6 +704,13 @@
     "boxRender": "Could not render the content of box {{id}} for export.",
     "boxMissing": "Box {{id}} was not rendered for export."
   },
+  "exportRegion": {
+    "selectionOnly": "Selection only",
+    "copyImage": "Copy as image",
+    "copyImageFailed": "Could not copy the image",
+    "fitPage": "Fit page",
+    "fitSelection": "Fit selection"
+  },
   "selection": {
     "label": "Selection",
     "arrange": "Arrange ▸",

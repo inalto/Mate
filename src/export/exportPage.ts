@@ -75,6 +75,20 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array> {
   );
 }
 
+/** Render `pageId` to PNG bytes without saving (copy as image); `options.region` selects the area. */
+export async function renderPagePng(pageId: string, options: Partial<ExportOptions> = {}): Promise<Uint8Array> {
+  const page = useNotebookStore.getState().tree.pages.find((p) => p.id === pageId);
+  if (!page) throw new Error("page not found");
+  endAllEdits();
+  const elements = await elementsOf(pageId);
+  await readyGraphs(elements);
+  const opts: ExportOptions = { scale: 2, theme: "light", background: "plain", pageFrame: page.mode === "page", ...options };
+  const textBitmaps = await prepareTextSnapshots(elements, opts.theme, opts.scale);
+  await prepareImages(elements);
+  const pdfTiles = await preparePdfPages(elements, canvasExportLayout(elements, page, opts.scale, opts.region).scale, { keep: true });
+  return canvasToPng(renderToCanvas(elements, page, opts, pdfTiles, textBitmaps));
+}
+
 /** Export a page; resolves to the saved path, or `null` if the save dialog was cancelled. */
 export async function exportPage(
   pageId: string,
@@ -115,6 +129,7 @@ export async function exportPage(
       pages: options.pages ?? "all",
       currentSheet: options.pages === "current" ? currentSheetIndex(pageId) : undefined,
       searchable: options.searchable ?? true,
+      region: opts.region,
       textBitmaps,
     });
     return writeExportFile(filename, bytes);
@@ -126,7 +141,7 @@ export async function exportPage(
   let bytes: Uint8Array;
   if (format === "png") {
     // PDF pages at the scale the canvas is actually painted at, held by this export until it is drawn.
-    const pdfTiles = await preparePdfPages(elements, canvasExportLayout(elements, page, opts.scale).scale, { keep: true });
+    const pdfTiles = await preparePdfPages(elements, canvasExportLayout(elements, page, opts.scale, opts.region).scale, { keep: true });
     bytes = await canvasToPng(renderToCanvas(elements, page, opts, pdfTiles, textBitmaps));
   } else {
     await preparePdfPages(elements, 2, { embed: true }); // embedded as 2× PNGs
