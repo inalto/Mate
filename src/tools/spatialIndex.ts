@@ -15,12 +15,12 @@ export const CELL_SIZE = 256;
 export const rectsOverlap = (a: Rect, b: Rect): boolean =>
   a.x <= b.x + b.width && b.x <= a.x + a.width && a.y <= b.y + b.height && b.y <= a.y + a.height;
 
-/** Element metadata stored in `content` (JSON object): z-order and rotation (radians). */
-export const contentMeta = (el: Element): { zIndex?: number; rotation?: number } =>
-  contentOf<{ zIndex: number; rotation: number }>(el);
+/** Element metadata stored in `content` (JSON object): z-order, rotation (radians) and lock. */
+export const contentMeta = (el: Element): { zIndex?: number; rotation?: number; locked?: boolean } =>
+  contentOf<{ zIndex: number; rotation: number; locked: boolean }>(el);
 
 /** Merge `patch` into `el.content` when it is an object (or empty); other content is left untouched. */
-export function withMeta(el: Element, patch: { zIndex?: number; rotation?: number }): Element {
+export function withMeta(el: Element, patch: { zIndex?: number; rotation?: number; locked?: boolean }): Element {
   const c = el.content;
   if (c !== undefined && c !== null && (typeof c !== "object" || Array.isArray(c))) return el;
   return { ...el, content: { ...((c as object | null) ?? {}), ...patch } };

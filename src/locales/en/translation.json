@@ -377,6 +377,11 @@
     "settingsToggle": "Offer line ends after snapping",
     "settingsHint": "Show a small picker for arrow, dot or bar ends when a stroke becomes a line or arrow."
   },
+  "lock": {
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "locked": "Locked"
+  },
   "keys": {
     "title": "Keyboard shortcuts",
     "resetAll": "Reset all",
@@ -432,6 +437,9 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "zoomReset": "Reset zoom",
+      "zoomFit": "Fit page to screen",
+      "zoomSelection": "Zoom to selection",
+      "toggleLock": "Lock or unlock selection",
       "toggleSidebar": "Toggle sidebar",
       "prevPage": "Previous page",
       "nextPage": "Next page",

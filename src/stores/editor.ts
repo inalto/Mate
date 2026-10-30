@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS, LIMITS, PAGE_GAP } from "../model/constants";
 import {
   contentOf,
   effectiveCaps,
+  isLocked,
   isPdfPlacement,
   type LineCaps,
   type ShapeContent,
@@ -30,12 +31,14 @@ import { alignElements, distributeElements, type AlignMode, type DistributeAxis 
 import { eraseAt } from "../tools/eraser";
 import { clampShift, shiftBelow, type SpaceOptions } from "../tools/insertSpace";
 import { History, type Action } from "../tools/history";
-import { scaleElements, translateElements } from "../tools/lasso";
-import { elementBounds, isBoxed, SpatialIndex, withMeta } from "../tools/spatialIndex";
+import { rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
+import { elementBounds, isBoxed, SpatialIndex, withMeta, type Rect } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
 import type { ElementsChange } from "../tutor/types";
 import {
+  animateCamera,
   clampCamera,
+  fitBounds,
   initialCamera,
   screenToWorld,
   sheetCountFor,
@@ -156,6 +159,13 @@ export interface EditorState {
   setCamera(camera: Camera): void;
   setViewport(viewport: Viewport): void;
   resetCamera(): void;
+  /**
+   * Animate the camera to show the page: canvas mode all elements (reset when empty), page mode the
+   * sheet at the viewport centre; 48 px margin.
+   */
+  fitPage(): void;
+  /** Animate the camera to the selection bounds (48 px margin); nothing when the selection is empty. */
+  fitSelection(): void;
   pushTempTool(tool: TempTool): void;
   popTempTool(): void;
   setPanHold(held: boolean): void;
@@ -181,10 +191,19 @@ export interface EditorState {
   /** Add a graph below the single selected equation, plotting its LaTeX; one "Graph" entry. */
   graphFromSelectedEquation(): string | null;
   scaleSelection(origin: Vec2, sx: number, sy: number): void;
+  /** Rotate the selection by `rad` about `centre`; one "Rotate" entry (locked elements skipped). */
+  rotateSelection(centre: Vec2, rad: number): void;
+  /** Lock the selected elements (`content.locked`); one "Lock" entry. */
+  lockSelection(): void;
+  /** Unlock the selected locked elements; one "Unlock" entry. */
+  unlockSelection(): void;
   /** Stroke colour applies to all; width to strokes and shapes; fill colour to shapes only. */
   restyleSelection(patch: { color?: string; width?: number; fillColor?: string }): void;
   deleteSelection(): void;
   duplicateSelection(): void;
+  /** Duplicate the selection with zero offset (Alt+drag) and select the copies; their ids ([] when refused). */
+  duplicateSelectionInPlace(): string[];
+  /** Copies are unlocked. */
   copySelection(): void;
   cutSelection(): void;
   paste(): void;
@@ -295,6 +314,14 @@ let clipboard: Element[] = [];
 let pasteCount = 0;
 
 const stamp = (el: Element, now = new Date().toISOString()): Element => ({ ...el, updatedAt: now });
+
+/** `el` without `content.locked` (the same object when it is not locked). */
+function unlocked(el: Element): Element {
+  if (!isLocked(el)) return el;
+  const content = { ...(el.content as Record<string, unknown>) };
+  delete content.locked;
+  return { ...el, content };
+}
 
 /** Append to the erase batch; a delete of an element added earlier in the batch cancels both. */
 function appendCompact(batch: Action[], actions: Action[]): void {
@@ -470,7 +497,8 @@ export function createEditorStore(): EditorStore {
 
     scribbleErase(ids) {
       const cur = get().elements;
-      record("Scribble erase", ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!);
+      record("Scribble erase", ids.filter(ok).map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
     updateElements(els) {
@@ -592,7 +620,7 @@ export function createEditorStore(): EditorStore {
       const now = new Date().toISOString();
       const actions: Action[] = [];
       for (const cur of selectedElements()) {
-        if (cur.type !== "text-box") continue;
+        if (cur.type !== "text-box" || isLocked(cur)) continue;
         const before = textAttrsOf(cur);
         const attrs = { ...before, ...patch };
         let html = sanitizeHtml(contentOf<TextBoxContent>(cur).contentHtml);
@@ -610,7 +638,8 @@ export function createEditorStore(): EditorStore {
 
     removeElements(ids, label = "Delete") {
       const cur = get().elements;
-      record(label, ids.filter((id) => cur.has(id)).map((id) => ({ type: "delete", el: cur.get(id)! })));
+      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!); // locked elements are never deleted
+      record(label, ids.filter(ok).map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
     addElements(label, els) {
@@ -640,6 +669,29 @@ export function createEditorStore(): EditorStore {
       if (!s.page) return;
       const stack = sheetStack(s);
       set({ camera: clampCamera(initialCamera(s.page, s.viewport, stack), s.page, s.viewport, stack) });
+    },
+    fitPage() {
+      const s = get();
+      if (!s.page) return;
+      let bounds: Rect | null;
+      if (s.page.mode === "page") {
+        const stack = sheetStack(s);
+        const pitch = stack.height + PAGE_GAP;
+        const centreY = screenToWorld(s.camera, { x: 0, y: s.viewport.height / 2 }).y;
+        const i = Math.max(0, Math.min(stack.count - 1, Math.floor(centreY / pitch)));
+        bounds = { x: 0, y: i * pitch, width: stack.width, height: stack.height };
+      } else bounds = selectionBounds(s.elements, s.elements.keys());
+      if (!bounds) {
+        s.resetCamera();
+        return;
+      }
+      animateCamera(store, clampToPage(fitBounds(bounds, s.viewport), s));
+    },
+    fitSelection() {
+      const s = get();
+      const bounds = selectionBounds(s.elements, s.selection);
+      if (!bounds) return;
+      animateCamera(store, clampToPage(fitBounds(bounds, s.viewport), s));
     },
 
     pushTempTool: (tempTool) => set({ tempTool }),
@@ -722,20 +774,20 @@ export function createEditorStore(): EditorStore {
       const after = shiftBelow(all, lineY, d, spaceOptions(s));
       const actions: Action[] = [];
       all.forEach((before, i) => {
-        if (after[i] !== before) actions.push({ type: "update", before, after: stamp(after[i], now) });
+        if (after[i] !== before && !isLocked(before)) actions.push({ type: "update", before, after: stamp(after[i], now) });
       });
       record("Insert space", actions);
     },
     alignSelection(mode) {
-      if (get().selection.size < 2) return;
+      if (unlockedSelection().length < 2) return;
       transformSelection("Align", (els) => alignElements(els, mode));
     },
     distributeSelection(axis) {
-      if (get().selection.size < 3) return;
+      if (unlockedSelection().length < 3) return;
       transformSelection("Distribute", (els) => distributeElements(els, axis));
     },
     groupSelection() {
-      if (get().selection.size < 2) return;
+      if (unlockedSelection().length < 2) return;
       const uiGroupId = crypto.randomUUID();
       transformSelection("Group", (els) => els.map((el) => ({ ...el, uiGroupId })));
     },
@@ -766,6 +818,19 @@ export function createEditorStore(): EditorStore {
       if (sx === 1 && sy === 1) return;
       transformSelection("Scale", (els) => scaleElements(els, origin, sx, sy));
     },
+    rotateSelection(centre, rad) {
+      if (rad === 0) return;
+      transformSelection("Rotate", (els) => rotateElements(els, centre, rad));
+    },
+    lockSelection() {
+      transformSelection("Lock", (els) => els.map((el) => withMeta(el, { locked: true })));
+    },
+    unlockSelection() {
+      const locked = selectedElements().filter(isLocked);
+      if (locked.length === 0) return;
+      const now = new Date().toISOString();
+      record("Unlock", locked.map((before): Action => ({ type: "update", before, after: stamp(unlocked(before), now) })));
+    },
     restyleSelection(patch) {
       // Consecutive width changes (a slider drag) on the same selection merge into one entry.
       const widthOnly = patch.color === undefined && patch.fillColor === undefined;
@@ -791,10 +856,13 @@ export function createEditorStore(): EditorStore {
     duplicateSelection() {
       pasteElements(selectedElements(), DUPLICATE_OFFSET, "Duplicate");
     },
+    duplicateSelectionInPlace() {
+      return pasteElements(selectedElements(), 0, "Duplicate");
+    },
     copySelection() {
       const els = selectedElements();
       if (els.length === 0) return;
-      clipboard = els;
+      clipboard = els.map(unlocked);
       pasteCount = 0;
     },
     cutSelection() {
@@ -1022,8 +1090,14 @@ export function createEditorStore(): EditorStore {
     return [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e);
   }
 
+  /** Selected elements that are not locked (the ones transforms may change). */
+  function unlockedSelection(): Element[] {
+    return selectedElements().filter((el) => !isLocked(el));
+  }
+
+  /** Apply `fn` to the unlocked selected elements as one history entry. */
   function transformSelection(label: string, fn: (els: Element[]) => Element[], mergeKey?: string): void {
-    const before = selectedElements();
+    const before = unlockedSelection();
     if (before.length === 0) return;
     const now = new Date().toISOString();
     const after = fn(before);
@@ -1034,19 +1108,21 @@ export function createEditorStore(): EditorStore {
     );
   }
 
-  function pasteElements(src: Element[], offset: number, label: string): void {
+  /** Add unlocked copies of `src` shifted by `offset` on both axes and select them; their ids ([] when refused). */
+  function pasteElements(src: Element[], offset: number, label: string): string[] {
     const s = S();
     const pageId = s.pageId;
-    if (src.length === 0 || !pageId) return;
+    if (src.length === 0 || !pageId) return [];
     const now = new Date().toISOString();
     const top = topZ(s.elements.values());
-    const copies = translateElements(src, offset, offset).map((el, i) => {
+    const copies = translateElements(src.map(unlocked), offset, offset).map((el, i) => {
       const copy: Element = { ...el, id: crypto.randomUUID(), pageId, createdAt: now, updatedAt: now, version: 0 };
       return top > 0 ? withMeta(copy, { zIndex: top + 1 + i }) : copy;
     });
-    if (record(label, copies.map((el): Action => ({ type: "add", el })))) {
-      store.setState({ selection: new Set(copies.map((c) => c.id)) });
-    }
+    if (!record(label, copies.map((el): Action => ({ type: "add", el })))) return [];
+    const ids = copies.map((c) => c.id);
+    store.setState({ selection: new Set(ids) });
+    return ids;
   }
 
   function arrange(op: ZOp): void {

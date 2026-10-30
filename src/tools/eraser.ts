@@ -1,8 +1,8 @@
 // Eraser hit-testing (pure). Stroke mode removes any touched element; partial mode cuts strokes
 // where they enter/leave the eraser circle. Shapes are hit along their outline (or anywhere inside
 // when filled); partial mode turns a touched shape outline into stroke fragments. Text boxes,
-// tables, code blocks and graphs are never erased.
-import { isPdfPlacement } from "../model/content";
+// tables, code blocks and graphs are never erased, nor is anything locked.
+import { isLocked, isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
 import type { Vec2 } from "../canvas/camera";
 import { hasFill, isClosedShape, isFilledCap, shapeElementOutline, shapeHit } from "../shapes/geometry";
@@ -25,6 +25,7 @@ export interface EraseResult {
 }
 
 function erasable(el: Element, opts: EraseOptions): boolean {
+  if (isLocked(el)) return false;
   switch (el.type) {
     case "stroke":
       return true;

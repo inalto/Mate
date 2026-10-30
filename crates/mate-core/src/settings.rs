@@ -137,6 +137,8 @@ pub struct Settings {
     // Input
     pub palm_rejection: String,
     pub snap_to_grid: bool,
+    /// Snap a moved or resized selection to other elements' edges and centres (smart guides).
+    pub smart_guides: bool,
     pub pen_barrel_button_action: String,
     pub pen_eraser_button_action: String,
     pub scroll_behavior: String,
@@ -247,6 +249,7 @@ impl Default for Settings {
             fountain_pen_nib_flatness: 35.0,
             palm_rejection: s("high"),
             snap_to_grid: false,
+            smart_guides: true,
             pen_barrel_button_action: s("eraser"),
             pen_eraser_button_action: s("eraser"),
             scroll_behavior: s("pan"),

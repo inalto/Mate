@@ -374,6 +374,8 @@ export interface Settings {
   fountainPenNibFlatness: number;
   palmRejection: string;
   snapToGrid: boolean;
+  /** Snap a moved or resized selection to other elements' edges and centres. */
+  smartGuides: boolean;
   penBarrelButtonAction: string;
   penEraserButtonAction: string;
   scrollBehavior: string;

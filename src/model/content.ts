@@ -8,7 +8,12 @@ interface ContentMeta {
   zIndex?: number;
   /** Radians about the box centre. */
   rotation?: number;
+  /** Never moved, resized, rotated, restyled, erased, deleted, aligned, grouped or lasso-picked. */
+  locked?: boolean;
 }
+
+/** True for an element the user locked (`content.locked`); copies of it are unlocked. */
+export const isLocked = (el: Pick<Element, "content">): boolean => contentOf<ContentMeta>(el).locked === true;
 
 export interface TextAttributes {
   fontFamily: string;

@@ -65,6 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fountainPenNibFlatness: 35,
   palmRejection: "high",
   snapToGrid: false,
+  smartGuides: true,
   penBarrelButtonAction: "eraser",
   penEraserButtonAction: "eraser",
   scrollBehavior: "pan",

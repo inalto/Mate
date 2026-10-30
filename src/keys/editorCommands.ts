@@ -1,6 +1,7 @@
 // Editor command dispatch for keyboard shortcuts (and toolbar zoom buttons).
 import { zoomBy } from "../canvas/gestures";
 import { elementsQueue } from "../ipc/elementsQueue";
+import { isLocked } from "../model/content";
 import { clampToPage } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
@@ -219,12 +220,24 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.toFront();
     case "arrange.back":
       return s.toBack();
+    case "arrange.lock": {
+      // Toggle: any locked element in the selection unlocks, otherwise the selection locks.
+      const anyLocked = [...s.selection].some((id) => {
+        const el = s.elements.get(id);
+        return el !== undefined && isLocked(el);
+      });
+      return anyLocked ? s.unlockSelection() : s.lockSelection();
+    }
     case "zoom.in":
       return zoomStep(ZOOM_STEP);
     case "zoom.out":
       return zoomStep(1 / ZOOM_STEP);
     case "zoom.reset":
       return zoomStep(null);
+    case "zoom.fit":
+      return s.fitPage();
+    case "zoom.selection":
+      return s.fitSelection();
     case "pan":
       return s.setPanHold(detail.phase === "down");
   }

@@ -377,6 +377,11 @@
     "settingsToggle": "Proponi le estremità delle linee riconosciute",
     "settingsHint": "Mostra un piccolo selettore di estremità a freccia, punto o barra quando un tratto diventa una linea o una freccia."
   },
+  "lock": {
+    "lock": "Blocca",
+    "unlock": "Sblocca",
+    "locked": "Bloccato"
+  },
   "keys": {
     "title": "Scorciatoie da tastiera",
     "resetAll": "Reimposta tutte",
@@ -432,6 +437,9 @@
       "zoomIn": "Ingrandisci",
       "zoomOut": "Riduci",
       "zoomReset": "Reimposta lo zoom",
+      "zoomFit": "Adatta la pagina allo schermo",
+      "zoomSelection": "Zoom sulla selezione",
+      "toggleLock": "Blocca o sblocca la selezione",
       "toggleSidebar": "Mostra/nascondi la barra laterale",
       "prevPage": "Pagina precedente",
       "nextPage": "Pagina successiva",
