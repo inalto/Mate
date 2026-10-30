@@ -45,6 +45,7 @@
       {
         "ext": ["pdf"],
         "mimeType": "application/pdf",
+        "contentTypes": ["com.adobe.pdf"],
         "name": "PDF document",
         "description": "PDF document",
         "role": "Editor",
@@ -53,6 +54,10 @@
       {
         "ext": ["mate"],
         "mimeType": "application/x-mate-archive",
+        "exportedType": {
+          "identifier": "com.mate.notes.archive",
+          "conformsTo": ["public.data", "public.zip-archive"]
+        },
         "name": "Mate archive",
         "description": "Mate archive",
         "role": "Editor",
