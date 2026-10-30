@@ -137,6 +137,26 @@ describe("renderToPdf", () => {
     expect(text(withText)).toContain("Tj");
   });
 
+  it("centres_a_rotated_shape_label_on_the_rotated_centre_line", async () => {
+    const at = (id: string, rotation: number): Element => ({
+      ...stroke(id, [{ x: 100, y: 100, pressure: 0.5, timestamp: 0 }, { x: 400, y: 400, pressure: 0.5, timestamp: 1 }]),
+      type: "shape",
+      shapeType: "rectangle",
+      fillColor: "transparent",
+      content: { fillOpacity: 1, rotation, label: { text: "M", fontSize: 20, color: "#000000", align: "center" } },
+    });
+    const out = text(await renderToPdf([at("flat", 0), at("turned", Math.PI / 2)], page(), { ...OPTS, compress: false }, deps()));
+    const td = out.match(/(-?[\d.]+) (-?[\d.]+) Td\s/);
+    const tm = out.match(/(?:-?[\d.]+ ){4}(-?[\d.]+) (-?[\d.]+) Tm\s/);
+    expect(td && tm).toBeTruthy();
+    const [e0, f0] = [Number(td![1]), Number(td![2])];
+    const [e1, f1] = [Number(tm![1]), Number(tm![2])];
+    // Same centre and width: with the baseline set in the shape frame, the quarter-turned anchor sits
+    // one baseline offset either side of the flat one (half the width cancels out).
+    const offset = 20 * (0.5 - 0.15) * PT_PER_UNIT;
+    expect(f1 - f0 - (e1 - e0)).toBeCloseTo(2 * offset, 1);
+  });
+
   it("caps a tall canvas page at the PDF size limit", async () => {
     const bytes = await renderToPdf([stroke("a", line(0, 0, 100, 40_000))], page(), OPTS, deps());
     const { width, height } = (await PDFDocument.load(bytes)).getPage(0).getSize();

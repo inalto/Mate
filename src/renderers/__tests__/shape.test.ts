@@ -282,7 +282,7 @@ describe("shape labels", () => {
     expect(svg).toContain('<tspan x="50" dy="0">alpha beta</tspan><tspan x="50" dy="12.5">gamma delta</tspan>');
     expect(svg).toContain('y="18.75"');
     expect(svg).toContain('text-anchor="middle"');
-    expect(svg).toContain('dominant-baseline="middle"');
+    expect(svg).toContain('dominant-baseline="central"'); // the canvas "middle" baseline (em box)
     expect(svg).toContain('font-size="10"');
     expect(svg).toContain('fill="#1565C0"');
   });

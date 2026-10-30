@@ -102,7 +102,7 @@ function labelSvg(el: Element, o: RenderOptions): string {
   const spans = lines.map((line, i) => `<tspan x="${n(x)}" dy="${i === 0 ? 0 : n(step)}">${line === "" ? "&#160;" : esc(line)}</tspan>`).join("");
   return (
     `<text y="${n(y)}" font-family="${esc(SHAPE_LABEL_FONT)}" font-size="${n(label.fontSize)}" fill="${esc(labelColor(el, label, o))}" ` +
-    `text-anchor="${SVG_ANCHOR[label.align]}" dominant-baseline="middle"${transform}>${spans}</text>`
+    `text-anchor="${SVG_ANCHOR[label.align]}" dominant-baseline="central"${transform}>${spans}</text>`
   );
 }
 

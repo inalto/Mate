@@ -76,6 +76,18 @@ describe("connector renderer", () => {
     expect(calls.filter((c) => c === "fill").length).toBeGreaterThanOrEqual(3); // two caps + pill
   });
 
+  it("label_pill_takes_the_live_paper_colour_when_given", () => {
+    const fills: string[] = [];
+    const { ctx } = stubCtx();
+    const c = ctx as unknown as { fill: () => void; fillStyle: string };
+    c.fill = () => void fills.push(c.fillStyle);
+    drawElement(ctx, connector({ caps: { start: "none", end: "none" } }), { theme: "sepia", zoomBucket: 1, paper: "#f7efdb" });
+    expect(fills).toEqual(["#f7efdb"]);
+    fills.length = 0;
+    drawElement(ctx, connector({ caps: { start: "none", end: "none" } }), { theme: "light", zoomBucket: 1 });
+    expect(fills).toEqual(["#ffffff"]); // exports keep the surface paper
+  });
+
   it("bounds_cover_route_caps_and_label", () => {
     const b = elementBounds(connector());
     expect(b.x).toBeLessThan(0);

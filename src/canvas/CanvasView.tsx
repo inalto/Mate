@@ -124,7 +124,7 @@ function createEngine(
       const bgPage = { mode: s.page.mode, width: stack.width, height: stack.height, count: stack.count };
       paintBackground(ctx, s.page.backgroundConfig, cache.worldClip(), bgPage, theme(), colors);
     } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
-      drawElement(asCtx(ctx), el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr });
+      drawElement(asCtx(ctx), el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper });
     }
   };
 
@@ -212,7 +212,7 @@ function createEngine(
       cache.invalidate();
       requestStatic();
     },
-    renderElement: (ctx, el) => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z }),
+    renderElement: (ctx, el) => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
     getSettings,
   });
 
@@ -237,7 +237,7 @@ function createEngine(
     cache.append((ctx) =>
       el.type === "stroke"
         ? renderStroke(asCtx(ctx), el, theme(), st().camera.z)
-        : drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: st().camera.z }),
+        : drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
     );
     committing = true;
     try {

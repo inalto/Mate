@@ -402,16 +402,19 @@ function paintShapeLabel(p: Painter, el: Element, theme: ThemeName): void {
   p.colour(mapInkColor(safeColor(label.color, safeColor(el.color, FALLBACK_INK)), theme), "text");
   p.pdf.setFont("helvetica", "normal");
   p.pdf.setFontSize(label.fontSize * p.k);
+  // jsPDF's baseline "middle" shifts down the page, not along the rotated line normal: place the
+  // alphabetic baseline in the shape frame instead (the same offset jsPDF would use), then rotate.
+  const baseline = label.fontSize * (0.5 - (p.pdf.getLineHeightFactor() - 1));
   lines.forEach((line, i) => {
     const text = latin1(line);
     if (text.trim() === "") return;
     const w = p.pdf.getTextWidth(text) / p.k;
     const x0 = label.align === "left" ? inner.x : label.align === "right" ? inner.x + inner.width - w : inner.x + (inner.width - w) / 2;
-    const y0 = top + i * step + step / 2;
+    const y0 = top + i * step + step / 2 + baseline;
     const dx = x0 - cx;
     const dy = y0 - cy;
     const [x, y] = p.pt(cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
-    p.pdf.text(text, x, y, { baseline: "middle", angle: (-rot * 180) / Math.PI });
+    p.pdf.text(text, x, y, { angle: (-rot * 180) / Math.PI });
   });
 }
 

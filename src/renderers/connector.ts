@@ -81,7 +81,7 @@ function draw(ctx: CanvasRenderingContext2D, el: Element, o: RenderOptions): voi
   const pill = labelPill(el);
   if (pill) {
     roundRect(ctx, pill.x, pill.y, pill.width, pill.height, pill.height / 2);
-    ctx.fillStyle = labelPaper(o.theme);
+    ctx.fillStyle = o.paper ?? labelPaper(o.theme);
     ctx.fill();
     ctx.lineWidth = 1 / o.zoomBucket;
     ctx.stroke();
