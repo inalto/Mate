@@ -20,6 +20,8 @@ import { useSettingsStore } from "../stores/settings";
 import { boxHeightFor } from "../text/measure";
 import { sanitizeHtml } from "../text/sanitize";
 import { boxCss, CONTENT_CLASS, CONTENT_CSS } from "../text/style";
+import { cardCss } from "../text/boxHtml";
+import { CARD_PADDING, cardOf } from "../model/content";
 import { textContentOf } from "../text/textBox";
 import type { BoxEditorProps } from "./editorRegistry";
 import { renderTextSnapshot, snapshotScale } from "./snapshot";
@@ -85,7 +87,9 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
     const stored = textContentOf(cur);
     if (sanitizeHtml(html) === stored.contentHtml && JSON.stringify(a) === JSON.stringify(stored.textAttributes)) return cur;
     const content: TextBoxContent = { ...contentOf<TextBoxContent>(cur), contentHtml: html, rawContent: "", textAttributes: a };
-    return { ...cur, content, boxHeight: boxHeightFor(measured, a.fontSize, cur.boxHeight ?? 0) };
+    // A card keeps its size (a 200 x 200 note stays square) and only grows when the text outgrows it.
+    const height = cardOf(cur) ? Math.max(cur.boxHeight ?? 0, boxHeightFor(measured > 0 ? measured + 2 * CARD_PADDING : 0, a.fontSize, cur.boxHeight ?? 0)) : boxHeightFor(measured, a.fontSize, cur.boxHeight ?? 0);
+    return { ...cur, content, boxHeight: height };
   }, []);
 
   /** Render `box` at the pane's current zoom; `publish` makes it the element's snapshot. */
@@ -184,9 +188,12 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
     return () => document.removeEventListener("pointerdown", onDown, true);
   }, [el.id, store]);
 
-  const css = boxCss(attrs, mapInkColor(attrs.color, theme));
+  const ink = mapInkColor(attrs.color, theme);
+  const css = boxCss(attrs, ink);
+  const card = cardOf(el);
+  const cardStyle = card ? styleOf(cardCss(card, theme, ink)) : undefined;
   return (
-    <div ref={rootRef} className="text-box-editor" style={{ ...styleOf(css), minHeight: `${attrs.fontSize * 1.5}px` }}>
+    <div ref={rootRef} className="text-box-editor" style={{ ...styleOf(css), ...cardStyle, minHeight: `${card ? Math.max(el.boxHeight ?? 0, attrs.fontSize * 1.5) : attrs.fontSize * 1.5}px` }}>
       <div className="text-format-bar" role="toolbar" aria-label={t("text.formatting")}>
         <TextFormatControls attrs={attrs} onAttrs={(patch) => setAttrs((a) => ({ ...a, ...patch }))} editor={editor} />
       </div>

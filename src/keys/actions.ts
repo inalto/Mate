@@ -11,6 +11,7 @@ export type ShortcutAction =
   | "tool.shape"
   | "tool.connector"
   | "tool.frame"
+  | "tool.note"
   | "tool.text"
   | "tool.insertSpace"
   | "preset.slot"
@@ -75,6 +76,7 @@ export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
   "tool.shape": { labelKey: "keys.actions.shape", group: "tools", defaultKeys: ["S"] },
   "tool.connector": { labelKey: "keys.actions.connector", group: "tools", defaultKeys: ["C"] },
   "tool.frame": { labelKey: "keys.actions.frame", group: "tools", defaultKeys: ["F"] },
+  "tool.note": { labelKey: "keys.actions.note", group: "tools", defaultKeys: ["Shift+N"] },
   "tool.text": { labelKey: "keys.actions.text", group: "tools", defaultKeys: ["T"] },
   "tool.insertSpace": { labelKey: "keys.actions.insertSpace", group: "tools", defaultKeys: ["N"] },
   "preset.slot": {

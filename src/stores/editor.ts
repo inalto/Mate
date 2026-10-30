@@ -7,9 +7,11 @@ import { DEFAULT_SETTINGS, LIMITS, PAGE_GAP } from "../model/constants";
 import {
   contentOf,
   isAttachable,
+  cardOf,
   effectiveCaps,
   isLocked,
   isPdfPlacement,
+  type CardStyle,
   type ConnectorContent,
   type ConnectorEnd,
   type FrameContent,
@@ -39,7 +41,8 @@ import { alignElements, distributeElements, type AlignMode, type DistributeAxis 
 import { eraseAt } from "../tools/eraser";
 import { clampShift, shiftBelow, type SpaceOptions } from "../tools/insertSpace";
 import { History, type Action } from "../tools/history";
-import { placeNext, type AutoCompleteChoice } from "../tools/autoComplete";
+import { AUTO_NOTE_SIZE, placeNext, type AutoCompleteChoice } from "../tools/autoComplete";
+import { noteCard } from "../components/noteColors";
 import { rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, SpatialIndex, withMeta, type Rect } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
@@ -64,7 +67,7 @@ import { useSettingsStore } from "./settings";
 import i18n from "../i18n";
 import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "text" | "insert-space";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
 export type InkType = PenPreset["type"];
@@ -194,6 +197,10 @@ export interface EditorState {
    * setting is on) and open its editor; its id, or null when refused.
    */
   addTextBox(at: Vec2): string | null;
+  /** A 200×200 sticky note (a text box with a card in the default colour) centred on `at` (default: the view centre); starts editing it and returns to the cursor. */
+  addNote(at?: Vec2): string | null;
+  /** Set (or with null, remove) the card style of every unlocked text box in `ids`. */
+  setCard(ids: string[], card: CardStyle | null): boolean;
   /** Insert an empty 3x3 table / code block at the viewport centre and edit it (one "Table"/"Code" entry). */
   addTable(): string | null;
   addCodespace(): string | null;
@@ -444,10 +451,7 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
 };
 
 /** A sticky note (a text box with `content.card`): kept when its text is emptied. */
-const hasCard = (el: Element): boolean => {
-  const card = contentOf<{ card?: unknown }>(el).card;
-  return card !== null && typeof card === "object";
-};
+const hasCard = (el: Element): boolean => cardOf(el) !== null;
 
 /** A closed shape: its text is edited in place (shapes are not boxed). */
 const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle");
@@ -618,6 +622,7 @@ export function createEditorStore(): EditorStore {
         pageId: s.pageId,
         at,
         textAttributes: defaultTextAttributes(cfg.defaultTextColor, cfg.defaultTextSize),
+        noteColor: cfg.defaultNoteColor,
       });
       const top = topZ(s.elements.values());
       const el = top > 0 ? withMeta(placed.element, { zIndex: top }) : placed.element;
@@ -857,6 +862,42 @@ export function createEditorStore(): EditorStore {
       return el.id;
     },
 
+    addNote(at) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const vp = s.viewport.width > 0 ? s.viewport : { width: 1280, height: 800 };
+      const c = at ?? screenToWorld(s.camera, { x: vp.width / 2, y: vp.height / 2 });
+      const cfg = useSettingsStore.getState().settings;
+      const attrs = defaultTextAttributes(cfg.defaultTextColor, cfg.defaultTextSize);
+      const base = textBoxElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), { x: c.x - AUTO_NOTE_SIZE.width / 2, y: c.y - AUTO_NOTE_SIZE.height / 2 }, attrs);
+      const top = topZ(s.elements.values());
+      const note: Element = { ...base, boxWidth: AUTO_NOTE_SIZE.width, boxHeight: AUTO_NOTE_SIZE.height, content: { ...(base.content as object), card: noteCard(cfg.defaultNoteColor) } };
+      const el = top > 0 ? withMeta(note, { zIndex: top }) : note;
+      if (!record("Note", [{ type: "add", el }])) return null;
+      set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
+      get().beginEdit(el.id);
+      return el.id;
+    },
+
+    setCard(ids, card) {
+      closeEdit();
+      const els = get().elements;
+      const now = new Date().toISOString();
+      const actions: Action[] = [];
+      for (const id of ids) {
+        const cur = els.get(id);
+        if (!cur || cur.type !== "text-box" || isLocked(cur) || isMathBox(cur)) continue;
+        const content: Record<string, unknown> = { ...(cur.content as object) };
+        if (card) content.card = { ...card };
+        else delete content.card;
+        const after = { ...cur, content, updatedAt: now };
+        if (sameElement(after, { ...cur, updatedAt: now })) continue;
+        actions.push({ type: "update", before: cur, after });
+      }
+      return record("Card", actions);
+    },
+
     addImage(assetId, natural, at) {
       closeEdit();
       const s = get();
@@ -961,7 +1002,7 @@ export function createEditorStore(): EditorStore {
         get().selectInk(tool);
         return;
       }
-      if (tool === "eraser" || tool === "shape" || tool === "connector" || tool === "frame" || tool === "text" || tool === "insert-space") {
+      if (tool === "eraser" || tool === "shape" || tool === "connector" || tool === "frame" || tool === "note" || tool === "text" || tool === "insert-space") {
         closeEdit();
         set({ tool, selection: new Set(), editingId: null });
       } else set({ tool });

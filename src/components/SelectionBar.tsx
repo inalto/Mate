@@ -35,6 +35,7 @@ import {
 } from "@phosphor-icons/react";
 import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import type { TKey } from "../i18n";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
@@ -48,7 +49,8 @@ import { getRuntime } from "../code/runtime";
 import { runCodeElement } from "../code/runElement";
 import type { EditorStore } from "../stores/editor";
 import type { Element } from "../model/types";
-import { CONNECTOR_CAPS, effectiveCaps, isLocked, type ConnectorContent } from "../model/content";
+import { CARD_RADII, CARD_SHADOWS, CONNECTOR_CAPS, cardOf, effectiveCaps, isLocked, type CardStyle, type ConnectorContent } from "../model/content";
+import { NOTE_SWATCHES, noteBackground, noteCard } from "./noteColors";
 import { connectorCaps, connectorLabel, connectorMode } from "../connectors/geometry";
 import { CONNECTOR_MODES } from "../connectors/route";
 import { openLabelPopover } from "../stores/labelPopover";
@@ -481,6 +483,74 @@ function FillMenu({ current, disabled }: { current: string | undefined; disabled
   );
 }
 
+/** Card (sticky-note) menu for the selected text boxes: swatches, None, radius, shadow, border. */
+function CardMenu({ ids, current, disabled }: { ids: string[]; current: CardStyle | null; disabled: boolean }) {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const theme = useSettingsStore((st) => st.settings.theme);
+  const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  useDismiss(ref, open, () => setOpen(false));
+  const base = current ?? noteCard(useSettingsStore.getState().settings.defaultNoteColor);
+  const apply = (patch: Partial<CardStyle>) => ed.getState().setCard(ids, { ...base, ...patch });
+  return (
+    <div ref={ref} className="tb-anchor">
+      <button
+        type="button"
+        className={current ? "tb-swatch" : "tb-swatch no-fill"}
+        style={current ? { background: noteBackground(current.background, theme) } : undefined}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={t("note.card")}
+        title={t("note.card")}
+        disabled={disabled}
+        onClick={() => setOpen((o) => !o)}
+      />
+      {open && (
+        <div className="tb-popover fill-menu" role="dialog" aria-label={t("note.card")}>
+          <div className="tb-row">
+            <button type="button" className={current ? "tb-swatch no-fill" : "tb-swatch no-fill active"} aria-label={t("note.none")} title={t("note.none")} onClick={() => ed.getState().setCard(ids, null)} />
+            {NOTE_SWATCHES.map((sw) => (
+              <button
+                key={sw.id}
+                type="button"
+                className={current?.background === sw.id ? "tb-swatch active" : "tb-swatch"}
+                style={{ background: theme === "dark" ? sw.dark : sw.light }}
+                aria-label={t(`note.${sw.id}` as TKey)}
+                title={t(`note.${sw.id}` as TKey)}
+                onClick={() => apply({ background: sw.id })}
+              />
+            ))}
+          </div>
+          {current && (
+            <>
+              <div className="tb-row" role="group" aria-label={t("note.radius")}>
+                {CARD_RADII.map((r) => (
+                  <button key={r} type="button" className={current.radius === r ? "tb-btn active" : "tb-btn"} aria-pressed={current.radius === r} title={t("note.radius")} onClick={() => apply({ radius: r })}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <div className="tb-row" role="group" aria-label={t("note.shadow")}>
+                {CARD_SHADOWS.map((sh) => (
+                  <button key={sh} type="button" className={current.shadow === sh ? "tb-btn active" : "tb-btn"} aria-pressed={current.shadow === sh} onClick={() => apply({ shadow: sh })}>
+                    {sh === "none" ? t("note.none") : t(`note.${sh}` as TKey)}
+                  </button>
+                ))}
+              </div>
+              <div className="tb-row">
+                <button type="button" className={current.border ? "tb-btn active" : "tb-btn"} aria-pressed={current.border} onClick={() => apply({ border: !current.border })}>
+                  {t("note.border")}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SelectionBar() {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
@@ -508,6 +578,7 @@ export default function SelectionBar() {
   const color = first?.color.toUpperCase();
   const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
   const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
+  const cardBoxes = selected.filter((e): e is Element => !!e && e.type === "text-box" && !isMathBox(e) && !isLocked(e));
   const textBox = selected.length === 1 && selected[0]?.type === "text-box" ? selected[0] : undefined;
   // The code editor has its own Run: offered here only for a block that is not being edited.
   const codeBlock = selected.length === 1 && selected[0]?.type === "codespace" && selected[0].id !== editingId ? selected[0] : undefined;
@@ -570,6 +641,7 @@ export default function SelectionBar() {
       {selected.length >= 2 && <AlignMenu count={selected.length} disabled={selected.length - lockedCount < 2} />}
       <span className="tb-sep" />
       {textBox && !allLocked && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
+      {cardBoxes.length > 0 && <CardMenu ids={cardBoxes.map((e) => e.id)} current={cardOf(cardBoxes[0])} disabled={allLocked} />}
       {!textBox && !frame && PEN_PALETTE.map((c) => (
         <button
           key={c}

@@ -28,11 +28,12 @@ import type { ThemeName } from "../ink/types";
 import { readAsset } from "../ipc/assets";
 import { isMathBox } from "../math/mathBox";
 import { PAGE_GAP } from "../model/constants";
-import { contentOf, isPdfPlacement, type ImageContent } from "../model/content";
+import { cardOf, contentOf, isPdfPlacement, type ImageContent } from "../model/content";
 import type { Element, Page } from "../model/types";
 import type { TextBitmapSet } from "../overlay/snapshot";
 import { preparePdfPages, type PdfTileSet } from "../pdf/render";
-import { PLACEHOLDER_COLOR } from "../renderers/boxDraw";
+import { noteBackground } from "../components/noteColors";
+import { CARD_BORDER_ALPHA, cardInk, PLACEHOLDER_COLOR, type BoxRenderOptions } from "../renderers/boxDraw";
 import { connectorDash, labelPaper } from "../renderers/connector";
 import { frameBorder, frameFill, frameTitleColour } from "../renderers/frame";
 import { FRAME_RADIUS, frameTitle, frameTitleHidden, frameTitleRect, isNestedFrame } from "../frames/contain";
@@ -97,7 +98,8 @@ function rasterizeElement(el: Element, theme: ThemeName, pdfTiles: PdfTileSet, t
   if (!ctx) return null;
   ctx.scale(canvas.width / r.width, canvas.height / r.height);
   ctx.translate(-r.x, -r.y);
-  drawElement(ctx, contentMeta(el).rotation ? withMeta(el, { rotation: 0 }) : el, { theme, zoomBucket: scale, pdfTiles, textBitmaps });
+  const opts: BoxRenderOptions = { theme, zoomBucket: scale, pdfTiles, textBitmaps, noCard: true };
+  drawElement(ctx, contentMeta(el).rotation ? withMeta(el, { rotation: 0 }) : el, opts);
   return canvas;
 }
 
@@ -563,6 +565,32 @@ function placeBitmap(p: Painter, el: Element, bmp: HTMLCanvasElement, alias: str
   p.pdf.addImage(bmp, "PNG", bx, by - h, w, h, alias, "FAST", (-rot * 180) / Math.PI);
 }
 
+/** The flat card (fill with radius, optional border, no shadow) under a note's text bitmap. */
+function paintCard(p: Painter, el: Element, theme: ThemeName): void {
+  const card = cardOf(el);
+  const r = boxRect(el);
+  if (!card || r.width <= 0 || r.height <= 0) return;
+  const at = boxLocal(el);
+  const rotated = !!contentMeta(el).rotation;
+  const [x, y] = p.pt(r.x, r.y);
+  const k = Math.min(card.radius, r.width / 2, r.height / 2) * p.k;
+  // Fill first, then the border on its own: the border's 25 % alpha must not thin the fill.
+  const pass = (style: "F" | "S") => {
+    if (rotated) {
+      p.polyline([at(0, 0), at(r.width, 0), at(r.width, r.height), at(0, r.height)].map(([px, py]) => ({ x: px, y: py })), true);
+      if (style === "F") p.pdf.fill();
+      else p.pdf.stroke();
+    } else p.pdf.roundedRect(x, y, r.width * p.k, r.height * p.k, k, k, style);
+  };
+  p.colour(noteBackground(card.background, theme), "fill");
+  pass("F");
+  if (card.border) {
+    p.colour(cardInk(el, theme), "draw", CARD_BORDER_ALPHA);
+    p.pdf.setLineWidth(0.75);
+    pass("S");
+  }
+}
+
 function paintPlaceholder(p: Painter, el: Element): void {
   const r = boxRect(el);
   p.colour(PLACEHOLDER_COLOR, "draw");
@@ -641,6 +669,7 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
           bmp = ctx.deps.rasterize(el, theme, ctx.pdfTiles, ctx.opts.textBitmaps);
           ctx.bitmaps.set(key, bmp);
         }
+        if (el.type === "text-box") paintCard(p, el, theme);
         if (bmp) placeBitmap(p, el, bmp, `${el.id}|${theme}`);
         else paintPlaceholder(p, el);
       }

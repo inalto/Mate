@@ -664,6 +664,10 @@ export function createToolController(deps: ToolDeps) {
       const at = endAt(p);
       g = { kind: "connector", press: p, start: at.point, source: at.end, end: p, at: { over: null, end: undefined, snapped: null, point: p } };
       preview = [];
+    } else if (tool === "note") {
+      // Note tool: one sticky note centred on the press, then back to the cursor (addNote switches the tool).
+      s.addNote(snap(p));
+      g = { kind: "idle" };
     } else if (tool === "text") {
       // Text tool: a text box under the pointer opens for editing; empty canvas gets a new box.
       const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);

@@ -23,13 +23,43 @@ export interface TextAttributes {
   align: "left" | "center" | "right" | "justify";
 }
 
+/**
+ * Card look of a text box (a sticky note). `background` is a note swatch id ("yellow") resolved per
+ * theme at render time (components/noteColors), or a "#rrggbb" colour used as-is.
+ */
+export interface CardStyle {
+  background: string;
+  radius: 0 | 8 | 16;
+  shadow: "none" | "soft" | "paper";
+  border: boolean;
+}
+
+export const CARD_RADII: readonly CardStyle["radius"][] = [0, 8, 16];
+export const CARD_SHADOWS: readonly CardStyle["shadow"][] = ["none", "soft", "paper"];
+/** Inner padding of a card box (page units): the text sits this far inside the card. */
+export const CARD_PADDING = 12;
+
 /** text-box (`boxWidth/boxHeight` top-level). Typed math is a text-box with subtype "math". */
 export interface TextBoxContent extends ContentMeta {
+  card?: CardStyle;
   contentHtml: string;
   rawContent: string;
   textAttributes: TextAttributes;
   subtype?: "math";
   latex?: string;
+}
+
+/** The card style of a text box, normalised (unknown radius or shadow fall back); null when it has none. */
+export function cardOf(el: Pick<Element, "type" | "content">): CardStyle | null {
+  if (el.type !== "text-box") return null;
+  const c = contentOf<{ card?: Partial<CardStyle> | null }>(el).card;
+  if (!c || typeof c !== "object" || typeof c.background !== "string" || c.background === "") return null;
+  return {
+    background: c.background,
+    radius: CARD_RADII.includes(c.radius as CardStyle["radius"]) ? (c.radius as CardStyle["radius"]) : 8,
+    shadow: CARD_SHADOWS.includes(c.shadow as CardStyle["shadow"]) ? (c.shadow as CardStyle["shadow"]) : "none",
+    border: c.border === true,
+  };
 }
 
 export interface TableContent extends ContentMeta {

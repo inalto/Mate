@@ -127,6 +127,8 @@ pub struct Settings {
     pub default_connector_width: f64,
     /// `"solid" | "dashed"`.
     pub default_connector_dash: String,
+    /// Swatch id of a new sticky note.
+    pub default_note_color: String,
     // Eraser
     pub default_eraser_type: String,
     pub default_eraser_width: f64,
@@ -246,6 +248,7 @@ impl Default for Settings {
             default_connector_color: s("#000000"),
             default_connector_width: 3.0,
             default_connector_dash: s("solid"),
+            default_note_color: s("yellow"),
             default_eraser_type: s("stroke"),
             default_eraser_width: 20.0,
             eraser_erase_shapes: true,

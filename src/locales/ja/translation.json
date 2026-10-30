@@ -422,6 +422,24 @@
     "present": "Present from here",
     "untitled": "Frame {{n}}"
   },
+  "note": {
+    "tool": "Note",
+    "card": "Card",
+    "none": "None",
+    "radius": "Corner radius",
+    "shadow": "Shadow",
+    "soft": "Soft",
+    "paper": "Paper",
+    "border": "Border",
+    "yellow": "Yellow",
+    "orange": "Orange",
+    "pink": "Pink",
+    "green": "Green",
+    "blue": "Blue",
+    "purple": "Purple",
+    "grey": "Grey",
+    "white": "White"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -464,6 +482,7 @@
       "shape": "図形",
       "connector": "Connector",
       "frame": "Frame",
+      "note": "Note",
       "text": "テキスト",
       "insertSpace": "スペースを挿入",
       "presetSlot": "プリセット 1〜9",

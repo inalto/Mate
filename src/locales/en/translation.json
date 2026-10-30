@@ -420,6 +420,24 @@
     "present": "Present from here",
     "untitled": "Frame {{n}}"
   },
+  "note": {
+    "tool": "Note",
+    "card": "Card",
+    "none": "None",
+    "radius": "Corner radius",
+    "shadow": "Shadow",
+    "soft": "Soft",
+    "paper": "Paper",
+    "border": "Border",
+    "yellow": "Yellow",
+    "orange": "Orange",
+    "pink": "Pink",
+    "green": "Green",
+    "blue": "Blue",
+    "purple": "Purple",
+    "grey": "Grey",
+    "white": "White"
+  },
   "lock": {
     "lock": "Lock",
     "unlock": "Unlock",
@@ -462,6 +480,7 @@
       "shape": "Shape",
       "connector": "Connector",
       "frame": "Frame",
+      "note": "Note",
       "text": "Text",
       "insertSpace": "Insert space",
       "presetSlot": "Preset 1 to 9",

@@ -428,6 +428,22 @@ function FrameButton() {
   );
 }
 
+/**
+ * Note button: adds a sticky note at the view centre and starts editing it. The N-style shortcut
+ * (`tool.note`) arms the note tool instead: the next canvas click places one, then the cursor returns.
+ */
+function NoteButton() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const active = ed((s) => s.tool === "note");
+  const hint = useShortcutHint("tool.note", t("note.tool"));
+  return (
+    <button type="button" className={active ? "tb-btn active" : "tb-btn"} aria-pressed={active} aria-label={t("note.tool")} {...hint} onClick={() => ed.getState().addNote()}>
+      <Note size={18} />
+    </button>
+  );
+}
+
 /** Insert-space tool button; a second click opens its options (Insert / Remove, Cut images). */
 function InsertSpaceButton() {
   const { t } = useTranslation();
@@ -670,6 +686,7 @@ export default function Toolbar() {
       <ShapeButton />
       <ConnectorButton />
       <FrameButton />
+      <NoteButton />
       {toolBtn("text", "tool.text", t("toolbar.text"), <TextT size={18} />)}
       <button
         type="button"

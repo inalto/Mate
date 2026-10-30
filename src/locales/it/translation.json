@@ -420,6 +420,24 @@
     "present": "Presenta da qui",
     "untitled": "Riquadro {{n}}"
   },
+  "note": {
+    "tool": "Nota",
+    "card": "Cartellino",
+    "none": "Nessuno",
+    "radius": "Raggio degli angoli",
+    "shadow": "Ombra",
+    "soft": "Morbida",
+    "paper": "Carta",
+    "border": "Bordo",
+    "yellow": "Giallo",
+    "orange": "Arancione",
+    "pink": "Rosa",
+    "green": "Verde",
+    "blue": "Blu",
+    "purple": "Viola",
+    "grey": "Grigio",
+    "white": "Bianco"
+  },
   "lock": {
     "lock": "Blocca",
     "unlock": "Sblocca",
@@ -462,6 +480,7 @@
       "shape": "Forma",
       "connector": "Connettore",
       "frame": "Riquadro",
+      "note": "Nota",
       "text": "Testo",
       "insertSpace": "Inserisci spazio",
       "presetSlot": "Preimpostazione da 1 a 9",

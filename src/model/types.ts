@@ -366,6 +366,8 @@ export interface Settings {
   defaultConnectorColor: string;
   defaultConnectorWidth: number;
   defaultConnectorDash: "solid" | "dashed";
+  /** Swatch id (yellow, orange, pink, green, blue, purple, grey, white) of a new sticky note. */
+  defaultNoteColor: string;
   defaultEraserType: string;
   defaultEraserWidth: number;
   eraserEraseShapes: boolean;

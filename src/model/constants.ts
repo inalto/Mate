@@ -55,6 +55,7 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultConnectorColor: "#000000",
   defaultConnectorWidth: 3,
   defaultConnectorDash: "solid",
+  defaultNoteColor: "yellow",
   defaultEraserType: "stroke",
   defaultEraserWidth: 20,
   eraserEraseShapes: true,
