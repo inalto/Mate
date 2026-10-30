@@ -160,6 +160,19 @@ describe("eraser and connectors", () => {
     expect(content(id).source).toEqual({ id: "a", side: "auto" });
   });
 
+  it("scribble_erasing_a_bound_shape_frees_the_connector_end_in_the_same_entry", async () => {
+    const id = await setup();
+    const start = route(id)[0];
+    s().scribbleErase(["a"]);
+    expect(s().elements.has("a")).toBe(false);
+    expect(content(id).source).toBeUndefined();
+    expect(content(id).target).toEqual({ id: "b", side: "auto" });
+    expect(route(id)[0]).toEqual(start);
+    s().undo(); // one "Scribble erase" entry restores both
+    expect(s().elements.has("a")).toBe(true);
+    expect(content(id).source).toEqual({ id: "a", side: "auto" });
+  });
+
   it("connectors_are_erased_along_their_route_like_shapes", async () => {
     const id = await setup();
     eraseAt(250, 50, false);

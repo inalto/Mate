@@ -57,12 +57,11 @@ function controller() {
   });
 }
 
-/** Press the `side` handle of the selected element and drag the canvas pointer through `path`. */
+/** Press the `side` handle of the selected element and drag its pointer through `path` (the driver API). */
 function dragFromHandle(tools: ReturnType<typeof controller>, side: "right" | "bottom", path: { x: number; y: number }[]) {
-  store.setState({ autoCompleteDrag: { sourceId: "a", side } });
-  tools.down(path[0], "cursor");
-  tools.move(path.slice(1));
-  tools.up();
+  expect(tools.beginAutoComplete(path[0], "a", side)).toBe(true);
+  for (const p of path.slice(1, -1)) tools.moveAutoComplete(p);
+  tools.endAutoComplete(path[path.length - 1]);
 }
 
 const ui = () =>
@@ -163,8 +162,13 @@ describe("AutoCompleteHandles", () => {
     ui();
     act(() => dragFromHandle(tools, "right", [{ x: 120, y: 50 }, { x: 250, y: 300 }]));
     expect(useAutoCompleteStore.getState().target).not.toBeNull();
+    const shortcut = vi.fn();
+    window.addEventListener("keydown", shortcut);
     fireEvent.keyDown(document, { key: "Escape" });
+    window.removeEventListener("keydown", shortcut);
     expect(useAutoCompleteStore.getState().target).toBeNull();
+    expect(shortcut).not.toHaveBeenCalled(); // the shortcut layer never deselects the source
+    expect(s().selection).toEqual(new Set(["a"]));
     expect(connectors()).toHaveLength(1);
     expect(ends(connectors()[0]).target).toBeUndefined();
     expect(s().elements.size).toBe(3);
@@ -178,22 +182,57 @@ describe("AutoCompleteHandles", () => {
     expect(note.points[0].x).toBe(-AUTO_COMPLETE_GAP - 200);
   });
 
-  it("hands_the_press_to_the_pane_canvas", () => {
-    const { container } = render(
-      <div className="pane">
-        <canvas className="canvas-layer canvas-live" />
-        <AutoCompleteHandles store={store} />
-      </div>,
-    );
-    const canvas = container.querySelector("canvas")!;
-    let seen: unknown = null;
-    canvas.addEventListener("pointerdown", () => {
-      seen = s().autoCompleteDrag;
-    });
+  it("the_pressed_arrow_drives_the_controller_itself_for_touch_with_finger_pan", () => {
+    useSettingsStore.setState((st) => ({ settings: { ...st.settings, fingerAction: "pan" } }));
+    const tools = controller();
+    const { container } = ui();
     const right = container.querySelector<HTMLButtonElement>('[data-side="right"]')!;
-    fireEvent.pointerDown(right, { pointerId: 7, pointerType: "mouse", button: 0, buttons: 1, clientX: 150, clientY: 50 });
-    expect(seen).toEqual({ sourceId: "a", side: "right" });
-    // The controller was not there to take it: nothing is left pending.
-    expect(s().autoCompleteDrag).toBeNull();
+    const touch = { pointerId: 3, pointerType: "touch", isPrimary: true, buttons: 1 };
+    fireEvent.pointerDown(right, { ...touch, clientX: 120, clientY: 50 });
+    fireEvent.pointerMove(right, { ...touch, clientX: 300, clientY: 50 });
+    // Dragging: the pressed arrow stays mounted (invisible) for its own pointer, the others go.
+    const shown = [...container.querySelectorAll<HTMLButtonElement>(".auto-complete-handle")];
+    expect(shown.map((b) => b.dataset.side)).toEqual(["right"]);
+    expect(shown[0]).toBe(right);
+    expect(right.style.opacity).toBe("0");
+    fireEvent.pointerMove(right, { ...touch, clientX: 402, clientY: 50 });
+    fireEvent.pointerUp(right, { ...touch, clientX: 402, clientY: 50, buttons: 0 });
+    const [c] = connectors();
+    expect(ends(c).source).toEqual({ id: "a", side: "right" });
+    expect(ends(c).target?.id).toBe("b");
+    expect(s().dragging).toBe(false);
+    expect(container.querySelectorAll(".auto-complete-handle")).toHaveLength(4);
+    tools.dispose();
+  });
+
+  it("a_tap_on_an_arrow_opens_the_popover_and_a_cancelled_drag_adds_nothing", () => {
+    const tools = controller();
+    const { container } = ui();
+    const bottom = () => container.querySelector<HTMLButtonElement>('[data-side="bottom"]')!;
+    const mouse = { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, isPrimary: true };
+    fireEvent.pointerDown(bottom(), { ...mouse, clientX: 50, clientY: 130 });
+    fireEvent.pointerUp(bottom(), { ...mouse, clientX: 50, clientY: 130, buttons: 0 });
+    expect(useAutoCompleteStore.getState().target).toMatchObject({ sourceId: "a", side: "bottom", at: null });
+    act(() => closeAutoComplete());
+    fireEvent.pointerDown(bottom(), { ...mouse, clientX: 50, clientY: 130 });
+    fireEvent.pointerMove(bottom(), { ...mouse, clientX: 60, clientY: 300 });
+    expect(s().dragging).toBe(true);
+    fireEvent.pointerCancel(bottom(), { ...mouse, clientX: 60, clientY: 300 });
+    expect(s().dragging).toBe(false);
+    expect(connectors()).toHaveLength(0);
+    expect(useAutoCompleteStore.getState().target).toBeNull();
+    tools.dispose();
+  });
+
+  it("without_a_controller_a_press_opens_the_popover", () => {
+    const { container } = ui();
+    fireEvent.pointerDown(container.querySelector('[data-side="left"]')!, { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1 });
+    expect(useAutoCompleteStore.getState().target).toMatchObject({ sourceId: "a", side: "left" });
+  });
+
+  it("arrow_icons_use_the_theme_primary_contrast_colour", () => {
+    const { container } = ui();
+    const dot = container.querySelector<HTMLElement>(".auto-complete-handle span")!;
+    expect(dot.style.color).toBe("var(--color-primary-contrast)");
   });
 });

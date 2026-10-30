@@ -1,6 +1,7 @@
 // Selection frame of one boxed element in the overlay layer (page units; the layer carries the camera
 // transform): an outline, edge strips that move the selection by dragging, and — when it is the only
-// selected element — 8 resize handles and a rotate handle 24 px above the top-centre. The drag shows
+// selected element — 8 resize handles and a rotate handle 24 px above the top-centre (none for a
+// frame: frames ignore rotation). The drag shows
 // a draft frame and commits once on release. Moves and (unrotated) resizes snap to smart guides of
 // the other elements on screen (published to the store for the live layer); Ctrl/Cmd suspends that,
 // Shift locks a move to its dominant axis and snaps rotation to 15°; Escape cancels the drag. A
@@ -8,6 +9,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { angleLabel, guideCandidates, GUIDE_SNAP_PX, lockedAxis, smartMoveDelta, snapAngle } from "../canvas/toolInteractions";
+import { isFrame } from "../frames/contain";
 import { isLocked } from "../model/content";
 import type { Element } from "../model/types";
 import type { EditorStore } from "../stores/editor";
@@ -88,6 +90,8 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
       centre,
       angle0: Math.atan2(e.clientY - centre.y, e.clientX - centre.x),
     };
+    // Published so other chrome (auto-complete arrows) hides while the box moves under it.
+    store.setState({ dragging: true });
   };
 
   const candidates = (): Rect[] => (others.current ??= guideCandidates(store, new Set(store.getState().selection)));
@@ -136,6 +140,7 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
     setDraft(null);
     setDraftRotation(null);
     store.getState().setGuides([]);
+    if (store.getState().dragging) store.setState({ dragging: false });
   }, [store]);
 
   const onUp = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -177,6 +182,7 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
       if (drag.current) {
         drag.current = null;
         store.getState().setGuides([]);
+        store.setState({ dragging: false });
       }
     };
   }, [store, end]);
@@ -194,7 +200,7 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
     <div ref={frameRef} className={locked ? "box-frame locked" : "box-frame"} data-box-frame={el.id} style={boxStyle(rect, shownRotation)}>
       {!locked && EDGES.map((edge) => <div key={edge} className={`box-frame-edge ${edge}`} {...grip(null)} />)}
       {handles && !locked && HANDLES.map((h) => <div key={h} className={`box-frame-handle ${h}`} data-handle={h} {...grip(h)} />)}
-      {handles && !locked && (
+      {handles && !locked && !isFrame(el) && (
         <div className="box-frame-rotate" data-rotate-handle="" role="button" aria-label={t("rotate.handle")} title={t("rotate.handle")} {...grip("rotate")} />
       )}
       {draftRotation !== null && (

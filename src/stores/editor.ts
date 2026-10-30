@@ -96,11 +96,6 @@ export interface EditorState {
   editingId: string | null;
   /** True while a pointer drag moves, resizes, rotates or draws a connector (set by the tool controller). */
   dragging: boolean;
-  /**
-   * An auto-complete handle was pressed: the tool controller's next pointer-down starts a connector
-   * drag from this side of this element (see overlay/AutoCompleteHandles).
-   */
-  autoCompleteDrag: { sourceId: string; side: Side } | null;
   /** Largest element y (world units), for the page-mode sheet count. */
   contentBottom: number;
   /** Temporary tool while a pen button / eraser end is held. */
@@ -496,7 +491,6 @@ export function createEditorStore(): EditorStore {
     guides: [],
     editingId: null,
     dragging: false,
-    autoCompleteDrag: null,
     contentBottom: 0,
     tempTool: null,
     panHold: false,
@@ -526,7 +520,6 @@ export function createEditorStore(): EditorStore {
         guides: [],
         editingId: null,
         dragging: false,
-        autoCompleteDrag: null,
         contentBottom: 0,
         limitReached: false,
         preset,
@@ -725,7 +718,7 @@ export function createEditorStore(): EditorStore {
     setShapeLabel(id, label) {
       const cur = get().elements.get(id);
       if (!cur || cur.type !== "shape" || !isClosedShape(cur.shapeType ?? "rectangle") || isLocked(cur)) return false;
-      const next = withShapeLabel(cur, label && label.text !== "" ? label : null);
+      const next = withShapeLabel(cur, label && label.text.trim() !== "" ? label : null);
       if (sameElement(next, cur)) return false;
       return record("Shape text", [{ type: "update", before: cur, after: stamp(next) }]);
     },
@@ -914,8 +907,8 @@ export function createEditorStore(): EditorStore {
           syncHistoryFlags();
           return;
         }
-        // Connectors bound to it keep their end at its last point, freed (as removeElements does).
-        record("Delete", [{ type: "delete", el: cur }, ...freeEnds(new Set([cur.id]))]);
+        // Connectors bound to it keep their end at its last point, freed (record does it).
+        record("Delete", [{ type: "delete", el: cur }]);
         return;
       }
       if (sameText(cur, next)) return;
@@ -953,9 +946,8 @@ export function createEditorStore(): EditorStore {
       const cur = get().elements;
       const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!); // locked elements are never deleted
       const gone = new Set(ids.filter(ok));
-      const actions: Action[] = [...gone].map((id) => ({ type: "delete", el: cur.get(id)! }));
-      // Connectors bound to a deleted element keep their end at its last point, freed.
-      record(label, [...actions, ...freeEnds(gone)]);
+      // Connectors bound to a deleted element keep their end at its last point, freed (by record).
+      record(label, [...gone].map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
     addElements(label, els) {
@@ -1411,6 +1403,22 @@ export function createEditorStore(): EditorStore {
   }
 
   /**
+   * `freeEnds` for the elements `actions` leaves deleted, minus connectors the actions already carry.
+   */
+  function freedBy(actions: readonly Action[]): Action[] {
+    const gone = new Set<string>();
+    const inEntry = new Set<string>();
+    for (const a of actions) {
+      const id = a.type === "update" ? a.after.id : a.el.id;
+      inEntry.add(id);
+      if (a.type === "delete") gone.add(id);
+      else gone.delete(id);
+    }
+    if (gone.size === 0) return [];
+    return freeEnds(gone).filter((a) => a.type !== "update" || !inEntry.has(a.after.id));
+  }
+
+  /**
    * Reroute connectors bound to an element changed by `actions` (connectors the actions already
    * carry are left alone); their updates, for the same history entry.
    */
@@ -1527,6 +1535,13 @@ export function createEditorStore(): EditorStore {
       return false;
     }
     flushEraseBatch();
+    // Connectors bound to a deleted element keep that end at its last point, freed (every delete path).
+    const freed = freedBy(applied);
+    if (freed.length > 0) {
+      const same = applied === actions;
+      actions = [...actions, ...freed];
+      applied = same ? actions : [...applied, ...freed];
+    }
     applyActions(applied);
     // Connectors bound to anything that changed follow it, in the same entry (undo restores their rows).
     const rerouted = rerouteBound(applied);

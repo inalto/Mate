@@ -78,6 +78,9 @@ describe("shape text interactions", () => {
     s().redo();
     s().setShapeLabel("a", { text: "", fontSize: 16, color: "#000000", align: "center" });
     expect(shapeLabelOf(s().elements.get("a")!)).toBeNull();
+    s().setShapeLabel("a", { text: "hi", fontSize: 16, color: "#000000", align: "center" });
+    s().setShapeLabel("a", { text: "   ", fontSize: 16, color: "#000000", align: "center" });
+    expect(shapeLabelOf(s().elements.get("a")!)).toBeNull(); // whitespace-only removes it too
   });
 
   it("typing_a_printable_key_with_one_closed_shape_selected_starts_editing", async () => {

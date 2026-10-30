@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 import { el } from "../../tools/__tests__/fixtures";
@@ -18,6 +18,7 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.f
 import { contentMeta } from "../../tools/spatialIndex";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
+import AutoCompleteHandles from "../AutoCompleteHandles";
 import BoxFrame from "../BoxFrame";
 
 const box = (id: string, x: number, y: number, opts: Partial<Element> = {}) =>
@@ -59,6 +60,52 @@ describe("BoxFrame", () => {
     expect(container.querySelectorAll(".box-frame-handle")).toHaveLength(8);
     expect(container.querySelector("[data-rotate-handle]")).not.toBeNull();
     expect(container.querySelector("[data-lock-glyph]")).toBeNull();
+  });
+
+  it("a_frame_has_resize_handles_but_no_rotate_handle", async () => {
+    await load([el("f", [[100, 100]], { type: "frame", boxWidth: 300, boxHeight: 200, width: 1 })]);
+    s().select(["f"]);
+    const { container } = frame("f");
+    expect(container.querySelectorAll(".box-frame-handle")).toHaveLength(8);
+    expect(container.querySelector("[data-rotate-handle]")).toBeNull();
+  });
+
+  it("a_drag_sets_the_dragging_flag_so_auto_complete_arrows_hide_until_it_ends", async () => {
+    await load([box("a", 100, 100)]);
+    s().select(["a"]);
+    s().setTool("cursor");
+    const { container } = render(
+      <div className="pane">
+        <BoxFrame el={s().elements.get("a")!} store={store} zoom={1} handles />
+        <AutoCompleteHandles store={store} />
+      </div>,
+    );
+    const arrows = () => container.querySelectorAll(".auto-complete-handle").length;
+    expect(arrows()).toBe(4);
+    const edge = container.querySelector(".box-frame-edge.top") as HTMLElement;
+    act(() => void fireEvent.pointerDown(edge, { clientX: 150, clientY: 100, pointerId: 1, button: 0 }));
+    expect(s().dragging).toBe(true);
+    expect(arrows()).toBe(0);
+    act(() => void fireEvent.pointerMove(edge, { clientX: 190, clientY: 100, pointerId: 1 }));
+    act(() => void fireEvent.pointerUp(edge, { clientX: 190, clientY: 100, pointerId: 1 }));
+    expect(s().dragging).toBe(false);
+    expect(arrows()).toBe(4);
+    // Cancel and a corner resize clear it too.
+    const corner = container.querySelector('[data-handle="se"]') as HTMLElement;
+    act(() => void fireEvent.pointerDown(corner, { clientX: 300, clientY: 180, pointerId: 2, button: 0 }));
+    expect(s().dragging).toBe(true);
+    act(() => void fireEvent.pointerCancel(corner, { pointerId: 2 }));
+    expect(s().dragging).toBe(false);
+  });
+
+  it("unmounting_mid_drag_clears_the_dragging_flag", async () => {
+    await load([box("a", 100, 100)]);
+    s().select(["a"]);
+    const { container, unmount } = frame("a");
+    fireEvent.pointerDown(container.querySelector(".box-frame-edge.top")!, { clientX: 150, clientY: 100, pointerId: 1, button: 0 });
+    expect(s().dragging).toBe(true);
+    unmount();
+    expect(s().dragging).toBe(false);
   });
 
   it("rotate_handle_with_shift_snaps_to_15_degrees_once", async () => {

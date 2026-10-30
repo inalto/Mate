@@ -352,6 +352,32 @@ export interface ToolDeps {
   now?(): number;
 }
 
+/** Modifier keys an auto-complete handle copies from its own pointer events. */
+export interface DragModifiers {
+  shiftKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+}
+
+/**
+ * The auto-complete drag API of a store's tool controller, driven by the handle itself (it captures
+ * its own pointer, so no canvas routing applies): world points from the pane's camera.
+ */
+export interface AutoCompleteDriver {
+  beginAutoComplete(p: Vec2, sourceId: string, side: Side): boolean;
+  moveAutoComplete(p: Vec2, mods?: DragModifiers): void;
+  endAutoComplete(p: Vec2, mods?: DragModifiers): void;
+  cancelAutoComplete(): void;
+}
+
+const autoCompleteDrivers = new WeakMap<EditorStore, AutoCompleteDriver>();
+
+/** The auto-complete drag API of the tool controller mounted for `store`, if any. */
+export function autoCompleteDriverOf(store: EditorStore): AutoCompleteDriver | undefined {
+  return autoCompleteDrivers.get(store);
+}
+
 export function createToolController(deps: ToolDeps) {
   const st = deps.store.getState;
   /** Elements drawn on the live layer while being transformed (hidden from the snapshot). */
@@ -620,11 +646,7 @@ export function createToolController(deps: ToolDeps) {
 
   const down = (p: Vec2, tool: PointerTool) => {
     const s = st();
-    const auto = s.autoCompleteDrag;
-    if (auto) deps.store.setState({ autoCompleteDrag: null });
-    if (auto && (tool === "cursor" || tool === "lasso") && beginAutoComplete(p, auto.sourceId, auto.side)) {
-      // An auto-complete handle's press: a connector from that side (see up()).
-    } else if (tool === "eraser") {
+    if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
     } else if (tool === "insert-space") {
@@ -1002,13 +1024,18 @@ export function createToolController(deps: ToolDeps) {
     free = e.ctrlKey || e.metaKey;
     alt = e.altKey;
   };
+  /**
+   * Escape drops a connector drag (drawing, an endpoint or the label) or a frame drag without changing
+   * anything. Capture phase, and the key goes no further: the gesture is cancelled, the selection stays.
+   */
+  const onEscape = (e: KeyboardEvent) => {
+    if (e.key !== "Escape" || !(g.kind === "connector" || g.kind === "endpoint" || g.kind === "label" || g.kind === "frame")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    cancel();
+  };
   const onKey = (e: KeyboardEvent) => {
     readMods(e);
-    // Escape drops a connector drag (drawing, an endpoint or the label) without changing anything.
-    if (e.type === "keydown" && e.key === "Escape" && (g.kind === "connector" || g.kind === "endpoint" || g.kind === "label" || g.kind === "frame")) {
-      cancel();
-      return;
-    }
     if (shift === e.shiftKey) return;
     shift = e.shiftKey;
     if (g.kind === "shape" && preview.length > 0) {
@@ -1022,8 +1049,41 @@ export function createToolController(deps: ToolDeps) {
   deps.el.addEventListener("pointermove", onPointerMods, true);
   deps.el.addEventListener("pointermove", onHover);
   deps.el.addEventListener("pointerleave", onLeave);
+  window.addEventListener("keydown", onEscape, true);
   window.addEventListener("keydown", onKey);
   window.addEventListener("keyup", onKey);
+
+  const autoDragging = () => g.kind === "connector" && !!g.auto;
+  const copyMods = (m?: DragModifiers) => {
+    if (!m) return;
+    free = m.ctrlKey || m.metaKey;
+    alt = m.altKey;
+    shift = m.shiftKey;
+  };
+  const driver: AutoCompleteDriver = {
+    beginAutoComplete: (p, sourceId, side) => {
+      // Any gesture in progress is dropped first (the handle owns this pointer).
+      if (g.kind !== "idle") cancel();
+      const ok = beginAutoComplete(p, sourceId, side);
+      deps.requestLive();
+      return ok;
+    },
+    moveAutoComplete: (p, mods) => {
+      if (!autoDragging()) return;
+      copyMods(mods);
+      move([p]);
+    },
+    endAutoComplete: (p, mods) => {
+      if (!autoDragging()) return;
+      copyMods(mods);
+      move([p]);
+      up();
+    },
+    cancelAutoComplete: () => {
+      if (autoDragging()) cancel();
+    },
+  };
+  autoCompleteDrivers.set(deps.store, driver);
 
   return {
     hidden: hidden as ReadonlySet<string>,
@@ -1032,12 +1092,14 @@ export function createToolController(deps: ToolDeps) {
     up,
     cancel,
     draw,
-    beginAutoComplete,
+    ...driver,
     dispose() {
+      if (autoCompleteDrivers.get(deps.store) === driver) autoCompleteDrivers.delete(deps.store);
       deps.el.removeEventListener("pointerdown", onPointerMods, true);
       deps.el.removeEventListener("pointermove", onPointerMods, true);
       deps.el.removeEventListener("pointermove", onHover);
       deps.el.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("keydown", onEscape, true);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKey);
     },

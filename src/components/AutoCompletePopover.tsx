@@ -46,7 +46,11 @@ export default function AutoCompletePopover({ store }: { store: EditorStore }) {
       if (!ref.current?.contains(e.target as Node)) closeAutoComplete();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeAutoComplete();
+      if (e.key !== "Escape") return;
+      // Closes the popover only: the source element stays selected.
+      e.preventDefault();
+      e.stopPropagation();
+      closeAutoComplete();
     };
     document.addEventListener("pointerdown", onDown, true);
     document.addEventListener("keydown", onKey);

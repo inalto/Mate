@@ -152,6 +152,33 @@ describe("connector tool", () => {
     expect(connectors()).toHaveLength(0);
   });
 
+  it("escape_during_an_endpoint_drag_cancels_only_the_drag_and_keeps_the_selection", async () => {
+    await ready("cursor");
+    const id = s().addConnector({ start: { x: 100, y: 50 }, end: { x: 300, y: 400 }, source: { id: "a", side: "auto" }, mode: "straight" })!;
+    s().select([id]);
+    const { tools } = controller();
+    dispose = tools.dispose;
+    const before = s().elements.get(id)!;
+    // Stands in for the shortcut layer (a window bubble listener whose Escape deselects).
+    const shortcut = vi.fn((e: KeyboardEvent) => void (!e.defaultPrevented && s().select([])));
+    window.addEventListener("keydown", shortcut);
+    try {
+      tools.down(before.points[1], "cursor");
+      tools.move([{ x: 440, y: 60 }]);
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      tools.up();
+      expect(shortcut).not.toHaveBeenCalled();
+      expect(s().selection).toEqual(new Set([id]));
+      expect(s().elements.get(id)).toBe(before);
+      expect(s().dragging).toBe(false);
+      // With no gesture, Escape reaches the shortcut layer as before.
+      document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+      expect(shortcut).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("keydown", shortcut);
+    }
+  });
+
   it("endpoint_handle_drag_rebinds_once_on_release", async () => {
     await ready("cursor");
     const id = s().addConnector({ start: { x: 100, y: 50 }, end: { x: 300, y: 400 }, source: { id: "a", side: "auto" }, mode: "straight" })!;
