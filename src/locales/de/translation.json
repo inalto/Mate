@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "Am Raster ausrichten",
         "hint": "Formen und Striche am Rasterhintergrund ausrichten"
+      },
+      "smartGuides": {
+        "label": "Smart guides",
+        "hint": "Snap to the edges, centres and spacing of other elements while moving or resizing; hold Ctrl (Cmd) to suspend"
       }
     },
     "pen": {
@@ -380,6 +384,15 @@
     "settingsToggle": "Linienenden nach dem Einrasten anbieten",
     "settingsHint": "Beim Umwandeln eines Strichs in eine Linie oder einen Pfeil eine kleine Auswahl für Pfeil-, Punkt- oder Strichenden zeigen."
   },
+  "lock": {
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "locked": "Locked"
+  },
+  "rotate": {
+    "handle": "Rotate",
+    "angle": "Rotation {{degrees}}"
+  },
   "keys": {
     "title": "Tastenkürzel",
     "resetAll": "Alle zurücksetzen",
@@ -435,6 +448,9 @@
       "zoomIn": "Vergrößern",
       "zoomOut": "Verkleinern",
       "zoomReset": "Zoom zurücksetzen",
+      "zoomFit": "Fit page to screen",
+      "zoomSelection": "Zoom to selection",
+      "toggleLock": "Lock or unlock selection",
       "toggleSidebar": "Seitenleiste ein-/ausblenden",
       "prevPage": "Vorherige Seite",
       "nextPage": "Nächste Seite",
@@ -603,6 +619,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}} %, zurücksetzen",
+    "zoomMenu": "Zoom options",
     "pageFull": "Diese Seite ist voll ({{max}} Elemente). Beginne eine neue Seite.",
     "tableLimit": "Die Tabelle hat ihre Größengrenze erreicht ({{max}} Zellen)",
     "insertImageFailed": "Dieses Bild konnte nicht eingefügt werden.",
@@ -706,6 +723,13 @@
     "shareInstead": "Stattdessen teilen…",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
     "boxMissing": "Feld {{id}} wurde für den Export nicht gerendert."
+  },
+  "exportRegion": {
+    "selectionOnly": "Selection only",
+    "copyImage": "Copy as image",
+    "copyImageFailed": "Could not copy the image",
+    "fitPage": "Fit page",
+    "fitSelection": "Fit selection"
   },
   "selection": {
     "label": "Auswahl",

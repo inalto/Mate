@@ -40,6 +40,7 @@ export default function PaperSection() {
       />
       <ToggleRow k="alignTextToLines" label={t("settings.paper.alignText.label")} hint={t("settings.paper.alignText.hint")} />
       <ToggleRow k="snapToGrid" label={t("settings.paper.snapToGrid.label")} hint={t("settings.paper.snapToGrid.hint")} />
+      <ToggleRow k="smartGuides" label={t("settings.paper.smartGuides.label")} hint={t("settings.paper.smartGuides.hint")} />
     </SettingsSection>
   );
 }

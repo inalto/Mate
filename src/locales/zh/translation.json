@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "对齐到方格",
         "hint": "将形状和笔画对齐到方格背景上"
+      },
+      "smartGuides": {
+        "label": "Smart guides",
+        "hint": "Snap to the edges, centres and spacing of other elements while moving or resizing; hold Ctrl (Cmd) to suspend"
       }
     },
     "pen": {
@@ -379,6 +383,15 @@
     "settingsToggle": "吸附后提供线条端点选项",
     "settingsHint": "笔画变为直线或箭头时,显示一个可选择箭头、圆点或竖线端点的小面板。"
   },
+  "lock": {
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "locked": "Locked"
+  },
+  "rotate": {
+    "handle": "Rotate",
+    "angle": "Rotation {{degrees}}"
+  },
   "keys": {
     "title": "键盘快捷键",
     "resetAll": "全部重置",
@@ -434,6 +447,9 @@
       "zoomIn": "放大",
       "zoomOut": "缩小",
       "zoomReset": "重置缩放",
+      "zoomFit": "Fit page to screen",
+      "zoomSelection": "Zoom to selection",
+      "toggleLock": "Lock or unlock selection",
       "toggleSidebar": "显示或隐藏侧边栏",
       "prevPage": "上一页",
       "nextPage": "下一页",
@@ -602,6 +618,7 @@
   },
   "editor": {
     "zoomReset": "缩放 {{percent}}%，重置",
+    "zoomMenu": "Zoom options",
     "pageFull": "此页面已满（{{max}} 个项目）。请新建页面。",
     "tableLimit": "表格已达到大小上限（{{max}} 个单元格）",
     "insertImageFailed": "无法插入该图片。",
@@ -705,6 +722,13 @@
     "shareInstead": "改为分享…",
     "boxRender": "无法为导出渲染框 {{id}} 的内容。",
     "boxMissing": "框 {{id}} 未能为导出而渲染。"
+  },
+  "exportRegion": {
+    "selectionOnly": "Selection only",
+    "copyImage": "Copy as image",
+    "copyImageFailed": "Could not copy the image",
+    "fitPage": "Fit page",
+    "fitSelection": "Fit selection"
   },
   "selection": {
     "label": "选择",

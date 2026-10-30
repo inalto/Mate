@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "方眼に吸着",
         "hint": "図形と線を方眼の背景に合わせます"
+      },
+      "smartGuides": {
+        "label": "Smart guides",
+        "hint": "Snap to the edges, centres and spacing of other elements while moving or resizing; hold Ctrl (Cmd) to suspend"
       }
     },
     "pen": {
@@ -379,6 +383,15 @@
     "settingsToggle": "スナップ後に線の端を選べるようにする",
     "settingsHint": "ストロークが線や矢印に変わったときに、矢印・点・バーの端を選ぶ小さなパネルを表示します。"
   },
+  "lock": {
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "locked": "Locked"
+  },
+  "rotate": {
+    "handle": "Rotate",
+    "angle": "Rotation {{degrees}}"
+  },
   "keys": {
     "title": "キーボードショートカット",
     "resetAll": "すべてリセット",
@@ -434,6 +447,9 @@
       "zoomIn": "拡大",
       "zoomOut": "縮小",
       "zoomReset": "拡大率をリセット",
+      "zoomFit": "Fit page to screen",
+      "zoomSelection": "Zoom to selection",
+      "toggleLock": "Lock or unlock selection",
       "toggleSidebar": "サイドバーの表示切り替え",
       "prevPage": "前のページ",
       "nextPage": "次のページ",
@@ -602,6 +618,7 @@
   },
   "editor": {
     "zoomReset": "拡大率 {{percent}}%、リセット",
+    "zoomMenu": "Zoom options",
     "pageFull": "このページは一杯です（{{max}} 項目）。新しいページを作成してください。",
     "tableLimit": "表がサイズの上限に達しました（{{max}} セル）",
     "insertImageFailed": "その画像を挿入できませんでした。",
@@ -705,6 +722,13 @@
     "shareInstead": "代わりに共有…",
     "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",
     "boxMissing": "ボックス {{id}} は書き出し用に描画されませんでした。"
+  },
+  "exportRegion": {
+    "selectionOnly": "Selection only",
+    "copyImage": "Copy as image",
+    "copyImageFailed": "Could not copy the image",
+    "fitPage": "Fit page",
+    "fitSelection": "Fit selection"
   },
   "selection": {
     "label": "選択",

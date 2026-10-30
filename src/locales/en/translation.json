@@ -119,6 +119,10 @@
       "snapToGrid": {
         "label": "Snap to grid",
         "hint": "Snap shapes and strokes to the grid background"
+      },
+      "smartGuides": {
+        "label": "Smart guides",
+        "hint": "Snap to the edges, centres and spacing of other elements while moving or resizing; hold Ctrl (Cmd) to suspend"
       }
     },
     "pen": {
@@ -382,6 +386,10 @@
     "unlock": "Unlock",
     "locked": "Locked"
   },
+  "rotate": {
+    "handle": "Rotate",
+    "angle": "Rotation {{degrees}}"
+  },
   "keys": {
     "title": "Keyboard shortcuts",
     "resetAll": "Reset all",
@@ -608,6 +616,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}}%, reset",
+    "zoomMenu": "Zoom options",
     "pageFull": "This page is full ({{max}} items) — start a new page.",
     "tableLimit": "Table is at its size limit ({{max}} cells)",
     "insertImageFailed": "Could not insert that image.",

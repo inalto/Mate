@@ -35,6 +35,7 @@ import { rotateElements, scaleElements, selectionBounds, translateElements } fro
 import { elementBounds, isBoxed, SpatialIndex, withMeta, type Rect } from "../tools/spatialIndex";
 import { reorder, topZ, zOf, type ZOp } from "../tools/zorder";
 import type { ElementsChange } from "../tutor/types";
+import type { Guide } from "../tools/smartGuides";
 import {
   animateCamera,
   clampCamera,
@@ -78,6 +79,8 @@ export interface EditorState {
   camera: Camera;
   viewport: Viewport;
   selection: Set<string>;
+  /** Smart guides of the selection move/resize in progress (page units), drawn by the live layer. */
+  guides: Guide[];
   /** Boxed element whose DOM editor is open (overlay layer), else null. */
   editingId: string | null;
   /** Largest element y (world units), for the page-mode sheet count. */
@@ -158,6 +161,8 @@ export interface EditorState {
   setPreset(preset: PenPreset): void;
   setCamera(camera: Camera): void;
   setViewport(viewport: Viewport): void;
+  /** Publish the smart guides of the drag in progress ([] clears them). */
+  setGuides(guides: Guide[]): void;
   resetCamera(): void;
   /**
    * Animate the camera to show the page: canvas mode all elements (reset when empty), page mode the
@@ -178,7 +183,11 @@ export interface EditorState {
   /** Selecting anything that excludes the edited element closes its editor. */
   select(ids: Iterable<string>): void;
   selectAll(): void;
-  moveSelection(dx: number, dy: number): void;
+  /**
+   * Move the unlocked selected elements; one "Move" entry. `opts` renames the entry and merges it
+   * with the newest entry of the same key (an Alt+drag copy and its move are one "Duplicate").
+   */
+  moveSelection(dx: number, dy: number, opts?: { label?: string; mergeKey?: string }): void;
   setSpaceOptions(patch: { spaceMode?: "insert" | "remove"; spaceCutImages?: boolean }): void;
   /** Insert-space tool: shift everything below `lineY` by `dy` (clamped); one "Insert space" entry, none when it is 0. */
   insertSpace(lineY: number, dy: number): void;
@@ -201,8 +210,11 @@ export interface EditorState {
   restyleSelection(patch: { color?: string; width?: number; fillColor?: string }): void;
   deleteSelection(): void;
   duplicateSelection(): void;
-  /** Duplicate the selection with zero offset (Alt+drag) and select the copies; their ids ([] when refused). */
-  duplicateSelectionInPlace(): string[];
+  /**
+   * Duplicate the selection with zero offset (Alt+drag) and select the copies; their ids ([] when
+   * refused). `mergeKey` lets the following move join the same "Duplicate" entry.
+   */
+  duplicateSelectionInPlace(mergeKey?: string): string[];
   /** Copies are unlocked. */
   copySelection(): void;
   cutSelection(): void;
@@ -387,6 +399,7 @@ export function createEditorStore(): EditorStore {
     camera: { x: 0, y: 0, z: 1 },
     viewport: { width: 0, height: 0 },
     selection: new Set(),
+    guides: [],
     editingId: null,
     contentBottom: 0,
     tempTool: null,
@@ -413,6 +426,7 @@ export function createEditorStore(): EditorStore {
         loadError: null,
         elements: new Map(),
         selection: new Set(),
+        guides: [],
         editingId: null,
         contentBottom: 0,
         limitReached: false,
@@ -510,9 +524,13 @@ export function createEditorStore(): EditorStore {
         clamped = true;
         return { ...e, content: { ...contentOf<TableContent>(e), subtype: "table", tableData: { rows: clampRows(tableRowsOf(e)) } } };
       };
+      // Locked elements are never edited (only unlockSelection changes them).
       record(
         "Edit",
-        els.filter((e) => cur.has(e.id)).map((e) => fit(e)).map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
+        els
+          .filter((e) => cur.has(e.id) && !isLocked(cur.get(e.id)!))
+          .map((e) => fit(e))
+          .map((after) => ({ type: "update", before: cur.get(after.id)!, after })),
       );
       if (clamped) set({ limitReached: true, limitKind: "table" });
     },
@@ -664,6 +682,10 @@ export function createEditorStore(): EditorStore {
     },
     setCamera: (camera) => set({ camera }),
     setViewport: (viewport) => set({ viewport }),
+    setGuides(guides) {
+      if (guides.length === 0 && get().guides.length === 0) return;
+      set({ guides });
+    },
     resetCamera() {
       const s = get();
       if (!s.page) return;
@@ -758,9 +780,9 @@ export function createEditorStore(): EditorStore {
       set({ selection: new Set([...get().elements.values()].filter((el) => !isPdfPlacement(el)).map((el) => el.id)) });
     },
 
-    moveSelection(dx, dy) {
+    moveSelection(dx, dy, opts) {
       if (dx === 0 && dy === 0) return;
-      transformSelection("Move", (els) => translateElements(els, dx, dy));
+      transformSelection(opts?.label ?? "Move", (els) => translateElements(els, dx, dy), opts?.mergeKey);
     },
     setSpaceOptions(patch) {
       set(patch);
@@ -856,8 +878,8 @@ export function createEditorStore(): EditorStore {
     duplicateSelection() {
       pasteElements(selectedElements(), DUPLICATE_OFFSET, "Duplicate");
     },
-    duplicateSelectionInPlace() {
-      return pasteElements(selectedElements(), 0, "Duplicate");
+    duplicateSelectionInPlace(mergeKey) {
+      return pasteElements(selectedElements(), 0, "Duplicate", mergeKey);
     },
     copySelection() {
       const els = selectedElements();
@@ -1109,7 +1131,7 @@ export function createEditorStore(): EditorStore {
   }
 
   /** Add unlocked copies of `src` shifted by `offset` on both axes and select them; their ids ([] when refused). */
-  function pasteElements(src: Element[], offset: number, label: string): string[] {
+  function pasteElements(src: Element[], offset: number, label: string, mergeKey?: string): string[] {
     const s = S();
     const pageId = s.pageId;
     if (src.length === 0 || !pageId) return [];
@@ -1119,7 +1141,7 @@ export function createEditorStore(): EditorStore {
       const copy: Element = { ...el, id: crypto.randomUUID(), pageId, createdAt: now, updatedAt: now, version: 0 };
       return top > 0 ? withMeta(copy, { zIndex: top + 1 + i }) : copy;
     });
-    if (!record(label, copies.map((el): Action => ({ type: "add", el })))) return [];
+    if (!record(label, copies.map((el): Action => ({ type: "add", el })), mergeKey)) return [];
     const ids = copies.map((c) => c.id);
     store.setState({ selection: new Set(ids) });
     return ids;

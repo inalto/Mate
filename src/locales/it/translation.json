@@ -119,6 +119,10 @@
       "snapToGrid": {
         "label": "Aggancia alla griglia",
         "hint": "Aggancia forme e tratti alla griglia di sfondo"
+      },
+      "smartGuides": {
+        "label": "Guide intelligenti",
+        "hint": "Allinea a bordi, centri e spaziature degli altri elementi mentre sposti o ridimensioni; tieni premuto Ctrl (Cmd) per sospendere"
       }
     },
     "pen": {
@@ -382,6 +386,10 @@
     "unlock": "Sblocca",
     "locked": "Bloccato"
   },
+  "rotate": {
+    "handle": "Ruota",
+    "angle": "Rotazione {{degrees}}"
+  },
   "keys": {
     "title": "Scorciatoie da tastiera",
     "resetAll": "Reimposta tutte",
@@ -608,6 +616,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}}%, reimposta",
+    "zoomMenu": "Opzioni zoom",
     "pageFull": "Questa pagina è piena ({{max}} elementi) — inizia una nuova pagina.",
     "tableLimit": "La tabella ha raggiunto il limite di dimensione ({{max}} celle)",
     "insertImageFailed": "Impossibile inserire quell'immagine.",

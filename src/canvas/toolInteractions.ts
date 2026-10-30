@@ -1,19 +1,21 @@
 // Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon;
 // clockwise = select what it encloses, drawn solid; anticlockwise = select what it touches, drawn
-// dashed), selection drag-move and corner-handle scaling, click/double-click on boxed elements (select /
-// open the editor), shape tool (drag a box, Shift constrains, live preview), text tool (click adds or
-// edits a text box). Geometry is pure; `createToolController` wires it
+// dashed), selection drag-move (smart guides, grid snap, Shift axis lock, Alt+drag copies, Ctrl/Cmd
+// suspends snapping), corner-handle scaling and the rotate handle, click/double-click on boxed
+// elements (select / open the editor), shape tool (drag a box, Shift constrains, live preview), text
+// tool (click adds or edits a text box). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
 import { shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { polylineTouches } from "../tools/eraser";
-import { lassoMode, lassoSelect, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
+import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { shiftBelow } from "../tools/insertSpace";
 import { spaceShift } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
-import { isPdfPlacement } from "../model/content";
+import { isLocked, isPdfPlacement } from "../model/content";
+import { equalSpacing, snapMove, type Guide } from "../tools/smartGuides";
 import { worldToScreen, type Camera, type Vec2 } from "./camera";
 import type { PointerInfo } from "./input";
 import { gridSpacingOf, snapDelta, snapPoint } from "./snap";
@@ -33,6 +35,15 @@ const MOVE_START_PX = 2;
 /** Second click within this time (ms) and distance (screen px) on the same element is a double-click. */
 export const DOUBLE_TAP_MS = 400;
 const DOUBLE_TAP_PX = 8;
+/** Rotate handle: distance above the selection's top-centre and drawn radius (screen px). */
+export const ROTATE_OFFSET_PX = 24;
+const ROTATE_R_PX = 6;
+/** Shift snaps rotation to this step (15°). */
+export const ROTATE_STEP = Math.PI / 12;
+/** Smart guides snap within this distance (screen px). */
+export const GUIDE_SNAP_PX = 8;
+/** Smart guide colour (magenta). */
+export const GUIDE_COLOR = "#e0218a";
 
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
 
@@ -51,6 +62,90 @@ export function hitHandle(b: Rect, p: Vec2, z: number, slopPx = HIT_SLOP_PX): Co
   }
   return null;
 }
+
+/** World position of the rotate handle of bounds `b` at zoom `z`. */
+export const rotateHandlePoint = (b: Rect, z: number): Vec2 => ({ x: b.x + b.width / 2, y: b.y - ROTATE_OFFSET_PX / z });
+
+/** World point `p` is on the rotate handle of `b` (hit radius ≥ 8 screen px). */
+export const hitRotateHandle = (b: Rect, p: Vec2, z: number): boolean => {
+  const q = rotateHandlePoint(b, z);
+  return Math.hypot(p.x - q.x, p.y - q.y) <= Math.max(HIT_SLOP_PX, ROTATE_R_PX + 4) / z;
+};
+
+/** `rad` rounded to the 15° step when `snap` is on. */
+export const snapAngle = (rad: number, snap: boolean): number => (snap ? Math.round(rad / ROTATE_STEP) * ROTATE_STEP : rad);
+
+/** Rotation in whole degrees, normalised to -179..180, for the angle badge. */
+export const angleLabel = (rad: number): string => {
+  let d = Math.round((rad * 180) / Math.PI) % 360;
+  if (d > 180) d -= 360;
+  if (d <= -180) d += 360;
+  return `${d}°`;
+};
+
+/**
+ * Smart-guide candidates: the bounds of the elements intersecting the viewport expanded by 25 %
+ * (page units), minus `exclude` (the moving ids), locked elements and PDF placements.
+ */
+export function guideCandidates(store: EditorStore, exclude: ReadonlySet<string>): Rect[] {
+  const s = store.getState();
+  const { camera: c, viewport: vp } = s;
+  const w = vp.width / c.z;
+  const h = vp.height / c.z;
+  const view = { x: -c.x / c.z - w * 0.125, y: -c.y / c.z - h * 0.125, width: w * 1.25, height: h * 1.25 };
+  const out: Rect[] = [];
+  for (const id of store.spatialIndex().query(view)) {
+    if (exclude.has(id)) continue;
+    const el = s.elements.get(id);
+    if (el && !isLocked(el) && !isPdfPlacement(el)) out.push(elementBounds(el));
+  }
+  return out;
+}
+
+/** The correction along `axis` that makes the gaps to both neighbours equal, or null. */
+function equalGapCorrection(moving: Rect, others: readonly Rect[], threshold: number, axis: "x" | "y"): number | null {
+  // Gaps along x are drawn as horizontal guides (axis "y") and vice versa.
+  const gs = equalSpacing(moving, others, threshold).filter((g) => g.axis !== axis);
+  if (gs.length < 2) return null;
+  return (gs[1].to - gs[1].from - (gs[0].to - gs[0].from)) / 2;
+}
+
+/**
+ * Snapped move delta for a selection with bounds `bounds` dragged by `raw`: per axis a smart-guide
+ * match (edges/centres, then equal spacing) wins, else `grid(raw)` (the grid snap, or `raw`). `lock`
+ * keeps one axis at 0 (Shift axis lock); that axis is never snapped.
+ */
+export function smartMoveDelta(
+  bounds: Rect,
+  raw: Vec2,
+  others: readonly Rect[],
+  threshold: number,
+  grid: (d: Vec2) => Vec2,
+  lock: "x" | "y" | null = null,
+): { delta: Vec2; guides: Guide[] } {
+  const g = grid(raw);
+  const moving = { ...bounds, x: bounds.x + raw.x, y: bounds.y + raw.y };
+  const r = snapMove(moving, others, threshold);
+  const hitX = lock !== "x" && r.guides.some((q) => q.axis === "x");
+  const hitY = lock !== "y" && r.guides.some((q) => q.axis === "y");
+  let dx = lock === "x" ? 0 : hitX ? raw.x + r.dx : g.x;
+  let dy = lock === "y" ? 0 : hitY ? raw.y + r.dy : g.y;
+  const at = () => ({ ...bounds, x: bounds.x + dx, y: bounds.y + dy });
+  if (!hitX && lock !== "x") {
+    const c = equalGapCorrection({ ...at(), x: moving.x }, others, threshold, "x");
+    if (c !== null) dx = raw.x + c;
+  }
+  if (!hitY && lock !== "y") {
+    const c = equalGapCorrection({ ...at(), y: moving.y }, others, threshold, "y");
+    if (c !== null) dy = raw.y + c;
+  }
+  const final = at();
+  const guides = [...snapMove(final, others, 1e-6).guides, ...equalSpacing(final, others, 1e-6)];
+  return { delta: { x: dx, y: dy }, guides };
+}
+
+/** Shift axis lock: the axis to hold at 0 (the smaller component of `d`). */
+export const lockedAxis = (d: Vec2): "x" | "y" => (Math.abs(d.x) >= Math.abs(d.y) ? "y" : "x");
 
 export const rectContains = (b: Rect, p: Vec2, pad = 0): boolean =>
   p.x >= b.x - pad && p.x <= b.x + b.width + pad && p.y >= b.y - pad && p.y <= b.y + b.height + pad;
@@ -117,8 +212,25 @@ type Gesture =
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
   | { kind: "shape"; start: Vec2; end: Vec2 }
-  | { kind: "move"; start: Vec2; delta: Vec2; orig: Element[]; lifted: boolean; anchor: Vec2 | null; started: boolean }
-  | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } };
+  | {
+      kind: "move";
+      start: Vec2;
+      delta: Vec2;
+      /** The unlocked elements being moved. */
+      orig: Element[];
+      lifted: boolean;
+      anchor: Vec2 | null;
+      started: boolean;
+      /** Their bounds at the start, and the smart-guide candidates (read once, on the first move). */
+      bounds: Rect | null;
+      others: Rect[] | null;
+      /** Alt held at the press: the selection is copied once the drag starts (an Alt+click copies nothing). */
+      copy: boolean;
+      /** The merge key joining that copy and the move into one "Duplicate" entry. */
+      dupKey: string | null;
+    }
+  | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } }
+  | { kind: "rotate"; centre: Vec2; from: number; angle: number; orig: Element[] };
 
 export interface ToolDeps {
   /** The editor instance (pane) this controller drives. */
@@ -141,15 +253,19 @@ export function createToolController(deps: ToolDeps) {
   let preview: Element[] = [];
   let hover: Vec2 | null = null; // screen px
   let shift = false;
+  /** Ctrl/Cmd held: snapping is suspended. Alt held: a selection drag copies first. */
+  let free = false;
+  let alt = false;
+  let dupCount = 0;
   let lastTap: Tap | null = null;
   const now = deps.now ?? (() => performance.now());
 
-  /** Double-click on a boxed element opens its editor; returns true when it did. */
+  /** Double-click on a boxed element opens its editor (never a locked one); returns true when it did. */
   const tapEdit = (p: Vec2): boolean => {
     const s = st();
     const id = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
     const el = id ? s.elements.get(id) : undefined;
-    if (!id || !el || !isBoxed(el)) {
+    if (!id || !el || !isBoxed(el) || isLocked(el)) {
       lastTap = null;
       return false;
     }
@@ -195,6 +311,20 @@ export function createToolController(deps: ToolDeps) {
   const moveDelta = (anchor: Vec2 | null, d: Vec2): Vec2 =>
     anchor && deps.getSettings().snapToGrid ? snapDelta(anchor, d, gridSpacingOf(st().page)) : d;
 
+  /** The unlocked selected elements (the ones a transform changes). */
+  const movable = (): Element[] => {
+    const s = st();
+    return [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e && !isLocked(e));
+  };
+
+  /** Start a selection move of the selected elements (Alt held: of fresh copies of them, made when the drag starts). */
+  const startMove = (p: Vec2): Gesture => {
+    const orig = movable();
+    return { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false, bounds: null, others: null, copy: alt, dupKey: null };
+  };
+
+  const clearGuides = () => st().setGuides([]);
+
   /** The shape being dragged, as an element (for the live preview). */
   const shapePreview = (start: Vec2, end: Vec2): Element[] => {
     const style = shapeStyleOf(deps.getSettings());
@@ -231,20 +361,25 @@ export function createToolController(deps: ToolDeps) {
       g = { kind: "idle" };
     } else if (tool === "cursor" || tool === "lasso") {
       const b = selectionBounds(s.elements, s.selection);
-      const corner = b ? hitHandle(b, p, s.camera.z) : null;
-      const orig = [...s.selection].map((id) => s.elements.get(id)!).filter(Boolean);
-      if (b && corner) {
+      // Locked elements are never transformed: only the unlocked part of the selection moves.
+      const orig = [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e && !isLocked(e));
+      const corner = b && orig.length > 0 ? hitHandle(b, p, s.camera.z) : null;
+      if (b && orig.length > 0 && !framedByOverlay(s.elements, s.selection) && hitRotateHandle(b, p, s.camera.z)) {
+        const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+        g = { kind: "rotate", centre, from: Math.atan2(p.y - centre.y, p.x - centre.x), angle: 0, orig };
+        preview = orig;
+        lift(orig);
+      } else if (b && corner) {
         g = { kind: "scale", corner, bounds: b, orig, t: { origin: p, sx: 1, sy: 1 } };
         preview = orig;
         lift(orig);
       } else if (b && rectContains(b, p, HIT_SLOP_PX / s.camera.z)) {
-        g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false };
+        g = startMove(p);
       } else {
         const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
         if (hit) {
           s.select([hit]);
-          const orig = [st().elements.get(hit)!];
-          g = { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false };
+          g = startMove(p);
         } else {
           s.select([]);
           g = { kind: "lasso", points: [p] };
@@ -297,8 +432,34 @@ export function createToolController(deps: ToolDeps) {
       case "move": {
         const raw = { x: p.x - g.start.x, y: p.y - g.start.y };
         if (!g.started && Math.hypot(raw.x, raw.y) * z < MOVE_START_PX) break;
+        if (!g.started && g.copy) {
+          // Alt+drag: copy in place (copies come out unlocked and selected), then move the copies.
+          const key = `alt-duplicate:${++dupCount}`;
+          if (st().duplicateSelectionInPlace(key).length > 0) {
+            g.dupKey = key;
+            g.orig = movable();
+            g.anchor = anchorOf(g.orig);
+          }
+        }
         g.started = true;
-        g.delta = moveDelta(g.anchor, raw);
+        const lock = shift ? lockedAxis(raw) : null;
+        const hold = (d: Vec2): Vec2 => (lock === "x" ? { x: 0, y: d.y } : lock === "y" ? { x: d.x, y: 0 } : d);
+        const held = hold(raw);
+        const anchor = g.anchor;
+        const grid = (d: Vec2) => hold(moveDelta(anchor, d));
+        if (free) {
+          // Ctrl/Cmd held: no smart guides, no grid.
+          g.delta = held;
+          clearGuides();
+        } else if (deps.getSettings().smartGuides && g.orig.length > 0) {
+          g.bounds ??= selectionBounds(new Map(g.orig.map((e) => [e.id, e])), g.orig.map((e) => e.id));
+          g.others ??= guideCandidates(deps.store, new Set(st().selection));
+          if (g.bounds) {
+            const r = smartMoveDelta(g.bounds, held, g.others, GUIDE_SNAP_PX / z, grid, lock);
+            g.delta = r.delta;
+            st().setGuides(r.guides);
+          } else g.delta = grid(held);
+        } else g.delta = grid(held);
         if (!g.lifted && (g.delta.x !== 0 || g.delta.y !== 0)) {
           g.lifted = true;
           lift(g.orig);
@@ -309,6 +470,10 @@ export function createToolController(deps: ToolDeps) {
       case "scale":
         g.t = scaleFromDrag(g.bounds, g.corner, p, shift);
         preview = scaleElements(g.orig, g.t.origin, g.t.sx, g.t.sy);
+        break;
+      case "rotate":
+        g.angle = snapAngle(Math.atan2(p.y - g.centre.y, p.x - g.centre.x) - g.from, shift);
+        preview = rotateElements(g.orig, g.centre, g.angle);
         break;
     }
     deps.requestLive();
@@ -336,11 +501,17 @@ export function createToolController(deps: ToolDeps) {
         break;
       case "move":
         drop();
-        s.moveSelection(g.delta.x, g.delta.y);
+        clearGuides();
+        s.moveSelection(g.delta.x, g.delta.y, g.dupKey ? { label: "Duplicate", mergeKey: g.dupKey } : undefined);
         break;
       case "scale":
         drop();
         s.scaleSelection(g.t.origin, g.t.sx, g.t.sy);
+        break;
+      case "rotate":
+        drop();
+        // One "Rotate" entry for the whole drag.
+        s.rotateSelection(g.centre, g.angle);
         break;
     }
     g = { kind: "idle" };
@@ -349,8 +520,11 @@ export function createToolController(deps: ToolDeps) {
 
   const cancel = () => {
     if (g.kind === "erase") st().endEraser();
+    // A cancelled Alt+drag takes its copies back.
+    if (g.kind === "move" && g.dupKey) st().undo();
     g = { kind: "idle" };
     drop();
+    clearGuides();
     deps.requestLive();
   };
 
@@ -391,12 +565,22 @@ export function createToolController(deps: ToolDeps) {
       ctx.stroke();
       ctx.restore();
     } else if (s.selection.size > 0 && !framedByOverlay(s.elements, s.selection)) {
-      const b = selectionBounds(preview.length > 0 ? new Map(preview.map((e) => [e.id, e])) : s.elements, s.selection);
+      // Preview elements replace their originals; locked ones stay where they are.
+      const live = new Map(preview.map((e) => [e.id, e]));
+      const sel = [...s.selection].map((id) => live.get(id) ?? s.elements.get(id)).filter((e): e is Element => !!e);
+      const b = selectionBounds(new Map(sel.map((e) => [e.id, e])), s.selection);
       if (b) {
-        drawSelectionBounds(ctx, b, c);
+        const editable = sel.some((e) => !isLocked(e));
+        const locks = sel.filter(isLocked).map(elementBounds);
+        if (g.kind === "rotate") {
+          // While rotating, the handle stays on the bounds the drag started from, with the angle badge.
+          drawSelectionBounds(ctx, b, c, { handles: false, locks });
+          drawRotateHandle(ctx, selectionBounds(s.elements, s.selection) ?? b, c, angleLabel(g.angle));
+        } else drawSelectionBounds(ctx, b, c, { handles: editable, rotate: editable, locks });
         animate = true;
       }
     }
+    if (s.guides.length > 0) drawGuides(ctx, s.guides, c);
     if (hover && (s.tempTool ?? s.tool) === "eraser") {
       ctx.save();
       ctx.beginPath();
@@ -424,7 +608,13 @@ export function createToolController(deps: ToolDeps) {
     hover = null;
     deps.requestLive();
   };
+  /** Track Ctrl/Cmd and Alt (keyboard and pointer events both carry them). */
+  const readMods = (e: KeyboardEvent | PointerEvent) => {
+    free = e.ctrlKey || e.metaKey;
+    alt = e.altKey;
+  };
   const onKey = (e: KeyboardEvent) => {
+    readMods(e);
     if (shift === e.shiftKey) return;
     shift = e.shiftKey;
     if (g.kind === "shape" && preview.length > 0) {
@@ -432,6 +622,10 @@ export function createToolController(deps: ToolDeps) {
       deps.requestLive();
     }
   };
+  // Capture phase: the modifiers are known before the pointer adapter starts a gesture.
+  const onPointerMods = (e: PointerEvent) => readMods(e);
+  deps.el.addEventListener("pointerdown", onPointerMods, true);
+  deps.el.addEventListener("pointermove", onPointerMods, true);
   deps.el.addEventListener("pointermove", onHover);
   deps.el.addEventListener("pointerleave", onLeave);
   window.addEventListener("keydown", onKey);
@@ -445,6 +639,8 @@ export function createToolController(deps: ToolDeps) {
     cancel,
     draw,
     dispose() {
+      deps.el.removeEventListener("pointerdown", onPointerMods, true);
+      deps.el.removeEventListener("pointermove", onPointerMods, true);
       deps.el.removeEventListener("pointermove", onHover);
       deps.el.removeEventListener("pointerleave", onLeave);
       window.removeEventListener("keydown", onKey);
@@ -453,8 +649,18 @@ export function createToolController(deps: ToolDeps) {
   };
 }
 
-/** Marching-ants rectangle plus corner handles, in screen space (ctx at dpr scale). */
-export function drawSelectionBounds(ctx: CanvasRenderingContext2D, b: Rect, c: Camera): void {
+export interface SelectionDrawOptions {
+  /** Corner handles (default true; false when every selected element is locked). */
+  handles?: boolean;
+  /** The rotate handle above the top-centre (default false). */
+  rotate?: boolean;
+  /** Bounds of the selected locked elements: each gets a lock glyph at its top-right. */
+  locks?: readonly Rect[];
+}
+
+/** Marching-ants rectangle plus corner handles, rotate handle and lock glyphs, in screen space (ctx at dpr scale). */
+export function drawSelectionBounds(ctx: CanvasRenderingContext2D, b: Rect, c: Camera, opts: SelectionDrawOptions = {}): void {
+  const { handles = true, rotate = false, locks = [] } = opts;
   const a = worldToScreen(c, { x: b.x, y: b.y });
   const w = b.width * c.z;
   const h = b.height * c.z;
@@ -471,10 +677,103 @@ export function drawSelectionBounds(ctx: CanvasRenderingContext2D, b: Rect, c: C
   ctx.setLineDash([]);
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "#4a5d4e";
-  for (const k of CORNERS) {
-    const q = cornerPoint({ x: a.x, y: a.y, width: w, height: h }, k);
-    ctx.fillRect(q.x - HANDLE_PX, q.y - HANDLE_PX, HANDLE_PX * 2, HANDLE_PX * 2);
-    ctx.strokeRect(q.x - HANDLE_PX + 0.5, q.y - HANDLE_PX + 0.5, HANDLE_PX * 2, HANDLE_PX * 2);
+  if (handles)
+    for (const k of CORNERS) {
+      const q = cornerPoint({ x: a.x, y: a.y, width: w, height: h }, k);
+      ctx.fillRect(q.x - HANDLE_PX, q.y - HANDLE_PX, HANDLE_PX * 2, HANDLE_PX * 2);
+      ctx.strokeRect(q.x - HANDLE_PX + 0.5, q.y - HANDLE_PX + 0.5, HANDLE_PX * 2, HANDLE_PX * 2);
+    }
+  ctx.restore();
+  if (rotate) drawRotateHandle(ctx, b, c, null);
+  for (const r of locks) {
+    const q = worldToScreen(c, { x: r.x + r.width, y: r.y });
+    drawLockGlyph(ctx, q.x, q.y);
+  }
+}
+
+/** The rotate handle of bounds `b` (a stem and a round knob), with the angle badge while dragging. */
+export function drawRotateHandle(ctx: CanvasRenderingContext2D, b: Rect, c: Camera, badge: string | null): void {
+  const top = worldToScreen(c, { x: b.x + b.width / 2, y: b.y });
+  const k = { x: top.x, y: top.y - ROTATE_OFFSET_PX };
+  ctx.save();
+  ctx.strokeStyle = "#4a5d4e";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(top.x + 0.5, top.y);
+  ctx.lineTo(k.x + 0.5, k.y + ROTATE_R_PX);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(k.x, k.y, ROTATE_R_PX, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.stroke();
+  if (badge) {
+    ctx.font = "12px system-ui, sans-serif";
+    const tw = ctx.measureText(badge).width;
+    const bx = k.x + ROTATE_R_PX + 6;
+    const by = k.y - 9;
+    ctx.fillStyle = "rgba(26,29,27,0.85)";
+    ctx.fillRect(bx, by, tw + 10, 18);
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(badge, bx + 5, by + 9);
+  }
+  ctx.restore();
+}
+
+/** A small padlock just outside the top-right corner at screen (x, y). */
+export function drawLockGlyph(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  const left = x + 4;
+  const top = y - 14;
+  ctx.save();
+  ctx.fillStyle = "#4a5d4e";
+  ctx.strokeStyle = "#4a5d4e";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(left + 5, top + 4, 3, Math.PI, 0);
+  ctx.stroke();
+  ctx.fillRect(left, top + 4, 10, 8);
+  ctx.restore();
+}
+
+/** Smart guides in magenta (1 screen px) with end ticks and, on equal-spacing guides, the gap label. */
+export function drawGuides(ctx: CanvasRenderingContext2D, guides: readonly Guide[], c: Camera): void {
+  const TICK = 3;
+  ctx.save();
+  ctx.strokeStyle = GUIDE_COLOR;
+  ctx.fillStyle = GUIDE_COLOR;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.font = "11px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (const gd of guides) {
+    const a = worldToScreen(c, gd.axis === "x" ? { x: gd.at, y: gd.from } : { x: gd.from, y: gd.at });
+    const e = worldToScreen(c, gd.axis === "x" ? { x: gd.at, y: gd.to } : { x: gd.to, y: gd.at });
+    ctx.beginPath();
+    if (gd.axis === "x") {
+      const x = Math.round(a.x) + 0.5;
+      ctx.moveTo(x, a.y);
+      ctx.lineTo(x, e.y);
+      ctx.moveTo(x - TICK, a.y);
+      ctx.lineTo(x + TICK, a.y);
+      ctx.moveTo(x - TICK, e.y);
+      ctx.lineTo(x + TICK, e.y);
+    } else {
+      const y = Math.round(a.y) + 0.5;
+      ctx.moveTo(a.x, y);
+      ctx.lineTo(e.x, y);
+      ctx.moveTo(a.x, y - TICK);
+      ctx.lineTo(a.x, y + TICK);
+      ctx.moveTo(e.x, y - TICK);
+      ctx.lineTo(e.x, y + TICK);
+    }
+    ctx.stroke();
+    if (gd.label) {
+      const mx = (a.x + e.x) / 2;
+      const my = (a.y + e.y) / 2;
+      ctx.fillText(gd.label, gd.axis === "x" ? mx + 12 : mx, gd.axis === "x" ? my : my - 9);
+    }
   }
   ctx.restore();
 }

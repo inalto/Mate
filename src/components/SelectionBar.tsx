@@ -1,8 +1,22 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, line ends (one
 // line/arrow), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width; a single math box also gets Graph and Compute; a single runnable code block gets Run. Hidden while a text box is
-// being edited (its editor has its own bar).
-import { AlignLeft, ArrowRight, ChartLine, Copy, CopySimple, Function as FunctionIcon, Play, Stack, Trash } from "@phosphor-icons/react";
+// being edited (its editor has its own bar). Lock (nothing locked) / Unlock (anything locked) and Copy as image are always
+// offered; when every selected element is locked the buttons that would change them are disabled.
+import {
+  AlignLeft,
+  ArrowRight,
+  ChartLine,
+  Copy,
+  CopySimple,
+  Function as FunctionIcon,
+  Image as ImageIcon,
+  LockSimple,
+  LockSimpleOpen,
+  Play,
+  Stack,
+  Trash,
+} from "@phosphor-icons/react";
 import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { worldToScreen } from "../canvas/camera";
@@ -16,7 +30,9 @@ import { getRuntime } from "../code/runtime";
 import { runCodeElement } from "../code/runElement";
 import type { EditorStore } from "../stores/editor";
 import type { Element } from "../model/types";
-import { effectiveCaps } from "../model/content";
+import { effectiveCaps, isLocked } from "../model/content";
+import { copySelectionAsImage } from "../export/copyImage";
+import { showToast } from "./Toast";
 import { LineCapsPicker } from "./LineCapsPopover";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import { useWolframItem } from "../math/useWolframItem";
@@ -57,7 +73,7 @@ function RunCodeButton({ store, id, language, pageId }: { store: EditorStore; id
   );
 }
 
-function ArrangeMenu() {
+function ArrangeMenu({ disabled }: { disabled: boolean }) {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
@@ -79,7 +95,7 @@ function ArrangeMenu() {
   );
   return (
     <div ref={ref} className="tb-anchor">
-      <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen((o) => !o)}>
         <Stack size={16} /> {t("selection.arrange")}
       </button>
       {open && (
@@ -103,7 +119,7 @@ function LineEndsMenu({ shape }: { shape: Element }) {
   useDismiss(ref, open, () => setOpen(false));
   return (
     <div ref={ref} className="tb-anchor">
-      <button type="button" className="tb-btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="tb-btn" aria-haspopup="dialog" aria-expanded={open} disabled={isLocked(shape)} onClick={() => setOpen((o) => !o)}>
         <ArrowRight size={16} /> {t("lineCaps.title")}
       </button>
       {open && (
@@ -116,7 +132,7 @@ function LineEndsMenu({ shape }: { shape: Element }) {
 }
 
 /** Align (>= 2 selected) and distribute (>= 3 selected) menu. */
-function AlignMenu({ count }: { count: number }) {
+function AlignMenu({ count, disabled }: { count: number; disabled: boolean }) {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
@@ -139,7 +155,7 @@ function AlignMenu({ count }: { count: number }) {
   );
   return (
     <div ref={ref} className="tb-anchor">
-      <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="tb-btn" aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen((o) => !o)}>
         <AlignLeft size={16} /> {t("selection.align")}
       </button>
       {open && (
@@ -159,7 +175,7 @@ function AlignMenu({ count }: { count: number }) {
 }
 
 /** Fill colour picker for the selected shapes. */
-function FillMenu({ current }: { current: string | undefined }) {
+function FillMenu({ current, disabled }: { current: string | undefined; disabled: boolean }) {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
@@ -180,6 +196,7 @@ function FillMenu({ current }: { current: string | undefined }) {
         aria-expanded={open}
         aria-label={t("selection.fillColour")}
         title={t("selection.fillColour")}
+        disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       />
       {open && (
@@ -236,6 +253,14 @@ export default function SelectionBar() {
   const codeLanguage = codeBlock ? codeOf(codeBlock).language : undefined;
   const lineShape =
     selected.length === 1 && selected[0]?.type === "shape" && (selected[0].shapeType === "line" || selected[0].shapeType === "arrow") ? selected[0] : undefined;
+  const lockedCount = selected.filter((e) => !!e && isLocked(e)).length;
+  /** Every selected element is locked: nothing here may change them. */
+  const allLocked = lockedCount > 0 && lockedCount === selected.length;
+  const copyImage = () => {
+    void copySelectionAsImage(ed).then((ok) => {
+      if (!ok) showToast(t("exportRegion.copyImageFailed"));
+    });
+  };
 
   return (
     <div className="selection-bar" role="toolbar" aria-label={t("selection.label")} style={{ left, top }}>
@@ -245,10 +270,22 @@ export default function SelectionBar() {
       <button type="button" className="tb-btn" aria-label={t("selection.duplicate")} title={t("selection.duplicate")} onClick={() => s().duplicateSelection()}>
         <Copy size={16} />
       </button>
-      <button type="button" className="tb-btn" aria-label={t("common.delete")} title={t("common.delete")} onClick={() => s().deleteSelection()}>
+      <button type="button" className="tb-btn" aria-label={t("common.delete")} title={t("common.delete")} disabled={allLocked} onClick={() => s().deleteSelection()}>
         <Trash size={16} />
       </button>
-      <ArrangeMenu />
+      <ArrangeMenu disabled={allLocked} />
+      {lockedCount === 0 ? (
+        <button type="button" className="tb-btn" aria-label={t("lock.lock")} title={t("lock.lock")} onClick={() => s().lockSelection()}>
+          <LockSimple size={16} />
+        </button>
+      ) : (
+        <button type="button" className="tb-btn active" aria-label={t("lock.unlock")} title={t("lock.unlock")} onClick={() => s().unlockSelection()}>
+          <LockSimpleOpen size={16} />
+        </button>
+      )}
+      <button type="button" className="tb-btn" aria-label={t("exportRegion.copyImage")} title={t("exportRegion.copyImage")} onClick={copyImage}>
+        <ImageIcon size={16} />
+      </button>
       {math && (
         <button type="button" className="tb-btn" aria-label={t("selection.copyLatex")} title={t("selection.copyLatex")} onClick={() => copyText(math.map(latexOf).join("\n"))}>
           <FunctionIcon size={16} /> LaTeX
@@ -262,9 +299,9 @@ export default function SelectionBar() {
       {math && math.length === 1 && <MathCompute store={ed} source={math[0]} />}
       {codeBlock && codeLanguage && isRunnable(codeLanguage) && <RunCodeButton store={ed} id={codeBlock.id} language={codeLanguage} pageId={codeBlock.pageId} />}
       {lineShape && <LineEndsMenu shape={lineShape} />}
-      {selected.length >= 2 && <AlignMenu count={selected.length} />}
+      {selected.length >= 2 && <AlignMenu count={selected.length} disabled={selected.length - lockedCount < 2} />}
       <span className="tb-sep" />
-      {textBox && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
+      {textBox && !allLocked && <TextFormatControls attrs={textAttrsOf(textBox)} onAttrs={(patch) => s().restyleTextBox(patch)} />}
       {!textBox && PEN_PALETTE.map((c) => (
         <button
           key={c}
@@ -272,13 +309,14 @@ export default function SelectionBar() {
           className={color === c ? "tb-swatch active" : "tb-swatch"}
           style={{ background: c }}
           aria-label={t("library.colour", { color: c })}
+          disabled={allLocked}
           onClick={() => s().restyleSelection({ color: c })}
         />
       ))}
       {firstShape && (
         <>
           <span className="tb-sep" />
-          <FillMenu current={firstShape.fillColor} />
+          <FillMenu current={firstShape.fillColor} disabled={allLocked} />
         </>
       )}
       {first && (
@@ -292,6 +330,7 @@ export default function SelectionBar() {
               step={0.5}
               value={widthPx(first.width)}
               aria-label={t("selection.width")}
+              disabled={allLocked}
               onChange={(e) => s().restyleSelection({ width: Number(e.target.value) / PX_PER_UNIT })}
             />
           </label>

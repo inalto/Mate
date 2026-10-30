@@ -491,7 +491,7 @@ function createEngine(
       requestStatic();
       requestLive();
     }
-    if (s.selection !== prev.selection || s.tool !== prev.tool || s.tempTool !== prev.tempTool) requestLive();
+    if (s.selection !== prev.selection || s.guides !== prev.guides || s.tool !== prev.tool || s.tempTool !== prev.tempTool) requestLive();
     if (s.panHold !== prev.panHold) host.classList.toggle("is-panning", s.panHold);
     if (s.tool !== prev.tool) host.dataset.tool = s.tool;
   });

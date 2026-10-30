@@ -122,6 +122,10 @@
       "snapToGrid": {
         "label": "Encaixar na grade",
         "hint": "Encaixa formas e traços no fundo quadriculado"
+      },
+      "smartGuides": {
+        "label": "Smart guides",
+        "hint": "Snap to the edges, centres and spacing of other elements while moving or resizing; hold Ctrl (Cmd) to suspend"
       }
     },
     "pen": {
@@ -380,6 +384,15 @@
     "settingsToggle": "Oferecer extremidades de linha após o ajuste",
     "settingsHint": "Mostrar um pequeno seletor de extremidades em seta, ponto ou barra quando um traço se torna uma linha ou seta."
   },
+  "lock": {
+    "lock": "Lock",
+    "unlock": "Unlock",
+    "locked": "Locked"
+  },
+  "rotate": {
+    "handle": "Rotate",
+    "angle": "Rotation {{degrees}}"
+  },
   "keys": {
     "title": "Atalhos de teclado",
     "resetAll": "Redefinir tudo",
@@ -435,6 +448,9 @@
       "zoomIn": "Aumentar zoom",
       "zoomOut": "Diminuir zoom",
       "zoomReset": "Redefinir zoom",
+      "zoomFit": "Fit page to screen",
+      "zoomSelection": "Zoom to selection",
+      "toggleLock": "Lock or unlock selection",
       "toggleSidebar": "Mostrar ou ocultar barra lateral",
       "prevPage": "Página anterior",
       "nextPage": "Próxima página",
@@ -603,6 +619,7 @@
   },
   "editor": {
     "zoomReset": "Zoom {{percent}}%, redefinir",
+    "zoomMenu": "Zoom options",
     "pageFull": "Esta página está cheia ({{max}} itens): comece uma nova página.",
     "tableLimit": "A tabela atingiu o limite de tamanho ({{max}} células)",
     "insertImageFailed": "Não foi possível inserir essa imagem.",
@@ -706,6 +723,13 @@
     "shareInstead": "Partilhar em vez disso…",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
+  },
+  "exportRegion": {
+    "selectionOnly": "Selection only",
+    "copyImage": "Copy as image",
+    "copyImageFailed": "Could not copy the image",
+    "fitPage": "Fit page",
+    "fitSelection": "Fit selection"
   },
   "selection": {
     "label": "Seleção",
