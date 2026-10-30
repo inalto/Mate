@@ -18,6 +18,7 @@ import { DEFAULT_SETTINGS } from "../../model/constants";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { createToolController, GUIDE_COLOR, smartMoveDelta } from "../toolInteractions";
+import { selectionBounds } from "../../tools/lasso";
 
 const s = () => useEditorStore.getState();
 
@@ -152,6 +153,121 @@ describe("selection modifiers", () => {
     s().undo();
     expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 0, y: 0 });
     expect(s().canUndo).toBe(false);
+  });
+
+  it("alt_drag_ending_where_it_started_leaves_no_copies", async () => {
+    // Grid snap pulls a 3 px nudge back to 0: the copies are taken back, no entry is left.
+    settings = { ...DEFAULT_SETTINGS, snapToGrid: true, smartGuides: false };
+    const tools = await setup([bar("a", 0, 0)]);
+    s().select(["a"]);
+    keys({ altKey: true });
+    drag(tools, { x: 50, y: 0 }, { x: 53, y: 2 });
+    expect(s().elements.size).toBe(1);
+    expect(s().canUndo).toBe(false);
+  });
+
+  it("alt_drag_copies_never_snap_back_onto_their_originals", async () => {
+    // Smart guides on, nothing else on the page: the originals are no guide candidates.
+    const tools = await setup([bar("a", 0, 0)]);
+    s().select(["a"]);
+    keys({ altKey: true });
+    drag(tools, { x: 50, y: 0 }, { x: 54, y: 5 });
+    expect(s().elements.size).toBe(2);
+    const copy = [...s().elements.values()].find((e) => e.id !== "a")!;
+    expect(copy.points[0]).toMatchObject({ x: 4, y: 5 });
+  });
+
+  describe("escape cancels every live-layer gesture", () => {
+    const escape = () => {
+      const e = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    };
+    const unchanged = () => {
+      expect(s().elements.size).toBe(1);
+      expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 0, y: 0 });
+      expect(s().canUndo).toBe(false);
+      expect(s().dragging).toBe(false);
+    };
+
+    it("move_alt_move_scale_and_rotate", async () => {
+      const tools = await setup([bar("a", 0, 0)]);
+      s().select(["a"]);
+      const gestures: [{ x: number; y: number }, { x: number; y: number }][] = [
+        [{ x: 50, y: 0 }, { x: 50, y: 300 }], // move
+        [{ x: 101, y: 1 }, { x: 201, y: 50 }], // corner scale
+        [{ x: 50, y: -25 }, { x: 150, y: 10 }], // rotate handle
+      ];
+      for (const [from, to] of gestures) {
+        tools.down(from, "cursor");
+        tools.move([to]);
+        expect(escape()).toBe(true);
+        tools.move([{ x: to.x + 10, y: to.y + 10 }]);
+        tools.up();
+        unchanged();
+        // The selection stays.
+        expect([...s().selection]).toEqual(["a"]);
+      }
+      // An Escaped Alt+drag takes its copies back.
+      keys({ altKey: true });
+      tools.down({ x: 50, y: 0 }, "cursor");
+      tools.move([{ x: 50, y: 300 }]);
+      expect(s().elements.size).toBe(2);
+      expect(escape()).toBe(true);
+      tools.up();
+      unchanged();
+    });
+
+    it("lasso_shape_and_insert_space", async () => {
+      const tools = await setup([bar("a", 0, 0)]);
+      // A lasso round the bar selects nothing once Escaped.
+      tools.down({ x: -20, y: -20 }, "cursor");
+      tools.move([{ x: 150, y: -20 }, { x: 150, y: 20 }, { x: -20, y: 20 }]);
+      expect(escape()).toBe(true);
+      tools.up();
+      expect(s().selection.size).toBe(0);
+      // A shape drag adds no shape.
+      tools.down({ x: 200, y: 200 }, "shape");
+      tools.move([{ x: 400, y: 400 }]);
+      expect(escape()).toBe(true);
+      tools.up();
+      // An insert-space drag shifts nothing.
+      tools.down({ x: 0, y: -50 }, "insert-space");
+      tools.move([{ x: 0, y: 100 }]);
+      expect(escape()).toBe(true);
+      tools.up();
+      unchanged();
+      // With no gesture, Escape is left to the shortcuts.
+      expect(escape()).toBe(false);
+    });
+  });
+
+  it("a_selection_holding_a_frame_has_no_rotate_handle", async () => {
+    const frame: Element = {
+      ...el("f", [[300, 300]]),
+      type: "frame",
+      boxWidth: 200,
+      boxHeight: 100,
+      content: { title: "", order: 0 },
+    };
+    const tools = await setup([bar("a", 0, 0), frame]);
+    s().select(["a", "f"]);
+    const b = selectionBounds(s().elements, s().selection)!;
+    drag(tools, { x: b.x + b.width / 2, y: b.y - 24 }, { x: b.x + b.width, y: b.y + b.height / 2 });
+    expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 0, y: 0 });
+    expect(s().elements.get("f")!.points[0]).toMatchObject({ x: 300, y: 300 });
+    expect((s().elements.get("f")!.content as { rotation?: number }).rotation).toBeUndefined();
+    expect(s().canUndo).toBe(false);
+  });
+
+  it("a_lone_box_is_never_scaled_from_the_canvas_outside_its_overlay_handles", async () => {
+    const box: Element = { ...el("t", [[0, 0]]), type: "text-box", boxWidth: 100, boxHeight: 50, content: { contentHtml: "", rawContent: "", textAttributes: {} } };
+    const tools = await setup([box]);
+    s().select(["t"]);
+    // 6 px outside the bottom-right corner (beyond BoxFrame's handle, within the canvas slop).
+    drag(tools, { x: 106, y: 56 }, { x: 206, y: 106 });
+    const t = s().elements.get("t")!;
+    expect([t.boxWidth, t.boxHeight]).toEqual([100, 50]);
   });
 
   it("locked_selection_is_clickable_but_never_moved_or_rotated", async () => {

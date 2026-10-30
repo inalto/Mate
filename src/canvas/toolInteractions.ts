@@ -332,6 +332,8 @@ type Gesture =
       copy: boolean;
       /** The merge key joining that copy and the move into one "Duplicate" entry. */
       dupKey: string | null;
+      /** The copied originals (an Alt+drag): never smart-guide candidates for their own copies. */
+      sources: string[];
     }
   | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } }
   | { kind: "rotate"; centre: Vec2; from: number; angle: number; orig: Element[] };
@@ -471,7 +473,7 @@ export function createToolController(deps: ToolDeps) {
   /** Start a selection move of the selected elements (Alt held: of fresh copies of them, made when the drag starts). */
   const startMove = (p: Vec2): Gesture => {
     const orig = movable();
-    return { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false, bounds: null, others: null, copy: alt, dupKey: null };
+    return { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false, bounds: null, others: null, copy: alt, dupKey: null, sources: [] };
   };
 
   const clearGuides = () => st().setGuides([]);
@@ -696,8 +698,12 @@ export function createToolController(deps: ToolDeps) {
       const loneFrame = s.selection.size === 1 && orig.length === 1 && isFrame(orig[0]);
       // A mind map is never scaled or rotated (zoom makes it bigger): a selection holding one only moves.
       const moveOnly = orig.some((e) => e.type === "mindmap");
-      const corner = b && orig.length > 0 && !lone && !loneFrame && !moveOnly ? hitHandle(b, p, s.camera.z) : null;
-      if (b && orig.length > 0 && !lone && !moveOnly && !framedByOverlay(s.elements, s.selection) && hitRotateHandle(b, p, s.camera.z)) {
+      // Frames ignore rotation: a selection holding one has no rotate handle.
+      const noRotate = moveOnly || orig.some(isFrame);
+      // A lone boxed element's handles are all the overlay's (BoxFrame): no canvas corner under them.
+      const overlay = framedByOverlay(s.elements, s.selection);
+      const corner = b && orig.length > 0 && !lone && !loneFrame && !moveOnly && !overlay ? hitHandle(b, p, s.camera.z) : null;
+      if (b && orig.length > 0 && !lone && !noRotate && !overlay && hitRotateHandle(b, p, s.camera.z)) {
         const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
         g = { kind: "rotate", centre, from: Math.atan2(p.y - centre.y, p.x - centre.x), angle: 0, orig };
         preview = orig;
@@ -744,7 +750,10 @@ export function createToolController(deps: ToolDeps) {
         g.dy = spaceShift(s, g.lineY, p.y - g.lineY);
         const all = [...s.elements.values()];
         const shifted = shiftBelow(all, g.lineY, g.dy, { cutImages: s.spaceCutImages });
-        const moved = shifted.filter((e, i) => e !== all[i] && !isLocked(all[i])); // as insertSpace commits
+        const shiftedOnly = shifted.filter((e, i) => e !== all[i] && !isLocked(all[i])); // as insertSpace commits
+        // Shifted connectors bound to an element that stays put follow it, as insertSpace settles them.
+        const byId = new Map(shiftedOnly.map((e) => [e.id, e]));
+        const moved = shiftedOnly.map((e) => (e.type === "connector" ? routeConnector(e, (id) => byId.get(id) ?? s.elements.get(id)) : e));
         if (g.dy === 0) {
           // Back at the line: show the originals again (nothing is shifted).
           drop();
@@ -791,8 +800,10 @@ export function createToolController(deps: ToolDeps) {
         if (!g.started && g.copy) {
           // Alt+drag: copy in place (copies come out unlocked and selected), then move the copies.
           const key = `alt-duplicate:${++dupCount}`;
+          const sources = g.orig.map((e) => e.id);
           if (st().duplicateSelectionInPlace(key).length > 0) {
             g.dupKey = key;
+            g.sources = sources;
             // The copies already include the frames' contents.
             g.orig = movable(false);
             g.anchor = anchorOf(g.orig);
@@ -810,8 +821,8 @@ export function createToolController(deps: ToolDeps) {
           clearGuides();
         } else if (deps.getSettings().smartGuides && g.orig.length > 0) {
           g.bounds ??= selectionBounds(new Map(g.orig.map((e) => [e.id, e])), g.orig.map((e) => e.id));
-          // The moving frames' contents are not guides either.
-          g.others ??= guideCandidates(deps.store, new Set([...st().selection, ...g.orig.map((e) => e.id)]));
+          // The moving frames' contents are not guides either, nor the originals of Alt+drag copies.
+          g.others ??= guideCandidates(deps.store, new Set([...st().selection, ...g.orig.map((e) => e.id), ...g.sources]));
           if (g.bounds) {
             const r = smartMoveDelta(g.bounds, held, g.others, GUIDE_SNAP_PX / z, grid, lock);
             g.delta = r.delta;
@@ -888,6 +899,11 @@ export function createToolController(deps: ToolDeps) {
       case "move":
         drop();
         clearGuides();
+        // An Alt+drag that ends where it started takes its copies back (no stacked duplicates).
+        if (g.dupKey && g.delta.x === 0 && g.delta.y === 0) {
+          s.undo();
+          break;
+        }
         s.moveSelection(g.delta.x, g.delta.y, g.dupKey ? { label: "Duplicate", mergeKey: g.dupKey, children: false } : undefined);
         break;
       case "scale":
@@ -987,12 +1003,14 @@ export function createToolController(deps: ToolDeps) {
         const editable = sel.some((e) => !isLocked(e));
         // Mind maps only move: no corner or rotate handles while one is selected.
         const transformable = editable && !sel.some((e) => e.type === "mindmap" && !isLocked(e));
+        // Frames ignore rotation: no rotate handle while an unlocked one is selected.
+        const rotatable = transformable && !sel.some((e) => isFrame(e) && !isLocked(e));
         const locks = sel.filter(isLocked).map(elementBounds);
         if (g.kind === "rotate") {
           // While rotating, the handle stays on the bounds the drag started from, with the angle badge.
           drawSelectionBounds(ctx, b, c, { handles: false, locks });
           drawRotateHandle(ctx, selectionBounds(s.elements, s.selection) ?? b, c, angleLabel(g.angle));
-        } else drawSelectionBounds(ctx, b, c, { handles: transformable, rotate: transformable, locks });
+        } else drawSelectionBounds(ctx, b, c, { handles: transformable, rotate: rotatable, locks });
         animate = true;
       }
     }
@@ -1039,11 +1057,12 @@ export function createToolController(deps: ToolDeps) {
     alt = e.altKey;
   };
   /**
-   * Escape drops a connector drag (drawing, an endpoint or the label) or a frame drag without changing
-   * anything. Capture phase, and the key goes no further: the gesture is cancelled, the selection stays.
+   * Escape drops any live-layer gesture (move, scale, rotate, lasso, shape, insert-space, frame,
+   * connector, endpoint, label, auto-complete) without changing anything; an eraser drag ends.
+   * Capture phase, and the key goes no further: the gesture is cancelled, the selection stays.
    */
   const onEscape = (e: KeyboardEvent) => {
-    if (e.key !== "Escape" || !(g.kind === "connector" || g.kind === "endpoint" || g.kind === "label" || g.kind === "frame")) return;
+    if (e.key !== "Escape" || g.kind === "idle") return;
     e.preventDefault();
     e.stopPropagation();
     cancel();
