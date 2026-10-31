@@ -240,6 +240,10 @@ export function createPointerAdapter(
         return;
       }
       if (why === "stylus") {
+        if (touches.size > 0) {
+          addGestureTouch(e); // a further finger joins the running gesture
+          return;
+        }
         const first = pending.entries().next().value as [number, Vec2] | undefined;
         if (first) {
           // Two fingers right after the pen: the held-back one and this one form a gesture.
@@ -280,6 +284,9 @@ export function createPointerAdapter(
     // A new pen/mouse down while a stroke is open means its up/cancel was lost (or it was a
     // finger stroke, which the pen overrides): cancel the stale stroke and start fresh.
     if (drawId !== null) cancelDraw();
+    // Contacts held back before the pen went down are a resting hand: drop them for good.
+    for (const id of pending.keys()) rejected.add(id);
+    pending.clear();
     // A pen writing while a touch pans: that touch is a resting hand, so the pan is no swipe.
     if (touches.size > 0) drewMeanwhile = true;
     drawId = e.pointerId;

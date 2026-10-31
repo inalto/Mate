@@ -393,6 +393,30 @@ describe("touches right after the pen", () => {
     at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
     at("pointerdown", { ...finger, pointerId: 12, width: 60, height: 60, clientX: 60, clientY: 10 }, 110);
     expect(h.onPinch).not.toHaveBeenCalled();
+    expect(h.onPanStart).not.toHaveBeenCalled();
+    expect(h.onDown).not.toHaveBeenCalled();
+  });
+
+  it("pending_contact_under_a_pen_stroke_is_rejected", () => {
+    const { h, at, hover, finger } = rig();
+    hover();
+    at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
+    const pen = { pointerId: 1, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 0, clientY: 0 };
+    at("pointerdown", pen, 200);
+    at("pointerup", { ...pen, buttons: 0 }, 300);
+    at("pointerdown", { ...finger, pointerId: 12, clientX: 60, clientY: 10 }, 400);
+    expect(h.onPanStart).not.toHaveBeenCalled();
+    expect(h.onPinch).not.toHaveBeenCalled();
+  });
+
+  it("third_finger_after_the_pen_joins_the_gesture", () => {
+    const { h, at, hover, finger } = rig();
+    hover();
+    at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
+    at("pointerdown", { ...finger, pointerId: 12, clientX: 60, clientY: 10 }, 110);
+    at("pointerdown", { ...finger, pointerId: 13, clientX: 90, clientY: 10 }, 120);
+    expect(h.onPanStart).toHaveBeenCalledTimes(1);
+    expect(h.onPinch).toHaveBeenCalledTimes(1);
   });
 
   it("touch_rejected_classifies", () => {
