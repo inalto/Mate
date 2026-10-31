@@ -106,6 +106,9 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "iOS": {
+      "minimumSystemVersion": "17.0"
     }
   },
   "plugins": {
