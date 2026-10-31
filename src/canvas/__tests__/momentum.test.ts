@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { releaseVelocity, startFling, stepFling } from "../momentum";
+import { releaseVelocity, startFling, stepFling, FLING_DECAY, MAX_FRAME_MS } from "../momentum";
 
 describe("momentum", () => {
   it("velocity_from_recent_samples", () =>
@@ -28,11 +28,12 @@ describe("momentum", () => {
     const q: ((t: number) => void)[] = [];
     const raf = (cb: (t: number) => void) => (q.push(cb), q.length);
     let ok = true;
-    const apply = vi.fn(() => ok);
+    const apply = vi.fn((_dx: number, _dy: number) => ok);
     const cancel = startFling({ x: 0, y: 1 }, apply, raf);
     q.shift()!(0);
     q.shift()!(16);
     expect(apply).toHaveBeenCalledTimes(2);
+    expect(apply.mock.calls[0][1]).toBeCloseTo(16);
     ok = false;
     q.shift()!(32);
     expect(q.length).toBe(0);
@@ -42,5 +43,16 @@ describe("momentum", () => {
     q.shift()!(0);
     expect(apply2).not.toHaveBeenCalled();
     void cancel;
+  });
+  it("long_frame_is_capped", () => {
+    const q: ((t: number) => void)[] = [];
+    const raf = (cb: (t: number) => void) => (q.push(cb), q.length);
+    const apply = vi.fn((_dx: number, _dy: number) => true);
+    startFling({ x: 0, y: 1 }, apply, raf);
+    q.shift()!(0);
+    q.shift()!(16);
+    q.shift()!(2016);
+    const v3 = FLING_DECAY ** 2;
+    expect(apply.mock.calls[2][1]).toBeCloseTo(v3 * MAX_FRAME_MS);
   });
 });

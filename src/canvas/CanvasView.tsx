@@ -111,9 +111,9 @@ function createEngine(
   let pinchStart: PinchStart | null = null;
   /** The current touch pan, for swipe-to-turn: screen samples, camera at its start, and whether it
    * stayed a one-finger pan (a pinch or second finger rules it out). */
+  let swipe: { samples: SwipeSample[]; camera: Camera; oneFinger: boolean } | null = null;
   /** Cancels a running pan fling. */
   let stopFling: (() => void) | null = null;
-  let swipe: { samples: SwipeSample[]; camera: Camera; oneFinger: boolean } | null = null;
   /** True while our own commit updates the store (the element is already in the snapshot). */
   let committing = false;
   let sheetCount = 0;
