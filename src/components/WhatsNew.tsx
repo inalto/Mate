@@ -4,7 +4,23 @@ import { useTranslation } from "react-i18next";
 
 type Block = { kind: "h"; text: string } | { kind: "p"; text: string } | { kind: "ul"; items: string[] };
 
-/** Minimal markdown: headings, bullet lists and paragraphs. Everything is rendered as text. */
+/** Inline markdown: `**bold**` and `` `code` `` spans; everything else stays plain text. */
+function renderInline(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  const re = /\*\*(.+?)\*\*|`([^`]+)`/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m[1] !== undefined) out.push(<strong key={m.index}>{m[1]}</strong>);
+    else out.push(<code key={m.index}>{m[2]}</code>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** Minimal markdown: headings, bullet lists and paragraphs, with inline bold and code. */
 function parseNotes(md: string): Block[] {
   const blocks: Block[] = [];
   let para: string[] = [];
@@ -36,9 +52,9 @@ function parseNotes(md: string): Block[] {
 }
 
 function renderBlock(b: Block, i: number): ReactNode {
-  if (b.kind === "h") return <h2 key={i}>{b.text}</h2>;
-  if (b.kind === "ul") return <ul key={i}>{b.items.map((t, j) => <li key={j}>{t}</li>)}</ul>;
-  return <p key={i}>{b.text}</p>;
+  if (b.kind === "h") return <h2 key={i}>{renderInline(b.text)}</h2>;
+  if (b.kind === "ul") return <ul key={i}>{b.items.map((t, j) => <li key={j}>{renderInline(t)}</li>)}</ul>;
+  return <p key={i}>{renderInline(b.text)}</p>;
 }
 
 export default function WhatsNew({ notes, onClose }: { notes: string; onClose: () => void }) {
