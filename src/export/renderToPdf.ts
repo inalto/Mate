@@ -49,6 +49,7 @@ import { LINE_HEIGHT } from "../text/style";
 import { textContentOf } from "../text/textBox";
 import { boxRect, contentMeta, elementBounds, rectsOverlap, withMeta } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
+import { drawInLayer, ensureAnnotationLayer } from "./annotationLayer";
 import { exportRegion, pageElements, surfaceFor } from "./scene";
 
 /** Points per page unit (page units are CSS pixels). */
@@ -794,8 +795,8 @@ export function overlayPlacement(rotation: number, crop: Rect, box: Rect, sheet:
   return { x, y, rotate: rot, scale };
 }
 
-/** Output with original pages under the annotation layers of backed sheets. */
-async function compose(layers: Uint8Array, sheets: Sheet[], sources: Map<string, PDFDocument>): Promise<Uint8Array> {
+/** Output with original pages under the annotation layers of backed sheets; `layer` puts those on an optional content group. */
+async function compose(layers: Uint8Array, sheets: Sheet[], sources: Map<string, PDFDocument>, layer: boolean): Promise<Uint8Array> {
   const overlay = await PDFDocument.load(layers);
   const out = await PDFDocument.create();
   const plain = sheets.map((s, i) => (s.backing ? -1 : i)).filter((i) => i >= 0);
@@ -823,7 +824,9 @@ async function compose(layers: Uint8Array, sheets: Sheet[], sources: Map<string,
     const pg = out.addPage(originals.get(i)!);
     const a = overlayPlacement(pg.getRotation().angle, pg.getCropBox(), s.backing.box, s.rect);
     const xy = a.scale / s.k; // layer points → output points
-    pg.drawPage(embedded[backed.indexOf(i)], { x: a.x, y: a.y, xScale: xy, yScale: xy, rotate: degrees(a.rotate) });
+    const draw = () => pg.drawPage(embedded[backed.indexOf(i)], { x: a.x, y: a.y, xScale: xy, yScale: xy, rotate: degrees(a.rotate) });
+    if (layer) drawInLayer(pg, ensureAnnotationLayer(out), draw);
+    else draw();
     if ((i + 1) % SHEETS_PER_YIELD === 0) await yieldToUi();
   }
   return out.save();
@@ -858,5 +861,5 @@ export async function renderToPdf(
   }
   const layers = new Uint8Array(pdf.output("arraybuffer"));
   if (!sheets.some((s) => s.backing)) return layers;
-  return compose(layers, sheets, sources);
+  return compose(layers, sheets, sources, opts.annotationLayer === true);
 }
