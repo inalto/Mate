@@ -4,6 +4,7 @@ import i18n, { type TKey } from "../i18n";
 
 export type ShortcutAction =
   | "tool.pen"
+  | "ink.straight"
   | "tool.highlighter"
   | "tool.eraser"
   | "tool.cursor"
@@ -70,6 +71,7 @@ export interface ActionMeta {
 }
 
 export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
+  "ink.straight": { labelKey: "keys.actions.straightLines", group: "tools", defaultKeys: ["Shift+L"] },
   "tool.pen": { labelKey: "keys.actions.pen", group: "tools", defaultKeys: ["P"] },
   "tool.highlighter": { labelKey: "keys.actions.highlighter", group: "tools", defaultKeys: ["H"] },
   "tool.eraser": { labelKey: "keys.actions.eraser", group: "tools", defaultKeys: ["E"] },

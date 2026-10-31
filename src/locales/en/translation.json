@@ -510,6 +510,7 @@
       "general": "General"
     },
     "actions": {
+      "straightLines": "Toggle straight lines",
       "pen": "Pen",
       "highlighter": "Highlighter",
       "eraser": "Eraser",
@@ -640,6 +641,7 @@
     "updateSettings": "Update settings"
   },
   "toolbar": {
+    "straightLines": "Straight lines",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -819,6 +821,11 @@
     "mateHint": "Exports the whole book this page belongs to.",
     "shareHint": "To send this book to someone, use Share… from the book menu.",
     "shareInstead": "Share instead…",
+    "annotations": "Annotations",
+    "annotationsNone": "None",
+    "annotationsFlat": "Flattened",
+    "annotationsLayer": "Separate layer",
+    "annotationsHint": "Applies to imported PDF pages. A separate layer can be hidden or edited in PDF editors.",
     "boxRender": "Could not render the content of box {{id}} for export.",
     "boxMissing": "Box {{id}} was not rendered for export."
   },

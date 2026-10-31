@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PAGE_GAP } from "../../model/constants";
 import type { Element, Page, PenStyle, Point } from "../../model/types";
 import { MAX_PDF_PAGE_PT, overlayPlacement, PT_PER_UNIT, renderToPdf, type PdfDeps, type PdfExportOptions } from "../renderToPdf";
+import { pdfText } from "./pdfText";
 
 const STAMP = "2026-01-01T00:00:00.000Z";
 const SHEET = { width: 1080, height: 1398 };
@@ -191,6 +192,41 @@ describe("renderToPdf", () => {
     expect(out.getPage(1).getSize()).toEqual({ width: 612, height: 792 });
     expect(readPdfBytes).toHaveBeenCalledTimes(1);
     expect(readPdfBytes).toHaveBeenCalledWith("asset-1");
+  });
+
+  it("annotation_layer_wraps_the_overlay_of_backed_sheets", async () => {
+    const src = await PDFDocument.create();
+    src.addPage([612, 792]);
+    const srcBytes = await src.save();
+    const els = [
+      box("pdf0", "image", 0, 0, SHEET.width, SHEET.height, { pdfSourceKey: "a", pdfPageIndex: 1, zIndex: -1_000_000 }),
+      stroke("ink", line(100, 100, 400, 300)),
+    ];
+    const run = (annotationLayer?: boolean) =>
+      renderToPdf(els, sheets(), { ...OPTS, annotationLayer }, deps({ readPdfBytes: async () => srcBytes }));
+    const on = await pdfText(await run(true));
+    expect(on).toContain("/OCProperties");
+    expect(on).toContain("(Mate annotations)");
+    expect(on).toMatch(/\/OC \/MateAnn BDC[\s\S]*Do[\s\S]*EMC/);
+    const off = await pdfText(await run());
+    expect(off).not.toContain("/MateAnn BDC");
+    expect(off).not.toContain("/OCProperties");
+  });
+
+  it("a_backed_sheet_without_annotations_gets_no_overlay", async () => {
+    // Annotations "none" sends the placements alone: the original page is copied, nothing drawn on it.
+    const src = await PDFDocument.create();
+    src.addPage([612, 792]);
+    const srcBytes = await src.save();
+    const els = [box("pdf0", "image", 0, 0, SHEET.width, SHEET.height, { pdfSourceKey: "a", pdfPageIndex: 1, zIndex: -1_000_000 })];
+    for (const annotationLayer of [false, true]) {
+      const bytes = await renderToPdf(els, sheets(), { ...OPTS, annotationLayer }, deps({ readPdfBytes: async () => srcBytes }));
+      const out = await PDFDocument.load(bytes);
+      expect(out.getPageCount()).toBe(1);
+      const body = await pdfText(bytes);
+      expect(body).not.toMatch(/\/\S+ Do/);
+      expect(body).not.toContain("/MateAnn BDC");
+    }
   });
 
   it("draws the annotation layer upright on rotated source pages", async () => {

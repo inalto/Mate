@@ -640,6 +640,26 @@ function FingerToggle() {
   );
 }
 
+/** Straight-lines mode: strokes keep only their first and last point. */
+function StraightToggle() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const on = ed((s) => s.straightLines);
+  const label = t("toolbar.straightLines");
+  return (
+    <button
+      type="button"
+      className={on ? "tb-btn active" : "tb-btn"}
+      aria-label={label}
+      title={label}
+      aria-pressed={on}
+      onClick={() => ed.getState().toggleStraightLines()}
+    >
+      <LineSegment size={18} />
+    </button>
+  );
+}
+
 /** Opens the paper picker as a popover next to the button; `chrome.paperPickerOpen` is the open flag. */
 function PaperButton() {
   const { t } = useTranslation();
@@ -810,6 +830,7 @@ export default function Toolbar() {
       {toolBtn("lasso", "tool.lasso", t("toolbar.lasso"), <Lasso size={18} />)}
       <InsertSpaceButton />
       {isMobile() && <FingerToggle />}
+      <StraightToggle />
       <span className="tb-sep" />
       <HintButton action="undo" label={t("keys.actions.undo")} disabled={!canUndo} onClick={() => s().undo()}>
         <ArrowUUpLeft size={18} />

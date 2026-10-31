@@ -68,6 +68,7 @@ import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
 import i18n from "../i18n";
 import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
+import { clampDeltaToStack, placeInStack } from "../canvas/pageBounds";
 import { frameCamera } from "../canvas/presentCamera";
 import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tree";
 import type { MindmapLayoutMode } from "../mindmap/layout";
@@ -115,6 +116,8 @@ export interface EditorState {
   tempTool: TempTool | null;
   /** Space held: pointer drags pan. */
   panHold: boolean;
+  /** Session-only: strokes keep just their first and last point. */
+  straightLines: boolean;
   canUndo: boolean;
   canRedo: boolean;
   /** True after a change (or a pen-down) was refused because the page would exceed
@@ -315,6 +318,8 @@ export interface EditorState {
   pushTempTool(tool: TempTool): void;
   popTempTool(): void;
   setPanHold(held: boolean): void;
+  setStraightLines(v: boolean): void;
+  toggleStraightLines(): void;
   /** Erase at a world point with the settings' eraser; one drag is one history entry (endEraser). */
   eraser(center: Vec2): void;
   endEraser(): void;
@@ -331,6 +336,8 @@ export interface EditorState {
    * `children: false` moves the selection alone (the copies already include the frames' contents).
    */
   moveSelection(dx: number, dy: number, opts?: { label?: string; mergeKey?: string; children?: boolean }): void;
+  /** The move `moveSelection(dx, dy)` would really apply (page-mode clamp of the same elements), for drag previews. */
+  clampSelectionMove(dx: number, dy: number): Vec2;
   setSpaceOptions(patch: { spaceMode?: "insert" | "remove"; spaceCutImages?: boolean }): void;
   /** Insert-space tool: shift everything below `lineY` by `dy` (clamped); one "Insert space" entry, none when it is 0. */
   insertSpace(lineY: number, dy: number): void;
@@ -399,6 +406,39 @@ export function sheetStack(s: Pick<EditorState, "page" | "contentBottom">): Shee
   const aspect = useSettingsStore.getState().settings.defaultPageAspectRatio;
   const size = s.page ? sheetSize(s.page, aspect) : sheetSize(fallbackPage("", "canvas"), aspect);
   return { ...size, count: sheetCountFor(s.contentBottom, size.height) };
+}
+
+/** Union bounds of `els` (null when empty). */
+function unionBounds(els: Element[]): Rect | null {
+  if (els.length === 0) return null;
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const el of els) {
+    const b = elementBounds(el);
+    x0 = Math.min(x0, b.x);
+    y0 = Math.min(y0, b.y);
+    x1 = Math.max(x1, b.x + b.width);
+    y1 = Math.max(y1, b.y + b.height);
+  }
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+}
+
+/** In page mode, `els` shifted as a group so they sit within the sheet width and below the top; else unchanged. */
+export function keepInStack(els: Element[], s: Pick<EditorState, "page" | "contentBottom">): Element[] {
+  if (s.page?.mode !== "page") return els;
+  const u = unionBounds(els);
+  if (!u) return els;
+  const d = placeInStack(u, sheetStack(s));
+  return d.x === 0 && d.y === 0 ? els : translateElements(els, d.x, d.y);
+}
+
+/** In page mode, the move (dx, dy) of `els` reduced so they stay within the sheet width and below the top. */
+export function clampMove(els: Element[], dx: number, dy: number, s: Pick<EditorState, "page" | "contentBottom">): Vec2 {
+  if (s.page?.mode !== "page") return { x: dx, y: dy };
+  const u = unionBounds(els);
+  return u ? clampDeltaToStack(u, { x: dx, y: dy }, sheetStack(s)) : { x: dx, y: dy };
 }
 
 /** Options for the insert-space helpers; page mode caps insertion at the stack bottom plus one sheet. */
@@ -573,6 +613,7 @@ export function createEditorStore(): EditorStore {
     contentBottom: 0,
     tempTool: null,
     panHold: false,
+    straightLines: false,
     canUndo: false,
     canRedo: false,
     limitReached: false,
@@ -1032,7 +1073,7 @@ export function createEditorStore(): EditorStore {
       const pos = cfg.alignTextToLines && s.page ? alignToRuledLine(at, attrs.fontSize, s.page, cfg.defaultPageAspectRatio) : at;
       const top = topZ(s.elements.values());
       const box = textBoxElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), pos, attrs);
-      const el = top > 0 ? withMeta(box, { zIndex: top }) : box;
+      const el = keepInStack([top > 0 ? withMeta(box, { zIndex: top }) : box], s)[0];
       if (!record("Text", [{ type: "add", el }], textKey(el.id))) return null;
       freshText = el.id;
       set({ selection: new Set([el.id]), editingId: el.id });
@@ -1050,7 +1091,7 @@ export function createEditorStore(): EditorStore {
       const base = textBoxElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), { x: c.x - AUTO_NOTE_SIZE.width / 2, y: c.y - AUTO_NOTE_SIZE.height / 2 }, attrs);
       const top = topZ(s.elements.values());
       const note: Element = { ...base, boxWidth: AUTO_NOTE_SIZE.width, boxHeight: AUTO_NOTE_SIZE.height, content: { ...(base.content as object), card: noteCard(cfg.defaultNoteColor) } };
-      const el = top > 0 ? withMeta(note, { zIndex: top }) : note;
+      const el = keepInStack([top > 0 ? withMeta(note, { zIndex: top }) : note], s)[0];
       if (!record("Note", [{ type: "add", el }])) return null;
       set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
       get().beginEdit(el.id);
@@ -1086,7 +1127,7 @@ export function createEditorStore(): EditorStore {
       const box = fitImage(natural, { x: tl.x, y: tl.y, width: br.x - tl.x, height: br.y - tl.y }, at);
       const top = topZ(s.elements.values());
       const img = imageElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), assetId, box);
-      const el = top > 0 ? withMeta(img, { zIndex: top }) : img;
+      const el = keepInStack([top > 0 ? withMeta(img, { zIndex: top }) : img], s)[0];
       if (!record("Image", [{ type: "add", el }])) return null;
       set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
       return el.id;
@@ -1103,7 +1144,7 @@ export function createEditorStore(): EditorStore {
       const top = topZ(s.elements.values());
       const content = title ? { kind, title } : { kind };
       const media = mediaElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), assetId, box, content);
-      const el = top > 0 ? withMeta(media, { zIndex: top }) : media;
+      const el = keepInStack([top > 0 ? withMeta(media, { zIndex: top }) : media], s)[0];
       if (!record("Media", [{ type: "add", el }])) return null;
       set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
       return el.id;
@@ -1237,6 +1278,10 @@ export function createEditorStore(): EditorStore {
     popTempTool: () => {
       if (get().tempTool !== null) set({ tempTool: null });
     },
+    setStraightLines: (straightLines) => {
+      if (get().straightLines !== straightLines) set({ straightLines });
+    },
+    toggleStraightLines: () => set({ straightLines: !get().straightLines }),
     setPanHold: (panHold) => {
       if (get().panHold !== panHold) set({ panHold });
     },
@@ -1306,7 +1351,12 @@ export function createEditorStore(): EditorStore {
     moveSelection(dx, dy, opts) {
       if (dx === 0 && dy === 0) return;
       const before = opts?.children === false ? unlockedSelection() : withChildren(unlockedSelection());
-      transformSelection(opts?.label ?? "Move", (els) => translateElements(els, dx, dy), opts?.mergeKey, before);
+      const d = clampMove(before, dx, dy, get());
+      if (d.x === 0 && d.y === 0) return;
+      transformSelection(opts?.label ?? "Move", (els) => translateElements(els, d.x, d.y), opts?.mergeKey, before);
+    },
+    clampSelectionMove(dx, dy) {
+      return clampMove(withChildren(unlockedSelection()), dx, dy, get());
     },
     setSpaceOptions(patch) {
       set(patch);
@@ -1988,7 +2038,7 @@ export function createEditorStore(): EditorStore {
     const top = topZ(s.elements.values());
     const ids = new Map(src.map((el) => [el.id, crypto.randomUUID()]));
     const { dx, dy } = typeof offset === "number" ? { dx: offset, dy: offset } : offset;
-    const placed = translateElements(src.map(unlocked), dx, dy).map((el, i) => {
+    const placed = keepInStack(translateElements(src.map(unlocked), dx, dy), s).map((el, i) => {
       const copy: Element = { ...el, id: ids.get(el.id)!, pageId, createdAt: now, updatedAt: now, version: 0 };
       return top > 0 ? withMeta(copy, { zIndex: top + 1 + i }) : copy;
     });

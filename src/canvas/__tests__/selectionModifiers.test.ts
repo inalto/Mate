@@ -166,6 +166,18 @@ describe("selection modifiers", () => {
     expect(s().canUndo).toBe(false);
   });
 
+  it("alt_drag_pinned_at_the_sheet_edge_keeps_its_copies", async () => {
+    // Page mode, bounds at the sheet's top-left: dragging up is clamped to no move, yet it was a drag.
+    settings = { ...DEFAULT_SETTINGS, snapToGrid: false, smartGuides: false };
+    const tools = await setup([bar("a", 1, 1)]);
+    useEditorStore.setState({ page: { ...s().page!, mode: "page" }, contentBottom: 1e5 });
+    s().select(["a"]);
+    keys({ altKey: true });
+    drag(tools, { x: 50, y: 1 }, { x: 50, y: -300 });
+    expect(s().elements.size).toBe(2);
+    expect(s().canUndo).toBe(true);
+  });
+
   it("alt_drag_copies_never_snap_back_onto_their_originals", async () => {
     // Smart guides on, nothing else on the page: the originals are no guide candidates.
     const tools = await setup([bar("a", 0, 0)]);

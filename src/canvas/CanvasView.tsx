@@ -28,10 +28,12 @@ import { clearMindmapCache } from "../mindmap/cache";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
+import { cameraFlingApply, releaseVelocity, startFling } from "./momentum";
 import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
 import { turnPage } from "../keys/editorCommands";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
+import { sheetRectAt } from "./pageBounds";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
 import { createDismissPress, createToolController, pointerTool } from "./toolInteractions";
@@ -110,6 +112,8 @@ function createEngine(
   /** The current touch pan, for swipe-to-turn: screen samples, camera at its start, and whether it
    * stayed a one-finger pan (a pinch or second finger rules it out). */
   let swipe: { samples: SwipeSample[]; camera: Camera; oneFinger: boolean } | null = null;
+  /** Cancels a running pan fling. */
+  let stopFling: (() => void) | null = null;
   /** True while our own commit updates the store (the element is already in the snapshot). */
   let committing = false;
   let sheetCount = 0;
@@ -309,6 +313,8 @@ function createEngine(
     liveCanvas,
     {
       onDown(p, info) {
+        stopFling?.();
+        stopFling = null;
         const s = ready();
         if (!s) return;
         const dismissing = consumeDismissDown();
@@ -341,6 +347,12 @@ function createEngine(
           if (mode === "tool") tools.down(p, tool);
           return;
         }
+        // Page mode: strokes belong to the sheet they start on; the gap between sheets draws nothing.
+        const sheet = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
+        if (sheet === null) {
+          mode = "none";
+          return;
+        }
         // No tutor gestures (double-tap, hold, marker tap) for the press that closed the card.
         tutorStroke = !dismissing && s.preset.type !== "highlighter";
         if (dismissing) dismissPress.down(worldToScreen(s.camera, p));
@@ -363,14 +375,17 @@ function createEngine(
         const set = getSettings();
         mode = "draw";
         penInk.start(info.pointerType);
+        const straight = s.straightLines || info.shiftKey;
         builder = createStrokeBuilder({
           pageId,
           preset: s.preset,
           zoom: s.camera.z,
           stabilization: set.strokeStabilization,
           nibFlatness: set.fountainPenNibFlatness,
+          clampRect: sheet,
+          straight,
         });
-        snap = inkSnapAllowed(s.preset.type, set)
+        snap = !straight && inkSnapAllowed(s.preset.type, set)
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
               snapsOnRelease: set.inkToShapeSnapsOnRelease,
@@ -454,6 +469,8 @@ function createEngine(
         setLive(null);
       },
       onPanStart(at, timeStamp) {
+        stopFling?.();
+        stopFling = null;
         swipe = { samples: [{ x: at.x, y: at.y, t: timeStamp }], camera: st().camera, oneFinger: true };
       },
       onPan(dx, dy, info) {
@@ -471,11 +488,24 @@ function createEngine(
         // A cancelled contact or one that rested while the pen wrote is never a page turn.
         if (!g?.oneFinger || end.cancelled || end.drewMeanwhile || !s.page || s.presenting) return;
         // The lift time closes the gesture: a flick followed by a hold fails the time window.
+        const velocity = releaseVelocity(g.samples, end.timeStamp);
         const last = g.samples[g.samples.length - 1];
         g.samples.push({ x: last.x, y: last.y, t: end.timeStamp });
         // A leftward swipe (-1) turns to the next page, a rightward one to the previous page.
         const dir = detectSwipe(g.samples);
-        if (dir !== null && canSwipeAt(g.camera, s.page, s.viewport, dir, sheetStack(s))) void turnPage(dir === -1 ? 1 : -1);
+        if (dir !== null && canSwipeAt(g.camera, s.page, s.viewport, dir, sheetStack(s))) {
+          void turnPage(dir === -1 ? 1 : -1);
+          return;
+        }
+        stopFling = startFling(
+          velocity,
+          cameraFlingApply(
+            () => st().camera,
+            (n) => st().setCamera(n),
+            (c, dx, dy) => dragPan(c, dx, dy, clamp),
+            () => ready() !== null,
+          ),
+        );
       },
       onPinch(g) {
         if (swipe) swipe.oneFinger = false;
@@ -500,6 +530,8 @@ function createEngine(
   );
 
   const onWheel = (e: WheelEvent) => {
+    stopFling?.();
+    stopFling = null;
     e.preventDefault();
     const s = ready();
     if (!s) return;
@@ -593,6 +625,8 @@ function createEngine(
     dispose() {
       tutor.dispose();
       disposed = true;
+      stopFling?.();
+      stopFling = null;
       adapter();
       penInk.dispose();
       tools.dispose();

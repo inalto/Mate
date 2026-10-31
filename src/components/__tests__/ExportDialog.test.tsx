@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
-import type { Page, Section, Unit } from "../../model/types";
+import type { Element, Page, Section, Unit } from "../../model/types";
 
 vi.mock("../../export/exportPage", () => ({ exportPage: vi.fn(async () => "C:/out.png") }));
 vi.mock("../../ipc/archive", () => ({ exportUnitArchive: vi.fn(async () => "C:/book.mate") }));
@@ -18,6 +18,7 @@ vi.mock("../ShareDialog", () => ({
 import { exportPage } from "../../export/exportPage";
 import { exportUnitArchive } from "../../ipc/archive";
 import { setPlatformForTests } from "../../platform";
+import { editorForPane } from "../../stores/focusedEditor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
 import { useToastStore } from "../Toast";
@@ -86,7 +87,7 @@ describe("ExportDialog", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Searchable text" }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(exportPage).toHaveBeenCalledWith("p1", "pdf", { theme: "light", background: "plain", pages: "current", searchable: false });
+    expect(exportPage).toHaveBeenCalledWith("p1", "pdf", { theme: "light", background: "plain", pages: "current", searchable: false, annotations: "flat" });
   });
 
   it("offers page range only for page-mode pages", () => {
@@ -111,7 +112,7 @@ describe("ExportDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "3×" }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(exportPage).toHaveBeenCalledWith("p1", "png", { theme: "dark", background: "transparent", scale: 3 });
+    expect(exportPage).toHaveBeenCalledWith("p1", "png", { theme: "dark", background: "transparent", scale: 3, annotations: "flat" });
   });
 
   it("exports the page's book as a .mate archive", async () => {
@@ -171,5 +172,44 @@ describe("ExportDialog", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("disk full");
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("ExportDialog annotations", () => {
+  const placement = {
+    id: "pdf0", pageId: "p1", type: "image", points: [], color: "#000", width: 1, isHighlighter: false,
+    content: { pdfSourceKey: "a", pdfPageIndex: 0 }, createdAt: STAMP, updatedAt: STAMP, version: 0,
+  } as unknown as Element;
+  const withPlacement = () =>
+    editorForPane(0).setState({ loadedPageId: "p1", elements: new Map([["pdf0", placement]]) });
+  afterEach(() => editorForPane(0).setState({ loadedPageId: null, elements: new Map() }));
+
+  it("hides_annotations_without_placements", () => {
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    expect(screen.queryByRole("group", { name: "Annotations" })).toBeNull();
+  });
+
+  it("offers_annotations_with_placements_and_layer_only_for_pdf", () => {
+    withPlacement();
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    expect(screen.getByRole("group", { name: "Annotations" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Separate layer" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "PNG" }));
+    expect(screen.getByRole("group", { name: "Annotations" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Separate layer" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "LaTeX" }));
+    expect(screen.queryByRole("group", { name: "Annotations" })).toBeNull();
+  });
+
+  it("passes_annotations_and_resets_layer_when_leaving_pdf", async () => {
+    withPlacement();
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Separate layer" }));
+    fireEvent.click(screen.getByRole("button", { name: "PNG" }));
+    expect(pressed("Flattened")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "None" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(exportPage).toHaveBeenCalled());
+    expect(vi.mocked(exportPage).mock.calls[0][2]).toMatchObject({ annotations: "none" });
   });
 });

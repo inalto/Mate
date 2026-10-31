@@ -19,7 +19,7 @@ import { anchorPoint } from "../../connectors/anchors";
 import { connectorRoute, labelPill } from "../../connectors/geometry";
 import { pointAt } from "../../connectors/route";
 import { shapeElement, shapeFromDrag } from "../../shapes/geometry";
-import { useEditorStore } from "../../stores/editor";
+import { sheetStack, useEditorStore } from "../../stores/editor";
 import { closeLabelPopover, useLabelPopoverStore } from "../../stores/labelPopover";
 import { useNotebookStore } from "../../stores/notebook";
 import { createToolController } from "../toolInteractions";
@@ -257,5 +257,23 @@ describe("connector tool", () => {
     tools.down({ x: 301, y: 300 }, "cursor");
     tools.up();
     expect(useLabelPopoverStore.getState().target).toMatchObject({ id });
+  });
+
+  it("page_mode_free_end_stays_on_the_sheet_and_an_off_sheet_press_draws_nothing", async () => {
+    await ready();
+    useEditorStore.setState({ page: { ...s().page!, mode: "page" }, contentBottom: 1e5 });
+    const width = sheetStack(s()).width;
+    const { tools } = controller();
+    dispose = tools.dispose;
+    tools.down({ x: 200, y: 300 }, "connector");
+    tools.move([{ x: width + 500, y: 300 }]);
+    tools.up();
+    const el = connectors()[0];
+    expect(content(el).target).toBeUndefined();
+    expect(el.points[1]).toMatchObject({ x: width, y: 300 });
+    tools.down({ x: width + 50, y: 300 }, "connector"); // in the gap beside the sheet
+    tools.move([{ x: width + 300, y: 400 }]);
+    tools.up();
+    expect(connectors()).toHaveLength(1);
   });
 });

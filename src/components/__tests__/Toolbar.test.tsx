@@ -45,6 +45,19 @@ describe("Toolbar", () => {
     setPlatformForTests(false);
   });
 
+  it("straight_toggle_follows_the_flag_on_every_platform", () => {
+    setPlatformForTests(false);
+    renderBar();
+    const btn = () => screen.getByRole("button", { name: "Straight lines" });
+    expect(btn().getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(btn());
+    expect(useEditorStore.getState().straightLines).toBe(true);
+    expect(btn().getAttribute("aria-pressed")).toBe("true");
+    expect(btn().className).toContain("active");
+    act(() => useEditorStore.getState().setStraightLines(false));
+    expect(btn().getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("finger_toggle_only_on_mobile_and_cycles_draw_pan", () => {
     setPlatformForTests(false);
     renderBar();

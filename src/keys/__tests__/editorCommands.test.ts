@@ -57,6 +57,14 @@ const focused = () => {
 };
 
 describe("runEditorShortcut", () => {
+  it("ink_straight_toggles_the_flag", () => {
+    expect(useEditorStore.getState().straightLines).toBe(false);
+    runEditorShortcut("ink.straight", {});
+    expect(useEditorStore.getState().straightLines).toBe(true);
+    runEditorShortcut("ink.straight", {});
+    expect(useEditorStore.getState().straightLines).toBe(false);
+  });
+
   it("ctrl_d_duplicates_selection_else_page", () => {
     runEditorShortcut("duplicate", {});
     expect(useNotebookStore.getState().duplicatePage).toHaveBeenCalledWith("b");

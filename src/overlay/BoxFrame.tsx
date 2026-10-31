@@ -108,9 +108,15 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
     if (!d.handle || d.handle === "rotate") {
       const lock = e.shiftKey ? lockedAxis({ x: dx, y: dy }) : null;
       const raw = { x: lock === "x" ? 0 : dx, y: lock === "y" ? 0 : dy };
-      if (!snapping(e)) return { rect: { ...d.from, x: d.from.x + raw.x, y: d.from.y + raw.y }, guides: [] };
+      // The preview stops where the commit will (page mode keeps the selection on the sheets).
+      const kept = (q: { x: number; y: number }) => store.getState().clampSelectionMove(q.x, q.y);
+      if (!snapping(e)) {
+        const k = kept(raw);
+        return { rect: { ...d.from, x: d.from.x + k.x, y: d.from.y + k.y }, guides: [] };
+      }
       const r = smartMoveDelta(d.from, raw, candidates(), GUIDE_SNAP_PX / zoom, (q) => q, lock);
-      return { rect: { ...d.from, x: d.from.x + r.delta.x, y: d.from.y + r.delta.y }, guides: r.guides };
+      const k = kept(r.delta);
+      return { rect: { ...d.from, x: d.from.x + k.x, y: d.from.y + k.y }, guides: r.guides };
     }
     // Handles act in the box's own (unrotated) frame.
     const cos = Math.cos(-rotation);

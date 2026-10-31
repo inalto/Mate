@@ -22,6 +22,9 @@ import type { ExportOptions } from "./scene";
 
 export type PageExportFormat = "png" | "svg" | "pdf" | "latex";
 
+/** Annotations drawn over imported PDF pages: dropped, merged into the page, or a separate PDF layer. */
+export type AnnotationMode = "none" | "flat" | "layer";
+
 export interface PageExportOptions extends Partial<ExportOptions> {
   /** PDF: every sheet, or the sheet shown in the editor (page mode). */
   pages?: "all" | "current";
@@ -29,6 +32,8 @@ export interface PageExportOptions extends Partial<ExportOptions> {
   searchable?: boolean;
   /** Adjust the elements before they are drawn (a frame export drops the frame's own title). */
   mapElements?: (els: Element[]) => Element[];
+  /** Imported-PDF pages: keep annotations flattened (default), drop them, or (PDF) add them as a layer. */
+  annotations?: AnnotationMode;
 }
 
 const EXTENSIONS: Record<PageExportFormat, string> = { png: "png", svg: "svg", pdf: "pdf", latex: "tex" };
@@ -102,7 +107,9 @@ export async function exportPage(
   // An open box editor keeps its edits locally until the session ends: commit them first.
   endAllEdits();
   const loaded = await elementsOf(pageId);
-  const elements = options.mapElements ? options.mapElements(loaded) : loaded;
+  // "none": only the imported PDF pages stay (a page without any keeps everything).
+  const kept = options.annotations === "none" && loaded.some(isPdfPlacement) ? loaded.filter(isPdfPlacement) : loaded;
+  const elements = options.mapElements ? options.mapElements(kept) : kept;
   const filename = pageExportFilename(page.title, EXTENSIONS[format]);
   if (format === "latex") {
     const tex = renderToLatex(elements.filter((e) => e.pageId === pageId));
@@ -134,6 +141,7 @@ export async function exportPage(
       searchable: options.searchable ?? true,
       region: opts.region,
       textBitmaps,
+      annotationLayer: options.annotations === "layer",
     });
     return writeExportFile(filename, bytes);
   }
