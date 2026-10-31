@@ -74,13 +74,13 @@ describe("input settings", () => {
   });
 
   it("barrel_button_switches_to_eraser", () => {
-    const pen: PointerInfo = { pointerType: "pen", buttons: 1 | 2, isBarrel: true, isEraserEnd: false };
+    const pen: PointerInfo = { pointerType: "pen", buttons: 1 | 2, isBarrel: true, isEraserEnd: false, shiftKey: false };
     set({ penBarrelButtonAction: "none" });
     expect(pointerTool("pen", false, pen, cfg()).tool).toBe("none");
     set({ penBarrelButtonAction: "eraser" });
     expect(pointerTool("pen", false, pen, cfg())).toEqual({ tool: "eraser", temp: "eraser" });
     // Eraser end (pen, buttons bit 32) follows its own key.
-    const end: PointerInfo = { pointerType: "pen", buttons: 32, isBarrel: false, isEraserEnd: true };
+    const end: PointerInfo = { pointerType: "pen", buttons: 32, isBarrel: false, isEraserEnd: true, shiftKey: false };
     set({ penEraserButtonAction: "lasso" });
     expect(pointerTool("pen", false, end, cfg()).tool).toBe("lasso");
   });

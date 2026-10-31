@@ -510,6 +510,7 @@
       "general": "General"
     },
     "actions": {
+      "straightLines": "Toggle straight lines",
       "pen": "Pen",
       "highlighter": "Highlighter",
       "eraser": "Eraser",
@@ -640,6 +641,7 @@
     "updateSettings": "Update settings"
   },
   "toolbar": {
+    "straightLines": "Straight lines",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

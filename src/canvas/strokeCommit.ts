@@ -18,6 +18,14 @@ export interface StrokeOptions {
   nibFlatness: number;
   /** Page mode: every raw point is clamped to this sheet before normalising. */
   clampRect?: Rect;
+  /** Keep only the first and last point (straight line). */
+  straight?: boolean;
+}
+
+/** `[]` for empty, `[p]` for one, else the first and last points unchanged. */
+export function straightenStroke(points: Point[]): Point[] {
+  if (points.length < 2) return points.slice();
+  return [points[0], points[points.length - 1]];
 }
 
 export const NIB_ANGLE = Math.PI / 4;
@@ -86,15 +94,16 @@ export function createStrokeBuilder(opts: StrokeOptions): StrokeBuilder {
         if (out.length >= LIMITS.MAX_POINTS_PER_STROKE) break;
         out.push(process(r, true, stab));
       }
-      return out;
+      return opts.straight ? straightenStroke(out) : out;
     },
     preview(predicted) {
-      if (predicted.length === 0) return out;
+      const all = predicted.length === 0 ? out : out.concat(predicted.map((r) => process(r, false, (p) => p)));
       // Predicted points skip the stabiliser (it is stateful) and are never committed.
-      return out.concat(predicted.map((r) => process(r, false, (p) => p)));
+      return opts.straight ? straightenStroke(all) : all;
     },
-    points: () => out,
+    points: () => (opts.straight ? straightenStroke(out) : out),
     finish() {
+      if (opts.straight) return straightenStroke(out);
       const resampled = resampleInkPoints(out, 0.08);
       const simplified = simplifyPolylineXY(resampled, simplifyEpsForZoom(opts.zoom));
       return simplified.slice(0, LIMITS.MAX_POINTS_PER_STROKE);

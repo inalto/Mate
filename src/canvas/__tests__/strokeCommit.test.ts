@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PenPreset, Point } from "../../model/types";
-import { commitStroke, createStrokeBuilder, nibFactor } from "../strokeCommit";
+import { commitStroke, createStrokeBuilder, nibFactor, straightenStroke } from "../strokeCommit";
 
 const pen: PenPreset = { id: "p", type: "pen", color: "#C62828", width: 4.11 };
 const raw = (n: number, pressure = 0.5): Point[] =>
@@ -8,6 +8,21 @@ const raw = (n: number, pressure = 0.5): Point[] =>
 const opts = (preset: PenPreset) => ({ pageId: "pg", preset, zoom: 1, stabilization: 35, nibFlatness: 35 });
 
 describe("strokeCommit", () => {
+  it("straight_builder_keeps_first_and_last_only", () => {
+    const pt = (x: number, y: number): Point => ({ x, y, pressure: 0.5, timestamp: 0 });
+    const b = createStrokeBuilder({ ...opts(pen), straight: true, stabilization: 0 });
+    b.push([pt(0, 0), pt(40, 90), pt(100, 10), pt(200, 200)]);
+    expect(b.points().map((p) => [p.x, p.y])).toEqual([[0, 0], [200, 200]]);
+    expect(b.finish().map((p) => [p.x, p.y])).toEqual([[0, 0], [200, 200]]);
+    expect(b.preview([pt(300, 300)]).map((p) => [p.x, p.y])).toEqual([[0, 0], [300, 300]]);
+  });
+
+  it("straighten_stroke_handles_short_inputs", () => {
+    const a: Point = { x: 1, y: 1, pressure: 0.5, timestamp: 0 };
+    expect(straightenStroke([])).toEqual([]);
+    expect(straightenStroke([a])).toEqual([a]);
+  });
+
   it("builds_a_stroke_element_from_the_preset", () => {
     const el = commitStroke(raw(30), opts(pen))!;
     expect(el).toMatchObject({ pageId: "pg", type: "stroke", color: "#C62828", width: 4.11, isHighlighter: false, penStyle: "pen", version: 0 });

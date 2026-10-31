@@ -25,6 +25,7 @@ export interface PointerInfo {
   isBarrel: boolean;
   /** Pen eraser end (bit 32 or pointerType "eraser"). */
   isEraserEnd: boolean;
+  shiftKey: boolean;
 }
 
 export interface PinchGesture {
@@ -87,6 +88,7 @@ export function pointerInfo(e: PointerEvent): PointerInfo {
     buttons: e.buttons,
     isBarrel: pen && (e.buttons & BUTTON_BARREL) !== 0,
     isEraserEnd: e.pointerType === "eraser" || (pen && (e.buttons & BUTTON_ERASER) !== 0),
+    shiftKey: e.shiftKey,
   };
 }
 

@@ -116,6 +116,8 @@ export interface EditorState {
   tempTool: TempTool | null;
   /** Space held: pointer drags pan. */
   panHold: boolean;
+  /** Session-only: strokes keep just their first and last point. */
+  straightLines: boolean;
   canUndo: boolean;
   canRedo: boolean;
   /** True after a change (or a pen-down) was refused because the page would exceed
@@ -316,6 +318,8 @@ export interface EditorState {
   pushTempTool(tool: TempTool): void;
   popTempTool(): void;
   setPanHold(held: boolean): void;
+  setStraightLines(v: boolean): void;
+  toggleStraightLines(): void;
   /** Erase at a world point with the settings' eraser; one drag is one history entry (endEraser). */
   eraser(center: Vec2): void;
   endEraser(): void;
@@ -607,6 +611,7 @@ export function createEditorStore(): EditorStore {
     contentBottom: 0,
     tempTool: null,
     panHold: false,
+    straightLines: false,
     canUndo: false,
     canRedo: false,
     limitReached: false,
@@ -1271,6 +1276,10 @@ export function createEditorStore(): EditorStore {
     popTempTool: () => {
       if (get().tempTool !== null) set({ tempTool: null });
     },
+    setStraightLines: (straightLines) => {
+      if (get().straightLines !== straightLines) set({ straightLines });
+    },
+    toggleStraightLines: () => set({ straightLines: !get().straightLines }),
     setPanHold: (panHold) => {
       if (get().panHold !== panHold) set({ panHold });
     },

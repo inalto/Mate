@@ -510,6 +510,7 @@
       "general": "Generali"
     },
     "actions": {
+      "straightLines": "Attiva/disattiva linee dritte",
       "pen": "Penna",
       "highlighter": "Evidenziatore",
       "eraser": "Gomma",
@@ -640,6 +641,7 @@
     "updateSettings": "Impostazioni di aggiornamento"
   },
   "toolbar": {
+    "straightLines": "Linee dritte",
     "finger": {
       "auto": "Dita: automatico",
       "draw": "Le dita disegnano",

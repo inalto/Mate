@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS } from "../../model/constants";
 import { createDismissPress, createTutorGestures, HOLD_ASK_MS, hitHandle, pointerTool, scaleFromDrag, TAP_MS, type TutorGestureDeps } from "../toolInteractions";
 
 const b = { x: 0, y: 0, width: 100, height: 50 };
-const info = { pointerType: "pen", buttons: 1, isBarrel: false, isEraserEnd: false };
+const info = { pointerType: "pen", buttons: 1, isBarrel: false, isEraserEnd: false, shiftKey: false };
 
 describe("toolInteractions", () => {
   it("corner_drag_scales_about_opposite_corner", () => {

@@ -370,6 +370,7 @@ function createEngine(
         const set = getSettings();
         mode = "draw";
         penInk.start(info.pointerType);
+        const straight = s.straightLines || info.shiftKey;
         builder = createStrokeBuilder({
           pageId,
           preset: s.preset,
@@ -377,8 +378,9 @@ function createEngine(
           stabilization: set.strokeStabilization,
           nibFlatness: set.fountainPenNibFlatness,
           clampRect: sheet,
+          straight,
         });
-        snap = inkSnapAllowed(s.preset.type, set)
+        snap = !straight && inkSnapAllowed(s.preset.type, set)
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
               snapsOnRelease: set.inkToShapeSnapsOnRelease,
