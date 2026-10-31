@@ -37,4 +37,12 @@ describe("strokeCommit", () => {
     expect(b.preview(raw(3))).toHaveLength(8);
     expect(b.points()).toHaveLength(5);
   });
+
+  it("clamp_rect_keeps_points_on_the_sheet", () => {
+    const pt = (x: number, y: number): Point => ({ x, y, pressure: 0.5, timestamp: 0 });
+    const b = createStrokeBuilder({ ...opts(pen), stabilization: 0, clampRect: { x: 0, y: 0, width: 1080, height: 1528 } });
+    b.push([pt(-20, 10), pt(500, 1600), pt(1100, 700)]);
+    expect(b.points().map((p) => [p.x, p.y])).toEqual([[0, 10], [500, 1528], [1080, 700]]);
+    expect(b.preview([pt(2000, -5)]).at(-1)).toMatchObject({ x: 1080, y: 0 });
+  });
 });

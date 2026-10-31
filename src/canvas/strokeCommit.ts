@@ -5,6 +5,8 @@ import type { Element, PenPreset, Point } from "../model/types";
 import { normalizePoint } from "../ink/normalize";
 import { resampleInkPoints, simplifyEpsForZoom, simplifyPolylineXY } from "../ink/resample";
 import { createStabilizer } from "../ink/stabilize";
+import { clampToRect } from "./pageBounds";
+import type { Rect } from "../tools/spatialIndex";
 
 export interface StrokeOptions {
   pageId: string;
@@ -14,6 +16,8 @@ export interface StrokeOptions {
   stabilization: number;
   /** settings.fountainPenNibFlatness, 0–100. */
   nibFlatness: number;
+  /** Page mode: every raw point is clamped to this sheet before normalising. */
+  clampRect?: Rect;
 }
 
 export const NIB_ANGLE = Math.PI / 4;
@@ -64,7 +68,7 @@ export function createStrokeBuilder(opts: StrokeOptions): StrokeBuilder {
   };
 
   const process = (raw: Point, commit: boolean, stabilize: (p: Point) => Point): Point => {
-    const n = normalizePoint(raw);
+    const n = normalizePoint(opts.clampRect ? { ...raw, ...clampToRect(raw, opts.clampRect) } : raw);
     const s = stabilize(n);
     if (!fountain) return s;
     const prev = out[out.length - 1];

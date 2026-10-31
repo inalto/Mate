@@ -32,6 +32,7 @@ import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
 import { turnPage } from "../keys/editorCommands";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
+import { sheetRectAt } from "./pageBounds";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
 import { createDismissPress, createToolController, pointerTool } from "./toolInteractions";
@@ -341,6 +342,12 @@ function createEngine(
           if (mode === "tool") tools.down(p, tool);
           return;
         }
+        // Page mode: strokes belong to the sheet they start on; the gap between sheets draws nothing.
+        const sheet = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
+        if (sheet === null) {
+          mode = "none";
+          return;
+        }
         // No tutor gestures (double-tap, hold, marker tap) for the press that closed the card.
         tutorStroke = !dismissing && s.preset.type !== "highlighter";
         if (dismissing) dismissPress.down(worldToScreen(s.camera, p));
@@ -369,6 +376,7 @@ function createEngine(
           zoom: s.camera.z,
           stabilization: set.strokeStabilization,
           nibFlatness: set.fountainPenNibFlatness,
+          clampRect: sheet,
         });
         snap = inkSnapAllowed(s.preset.type, set)
           ? createInkSnap({
