@@ -26,7 +26,8 @@ import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { boxRect, elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { shiftBelow } from "../tools/insertSpace";
-import { spaceShift } from "../stores/editor";
+import { sheetStack, spaceShift } from "../stores/editor";
+import { clampDeltaToStack, clampToRect, sheetRectAt } from "./pageBounds";
 import { renderOrder } from "../tools/zorder";
 import { contentOf, isAttachable, isLocked, isPdfPlacement, type ConnectorContent, type ConnectorEnd, type Side } from "../model/content";
 import { equalSpacing, snapMove, type Guide } from "../tools/smartGuides";
@@ -290,8 +291,8 @@ type Gesture =
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
-  | { kind: "shape"; start: Vec2; end: Vec2 }
-  | { kind: "frame"; start: Vec2; end: Vec2 }
+  | { kind: "shape"; start: Vec2; end: Vec2; rect?: Rect }
+  | { kind: "frame"; start: Vec2; end: Vec2; rect?: Rect }
   | {
       kind: "connector";
       /** The pointer-down point (the drag length is measured from it) and the source end's point. */
@@ -661,12 +662,14 @@ export function createToolController(deps: ToolDeps) {
       g = { kind: "space", lineY: p.y, dy: 0, lifted: false };
       preview = [];
     } else if (tool === "shape") {
+      const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
       const q = snap(p);
-      g = { kind: "shape", start: q, end: q };
+      g = rect === null ? { kind: "idle" } : { kind: "shape", start: q, end: q, rect };
       preview = [];
     } else if (tool === "frame") {
+      const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
       const q = snap(p);
-      g = { kind: "frame", start: q, end: q };
+      g = rect === null ? { kind: "idle" } : { kind: "frame", start: q, end: q, rect };
       preview = [];
     } else if (tool === "connector") {
       const at = endAt(p);
@@ -768,11 +771,11 @@ export function createToolController(deps: ToolDeps) {
         break;
       }
       case "shape":
-        g.end = snap(p);
+        g.end = g.rect ? clampToRect(snap(p), g.rect) : snap(p);
         preview = shapePreview(g.start, g.end);
         break;
       case "frame":
-        g.end = snap(p);
+        g.end = g.rect ? clampToRect(snap(p), g.rect) : snap(p);
         preview = framePreview(g.start, g.end);
         break;
       case "connector":
@@ -829,6 +832,10 @@ export function createToolController(deps: ToolDeps) {
             st().setGuides(r.guides);
           } else g.delta = grid(held);
         } else g.delta = grid(held);
+        if (st().page?.mode === "page") {
+          const b = selectionBounds(new Map(g.orig.map((e) => [e.id, e])), g.orig.map((e) => e.id));
+          if (b) g.delta = clampDeltaToStack(b, g.delta, sheetStack(st()));
+        }
         if (!g.lifted && (g.delta.x !== 0 || g.delta.y !== 0)) {
           g.lifted = true;
           lift(g.orig);
