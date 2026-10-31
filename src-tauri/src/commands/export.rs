@@ -186,7 +186,17 @@ pub async fn ask_save_path(
     Ok(Some(path))
 }
 
-/// Opens the Android share sheet for `path` (tauri-plugin-sharekit). Resolves once the sheet is
+/// The `url` argument for the share plugin: iOS parses it with `URL(string:)` and so needs a
+/// `file://` URL; Android takes the plain path.
+#[cfg_attr(desktop, allow(dead_code))]
+fn share_url_for(path: &Path, ios: bool) -> String {
+    if ios && let Ok(url) = tauri::Url::from_file_path(path) {
+        return url.to_string();
+    }
+    path.to_string_lossy().into_owned()
+}
+
+/// Opens the Android/iPad share sheet for `path` (tauri-plugin-sharekit). Resolves once the sheet is
 /// dismissed; dismissing it without picking a target is not an error.
 #[cfg(mobile)]
 pub async fn share_file(app: &AppHandle, path: &Path, mime: &str) -> Result<(), String> {
@@ -196,7 +206,7 @@ pub async fn share_file(app: &AppHandle, path: &Path, mime: &str) -> Result<(), 
         .get_webview_window("main")
         .ok_or_else(|| "no main window".to_string())?;
     let app = app.clone();
-    let url = path.to_string_lossy().into_owned();
+    let url = share_url_for(path, cfg!(target_os = "ios"));
     let options = ShareFileOptions {
         mime_type: Some(mime.to_string()),
         title: path.file_name().map(|n| n.to_string_lossy().into_owned()),
@@ -269,6 +279,15 @@ pub async fn write_export_file(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn share_url_is_a_file_url_on_ios_and_a_path_on_android() {
+        let path = std::env::temp_dir().join("mate-share.pdf");
+        let ios = share_url_for(&path, true);
+        assert!(ios.starts_with("file://"), "{ios}");
+        assert_eq!(tauri::Url::parse(&ios).unwrap().to_file_path().unwrap(), path);
+        assert_eq!(share_url_for(&path, false), path.to_string_lossy());
+    }
 
     #[test]
     fn filename_slugifies_or_falls_back_to_date() {

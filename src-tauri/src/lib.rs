@@ -196,6 +196,12 @@ pub fn run() {
             commands::incoming::content_uri_opened(app, url.clone());
             continue;
           }
+          // iOS hands a copy in `Documents/Inbox/`: stash it under `incoming/`, then route it.
+          #[cfg(target_os = "ios")]
+          if let Ok(path) = url.to_file_path() {
+            commands::incoming::inbox_opened(app, path);
+            continue;
+          }
           if let Ok(path) = url.to_file_path() {
             open_files::file_opened(app, path.to_string_lossy().into_owned());
           }

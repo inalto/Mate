@@ -11,6 +11,10 @@ src-tauri/gen/android/.gradle/
 src-tauri/gen/android/local.properties
 src-tauri/gen/android/key.properties
 src-tauri/gen/android/*.jks
+src-tauri/gen/apple/build/
+src-tauri/gen/apple/Externals/
+src-tauri/gen/apple/*.xcodeproj/project.xcworkspace/xcuserdata/
+src-tauri/gen/apple/*.xcodeproj/xcuserdata/
 *.db
 *.db-wal
 *.db-shm

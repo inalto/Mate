@@ -1,9 +1,10 @@
 //! API key storage. Keys live in the OS keychain (service [`SERVICE`], account = provider id)
 //! and never leave Rust: they are not logged, serialised or written to `settings.json`.
 //!
-//! Mobile has no keyring backend, so [`FileKeyStore`] keeps a JSON file in the app-private data
-//! dir, which Android isolates per app and encrypts at rest. The Android Keystore is a later
-//! improvement.
+//! Desktop and iOS use the OS keychain through `keyring` (on iOS a Keychain generic password,
+//! service `com.mate.notes`). Android has no keyring backend, so [`FileKeyStore`] keeps a JSON
+//! file in the app-private data dir, which Android isolates per app and encrypts at rest. The
+//! Android Keystore is a later improvement.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -18,17 +19,17 @@ pub trait KeyStore: Send + Sync {
     fn delete(&self, provider: &str) -> Result<(), String>;
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 /// The OS keychain (Windows Credential Manager, macOS Keychain, Linux Secret Service).
 #[derive(Default)]
 pub struct KeyringStore;
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 fn entry(provider: &str) -> Result<keyring::Entry, String> {
     keyring::Entry::new(SERVICE, provider).map_err(|e| format!("keychain unavailable: {e}"))
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[cfg(not(target_os = "android"))]
 impl KeyStore for KeyringStore {
     fn get(&self, provider: &str) -> Result<Option<String>, String> {
         match entry(provider)?.get_password() {
