@@ -213,6 +213,22 @@ describe("renderToPdf", () => {
     expect(off).not.toContain("/OCProperties");
   });
 
+  it("a_backed_sheet_without_annotations_gets_no_overlay", async () => {
+    // Annotations "none" sends the placements alone: the original page is copied, nothing drawn on it.
+    const src = await PDFDocument.create();
+    src.addPage([612, 792]);
+    const srcBytes = await src.save();
+    const els = [box("pdf0", "image", 0, 0, SHEET.width, SHEET.height, { pdfSourceKey: "a", pdfPageIndex: 1, zIndex: -1_000_000 })];
+    for (const annotationLayer of [false, true]) {
+      const bytes = await renderToPdf(els, sheets(), { ...OPTS, annotationLayer }, deps({ readPdfBytes: async () => srcBytes }));
+      const out = await PDFDocument.load(bytes);
+      expect(out.getPageCount()).toBe(1);
+      const body = await pdfText(bytes);
+      expect(body).not.toMatch(/\/\S+ Do/);
+      expect(body).not.toContain("/MateAnn BDC");
+    }
+  });
+
   it("draws the annotation layer upright on rotated source pages", async () => {
     const src = await PDFDocument.create();
     src.addPage([792, 612]).setRotation(degrees(90)); // displayed as 612 x 792

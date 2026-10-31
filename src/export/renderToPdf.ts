@@ -159,6 +159,8 @@ interface Sheet {
   /** Points per page unit on this PDF page. */
   k: number;
   backing: Backing | null;
+  /** Nothing was painted on it (a backed sheet then gets no annotation overlay). */
+  blank?: boolean;
 }
 
 const fitK = (r: Rect): number => Math.min(PT_PER_UNIT, MAX_PDF_PAGE_PT / Math.max(1, r.width), MAX_PDF_PAGE_PT / Math.max(1, r.height));
@@ -699,7 +701,8 @@ interface SheetContext {
   bitmaps: Map<string, HTMLCanvasElement | null>;
 }
 
-function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
+/** Paints `sheet`; false when it holds no element (nothing but, possibly, its background). */
+function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): boolean {
   const { rect, k, backing } = sheet;
   const p = new Painter(pdf, (x, y) => [(x - rect.x) * k, (y - rect.y) * k], k);
   // A PDF-backed sheet keeps the original page: light ink over it, no paper.
@@ -742,6 +745,7 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
   }
   // Math boxes are left out: their raw content is LaTeX source, not the text a reader searches for.
   if (ctx.opts.searchable) for (const el of onSheet) if (el.type === "text-box" && !isMathBox(el)) paintTextLayer(p, el);
+  return onSheet.length > 0;
 }
 
 const yieldToUi = () => new Promise<void>((resolve) => setTimeout(resolve));
@@ -803,7 +807,9 @@ async function compose(layers: Uint8Array, sheets: Sheet[], sources: Map<string,
   const copiedPlain = new Map<number, PDFPage>();
   (await out.copyPages(overlay, plain)).forEach((pg, j) => copiedPlain.set(plain[j], pg));
   const backed = sheets.map((s, i) => (s.backing ? i : -1)).filter((i) => i >= 0);
-  const embedded = await out.embedPages(backed.map((i) => overlay.getPage(i)));
+  // A backed sheet without annotations is the original page alone.
+  const drawn = backed.filter((i) => !sheets[i].blank);
+  const embedded = await out.embedPages(drawn.map((i) => overlay.getPage(i)));
   // One copy call per source so shared resources (fonts, images) are copied once.
   const originals = new Map<number, PDFPage>();
   for (const [assetId, doc] of sources) {
@@ -822,11 +828,13 @@ async function compose(layers: Uint8Array, sheets: Sheet[], sources: Map<string,
       continue;
     }
     const pg = out.addPage(originals.get(i)!);
-    const a = overlayPlacement(pg.getRotation().angle, pg.getCropBox(), s.backing.box, s.rect);
-    const xy = a.scale / s.k; // layer points → output points
-    const draw = () => pg.drawPage(embedded[backed.indexOf(i)], { x: a.x, y: a.y, xScale: xy, yScale: xy, rotate: degrees(a.rotate) });
-    if (layer) drawInLayer(pg, ensureAnnotationLayer(out), draw);
-    else draw();
+    if (!s.blank) {
+      const a = overlayPlacement(pg.getRotation().angle, pg.getCropBox(), s.backing.box, s.rect);
+      const xy = a.scale / s.k; // layer points → output points
+      const draw = () => pg.drawPage(embedded[drawn.indexOf(i)], { x: a.x, y: a.y, xScale: xy, yScale: xy, rotate: degrees(a.rotate) });
+      if (layer) drawInLayer(pg, ensureAnnotationLayer(out), draw);
+      else draw();
+    }
     if ((i + 1) % SHEETS_PER_YIELD === 0) await yieldToUi();
   }
   return out.save();
@@ -856,7 +864,7 @@ export async function renderToPdf(
       const sz = size(sheets[i]);
       pdf.addPage(sz, orient(sz));
     }
-    paintSheet(pdf, sheets[i], ctx);
+    sheets[i].blank = !paintSheet(pdf, sheets[i], ctx);
     if ((i + 1) % SHEETS_PER_YIELD === 0) await yieldToUi();
   }
   const layers = new Uint8Array(pdf.output("arraybuffer"));
