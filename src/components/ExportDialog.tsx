@@ -3,8 +3,9 @@ import { useModal } from "./useModal";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { paddedSelectionRegion } from "../export/copyImage";
-import { exportPage } from "../export/exportPage";
+import { exportPage, type AnnotationMode } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
+import { isPdfPlacement } from "../model/content";
 import { isMobile } from "../platform";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
@@ -32,7 +33,13 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
     return s.tree.sections.find((sec) => sec.id === page?.sectionId)?.unitId ?? null;
   });
   const unit = useNotebookStore((s) => s.tree.units.find((u) => u.id === unitId) ?? null);
-  const [format, setFormat] = useState<Format>(() => initialFormat(defaultFormat));
+  const [format, setFormatRaw] = useState<Format>(() => initialFormat(defaultFormat));
+  const [annotations, setAnnotations] = useState<AnnotationMode>("flat");
+  /** "Separate layer" is a PDF-only choice: leaving PDF falls back to flattened. */
+  const setFormat = (f: Format) => {
+    setFormatRaw(f);
+    if (f !== "pdf") setAnnotations((a) => (a === "layer" ? "flat" : a));
+  };
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const [background, setBackground] = useState<"plain" | "transparent">("plain");
   const [scale, setScale] = useState(2);
@@ -41,6 +48,7 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
   const pageMode = useNotebookStore((s) => s.tree.pages.find((p) => p.id === pageId)?.mode === "page");
   const editor = useFocusedEditor();
   const canSelect = editor((s) => s.loadedPageId === pageId && s.selection.size > 0);
+  const hasPlacements = editor((s) => s.loadedPageId === pageId && [...s.elements.values()].some(isPdfPlacement));
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,9 +65,9 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
       } else if (format === "latex") {
         saved = await exportPage(pageId, "latex", {});
       } else if (format === "pdf") {
-        saved = await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable, region });
+        saved = await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable, region, annotations });
       } else {
-        saved = await exportPage(pageId, format, format === "png" ? { theme, background, scale, region } : { theme, background, region });
+        saved = await exportPage(pageId, format, format === "png" ? { theme, background, scale, region, annotations } : { theme, background, region, annotations });
       }
       // Mobile: the file went to the share sheet (desktop users picked the path themselves).
       if (saved && isMobile()) showToast(t("export.shared"));
@@ -114,6 +122,21 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
               onChange={(e) => setSelectionOnly(e.target.checked)}
             />
           </label>
+        )}
+        {hasPlacements && (format === "pdf" || format === "png" || format === "svg") && (
+          <>
+            {seg<AnnotationMode>(
+              t("export.annotations"),
+              [
+                ["none", t("export.annotationsNone")],
+                ["flat", t("export.annotationsFlat")],
+                ...(format === "pdf" ? [["layer", t("export.annotationsLayer")] as [AnnotationMode, string]] : []),
+              ],
+              annotations,
+              setAnnotations,
+            )}
+            <p className="field-hint">{t("export.annotationsHint")}</p>
+          </>
         )}
         {format === "png" && seg(t("export.scale"), SCALES.map((s): [number, string] => [s, t("export.times", { n: s })]), scale, setScale)}
         {format === "pdf" &&

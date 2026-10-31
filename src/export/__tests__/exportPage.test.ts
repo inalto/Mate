@@ -17,6 +17,7 @@ import { prepareTextSnapshots } from "../../overlay/snapshot";
 import { editorForPane } from "../../stores/focusedEditor";
 import { useNotebookStore } from "../../stores/notebook";
 import { exportPage, pageExportFilename } from "../exportPage";
+import { renderToPdf } from "../renderToPdf";
 
 describe("pageExportFilename", () => {
   it("slugifies the title", () => {
@@ -129,5 +130,38 @@ describe("exportPage", () => {
       unbind();
       store.setState({ loadedPageId: null, pageId: null, elements: new Map(), editingId: null });
     }
+  });
+
+  describe("annotations", () => {
+    const placement: Element = { ...graph, id: "pdf0", type: "image", width: 1080, height: 1398, content: { pdfSourceKey: "a", pdfPageIndex: 1 } };
+    const stroke: Element = { ...graph, id: "st1", type: "stroke", content: {} };
+    const sent = () => [...vi.mocked(renderToPdf).mock.calls[0][0]].map((e) => e.id);
+
+    it("annotations_none_keeps_only_pdf_placements", async () => {
+      vi.mocked(loadElements).mockResolvedValue([placement, stroke]);
+      await exportPage("p1", "pdf", { annotations: "none" });
+      expect(sent()).toEqual(["pdf0"]);
+    });
+
+    it("annotations_none_without_placement_keeps_everything", async () => {
+      vi.mocked(loadElements).mockResolvedValue([stroke]);
+      await exportPage("p1", "pdf", { annotations: "none" });
+      expect(sent()).toEqual(["st1"]);
+    });
+
+    it("annotations_flat_keeps_everything_and_layer_flag_follows_mode", async () => {
+      vi.mocked(loadElements).mockResolvedValue([placement, stroke]);
+      await exportPage("p1", "pdf");
+      expect(sent()).toEqual(["pdf0", "st1"]);
+      expect(vi.mocked(renderToPdf).mock.calls[0][2].annotationLayer).toBe(false);
+      await exportPage("p1", "pdf", { annotations: "layer" });
+      expect(vi.mocked(renderToPdf).mock.calls[1][2].annotationLayer).toBe(true);
+    });
+
+    it("annotations_none_composes_with_map_elements", async () => {
+      vi.mocked(loadElements).mockResolvedValue([placement, stroke]);
+      await exportPage("p1", "pdf", { annotations: "none", mapElements: (els) => [...els].map((e) => ({ ...e, id: `m-${e.id}` })) });
+      expect(sent()).toEqual(["m-pdf0"]);
+    });
   });
 });

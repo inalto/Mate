@@ -76,6 +76,8 @@ export interface PdfExportOptions {
   compress?: boolean;
   /** One page of exactly this page-unit rectangle (selection export). */
   region?: Rect;
+  /** Imported PDF pages: write the annotations as a separate, hideable layer instead of flattening. */
+  annotationLayer?: boolean;
 }
 
 export interface PdfDeps {

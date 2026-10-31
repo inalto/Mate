@@ -821,6 +821,11 @@
     "mateHint": "Esporta l'intero quaderno a cui appartiene questa pagina.",
     "shareHint": "Per inviare questo quaderno a qualcuno, usa Condividi… dal menu del quaderno.",
     "shareInstead": "Condividi invece…",
+    "annotations": "Annotazioni",
+    "annotationsNone": "Nessuna",
+    "annotationsFlat": "Unite alla pagina",
+    "annotationsLayer": "Livello separato",
+    "annotationsHint": "Vale per le pagine PDF importate. Un livello separato si può nascondere o modificare negli editor PDF.",
     "boxRender": "Impossibile renderizzare il contenuto della casella {{id}} per l'esportazione.",
     "boxMissing": "La casella {{id}} non è stata renderizzata per l'esportazione."
   },
