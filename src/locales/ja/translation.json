@@ -825,7 +825,7 @@
     "shareInstead": "代わりに共有…",
     "annotations": "注釈",
     "annotationsNone": "なし",
-    "annotationsFlat": "統合",
+    "annotationsFlat": "フラット化済み",
     "annotationsLayer": "別レイヤー",
     "annotationsHint": "インポートした PDF ページに適用されます。別レイヤーは PDF エディタで非表示や編集ができます。",
     "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",

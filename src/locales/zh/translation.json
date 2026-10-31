@@ -825,7 +825,7 @@
     "shareInstead": "改为分享…",
     "annotations": "批注",
     "annotationsNone": "无",
-    "annotationsFlat": "合并到页面",
+    "annotationsFlat": "拼合到页面",
     "annotationsLayer": "独立图层",
     "annotationsHint": "适用于导入的 PDF 页面。独立图层可在 PDF 编辑器中隐藏或编辑。",
     "boxRender": "无法为导出渲染框 {{id}} 的内容。",

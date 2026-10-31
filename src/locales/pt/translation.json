@@ -826,7 +826,7 @@
     "shareInstead": "Partilhar em vez disso…",
     "annotations": "Anotações",
     "annotationsNone": "Nenhuma",
-    "annotationsFlat": "Achatadas",
+    "annotationsFlat": "Niveladas",
     "annotationsLayer": "Camada separada",
     "annotationsHint": "Aplica-se às páginas PDF importadas. Uma camada separada pode ser ocultada ou editada em editores de PDF.",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",

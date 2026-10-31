@@ -826,7 +826,7 @@
     "shareInstead": "Stattdessen teilen…",
     "annotations": "Anmerkungen",
     "annotationsNone": "Keine",
-    "annotationsFlat": "Eingebettet",
+    "annotationsFlat": "Auf Seite reduziert",
     "annotationsLayer": "Separate Ebene",
     "annotationsHint": "Gilt für importierte PDF-Seiten. Eine separate Ebene kann in PDF-Editoren ausgeblendet oder bearbeitet werden.",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
