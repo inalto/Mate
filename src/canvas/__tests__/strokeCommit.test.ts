@@ -17,6 +17,15 @@ describe("strokeCommit", () => {
     expect(b.preview([pt(300, 300)]).map((p) => [p.x, p.y])).toEqual([[0, 0], [300, 300]]);
   });
 
+  it("straight_line_ends_where_the_pen_lifted_despite_stabilization", () => {
+    const pt = (x: number, y: number): Point => ({ x, y, pressure: 0.5, timestamp: 0 });
+    const b = createStrokeBuilder({ ...opts(pen), straight: true, stabilization: 80, clampRect: { x: 0, y: 0, width: 150, height: 1000 } });
+    // Small final steps: the stabiliser lags behind them; the last one is also past the sheet edge.
+    b.push([pt(0, 0), pt(140, 0), pt(141, 1), pt(142, 2), pt(160, 3)]);
+    expect(b.points().map((p) => [p.x, p.y])).toEqual([[0, 0], [150, 3]]);
+    expect(b.finish().map((p) => [p.x, p.y])).toEqual([[0, 0], [150, 3]]);
+  });
+
   it("straighten_stroke_handles_short_inputs", () => {
     const a: Point = { x: 1, y: 1, pressure: 0.5, timestamp: 0 };
     expect(straightenStroke([])).toEqual([]);

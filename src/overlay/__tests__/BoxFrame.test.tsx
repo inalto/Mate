@@ -16,7 +16,7 @@ vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.el
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 
 import { contentMeta } from "../../tools/spatialIndex";
-import { createEditorStore, type EditorStore } from "../../stores/editor";
+import { createEditorStore, sheetStack, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import AutoCompleteHandles from "../AutoCompleteHandles";
 import BoxFrame from "../BoxFrame";
@@ -186,5 +186,20 @@ describe("BoxFrame", () => {
     fireEvent.lostPointerCapture(edge, { pointerId: 1 });
     expect(s().guides).toEqual([]);
     expect(container.querySelector(".box-frame")).not.toBeNull();
+  });
+
+  it("page_mode_move_preview_stops_at_the_sheet_edge_where_the_commit_does", async () => {
+    await load([box("a", 100, 100)]);
+    store.setState({ page: { ...s().page!, mode: "page" }, contentBottom: 1e5 });
+    s().select(["a"]);
+    const width = sheetStack(s()).width;
+    const { container } = frame("a");
+    const edge = container.querySelector(".box-frame-edge.top") as HTMLElement;
+    const shown = () => container.querySelector<HTMLElement>(".box-frame")!.style.left;
+    fireEvent.pointerDown(edge, { clientX: 0, clientY: 0, pointerId: 1, button: 0, ctrlKey: true });
+    fireEvent.pointerMove(edge, { clientX: width * 3, clientY: 0, pointerId: 1, ctrlKey: true });
+    expect(shown()).toBe(`${width - 200}px`);
+    fireEvent.pointerUp(edge, { clientX: width * 3, clientY: 0, pointerId: 1, ctrlKey: true });
+    expect(s().elements.get("a")!.points[0].x).toBe(width - 200);
   });
 });

@@ -304,6 +304,8 @@ type Gesture =
       at: EndAt;
       /** Drawn from an auto-complete handle: from this side of this element. */
       auto?: { sourceId: string; side: Side };
+      /** Page mode: the sheet under the press, which holds a free end. */
+      rect?: Rect;
     }
   | {
       kind: "endpoint";
@@ -321,6 +323,8 @@ type Gesture =
       kind: "move";
       start: Vec2;
       delta: Vec2;
+      /** The delta before the page-mode clamp (an Alt+drag pinned at the sheet edge still moved). */
+      unclamped: Vec2;
       /** The unlocked elements being moved. */
       orig: Element[];
       lifted: boolean;
@@ -474,7 +478,7 @@ export function createToolController(deps: ToolDeps) {
   /** Start a selection move of the selected elements (Alt held: of fresh copies of them, made when the drag starts). */
   const startMove = (p: Vec2): Gesture => {
     const orig = movable();
-    return { kind: "move", start: p, delta: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false, bounds: null, others: null, copy: alt, dupKey: null, sources: [] };
+    return { kind: "move", start: p, delta: { x: 0, y: 0 }, unclamped: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false, bounds: null, others: null, copy: alt, dupKey: null, sources: [] };
   };
 
   const clearGuides = () => st().setGuides([]);
@@ -630,7 +634,9 @@ export function createToolController(deps: ToolDeps) {
     if (!src || isLocked(src)) return false;
     const start = anchorPoint(src, side);
     const source: ConnectorEnd = { id: sourceId, side };
-    g = { kind: "connector", press: p, start, source, end: p, at: { over: null, end: undefined, snapped: null, point: p }, auto: { sourceId, side } };
+    const s = st();
+    const rect = s.page?.mode === "page" ? (sheetRectAt(sheetStack(s), start) ?? undefined) : undefined;
+    g = { kind: "connector", press: p, start, source, end: p, at: { over: null, end: undefined, snapped: null, point: p }, auto: { sourceId, side }, rect };
     preview = [];
     lastTap = null;
     return true;
@@ -663,17 +669,21 @@ export function createToolController(deps: ToolDeps) {
       preview = [];
     } else if (tool === "shape") {
       const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
-      const q = snap(p);
+      const q = rect ? clampToRect(snap(p), rect) : snap(p);
       g = rect === null ? { kind: "idle" } : { kind: "shape", start: q, end: q, rect };
       preview = [];
     } else if (tool === "frame") {
       const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
-      const q = snap(p);
+      const q = rect ? clampToRect(snap(p), rect) : snap(p);
       g = rect === null ? { kind: "idle" } : { kind: "frame", start: q, end: q, rect };
       preview = [];
     } else if (tool === "connector") {
+      const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
       const at = endAt(p);
-      g = { kind: "connector", press: p, start: at.point, source: at.end, end: p, at: { over: null, end: undefined, snapped: null, point: p } };
+      g =
+        rect === null
+          ? { kind: "idle" }
+          : { kind: "connector", press: p, start: at.point, source: at.end, end: p, at: { over: null, end: undefined, snapped: null, point: p }, rect };
       preview = [];
     } else if (tool === "note") {
       // Note tool: one sticky note centred on the press, then back to the cursor (addNote switches the tool).
@@ -782,6 +792,8 @@ export function createToolController(deps: ToolDeps) {
         g.end = p;
         // Never back onto the element the connector starts from.
         g.at = endAt(p, g.source?.id);
+        // A free end stays on the sheet the connector starts on (a bound end follows its element).
+        if (g.rect && !g.at.end) g.at = { ...g.at, point: clampToRect(g.at.point, g.rect) };
         preview = connectorPreview(g.start, g.source, g.at);
         break;
       case "endpoint":
@@ -832,6 +844,7 @@ export function createToolController(deps: ToolDeps) {
             st().setGuides(r.guides);
           } else g.delta = grid(held);
         } else g.delta = grid(held);
+        g.unclamped = g.delta;
         if (st().page?.mode === "page") {
           const b = selectionBounds(new Map(g.orig.map((e) => [e.id, e])), g.orig.map((e) => e.id));
           if (b) g.delta = clampDeltaToStack(b, g.delta, sheetStack(st()));
@@ -907,7 +920,7 @@ export function createToolController(deps: ToolDeps) {
         drop();
         clearGuides();
         // An Alt+drag that ends where it started takes its copies back (no stacked duplicates).
-        if (g.dupKey && g.delta.x === 0 && g.delta.y === 0) {
+        if (g.dupKey && g.unclamped.x === 0 && g.unclamped.y === 0) {
           s.undo();
           break;
         }

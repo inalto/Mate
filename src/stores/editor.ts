@@ -336,6 +336,8 @@ export interface EditorState {
    * `children: false` moves the selection alone (the copies already include the frames' contents).
    */
   moveSelection(dx: number, dy: number, opts?: { label?: string; mergeKey?: string; children?: boolean }): void;
+  /** The move `moveSelection(dx, dy)` would really apply (page-mode clamp of the same elements), for drag previews. */
+  clampSelectionMove(dx: number, dy: number): Vec2;
   setSpaceOptions(patch: { spaceMode?: "insert" | "remove"; spaceCutImages?: boolean }): void;
   /** Insert-space tool: shift everything below `lineY` by `dy` (clamped); one "Insert space" entry, none when it is 0. */
   insertSpace(lineY: number, dy: number): void;
@@ -1352,6 +1354,9 @@ export function createEditorStore(): EditorStore {
       const d = clampMove(before, dx, dy, get());
       if (d.x === 0 && d.y === 0) return;
       transformSelection(opts?.label ?? "Move", (els) => translateElements(els, d.x, d.y), opts?.mergeKey, before);
+    },
+    clampSelectionMove(dx, dy) {
+      return clampMove(withChildren(unlockedSelection()), dx, dy, get());
     },
     setSpaceOptions(patch) {
       set(patch);
