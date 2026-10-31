@@ -28,7 +28,7 @@ import { clearMindmapCache } from "../mindmap/cache";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
 import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
-import { releaseVelocity, startFling } from "./momentum";
+import { cameraFlingApply, releaseVelocity, startFling } from "./momentum";
 import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
 import { turnPage } from "../keys/editorCommands";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
@@ -497,13 +497,15 @@ function createEngine(
           void turnPage(dir === -1 ? 1 : -1);
           return;
         }
-        stopFling = startFling(velocity, (dx, dy) => {
-          const c = st().camera;
-          const n = dragPan(c, dx, dy, clamp);
-          if (n.x === c.x && n.y === c.y) return false;
-          st().setCamera(n);
-          return true;
-        });
+        stopFling = startFling(
+          velocity,
+          cameraFlingApply(
+            () => st().camera,
+            (n) => st().setCamera(n),
+            (c, dx, dy) => dragPan(c, dx, dy, clamp),
+            () => ready() !== null,
+          ),
+        );
       },
       onPinch(g) {
         if (swipe) swipe.oneFinger = false;

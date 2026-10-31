@@ -241,7 +241,8 @@ export function createPointerAdapter(
         rejected.add(e.pointerId);
         return;
       }
-      if (why === "stylus") {
+      // A finger held back after the pen promotes with the next one even once the window has passed.
+      if (why === "stylus" || pending.size > 0) {
         if (touches.size > 0) {
           addGestureTouch(e); // a further finger joins the running gesture
           return;

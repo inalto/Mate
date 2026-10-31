@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { releaseVelocity, startFling, stepFling, FLING_DECAY, MAX_FRAME_MS } from "../momentum";
+import { cameraFlingApply, releaseVelocity, startFling, stepFling, FLING_DECAY, MAX_FRAME_MS } from "../momentum";
 
 describe("momentum", () => {
   it("velocity_from_recent_samples", () =>
@@ -54,5 +54,33 @@ describe("momentum", () => {
     q.shift()!(2016);
     const v3 = FLING_DECAY ** 2;
     expect(apply.mock.calls[2][1]).toBeCloseTo(v3 * MAX_FRAME_MS);
+  });
+  it("fling_stops_when_the_camera_is_replaced_from_outside", () => {
+    let camera = { x: 0, y: 0, zoom: 1 };
+    const set = vi.fn((c: typeof camera) => {
+      camera = c;
+    });
+    const apply = cameraFlingApply(() => camera, set, (c, dx, dy) => ({ ...c, x: c.x + dx, y: c.y + dy }));
+    const q: ((t: number) => void)[] = [];
+    startFling({ x: 0, y: 1 }, apply, (cb) => (q.push(cb), q.length));
+    q.shift()!(0);
+    expect(set).toHaveBeenCalledTimes(1);
+    camera = { x: 500, y: 500, zoom: 2 }; // zoom to fit, frame navigation, jump to sheet
+    q.shift()!(16);
+    expect(set).toHaveBeenCalledTimes(1);
+    expect(camera).toEqual({ x: 500, y: 500, zoom: 2 });
+    expect(q.length).toBe(0);
+  });
+  it("fling_stops_when_the_page_is_no_longer_ready", () => {
+    let camera = { x: 0, y: 0 };
+    let ok = true;
+    const set = vi.fn((c: typeof camera) => {
+      camera = c;
+    });
+    const apply = cameraFlingApply(() => camera, set, (c, dx, dy) => ({ x: c.x + dx, y: c.y + dy }), () => ok);
+    expect(apply(1, 1)).toBe(true);
+    ok = false;
+    expect(apply(1, 1)).toBe(false);
+    expect(set).toHaveBeenCalledTimes(1);
   });
 });

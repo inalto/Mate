@@ -54,3 +54,24 @@ export function startFling(
     stopped = true;
   };
 }
+
+/**
+ * The fling's per-frame `apply` over a camera store. It stops as soon as anything else replaces the
+ * camera (zoom to fit, frame navigation, jump to sheet, a page load) or the page is no longer ready.
+ */
+export function cameraFlingApply<C extends { x: number; y: number }>(
+  get: () => C,
+  set: (c: C) => void,
+  pan: (c: C, dx: number, dy: number) => C,
+  isReady: () => boolean = () => true,
+): (dx: number, dy: number) => boolean {
+  let own = get();
+  return (dx, dy) => {
+    if (get() !== own || !isReady()) return false;
+    const n = pan(own, dx, dy);
+    if (n.x === own.x && n.y === own.y) return false;
+    set(n);
+    own = get();
+    return true;
+  };
+}

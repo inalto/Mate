@@ -417,6 +417,22 @@ describe("touches right after the pen", () => {
     at("pointerdown", { ...finger, pointerId: 13, clientX: 90, clientY: 10 }, 120);
     expect(h.onPanStart).toHaveBeenCalledTimes(1);
     expect(h.onPinch).toHaveBeenCalledTimes(1);
+    // The third contact is part of the gesture: its move updates the pinch (no second start).
+    at("pointermove", { ...finger, pointerId: 13, clientX: 120, clientY: 10 }, 130);
+    expect(h.onPinch).toHaveBeenCalledTimes(2);
+    expect(h.onPinch.mock.calls[1][0].phase).not.toBe("start");
+    expect(h.onDown).not.toHaveBeenCalled();
+  });
+
+  it("pending_finger_promotes_even_after_the_stylus_window", () => {
+    const { h, at, hover, finger } = rig();
+    hover();
+    at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 1950);
+    at("pointerdown", { ...finger, pointerId: 12, clientX: 60, clientY: 10 }, 2050);
+    expect(h.onDown).not.toHaveBeenCalled();
+    expect(h.onPanStart).toHaveBeenCalledTimes(1);
+    expect(h.onPinch).toHaveBeenCalledTimes(1);
+    expect(h.onPinch).toHaveBeenCalledWith({ phase: "start", mid: { x: 35, y: 10 }, dist: 50 });
   });
 
   it("touch_rejected_classifies", () => {
