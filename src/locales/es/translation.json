@@ -513,6 +513,7 @@
       "general": "General"
     },
     "actions": {
+      "straightLines": "Activar líneas rectas",
       "pen": "Lápiz",
       "highlighter": "Marcador",
       "eraser": "Goma",
@@ -643,6 +644,7 @@
     "updateSettings": "Ajustes de actualización"
   },
   "toolbar": {
+    "straightLines": "Líneas rectas",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -822,6 +824,11 @@
     "mateHint": "Exporta todo el cuaderno al que pertenece esta página.",
     "shareHint": "Para enviar este cuaderno a alguien, usa Compartir… desde el menú del cuaderno.",
     "shareInstead": "Compartir en su lugar…",
+    "annotations": "Anotaciones",
+    "annotationsNone": "Ninguna",
+    "annotationsFlat": "Aplanadas",
+    "annotationsLayer": "Capa separada",
+    "annotationsHint": "Se aplica a las páginas PDF importadas. Una capa separada se puede ocultar o editar en editores de PDF.",
     "boxRender": "No se pudo generar el contenido del cuadro {{id}} para exportar.",
     "boxMissing": "El cuadro {{id}} no se generó para exportar."
   },

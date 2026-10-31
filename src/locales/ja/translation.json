@@ -512,6 +512,7 @@
       "general": "一般"
     },
     "actions": {
+      "straightLines": "直線の切り替え",
       "pen": "ペン",
       "highlighter": "蛍光ペン",
       "eraser": "消しゴム",
@@ -642,6 +643,7 @@
     "updateSettings": "アップデートの設定"
   },
   "toolbar": {
+    "straightLines": "直線",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -821,6 +823,11 @@
     "mateHint": "このページが属するノート全体を書き出します。",
     "shareHint": "このノートを相手に送るには、ノートのメニューから「共有…」を使ってください。",
     "shareInstead": "代わりに共有…",
+    "annotations": "注釈",
+    "annotationsNone": "なし",
+    "annotationsFlat": "統合",
+    "annotationsLayer": "別レイヤー",
+    "annotationsHint": "インポートした PDF ページに適用されます。別レイヤーは PDF エディタで非表示や編集ができます。",
     "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",
     "boxMissing": "ボックス {{id}} は書き出し用に描画されませんでした。"
   },

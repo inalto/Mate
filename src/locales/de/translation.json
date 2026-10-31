@@ -513,6 +513,7 @@
       "general": "Allgemein"
     },
     "actions": {
+      "straightLines": "Gerade Linien umschalten",
       "pen": "Stift",
       "highlighter": "Markierer",
       "eraser": "Radierer",
@@ -643,6 +644,7 @@
     "updateSettings": "Update-Einstellungen"
   },
   "toolbar": {
+    "straightLines": "Gerade Linien",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -822,6 +824,11 @@
     "mateHint": "Exportiert das gesamte Notizbuch, zu dem diese Seite gehört.",
     "shareHint": "Um dieses Notizbuch an jemanden zu senden, nutze Teilen… im Notizbuchmenü.",
     "shareInstead": "Stattdessen teilen…",
+    "annotations": "Anmerkungen",
+    "annotationsNone": "Keine",
+    "annotationsFlat": "Eingebettet",
+    "annotationsLayer": "Separate Ebene",
+    "annotationsHint": "Gilt für importierte PDF-Seiten. Eine separate Ebene kann in PDF-Editoren ausgeblendet oder bearbeitet werden.",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
     "boxMissing": "Feld {{id}} wurde für den Export nicht gerendert."
   },

@@ -513,6 +513,7 @@
       "general": "Général"
     },
     "actions": {
+      "straightLines": "Activer les lignes droites",
       "pen": "Stylo",
       "highlighter": "Surligneur",
       "eraser": "Gomme",
@@ -643,6 +644,7 @@
     "updateSettings": "Réglages des mises à jour"
   },
   "toolbar": {
+    "straightLines": "Lignes droites",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -822,6 +824,11 @@
     "mateHint": "Exporte tout le cahier auquel appartient cette page.",
     "shareHint": "Pour envoyer ce cahier à quelqu'un, utilise Partager… depuis le menu du cahier.",
     "shareInstead": "Partager plutôt…",
+    "annotations": "Annotations",
+    "annotationsNone": "Aucune",
+    "annotationsFlat": "Aplaties",
+    "annotationsLayer": "Calque séparé",
+    "annotationsHint": "S'applique aux pages PDF importées. Un calque séparé peut être masqué ou modifié dans les éditeurs PDF.",
     "boxRender": "Impossible de générer le contenu de la zone {{id}} pour l'export.",
     "boxMissing": "La zone {{id}} n'a pas été générée pour l'export."
   },

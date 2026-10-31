@@ -512,6 +512,7 @@
       "general": "通用"
     },
     "actions": {
+      "straightLines": "切换直线",
       "pen": "笔",
       "highlighter": "荧光笔",
       "eraser": "橡皮擦",
@@ -642,6 +643,7 @@
     "updateSettings": "更新设置"
   },
   "toolbar": {
+    "straightLines": "直线",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -821,6 +823,11 @@
     "mateHint": "导出此页面所属的整个笔记本。",
     "shareHint": "如需将此笔记本发送给他人，请使用笔记本菜单中的“分享…”。",
     "shareInstead": "改为分享…",
+    "annotations": "批注",
+    "annotationsNone": "无",
+    "annotationsFlat": "合并到页面",
+    "annotationsLayer": "独立图层",
+    "annotationsHint": "适用于导入的 PDF 页面。独立图层可在 PDF 编辑器中隐藏或编辑。",
     "boxRender": "无法为导出渲染框 {{id}} 的内容。",
     "boxMissing": "框 {{id}} 未能为导出而渲染。"
   },

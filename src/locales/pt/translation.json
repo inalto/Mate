@@ -513,6 +513,7 @@
       "general": "Geral"
     },
     "actions": {
+      "straightLines": "Alternar linhas retas",
       "pen": "Caneta",
       "highlighter": "Marca-texto",
       "eraser": "Borracha",
@@ -643,6 +644,7 @@
     "updateSettings": "Configurações de atualização"
   },
   "toolbar": {
+    "straightLines": "Linhas retas",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -822,6 +824,11 @@
     "mateHint": "Exporta o caderno inteiro ao qual esta página pertence.",
     "shareHint": "Para enviar este caderno a alguém, use Compartilhar… no menu do caderno.",
     "shareInstead": "Partilhar em vez disso…",
+    "annotations": "Anotações",
+    "annotationsNone": "Nenhuma",
+    "annotationsFlat": "Achatadas",
+    "annotationsLayer": "Camada separada",
+    "annotationsHint": "Aplica-se às páginas PDF importadas. Uma camada separada pode ser ocultada ou editada em editores de PDF.",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
   },
