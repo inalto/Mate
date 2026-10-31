@@ -120,13 +120,21 @@ export function fingerMayDraw(
   return !stylusRecent || !isPalmContact(e, mode);
 }
 
-/** Whether a touch contact is ignored outright (neither draws nor pans): a definite palm, or, with
- * a stylus seen recently, a palm-sized contact (any contact unless fingers draw). */
-function touchRejected(e: PointerEvent, mode: PalmRejection, fingerAction: FingerAction, stylusRecent: boolean): boolean {
-  if (mode === "off") return false;
-  if (contactRadius(e) > DEFINITE_PALM_RADIUS) return true;
-  if (!stylusRecent) return false;
-  return fingerAction !== "draw" || isPalmContact(e, mode);
+/** Why a touch contact is ignored as a drawing/pan start: "palm" (a definite palm, or a palm-sized
+ * contact with a stylus seen recently: dropped for good), "stylus" (a fingertip right after the pen
+ * while fingers may not draw: held back, it only counts as a gesture once a second finger lands),
+ * or null (accepted). */
+export function touchRejected(
+  e: Pick<PointerEvent, "width" | "height">,
+  mode: PalmRejection,
+  fingerAction: FingerAction,
+  stylusRecent: boolean,
+): "palm" | "stylus" | null {
+  if (mode === "off") return null;
+  if (contactRadius(e) > DEFINITE_PALM_RADIUS) return "palm";
+  if (!stylusRecent) return null;
+  if (isPalmContact(e, mode)) return "palm";
+  return fingerAction !== "draw" ? "stylus" : null;
 }
 
 /** Attach the adapter to `el`; returns a disposer. Options are read at event time. */
@@ -143,6 +151,8 @@ export function createPointerAdapter(
   /** Pointers whose capture we released ourselves; their (async) lostpointercapture is ignored. */
   const expectedRelease = new Set<number>();
   const touches = new Map<number, Vec2>();
+  /** Fingertips that landed right after the pen: held back until a second finger makes a gesture. */
+  const pending = new Map<number, Vec2>();
   let pinching = false;
   /** Current gesture: a touch was cancelled / a pen or mouse stroke was open at some point. */
   let panCancelled = false;
@@ -197,19 +207,20 @@ export function createPointerAdapter(
     handlers.onCancel();
   };
 
-  const addGestureTouch = (e: PointerEvent) => {
+  const addGestureTouchAt = (id: number, at: Vec2, timeStamp: number) => {
     if (touches.size === 0) {
       panCancelled = false;
       drewMeanwhile = drawId !== null && drawType !== "touch";
-      handlers.onPanStart?.(local(e), e.timeStamp);
+      handlers.onPanStart?.(at, timeStamp);
     }
-    touches.set(e.pointerId, local(e));
-    capture(e.pointerId);
+    touches.set(id, at);
+    capture(id);
     if (touches.size === 2 && pinchEnabled()) {
       pinching = true;
       handlers.onPinch!({ ...pinchState()!, phase: "start" });
     }
   };
+  const addGestureTouch = (e: PointerEvent) => addGestureTouchAt(e.pointerId, local(e), e.timeStamp);
 
   const isStylus = (e: PointerEvent) => e.pointerType === "pen" || e.pointerType === "eraser";
 
@@ -223,8 +234,22 @@ export function createPointerAdapter(
         return;
       }
       const stylusRecent = e.timeStamp - lastStylusAt < STYLUS_SEEN_WINDOW_MS;
-      if (touchRejected(e, opts.palmRejection, opts.fingerAction, stylusRecent)) {
+      const why = touchRejected(e, opts.palmRejection, opts.fingerAction, stylusRecent);
+      if (why === "palm") {
         rejected.add(e.pointerId);
+        return;
+      }
+      if (why === "stylus") {
+        const first = pending.entries().next().value as [number, Vec2] | undefined;
+        if (first) {
+          // Two fingers right after the pen: the held-back one and this one form a gesture.
+          pending.delete(first[0]);
+          addGestureTouchAt(first[0], first[1], e.timeStamp);
+          addGestureTouch(e);
+        } else {
+          pending.set(e.pointerId, local(e));
+          capture(e.pointerId);
+        }
         return;
       }
       if (drawId !== null && drawType === "touch") {
@@ -279,6 +304,10 @@ export function createPointerAdapter(
       handlers.onMove(pts, pr.map((x) => toPoint(x, rect)));
       return;
     }
+    if (pending.has(e.pointerId)) {
+      pending.set(e.pointerId, local(e));
+      return;
+    }
     const prev = touches.get(e.pointerId);
     if (!prev) return;
     const next = local(e);
@@ -298,6 +327,10 @@ export function createPointerAdapter(
   function end(e: PointerEvent, cancelled: boolean) {
     if (isStylus(e)) lastStylusAt = e.timeStamp;
     rejected.delete(e.pointerId);
+    if (pending.delete(e.pointerId)) {
+      release(e.pointerId);
+      return;
+    }
     if (e.pointerId === drawId) {
       release(e.pointerId);
       drawId = null;
@@ -338,7 +371,9 @@ export function createPointerAdapter(
   return () => {
     cancelDraw();
     for (const id of touches.keys()) release(id);
+    for (const id of pending.keys()) release(id);
     touches.clear();
+    pending.clear();
     rejected.clear();
     expectedRelease.clear();
     pinching = false;

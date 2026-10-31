@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPointerAdapter, fingerMayDraw, type FingerAction } from "../input";
+import { createPointerAdapter, fingerMayDraw, touchRejected, type FingerAction } from "../input";
 
 const camera = () => ({ x: 0, y: 0, z: 1 });
 
@@ -337,5 +337,69 @@ describe("fingerMayDraw", () => {
     at("pointermove", { ...touch, clientX: 200, clientY: 50 }, 60);
     at("pointercancel", { ...touch, buttons: 0, clientX: 200, clientY: 50 }, 90);
     expect(h.onPanEnd).toHaveBeenCalledWith({ cancelled: true, timeStamp: 90, drewMeanwhile: false });
+  });
+});
+
+describe("touches right after the pen", () => {
+  function rig() {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const h = {
+      onDown: vi.fn(),
+      onMove: vi.fn(),
+      onUp: vi.fn(),
+      onCancel: vi.fn(),
+      onPan: vi.fn(),
+      onPanStart: vi.fn(),
+      onPanEnd: vi.fn(),
+      onPinch: vi.fn(),
+    };
+    createPointerAdapter(el, h, { palmRejection: "high", fingerAction: "auto", getCamera: camera });
+    const at = (type: string, init: PointerEventInit, t: number) => {
+      const ev = new PointerEvent(type, { bubbles: true, cancelable: true, ...init });
+      Object.defineProperty(ev, "timeStamp", { value: t });
+      el.dispatchEvent(ev);
+    };
+    const hover = () => at("pointermove", { pointerId: 1, pointerType: "pen", buttons: 0, clientX: 0, clientY: 0 }, 0);
+    const finger = { pointerType: "touch", width: 8, height: 8, buttons: 1 };
+    return { h, at, hover, finger };
+  }
+
+  it("two_fingers_right_after_the_pen_pinch", () => {
+    const { h, at, hover, finger } = rig();
+    hover();
+    at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
+    at("pointerdown", { ...finger, pointerId: 12, clientX: 60, clientY: 10 }, 110);
+    expect(h.onDown).not.toHaveBeenCalled();
+    expect(h.onPanStart).toHaveBeenCalledTimes(1);
+    expect(h.onPinch).toHaveBeenCalledWith({ phase: "start", mid: { x: 35, y: 10 }, dist: 50 });
+  });
+
+  it("one_finger_right_after_the_pen_does_nothing", () => {
+    const { h, at, hover, finger } = rig();
+    hover();
+    at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
+    at("pointermove", { ...finger, pointerId: 11, clientX: 30, clientY: 10 }, 120);
+    at("pointerup", { ...finger, pointerId: 11, buttons: 0, clientX: 30, clientY: 10 }, 140);
+    expect(h.onPan).not.toHaveBeenCalled();
+    expect(h.onPanStart).not.toHaveBeenCalled();
+    expect(h.onDown).not.toHaveBeenCalled();
+    expect(h.onPanEnd).not.toHaveBeenCalled();
+  });
+
+  it("palm_sized_second_contact_stays_rejected", () => {
+    const { h, at, hover, finger } = rig();
+    hover();
+    at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
+    at("pointerdown", { ...finger, pointerId: 12, width: 60, height: 60, clientX: 60, clientY: 10 }, 110);
+    expect(h.onPinch).not.toHaveBeenCalled();
+  });
+
+  it("touch_rejected_classifies", () => {
+    const ev = (width: number) => ({ width, height: width }) as PointerEvent;
+    expect(touchRejected(ev(8), "high", "auto", true)).toBe("stylus");
+    expect(touchRejected(ev(30), "high", "auto", true)).toBe("palm");
+    expect(touchRejected(ev(8), "high", "auto", false)).toBeNull();
+    expect(touchRejected(ev(8), "high", "draw", true)).toBeNull();
   });
 });
