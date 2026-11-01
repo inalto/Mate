@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Mate",
   "version": "1.3.0",
-  "identifier": "com.mate.notes",
+  "identifier": "com.martinimultimedia.mate",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -55,7 +55,7 @@
         "ext": ["mate"],
         "mimeType": "application/x-mate-archive",
         "exportedType": {
-          "identifier": "com.mate.notes.archive",
+          "identifier": "com.martinimultimedia.mate.archive",
           "conformsTo": ["public.data", "public.zip-archive"]
         },
         "name": "Mate archive",

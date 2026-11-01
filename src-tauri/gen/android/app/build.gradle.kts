@@ -26,10 +26,10 @@ val keystoreProperties = Properties().apply {
 
 android {
     compileSdk = 37
-    namespace = "com.mate.notes"
+    namespace = "com.martinimultimedia.mate"
     defaultConfig {
         manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "com.mate.notes"
+        applicationId = "com.martinimultimedia.mate"
         minSdk = 24
         targetSdk = 37
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()

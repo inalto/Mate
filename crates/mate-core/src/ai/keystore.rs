@@ -2,7 +2,7 @@
 //! and never leave Rust: they are not logged, serialised or written to `settings.json`.
 //!
 //! Desktop and iOS use the OS keychain through `keyring` (on iOS a Keychain generic password,
-//! service `com.mate.notes`). Android has no keyring backend, so [`FileKeyStore`] keeps a JSON
+//! service `com.martinimultimedia.mate`). Android has no keyring backend, so [`FileKeyStore`] keeps a JSON
 //! file in the app-private data dir, which Android isolates per app and encrypts at rest. The
 //! Android Keystore is a later improvement.
 
@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-pub const SERVICE: &str = "com.mate.notes";
+pub const SERVICE: &str = "com.martinimultimedia.mate";
 
 pub trait KeyStore: Send + Sync {
     fn get(&self, provider: &str) -> Result<Option<String>, String>;

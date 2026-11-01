@@ -1,4 +1,4 @@
-package com.mate.notes
+package com.martinimultimedia.mate
 
 import android.os.Bundle
 import androidx.activity.enableEdgeToEdge
