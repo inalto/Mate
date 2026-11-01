@@ -1,3 +1,9 @@
 [workspace]
 members = ["crates/mate-core", "src-tauri"]
 resolver = "2"
+
+# tauri-plugin-sharekit 0.3.1 declares its iOS entry point without `public`, so Swift 6.4
+# (Xcode 27) keeps `init_plugin_share` internal and the iOS link fails. Drop this patch once
+# upstream ships the fix.
+[patch.crates-io]
+tauri-plugin-sharekit = { path = "vendor/tauri-plugin-sharekit" }
