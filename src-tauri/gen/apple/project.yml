@@ -1,6 +1,6 @@
 name: mate
 options:
-  bundleIdPrefix: com.mate.notes
+  bundleIdPrefix: com.martinimultimedia.mate
   deploymentTarget:
     iOS: 17.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Mate
-      PRODUCT_BUNDLE_IDENTIFIER: com.mate.notes
+      PRODUCT_BUNDLE_IDENTIFIER: com.martinimultimedia.mate
 targetTemplates:
   app:
     type: application
@@ -45,6 +45,7 @@ targets:
       path: mate_iOS/Info.plist
       properties:
         LSRequiresIPhoneOS: true
+        LSSupportsOpeningDocumentsInPlace: false
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
         UISupportedInterfaceOrientations:
