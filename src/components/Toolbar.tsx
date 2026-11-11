@@ -7,6 +7,7 @@ import {
   FlowArrow,
   FrameCorners,
   LineSegment,
+  Shapes,
   ArrowUUpRight,
   Cursor,
   ArrowsVertical,
@@ -660,6 +661,26 @@ function StraightToggle() {
   );
 }
 
+/** Perfect-shapes mode: each stroke that reads as a shape, line, arrow or curve becomes one on pen-up. */
+function AutoShapesToggle() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const on = ed((s) => s.autoShapes);
+  const label = t("toolbar.autoShapes");
+  return (
+    <button
+      type="button"
+      className={on ? "tb-btn active" : "tb-btn"}
+      aria-label={label}
+      title={label}
+      aria-pressed={on}
+      onClick={() => ed.getState().toggleAutoShapes()}
+    >
+      <Shapes size={18} />
+    </button>
+  );
+}
+
 /** Opens the paper picker as a popover next to the button; `chrome.paperPickerOpen` is the open flag. */
 function PaperButton() {
   const { t } = useTranslation();
@@ -831,6 +852,7 @@ export default function Toolbar() {
       <InsertSpaceButton />
       {isMobile() && <FingerToggle />}
       <StraightToggle />
+      <AutoShapesToggle />
       <span className="tb-sep" />
       <HintButton action="undo" label={t("keys.actions.undo")} disabled={!canUndo} onClick={() => s().undo()}>
         <ArrowUUpLeft size={18} />

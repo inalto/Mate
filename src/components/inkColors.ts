@@ -33,3 +33,15 @@ export function hueOf(hex: string): number {
 
 /** Shape fill swatches: the ink colours plus the light highlighter tints. */
 export const FILL_PALETTE = [...PEN_PALETTE, ...HIGHLIGHTER_PALETTE];
+
+/** Most swatches a user may save. */
+export const MAX_SWATCHES = 32;
+
+/** `list` with `color` (a #RRGGBB hex) appended; unchanged when it is not a hex, already there, or the list is full. */
+export function withSwatch(list: readonly string[], color: string): string[] {
+  const m = HEX.exec(color.trim());
+  if (!m) return list as string[];
+  const hex = `#${m[1].toUpperCase()}`;
+  if (list.length >= MAX_SWATCHES || list.some((c) => c.toUpperCase() === hex)) return list as string[];
+  return [...list, hex];
+}

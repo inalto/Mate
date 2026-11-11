@@ -2,7 +2,9 @@
 // tool's types: closed strokes (end within 15 % of the path length from the start) are ranked by
 // how well each candidate outline fits — polygon candidates come from corner detection (RDP at
 // 2 %, 4 %, 6 % of the arc length, 3–12 corners), circle and ellipse are always tried; open strokes
-// are a line (straightness) or an arrow (a straight shaft plus a two-winged chevron at one end).
+// are a line (straightness) or an arrow (a straight shaft plus a two-winged chevron at one end);
+// a longer open stroke that is neither, but follows one smooth bend, is a curve (a cubic Bézier
+// fitted through it, returned as the polyline `curve`).
 // The result uses the shape tool's geometry: `rect` and `rotation` as `shapeOutline` reads them.
 import type { Vec2 } from "../canvas/camera";
 import { simplifyPolylineXY } from "../ink/resample";
@@ -17,6 +19,11 @@ export interface RecognizedShape {
   rect: ShapeRect;
   /** Radians about the rect centre (closed types only). */
   rotation: number;
+  /**
+   * A smooth open curve instead of a shape: the fitted cubic Bézier as a polyline. `type` is then
+   * "line" and `rect` its start → end, but the result becomes an ink stroke along `curve`.
+   */
+  curve?: Vec2[];
 }
 
 /** A stroke converts only when its best candidate scores above this. */
@@ -25,6 +32,13 @@ const MIN_POINTS = 4;
 /** Preconditions (world units). */
 const MIN_PATH_LENGTH = 10;
 const MIN_DIAGONAL = 24;
+/** A curve needs this much path (world units): handwriting-sized bends stay ink. */
+const MIN_CURVE_LENGTH = 80;
+/** Curve fit error (mean distance / curve length) at which it scores 0. */
+const CURVE_ERROR_AT_ZERO = 0.025;
+const CURVE_POINTS = 48;
+/** The ink may be at most this many times longer than the curve fitted through it. */
+const CURVE_MAX_WANDER = 1.15;
 /** Closed when the end is within this fraction of the path length from the start. */
 const CLOSED_GAP = 0.15;
 const RDP_FRACTIONS = [0.02, 0.04, 0.06];
@@ -424,6 +438,82 @@ function recognizeLine(samples: Vec2[]): RecognizedShape | null {
   return { type: "line", score, rect: { x: a.x, y: a.y, width: z.x - a.x, height: z.y - a.y }, rotation: 0 };
 }
 
+const bezierAt = (p: readonly [Vec2, Vec2, Vec2, Vec2], t: number): Vec2 => {
+  const u = 1 - t;
+  const a = u * u * u;
+  const b = 3 * u * u * t;
+  const c = 3 * u * t * t;
+  const d = t * t * t;
+  return { x: a * p[0].x + b * p[1].x + c * p[2].x + d * p[3].x, y: a * p[0].y + b * p[1].y + c * p[2].y + d * p[3].y };
+};
+
+/**
+ * Least-squares cubic Bézier through `samples` with both ends fixed (chord-length parameters):
+ * the two inner control points solve a 2×2 system per coordinate. Null when it is degenerate.
+ */
+export function fitCubic(samples: readonly Vec2[]): [Vec2, Vec2, Vec2, Vec2] | null {
+  const total = pathLength(samples);
+  if (samples.length < 4 || total === 0) return null;
+  const p0 = samples[0];
+  const p3 = samples[samples.length - 1];
+  let a11 = 0;
+  let a12 = 0;
+  let a22 = 0;
+  let bx1 = 0;
+  let bx2 = 0;
+  let by1 = 0;
+  let by2 = 0;
+  let run = 0;
+  for (let i = 0; i < samples.length; i++) {
+    if (i > 0) run += dist(samples[i - 1], samples[i]);
+    const t = run / total;
+    const u = 1 - t;
+    const b0 = u * u * u;
+    const b1 = 3 * u * u * t;
+    const b2 = 3 * u * t * t;
+    const b3 = t * t * t;
+    const rx = samples[i].x - (b0 * p0.x + b3 * p3.x);
+    const ry = samples[i].y - (b0 * p0.y + b3 * p3.y);
+    a11 += b1 * b1;
+    a12 += b1 * b2;
+    a22 += b2 * b2;
+    bx1 += b1 * rx;
+    bx2 += b2 * rx;
+    by1 += b1 * ry;
+    by2 += b2 * ry;
+  }
+  const det = a11 * a22 - a12 * a12;
+  if (Math.abs(det) < 1e-9) return null;
+  const p1 = { x: (a22 * bx1 - a12 * bx2) / det, y: (a22 * by1 - a12 * by2) / det };
+  const p2 = { x: (a11 * bx2 - a12 * bx1) / det, y: (a11 * by2 - a12 * by1) / det };
+  return [{ x: p0.x, y: p0.y }, p1, p2, { x: p3.x, y: p3.y }];
+}
+
+/** A smooth open stroke as one cubic Bézier; the score falls with how far the ink strays from it. */
+function recognizeCurve(samples: Vec2[], length: number): RecognizedShape | null {
+  if (length < MIN_CURVE_LENGTH) return null;
+  const ctrl = fitCubic(samples);
+  if (!ctrl) return null;
+  // A control polygon much longer than the ink means the fit overshoots (loops, cusps).
+  if (dist(ctrl[0], ctrl[1]) + dist(ctrl[1], ctrl[2]) + dist(ctrl[2], ctrl[3]) > 3 * length) return null;
+  const curve = Array.from({ length: CURVE_POINTS }, (_, i) => bezierAt(ctrl, i / (CURVE_POINTS - 1)));
+  // Jagged ink is much longer than the smooth curve through it: not a curve.
+  const curveLength = pathLength(curve);
+  if (curveLength === 0 || length > CURVE_MAX_WANDER * curveLength) return null;
+  let err = 0;
+  for (const p of samples) err += polylineDist(p, curve);
+  err /= samples.length * curveLength;
+  const start = curve[0];
+  const end = curve[curve.length - 1];
+  return {
+    type: "line",
+    score: clamp01(1 - err / CURVE_ERROR_AT_ZERO),
+    rect: { x: start.x, y: start.y, width: end.x - start.x, height: end.y - start.y },
+    rotation: 0,
+    curve,
+  };
+}
+
 /** Best matching shape for an ink stroke, or null when nothing fits well enough to convert. */
 export function recognizeShape(points: readonly Vec2[]): RecognizedShape | null {
   if (points.length < MIN_POINTS) return null;
@@ -435,5 +525,8 @@ export function recognizeShape(points: readonly Vec2[]): RecognizedShape | null 
   const samples = resample(points, SAMPLES);
   const closed = dist(points[0], points[points.length - 1]) <= CLOSED_GAP * length;
   const r = closed ? recognizeClosed(samples, length, diag) : (recognizeArrow(samples, length) ?? recognizeLine(samples));
-  return r && r.score > SNAP_MIN_SCORE ? r : null;
+  if (r && r.score > SNAP_MIN_SCORE) return r;
+  if (closed) return null;
+  const c = recognizeCurve(samples, length);
+  return c && c.score > SNAP_MIN_SCORE ? c : null;
 }

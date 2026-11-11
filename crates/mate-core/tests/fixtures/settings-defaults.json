@@ -80,6 +80,7 @@
   "trashRetentionDays": 30,
   "defaultExportFormat": "pdf",
   "recentColors": [],
+  "customSwatches": [],
   "toolbarPresets": [
     {
       "id": "preset-1",

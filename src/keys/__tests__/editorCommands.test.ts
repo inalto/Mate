@@ -57,6 +57,14 @@ const focused = () => {
 };
 
 describe("runEditorShortcut", () => {
+  it("ink_shapes_toggles_perfect_shapes_mode", () => {
+    expect(useEditorStore.getState().autoShapes).toBe(false);
+    runEditorShortcut("ink.shapes", {});
+    expect(useEditorStore.getState().autoShapes).toBe(true);
+    runEditorShortcut("ink.shapes", {});
+    expect(useEditorStore.getState().autoShapes).toBe(false);
+  });
+
   it("ink_straight_toggles_the_flag", () => {
     expect(useEditorStore.getState().straightLines).toBe(false);
     runEditorShortcut("ink.straight", {});

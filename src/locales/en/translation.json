@@ -514,6 +514,7 @@
     },
     "actions": {
       "straightLines": "Toggle straight lines",
+      "autoShapes": "Toggle perfect shapes",
       "pen": "Pen",
       "highlighter": "Highlighter",
       "eraser": "Eraser",
@@ -645,6 +646,7 @@
   },
   "toolbar": {
     "straightLines": "Straight lines",
+    "autoShapes": "Perfect shapes",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -839,8 +841,20 @@
     "fitPage": "Fit page",
     "fitSelection": "Fit selection"
   },
+  "sendTo": {
+    "title": "Send selection to…",
+    "search": "Search pages",
+    "pages": "Pages",
+    "empty": "No other pages",
+    "copy": "Copy there",
+    "move": "Move there",
+    "sent": "Sent to {{page}}",
+    "failed": "Could not send the selection",
+    "untitled": "Untitled"
+  },
   "selection": {
     "label": "Selection",
+    "sendTo": "Send to another page",
     "arrange": "Arrange ▸",
     "align": "Align ▸",
     "alignLeft": "Align left",
@@ -861,6 +875,10 @@
   },
   "preset": {
     "edit": "Edit preset",
+    "swatches": "My swatches",
+    "addSwatch": "Save colour as a swatch",
+    "editSwatches": "Remove swatches",
+    "removeSwatch": "Remove {{color}}",
     "hue": "Hue",
     "hex": "Hex colour",
     "recent": "Recent colours",

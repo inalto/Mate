@@ -2184,3 +2184,45 @@ html.mobile .sb-resize {
 .connector-menu {
   min-width: 200px;
 }
+
+/* The user's own swatches in a colour picker: they wrap; in remove mode each is outlined. */
+.swatch-shelf {
+  flex-wrap: wrap;
+  max-width: 240px;
+}
+
+.tb-swatch.removing {
+  outline: 2px dashed #c62828;
+  outline-offset: 1px;
+}
+
+.swatch-tool {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 2px;
+}
+
+.swatch-native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Page picker of "Send to another page". */
+.send-search {
+  width: 100%;
+  margin-bottom: var(--space-2);
+}
+
+.send-group {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.folder-option[aria-pressed="true"] {
+  background: var(--color-surface-2);
+  font-weight: 600;
+}

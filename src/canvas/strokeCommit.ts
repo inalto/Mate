@@ -6,6 +6,7 @@ import { normalizePoint } from "../ink/normalize";
 import { resampleInkPoints, simplifyEpsForZoom, simplifyPolylineXY } from "../ink/resample";
 import { createStabilizer } from "../ink/stabilize";
 import { clampToRect, exitPoint, inRect } from "./pageBounds";
+import { snapLineEnd } from "../shapes/lineSnap";
 import type { Rect } from "../tools/spatialIndex";
 
 export interface StrokeOptions {
@@ -21,7 +22,7 @@ export interface StrokeOptions {
    * (the rest of the contact draws nothing); a straight line's end is clamped to the sheet instead.
    */
   clampRect?: Rect;
-  /** Keep only the first and last point (straight line). */
+  /** Keep only the first and last point (straight line; near-horizontal / vertical ones land on the axis). */
   straight?: boolean;
 }
 
@@ -65,8 +66,13 @@ export function createStrokeBuilder(opts: StrokeOptions): StrokeBuilder {
   let lastRaw: Point | null = null;
   const straightened = (pts: Point[]): Point[] => {
     const line = straightenStroke(pts);
-    if (line.length < 2 || !lastRaw) return line;
-    return [line[0], { ...line[1], x: lastRaw.x, y: lastRaw.y }];
+    if (line.length < 2) return line;
+    return [line[0], { ...line[1], ...snapLineEnd(line[0], lastRaw ?? line[1]) }];
+  };
+  /** A straight preview through a predicted end (no committed raw point to end on). */
+  const straightTo = (pts: Point[]): Point[] => {
+    const line = straightenStroke(pts);
+    return line.length < 2 ? line : [line[0], { ...line[1], ...snapLineEnd(line[0], line[1]) }];
   };
 
   /** The sheet that cuts the stroke (free ink only), the last raw point on it, and whether the pen left it. */
@@ -125,7 +131,7 @@ export function createStrokeBuilder(opts: StrokeOptions): StrokeBuilder {
       const ahead = left ? [] : off < 0 ? predicted : predicted.slice(0, off);
       const all = ahead.length === 0 ? out : out.concat(ahead.map((r) => process(r, false, (p) => p)));
       // Predicted points skip the stabiliser (it is stateful) and are never committed.
-      return opts.straight ? (ahead.length === 0 ? straightened(all) : straightenStroke(all)) : all;
+      return opts.straight ? (ahead.length === 0 ? straightened(all) : straightTo(all)) : all;
     },
     points: () => (opts.straight ? straightened(out) : out),
     finish() {

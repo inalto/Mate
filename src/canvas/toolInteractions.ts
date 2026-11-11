@@ -21,7 +21,8 @@ import { openLabelPopover } from "../stores/labelPopover";
 import { openAutoComplete } from "../stores/autoComplete";
 import { FRAME_TITLE_BAND, frameTitleRect, isFrame, isNestedFrame, withFrameChildren } from "../frames/contain";
 import { mindmapHit } from "../mindmap/hit";
-import { isClosedShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
+import { isClosedShape, normalizeShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
+import { snapLineEnd } from "../shapes/lineSnap";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { boxRect, elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
@@ -319,6 +320,8 @@ type Gesture =
       at: EndAt;
     }
   | { kind: "label"; id: string; orig: Element; text: string; t: number; start: Vec2; moved: boolean }
+  /** An end of the lone selected line or arrow (`which` indexes its points) follows the pointer. */
+  | { kind: "line-end"; id: string; which: 0 | 1; orig: Element; start: Vec2; end: Vec2 }
   | {
       kind: "move";
       start: Vec2;
@@ -615,6 +618,22 @@ export function createToolController(deps: ToolDeps) {
     return true;
   };
 
+  /** Pointer-down on an end handle of the lone selected line or arrow: start dragging that end. */
+  const startLineEnd = (p: Vec2): boolean => {
+    const s = st();
+    const el = loneLine(s.elements, s.selection);
+    if (!el || isLocked(el)) return false;
+    const r = Math.max(ENDPOINT_HANDLE_PX, HIT_SLOP_PX) / s.camera.z;
+    const near = (q: Vec2 | undefined) => !!q && Math.abs(p.x - q.x) <= r && Math.abs(p.y - q.y) <= r;
+    const which = near(el.points[1]) ? 1 : near(el.points[0]) ? 0 : null;
+    if (which === null) return false;
+    g = { kind: "line-end", id: el.id, which, orig: el, start: p, end: p };
+    preview = [el];
+    lift([el]);
+    lastTap = null;
+    return true;
+  };
+
   /** Pointer-down on the label pill of the lone selected connector: start sliding the label. */
   const startLabel = (p: Vec2): boolean => {
     const el = editableLone();
@@ -697,6 +716,8 @@ export function createToolController(deps: ToolDeps) {
       g = { kind: "idle" };
     } else if ((tool === "cursor" || tool === "lasso") && startEndpoint(p)) {
       // A lone connector's endpoint handle: re-bind or free that end.
+    } else if ((tool === "cursor" || tool === "lasso") && startLineEnd(p)) {
+      // A lone line's or arrow's end handle: that end follows the pointer.
     } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
       g = { kind: "idle" };
     } else if ((tool === "cursor" || tool === "lasso") && startLabel(p)) {
@@ -801,6 +822,19 @@ export function createToolController(deps: ToolDeps) {
         g.at = endAt(p, g.other);
         preview = [withEnd(g.orig, g.which, g.at)];
         break;
+      case "line-end": {
+        // The other end stays put; near the horizontal / vertical through it the line snaps (not
+        // with Ctrl/Cmd), and in page mode the end stays on that end's sheet.
+        const s = st();
+        const fixed = g.orig.points[1 - g.which];
+        let q = free ? p : snapLineEnd(fixed, p);
+        const sheet = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), fixed) : null;
+        if (sheet) q = clampToRect(q, sheet);
+        g.end = p;
+        const which = g.which;
+        preview = [normalizeShape({ ...g.orig, points: g.orig.points.map((pt, k) => (k === which ? { ...pt, x: q.x, y: q.y } : pt)) })];
+        break;
+      }
       case "label": {
         if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) * z < MOVE_START_PX) break;
         if (!g.moved) lift([g.orig]);
@@ -866,7 +900,7 @@ export function createToolController(deps: ToolDeps) {
         break;
     }
     const k = g.kind;
-    if ((k === "move" && g.started) || k === "scale" || k === "rotate" || k === "connector" || k === "endpoint") setDragging(true);
+    if ((k === "move" && g.started) || k === "scale" || k === "rotate" || k === "connector" || k === "endpoint" || k === "line-end") setDragging(true);
     deps.requestLive();
   };
 
@@ -909,6 +943,15 @@ export function createToolController(deps: ToolDeps) {
           s.setConnectorEnd(g.id, g.which, g.at.end ?? null, g.at.point);
         }
         break;
+      case "line-end": {
+        const next = preview[0];
+        drop();
+        // One entry on release; a tap on the handle changes nothing.
+        if (next && Math.hypot(g.end.x - g.start.x, g.end.y - g.start.y) * s.camera.z >= MIN_SHAPE_DRAG_PX) {
+          s.updateElements([{ ...next, updatedAt: new Date().toISOString() }]);
+        }
+        break;
+      }
       case "label":
         drop();
         if (g.moved) s.setConnectorLabel(g.id, { text: g.text, t: g.t });
@@ -1033,6 +1076,9 @@ export function createToolController(deps: ToolDeps) {
         } else drawSelectionBounds(ctx, b, c, { handles: transformable, rotate: rotatable, locks });
         animate = true;
       }
+      // A lone line or arrow: round handles on its ends (drag one to move that end).
+      const line = sel.length === 1 && isLineShape(sel[0]) && !isLocked(sel[0]) ? sel[0] : null;
+      if (line) drawLineEnds(ctx, line, c);
     }
     // The anchors of the element a connector end is over (while drawing or dragging an end, and on hover with the tool).
     const at =
@@ -1199,6 +1245,34 @@ export function drawSelectionBounds(ctx: CanvasRenderingContext2D, b: Rect, c: C
     const q = worldToScreen(c, { x: r.x + r.width, y: r.y });
     drawLockGlyph(ctx, q.x, q.y);
   }
+}
+
+/** A straight line or arrow whose ends can be dragged (rotation folded into its points, i.e. none). */
+export const isLineShape = (el: Element | undefined): el is Element =>
+  !!el && el.type === "shape" && (el.shapeType === "line" || el.shapeType === "arrow") && !contentOf<{ rotation?: number }>(el).rotation;
+
+/** The lone selected line or arrow, else null. */
+export function loneLine(elements: ReadonlyMap<string, Element>, selection: ReadonlySet<string>): Element | null {
+  if (selection.size !== 1) return null;
+  const el = elements.get(selection.values().next().value!);
+  return isLineShape(el) ? el : null;
+}
+
+/** Round end handles of a lone selected line or arrow. */
+export function drawLineEnds(ctx: CanvasRenderingContext2D, el: Element, c: Camera): void {
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = ACCENT;
+  ctx.fillStyle = "#ffffff";
+  for (const pt of el.points.slice(0, 2)) {
+    const q = worldToScreen(c, pt);
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, ENDPOINT_HANDLE_PX + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** A lone selected connector: its route traced in the accent colour and, when editable, a square handle at each end. */

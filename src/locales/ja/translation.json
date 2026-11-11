@@ -516,6 +516,7 @@
     },
     "actions": {
       "straightLines": "直線の切り替え",
+      "autoShapes": "図形の自動整形の切り替え",
       "pen": "ペン",
       "highlighter": "蛍光ペン",
       "eraser": "消しゴム",
@@ -647,6 +648,7 @@
   },
   "toolbar": {
     "straightLines": "直線",
+    "autoShapes": "図形を自動整形",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -841,8 +843,20 @@
     "fitPage": "ページに合わせる",
     "fitSelection": "選択範囲に合わせる"
   },
+  "sendTo": {
+    "title": "選択範囲の送り先…",
+    "search": "ページを検索",
+    "pages": "ページ",
+    "empty": "ほかのページはありません",
+    "copy": "コピーする",
+    "move": "移動する",
+    "sent": "{{page}} に送りました",
+    "failed": "選択範囲を送れませんでした",
+    "untitled": "無題"
+  },
   "selection": {
     "label": "選択",
+    "sendTo": "別のページに送る",
     "arrange": "整列 ▸",
     "align": "配置 ▸",
     "alignLeft": "左揃え",
@@ -863,6 +877,10 @@
   },
   "preset": {
     "edit": "プリセットを編集",
+    "swatches": "マイスウォッチ",
+    "addSwatch": "色をスウォッチとして保存",
+    "editSwatches": "スウォッチを削除",
+    "removeSwatch": "{{color}} を削除",
     "hue": "色相",
     "hex": "16 進数カラー",
     "recent": "最近使った色",

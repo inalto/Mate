@@ -33,7 +33,7 @@ import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
 import { turnPage } from "../keys/editorCommands";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
-import { sheetRectAt } from "./pageBounds";
+import { clampToRect, sheetRectAt } from "./pageBounds";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
 import { createDismissPress, createToolController, pointerTool } from "./toolInteractions";
@@ -105,6 +105,8 @@ function createEngine(
   /** Ink to shape for the stroke in progress, and the shape it snapped to (shown instead of it). */
   let snap: InkSnap | null = null;
   let snapShape: Element | null = null;
+  /** Page mode: the sheet the stroke in progress belongs to. */
+  let strokeSheet: Rect | undefined;
   let flash: { shape: RecognizedShape; until: number } | null = null;
   let flashTimer: ReturnType<typeof setTimeout> | null = null;
   let lastPan: Vec2 = { x: 0, y: 0 };
@@ -116,6 +118,9 @@ function createEngine(
   let stopFling: (() => void) | null = null;
   /** The last one-finger tap of a panning finger (the first half of a double tap to zoom). */
   let fingerTap: FingerTap | null = null;
+  /** Pointer type of the stroke in progress, and the last dot a drawing finger tapped (its tap and stroke id). */
+  let drawPointer = "";
+  let inkTap: { tap: FingerTap; id: string } | null = null;
   /** The last two-finger tap (the first half of a two-finger double tap: undo). */
   let twoFingerTap: FingerTap | null = null;
   /** True while our own commit updates the store (the element is already in the snapshot). */
@@ -380,6 +385,8 @@ function createEngine(
         const set = getSettings();
         mode = "draw";
         penInk.start(info.pointerType);
+        strokeSheet = sheet ?? undefined;
+        drawPointer = info.pointerType;
         const straight = s.straightLines || info.shiftKey;
         builder = createStrokeBuilder({
           pageId,
@@ -390,14 +397,20 @@ function createEngine(
           clampRect: sheet,
           straight,
         });
-        snap = !straight && inkSnapAllowed(s.preset.type, set)
+        // Perfect-shapes mode: every stroke is recognised on pen-up, whatever the ink-to-shape settings.
+        const snapping = s.autoShapes ? s.preset.type !== "highlighter" : inkSnapAllowed(s.preset.type, set);
+        snap = !straight && snapping
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
-              snapsOnRelease: set.inkToShapeSnapsOnRelease,
+              snapsOnRelease: s.autoShapes || set.inkToShapeSnapsOnRelease,
               zoom: s.camera.z,
               slopPx: dwellSlopFor(info.pointerType),
               points: () => builder?.points() ?? [],
               onSnap,
+              onAdjust: (r) => {
+                snapShape = snapShapeElement(r, st().preset, pageId, "live", "");
+                setLive(null);
+              },
             })
           : null;
         setLive(builder.push([p]));
@@ -411,7 +424,10 @@ function createEngine(
           lastPan = scr;
         } else if (mode === "draw" && builder) {
           builder.push(points);
-          if (points.length > 0) snap?.move(points[points.length - 1]);
+          if (points.length > 0) {
+            const last = points[points.length - 1];
+            snap?.move(strokeSheet ? { ...last, ...clampToRect(last, strokeSheet) } : last);
+          }
           if (tutorStroke && points.length > 0) tutor.inkMove(worldToScreen(st().camera, points[points.length - 1]));
           if (dismissPress.active() && points.length > 0) dismissPress.move(worldToScreen(st().camera, points[points.length - 1]));
           if (!snapShape) setLive(builder.preview(predicted));
@@ -439,7 +455,27 @@ function createEngine(
           if (dismissPress.active()) dismissPress.move(worldToScreen(st().camera, p));
           const dismissed = dismissPress.up();
           const t = dismissed === "discard" ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
-          if (stroke && t === "commit") {
+          // A finger that draws: two quick taps zoom in instead of leaving two dots (the first dot is
+          // taken back).
+          let tap: FingerTap | null = null;
+          let zoomed = false;
+          if (drawPointer === "touch" && !shape && t === "commit" && raw.length > 0 && getSettings().doubleTapZoom) {
+            const cam = st().camera;
+            const first = worldToScreen(cam, raw[0]);
+            let travel = 0;
+            for (const q of raw) {
+              const at = worldToScreen(cam, q);
+              travel = Math.max(travel, Math.hypot(at.x - first.x, at.y - first.y));
+            }
+            tap = gestureTapOf({ x: first.x, y: first.y, t: raw[0].timestamp }, p.timestamp, travel);
+            if (tap && inkTap && isFingerDoubleTap(inkTap.tap, tap)) {
+              zoomed = true;
+              if (st().elements.has(inkTap.id)) st().undo();
+              stopFling = animateCamera(store, zoomBy(cam, DOUBLE_TAP_ZOOM_FACTOR, tap, clamp));
+            }
+          }
+          inkTap = tap && stroke && !zoomed && t === "commit" ? { tap, id: stroke.id } : null;
+          if (stroke && t === "commit" && !zoomed) {
             if (shape) {
               const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());
               let added = false;

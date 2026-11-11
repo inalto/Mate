@@ -437,6 +437,8 @@ export interface Settings {
   trashRetentionDays: number;
   defaultExportFormat: string;
   recentColors: string[];
+  /** Colours the user saved as swatches in the colour pickers (hex, at most 32). */
+  customSwatches: string[];
   toolbarPresets: PenPreset[];
   /** Named graph presets, all kinds (filtered per kind where shown). */
   graphPresets: GraphPreset[];

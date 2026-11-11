@@ -1,6 +1,7 @@
 import { getStroke } from "perfect-freehand";
 import { capsuleRuns } from "./capsuleRuns";
 import { simplifyEpsForZoom } from "./resample";
+import { strokeFill } from "./closed";
 import { detectRealPressure, penParams, strokeDiscs } from "./strokePoints";
 import { isDarkTheme, mapInkColor } from "./theme";
 import type { Element, PenStyle, ThemeName } from "./types";
@@ -44,6 +45,18 @@ export function renderStroke(
   if (pts.length === 0) return;
   const style = styleOf(el);
   const color = mapInkColor(el.color, theme);
+
+  // A closed stroke's fill sits under its ink.
+  const fill = strokeFill(el);
+  if (fill) {
+    ctx.save();
+    ctx.fillStyle = mapInkColor(fill, theme);
+    ctx.beginPath();
+    pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.fillStyle = color;

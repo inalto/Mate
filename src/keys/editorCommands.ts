@@ -284,6 +284,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   switch (action) {
     case "ink.straight":
       return s.toggleStraightLines();
+    case "ink.shapes":
+      return s.toggleAutoShapes();
     case "tool.pen":
       return s.selectInk(s.preset.type === "fountain-pen" ? "fountain-pen" : "pen");
     case "tool.highlighter":

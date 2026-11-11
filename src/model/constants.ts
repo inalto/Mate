@@ -105,6 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
   trashRetentionDays: 30,
   defaultExportFormat: "pdf",
   recentColors: [],
+  customSwatches: [],
   toolbarPresets: [
     { id: "preset-1", type: "pen", color: "#000000", width: 4.11 },
     { id: "preset-2", type: "pen", color: "#C62828", width: 4.11 },

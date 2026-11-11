@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { PenPreset } from "../model/types";
 import { HIGHLIGHTER_PALETTE, hslToHex, hueOf, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
+import CustomSwatches from "./CustomSwatches";
 import { useDismiss } from "./useDismiss";
 import type { EditorStore } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
@@ -102,6 +103,7 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
           {recent.slice(0, MAX_RECENT).map(swatch)}
         </div>
       )}
+      <CustomSwatches current={draft.color} candidate={draft.color} onPick={(c) => change({ color: c.toUpperCase() })} />
       <label className="tb-row tb-width" title={t("selection.widthPx")}>
         <input
           type="range"

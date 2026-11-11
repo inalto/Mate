@@ -132,3 +132,32 @@ describe("recognizeShape", () => {
     expect(recognizeShape(pts(trace([[0, 0], [10, 0], [10, 10], [0, 10], [0, 1]], 1)))).toBeNull();
   });
 });
+
+describe("curve recognition", () => {
+  const pt = (x: number, y: number) => ({ x, y });
+  it("a_smooth_open_bend_becomes_a_curve_through_its_ends", () => {
+    // A quarter-circle arc of radius 200 with a little hand wobble.
+    const arc = Array.from({ length: 60 }, (_, i) => {
+      const a = (i / 59) * (Math.PI / 2);
+      return pt(200 * Math.cos(a) + Math.sin(i * 1.7) * 0.8, 200 * Math.sin(a) + Math.cos(i * 2.3) * 0.8);
+    });
+    const r = recognizeShape(arc);
+    expect(r?.curve).toBeDefined();
+    expect(r!.curve![0].x).toBeCloseTo(arc[0].x, 5);
+    expect(r!.curve!.at(-1)!.y).toBeCloseTo(arc.at(-1)!.y, 5);
+    // The curve stays on the arc: its middle is about 200 from the centre.
+    const mid = r!.curve![Math.floor(r!.curve!.length / 2)];
+    expect(Math.hypot(mid.x, mid.y)).toBeGreaterThan(195);
+    expect(Math.hypot(mid.x, mid.y)).toBeLessThan(205);
+  });
+  it("a_straight_stroke_stays_a_line_and_a_short_bend_stays_ink", () => {
+    const line = Array.from({ length: 40 }, (_, i) => pt(i * 6, i * 2));
+    expect(recognizeShape(line)?.curve).toBeUndefined();
+    expect(recognizeShape(line)?.type).toBe("line");
+    const small = Array.from({ length: 30 }, (_, i) => {
+      const a = (i / 29) * (Math.PI / 2);
+      return pt(30 * Math.cos(a), 30 * Math.sin(a));
+    });
+    expect(recognizeShape(small)).toBeNull();
+  });
+});

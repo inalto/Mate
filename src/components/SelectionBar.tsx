@@ -16,6 +16,7 @@ import {
   ChartLine,
   Copy,
   CopySimple,
+  PaperPlaneTilt,
   Export,
   PencilSimple,
   Presentation,
@@ -65,6 +66,10 @@ import { useSettingsStore } from "../stores/settings";
 import { boxRect } from "../tools/spatialIndex";
 import { copySelectionAsImage } from "../export/copyImage";
 import { placeSelectionBar } from "./selectionBarPlace";
+import CustomSwatches from "./CustomSwatches";
+import SendToPageDialog from "./SendToPageDialog";
+import { createPortal } from "react-dom";
+import { isClosedStroke } from "../ink/closed";
 import { showToast } from "./Toast";
 import { LineCapsPicker } from "./LineCapsPopover";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
@@ -600,6 +605,7 @@ function FillMenu({ current, disabled }: { current: string | undefined; disabled
               />
             ))}
           </div>
+          <CustomSwatches current={current} onPick={apply} />
         </div>
       )}
     </div>
@@ -689,6 +695,7 @@ export default function SelectionBar() {
   // placed whole inside the pane.
   const barRef = useRef<HTMLDivElement>(null);
   const [barSize, setBarSize] = useState({ width: 0, height: 0 });
+  const [sending, setSending] = useState(false);
   useLayoutEffect(() => {
     const el = barRef.current;
     if (!el) return;
@@ -706,6 +713,8 @@ export default function SelectionBar() {
   const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape" || e?.type === "connector");
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
+  // What the fill menu applies to: a shape, or ink that closes on itself.
+  const fillable = firstShape ?? selected.find((e) => isClosedStroke(e));
   const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
   const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
   const cardBoxes = selected.filter((e): e is Element => !!e && e.type === "text-box" && !isMathBox(e) && !isLocked(e));
@@ -737,6 +746,11 @@ export default function SelectionBar() {
       <button type="button" className="tb-btn" aria-label={t("selection.duplicate")} title={t("selection.duplicate")} onClick={() => s().duplicateSelection()}>
         <Copy size={16} />
       </button>
+      <button type="button" className="tb-btn" aria-label={t("selection.sendTo")} title={t("selection.sendTo")} onClick={() => setSending(true)}>
+        <PaperPlaneTilt size={16} />
+      </button>
+      {/* On <body>: the bar is transformed, which would capture a fixed backdrop. */}
+      {sending && createPortal(<SendToPageDialog store={ed} onClose={() => setSending(false)} />, document.body)}
       <button type="button" className="tb-btn" aria-label={t("common.delete")} title={t("common.delete")} disabled={allLocked} onClick={() => s().deleteSelection()}>
         <Trash size={16} />
       </button>
@@ -785,10 +799,10 @@ export default function SelectionBar() {
           onClick={() => s().restyleSelection({ color: c })}
         />
       ))}
-      {firstShape && (
+      {fillable && (
         <>
           <span className="tb-sep" />
-          <FillMenu current={firstShape.fillColor} disabled={allLocked} />
+          <FillMenu current={fillable.fillColor} disabled={allLocked} />
         </>
       )}
       {first && (

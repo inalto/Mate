@@ -517,6 +517,7 @@
     },
     "actions": {
       "straightLines": "Gerade Linien umschalten",
+      "autoShapes": "Perfekte Formen umschalten",
       "pen": "Stift",
       "highlighter": "Markierer",
       "eraser": "Radierer",
@@ -648,6 +649,7 @@
   },
   "toolbar": {
     "straightLines": "Gerade Linien",
+    "autoShapes": "Perfekte Formen",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -842,8 +844,20 @@
     "fitPage": "Seite einpassen",
     "fitSelection": "Auswahl einpassen"
   },
+  "sendTo": {
+    "title": "Auswahl senden an…",
+    "search": "Seiten suchen",
+    "pages": "Seiten",
+    "empty": "Keine anderen Seiten",
+    "copy": "Dorthin kopieren",
+    "move": "Dorthin verschieben",
+    "sent": "An {{page}} gesendet",
+    "failed": "Die Auswahl konnte nicht gesendet werden",
+    "untitled": "Ohne Titel"
+  },
   "selection": {
     "label": "Auswahl",
+    "sendTo": "An eine andere Seite senden",
     "arrange": "Anordnen ▸",
     "align": "Ausrichten ▸",
     "alignLeft": "Links ausrichten",
@@ -864,6 +878,10 @@
   },
   "preset": {
     "edit": "Voreinstellung bearbeiten",
+    "swatches": "Meine Farbfelder",
+    "addSwatch": "Farbe als Farbfeld speichern",
+    "editSwatches": "Farbfelder entfernen",
+    "removeSwatch": "{{color}} entfernen",
     "hue": "Farbton",
     "hex": "Hex-Farbe",
     "recent": "Zuletzt verwendete Farben",

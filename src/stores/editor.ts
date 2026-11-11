@@ -66,6 +66,7 @@ import {
 } from "../canvas/camera";
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
+import { isClosedStroke } from "../ink/closed";
 import i18n from "../i18n";
 import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
 import { clampDeltaToStack, placeInStack } from "../canvas/pageBounds";
@@ -118,6 +119,8 @@ export interface EditorState {
   panHold: boolean;
   /** Session-only: strokes keep just their first and last point. */
   straightLines: boolean;
+  /** Session-only: every ink stroke that reads as a shape, line, arrow or curve becomes one on pen-up. */
+  autoShapes: boolean;
   canUndo: boolean;
   canRedo: boolean;
   /** True after a change (or a pen-down) was refused because the page would exceed
@@ -320,6 +323,7 @@ export interface EditorState {
   setPanHold(held: boolean): void;
   setStraightLines(v: boolean): void;
   toggleStraightLines(): void;
+  toggleAutoShapes(): void;
   /** Erase at a world point with the settings' eraser; one drag is one history entry (endEraser). */
   eraser(center: Vec2): void;
   endEraser(): void;
@@ -614,6 +618,7 @@ export function createEditorStore(): EditorStore {
     tempTool: null,
     panHold: false,
     straightLines: false,
+    autoShapes: false,
     canUndo: false,
     canRedo: false,
     limitReached: false,
@@ -1282,6 +1287,7 @@ export function createEditorStore(): EditorStore {
       if (get().straightLines !== straightLines) set({ straightLines });
     },
     toggleStraightLines: () => set({ straightLines: !get().straightLines }),
+    toggleAutoShapes: () => set({ autoShapes: !get().autoShapes }),
     setPanHold: (panHold) => {
       if (get().panHold !== panHold) set({ panHold });
     },
@@ -1450,7 +1456,7 @@ export function createEditorStore(): EditorStore {
             ...el,
             ...(patch.color !== undefined ? { color: patch.color } : {}),
             ...(patch.width !== undefined && sized(el) ? { width: patch.width } : {}),
-            ...(patch.fillColor !== undefined && el.type === "shape" ? { fillColor: patch.fillColor } : {}),
+            ...(patch.fillColor !== undefined && (el.type === "shape" || isClosedStroke(el)) ? { fillColor: patch.fillColor } : {}),
           })),
         key,
       );

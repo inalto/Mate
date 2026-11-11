@@ -2,7 +2,9 @@
 // fountain-pen/highlighter strokes a filled outline (mirrors render.ts).
 import { getStroke } from "perfect-freehand";
 import { circle, esc, n, PathData } from "../export/svgUtil";
+import { isSafeColor } from "../text/sanitize";
 import { capsuleRuns } from "./capsuleRuns";
+import { strokeFill } from "./closed";
 import { traceSmoothPolygon } from "./render";
 import { simplifyEpsForZoom } from "./resample";
 import { detectRealPressure, penParams, strokeDiscs } from "./strokePoints";
@@ -15,6 +17,11 @@ export function strokeSvg(el: Element, theme: ThemeName, zoomBucket: number): st
   const style = el.penStyle ?? (el.isHighlighter ? "highlighter" : "pen");
   const color = esc(mapInkColor(el.color, theme));
   const shapes: string[] = [];
+  // A closed stroke's fill sits under its ink (an unsafe stored colour is not written out).
+  const fill = strokeFill(el);
+  if (fill && isSafeColor(fill)) {
+    shapes.push(`<polygon points="${pts.map((p) => `${n(p.x)},${n(p.y)}`).join(" ")}" fill="${esc(mapInkColor(fill, theme))}"/>`);
+  }
   if (pts.length === 1) {
     shapes.push(circle(pts[0].x, pts[0].y, Math.max(el.width / 2, 0.4), color));
   } else {

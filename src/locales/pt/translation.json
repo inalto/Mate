@@ -517,6 +517,7 @@
     },
     "actions": {
       "straightLines": "Alternar linhas retas",
+      "autoShapes": "Alternar formas perfeitas",
       "pen": "Caneta",
       "highlighter": "Marca-texto",
       "eraser": "Borracha",
@@ -648,6 +649,7 @@
   },
   "toolbar": {
     "straightLines": "Linhas retas",
+    "autoShapes": "Formas perfeitas",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -842,8 +844,20 @@
     "fitPage": "Ajustar à página",
     "fitSelection": "Ajustar à seleção"
   },
+  "sendTo": {
+    "title": "Enviar a seleção para…",
+    "search": "Procurar páginas",
+    "pages": "Páginas",
+    "empty": "Não há outras páginas",
+    "copy": "Copiar para lá",
+    "move": "Mover para lá",
+    "sent": "Enviado para {{page}}",
+    "failed": "Não foi possível enviar a seleção",
+    "untitled": "Sem título"
+  },
   "selection": {
     "label": "Seleção",
+    "sendTo": "Enviar para outra página",
     "arrange": "Organizar ▸",
     "align": "Alinhar ▸",
     "alignLeft": "Alinhar à esquerda",
@@ -864,6 +878,10 @@
   },
   "preset": {
     "edit": "Editar predefinição",
+    "swatches": "As minhas amostras",
+    "addSwatch": "Guardar a cor como amostra",
+    "editSwatches": "Remover amostras",
+    "removeSwatch": "Remover {{color}}",
     "hue": "Matiz",
     "hex": "Cor hexadecimal",
     "recent": "Cores recentes",

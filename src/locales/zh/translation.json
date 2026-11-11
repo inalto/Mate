@@ -516,6 +516,7 @@
     },
     "actions": {
       "straightLines": "切换直线",
+      "autoShapes": "切换自动规整图形",
       "pen": "笔",
       "highlighter": "荧光笔",
       "eraser": "橡皮擦",
@@ -647,6 +648,7 @@
   },
   "toolbar": {
     "straightLines": "直线",
+    "autoShapes": "自动规整图形",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -841,8 +843,20 @@
     "fitPage": "适应页面",
     "fitSelection": "适应所选内容"
   },
+  "sendTo": {
+    "title": "将所选内容发送到…",
+    "search": "搜索页面",
+    "pages": "页面",
+    "empty": "没有其他页面",
+    "copy": "复制到那里",
+    "move": "移动到那里",
+    "sent": "已发送到 {{page}}",
+    "failed": "无法发送所选内容",
+    "untitled": "无标题"
+  },
   "selection": {
     "label": "选择",
+    "sendTo": "发送到其他页面",
     "arrange": "排列 ▸",
     "align": "对齐 ▸",
     "alignLeft": "左对齐",
@@ -863,6 +877,10 @@
   },
   "preset": {
     "edit": "编辑预设",
+    "swatches": "我的色板",
+    "addSwatch": "将颜色保存为色板",
+    "editSwatches": "移除色板",
+    "removeSwatch": "移除 {{color}}",
     "hue": "色相",
     "hex": "十六进制颜色",
     "recent": "最近使用的颜色",

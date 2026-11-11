@@ -22,8 +22,12 @@ describe("strokeCommit", () => {
     const b = createStrokeBuilder({ ...opts(pen), straight: true, stabilization: 80, clampRect: { x: 0, y: 0, width: 150, height: 1000 } });
     // Small final steps: the stabiliser lags behind them; the last one is also past the sheet edge.
     b.push([pt(0, 0), pt(140, 0), pt(141, 1), pt(142, 2), pt(160, 3)]);
-    expect(b.points().map((p) => [p.x, p.y])).toEqual([[0, 0], [150, 3]]);
-    expect(b.finish().map((p) => [p.x, p.y])).toEqual([[0, 0], [150, 3]]);
+    // (150, 3) is about 1° off the horizontal: the end lands on it.
+    expect(b.points().map((p) => [p.x, p.y])).toEqual([[0, 0], [150, 0]]);
+    expect(b.finish().map((p) => [p.x, p.y])).toEqual([[0, 0], [150, 0]]);
+    const steep = createStrokeBuilder({ ...opts(pen), straight: true, stabilization: 0 });
+    steep.push([pt(0, 0), pt(150, 40)]);
+    expect(steep.points().map((p) => [p.x, p.y])).toEqual([[0, 0], [150, 40]]);
   });
 
   it("straighten_stroke_handles_short_inputs", () => {

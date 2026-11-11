@@ -207,6 +207,8 @@ pub struct Settings {
     // Mate additions
     /// Most recent first, max 6 entries.
     pub recent_colors: Vec<String>,
+    /// Colours the user saved as swatches in the colour pickers (hex, at most 32).
+    pub custom_swatches: Vec<String>,
     pub toolbar_presets: Vec<PenPreset>,
     /// Named graph presets for every graph kind; empty until the user saves one.
     pub graph_presets: Vec<GraphPreset>,
@@ -307,6 +309,7 @@ impl Default for Settings {
             trash_retention_days: 30,
             default_export_format: s("pdf"),
             recent_colors: Vec::new(),
+            custom_swatches: Vec::new(),
             toolbar_presets: default_toolbar_presets(),
             graph_presets: Vec::new(),
             keybindings: Vec::new(),
