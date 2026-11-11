@@ -204,6 +204,9 @@
         "pan": "Pans and zooms"
       },
       "pinchToZoom": "Pinch to zoom",
+      "doubleTapZoom": "Double-tap with a finger to zoom in",
+      "twoFingerUndo": "Double-tap with two fingers to undo",
+      "centerPage": "Keep the page centred horizontally",
       "mouseWheel": {
         "label": "Mouse wheel",
         "pan": "Pans the page",

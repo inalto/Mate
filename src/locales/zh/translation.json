@@ -207,6 +207,9 @@
         "pan": "Pans and zooms"
       },
       "pinchToZoom": "双指缩放",
+      "doubleTapZoom": "手指双击放大",
+      "twoFingerUndo": "双指双击撤销",
+      "centerPage": "页面始终水平居中",
       "mouseWheel": {
         "label": "鼠标滚轮",
         "pan": "平移页面",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Camera } from "../camera";
-import { applyWheel, isLikelyTrackpadWheel, OVERSCROLL_MAX, overscrollPan, pinchCamera } from "../gestures";
+import { applyWheel, fingerTapOf, gestureTapOf, isFingerDoubleTap, isLikelyTrackpadWheel, OVERSCROLL_MAX, overscrollPan, pinchCamera } from "../gestures";
 
 const clampOrigin = (c: Camera): Camera => ({ x: Math.min(0, c.x), y: Math.min(0, c.y), z: c.z });
 const wheel = (o: Partial<WheelEvent>) => ({ deltaX: 0, deltaY: 0, deltaMode: 0, ctrlKey: false, metaKey: false, shiftKey: false, ...o });
@@ -36,5 +36,25 @@ describe("gestures", () => {
     const start = { camera: { x: 0, y: 0, z: 1 }, mid: { x: 100, y: 100 }, dist: 100 };
     expect(pinchCamera(start, { x: 100, y: 100 }, 200)).toEqual({ x: -100, y: -100, z: 2 });
     expect(pinchCamera(start, { x: 100, y: 100 }, 1).z).toBe(0.1);
+  });
+
+  it("finger_tap_and_double_tap_detection", () => {
+    const tap = fingerTapOf([{ x: 100, y: 100, t: 0 }, { x: 104, y: 103, t: 60 }], 120);
+    expect(tap).toEqual({ x: 100, y: 100, t: 120 });
+    expect(fingerTapOf([{ x: 100, y: 100, t: 0 }], 400)).toBeNull(); // a hold
+    expect(fingerTapOf([{ x: 100, y: 100, t: 0 }, { x: 130, y: 100, t: 60 }], 120)).toBeNull(); // a pan
+    expect(isFingerDoubleTap(null, tap!)).toBe(false);
+    expect(isFingerDoubleTap(tap, { x: 125, y: 110, t: 400 })).toBe(true);
+    expect(isFingerDoubleTap(tap, { x: 125, y: 110, t: 700 })).toBe(false); // too late
+    expect(isFingerDoubleTap(tap, { x: 200, y: 100, t: 300 })).toBe(false); // elsewhere
+  });
+
+  it("whole_gesture_tap_for_two_finger_double_tap", () => {
+    const at = { x: 300, y: 300, t: 1000 };
+    expect(gestureTapOf(at, 1150, 4)).toEqual({ x: 300, y: 300, t: 1150 });
+    expect(gestureTapOf(at, 1150, 30)).toBeNull(); // a pinch or pan
+    expect(gestureTapOf(at, 1500, 0)).toBeNull(); // fingers rested
+    expect(gestureTapOf(undefined, 1150, 0)).toBeNull();
+    expect(isFingerDoubleTap({ x: 300, y: 300, t: 1150 }, { x: 360, y: 300, t: 1450 }, 80)).toBe(true);
   });
 });

@@ -394,6 +394,12 @@ export interface Settings {
   penEraserButtonAction: string;
   scrollBehavior: string;
   pinchToZoom: boolean;
+  /** A finger that pans zooms in (×2) about the spot it double-taps. */
+  doubleTapZoom: boolean;
+  /** Two quick taps with two fingers undo the last action. */
+  twoFingerDoubleTapUndo: boolean;
+  /** Page mode: a sheet narrower than the view stays centred horizontally. */
+  centerPageHorizontally: boolean;
   /** What one finger does on a touch screen (see `FingerAction`). */
   fingerAction: FingerAction;
   conversionEnabled: boolean;

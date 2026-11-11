@@ -25,8 +25,8 @@ import { paintBackground, PRESENT_BACKDROP, presentBackdrop, type SurfaceColors 
 import { boxRect, type Rect } from "../tools/spatialIndex";
 import { FRAME_RADIUS } from "../frames/contain";
 import { clearMindmapCache } from "../mindmap/cache";
-import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
-import { applyWheel, dragPan, pinchCamera, SNAP_BACK_MS, type PinchStart } from "./gestures";
+import { animateCamera, screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
+import { applyWheel, DOUBLE_TAP_ZOOM_FACTOR, dragPan, fingerTapOf, gestureTapOf, isFingerDoubleTap, pinchCamera, SNAP_BACK_MS, TWO_FINGER_DOUBLE_TAP_PX, zoomBy, type FingerTap, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
 import { cameraFlingApply, releaseVelocity, startFling } from "./momentum";
 import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
@@ -114,6 +114,10 @@ function createEngine(
   let swipe: { samples: SwipeSample[]; camera: Camera; oneFinger: boolean } | null = null;
   /** Cancels a running pan fling. */
   let stopFling: (() => void) | null = null;
+  /** The last one-finger tap of a panning finger (the first half of a double tap to zoom). */
+  let fingerTap: FingerTap | null = null;
+  /** The last two-finger tap (the first half of a two-finger double tap: undo). */
+  let twoFingerTap: FingerTap | null = null;
   /** True while our own commit updates the store (the element is already in the snapshot). */
   let committing = false;
   let sheetCount = 0;
@@ -347,7 +351,8 @@ function createEngine(
           if (mode === "tool") tools.down(p, tool);
           return;
         }
-        // Page mode: strokes belong to the sheet they start on; the gap between sheets draws nothing.
+        // Page mode: strokes belong to the sheet they start on and end where they leave it; the desk
+        // around the sheets draws nothing.
         const sheet = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
         if (sheet === null) {
           mode = "none";
@@ -486,7 +491,36 @@ function createEngine(
         swipe = null;
         const s = st();
         // A cancelled contact or one that rested while the pen wrote is never a page turn.
-        if (!g?.oneFinger || end.cancelled || end.drewMeanwhile || !s.page || s.presenting) return;
+        if (!g || end.cancelled || end.drewMeanwhile || !s.page || s.presenting) {
+          fingerTap = null;
+          twoFingerTap = null;
+          return;
+        }
+        if (end.fingers === 2) {
+          // Two quick two-finger taps undo the last action.
+          fingerTap = null;
+          const tap2 = gestureTapOf(g.samples[0], end.timeStamp, end.travel);
+          const double2 = tap2 !== null && isFingerDoubleTap(twoFingerTap, tap2, TWO_FINGER_DOUBLE_TAP_PX);
+          twoFingerTap = double2 ? null : tap2;
+          if (double2 && getSettings().twoFingerDoubleTapUndo) {
+            s.setCamera(clamp(g.camera)); // the taps themselves must not leave the view nudged
+            s.undo();
+          }
+          return;
+        }
+        twoFingerTap = null;
+        if (!g.oneFinger) {
+          fingerTap = null;
+          return;
+        }
+        // Two quick taps of a panning finger zoom in about the spot tapped.
+        const tap = fingerTapOf(g.samples, end.timeStamp);
+        const double = tap !== null && isFingerDoubleTap(fingerTap, tap);
+        fingerTap = double ? null : tap;
+        if (double && tap && getSettings().doubleTapZoom) {
+          stopFling = animateCamera(store, zoomBy(s.camera, DOUBLE_TAP_ZOOM_FACTOR, tap, clamp)); // a new touch stops it
+          return;
+        }
         // The lift time closes the gesture: a flick followed by a hold fails the time window.
         const velocity = releaseVelocity(g.samples, end.timeStamp);
         const last = g.samples[g.samples.length - 1];

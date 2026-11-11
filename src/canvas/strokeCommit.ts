@@ -5,7 +5,7 @@ import type { Element, PenPreset, Point } from "../model/types";
 import { normalizePoint } from "../ink/normalize";
 import { resampleInkPoints, simplifyEpsForZoom, simplifyPolylineXY } from "../ink/resample";
 import { createStabilizer } from "../ink/stabilize";
-import { clampToRect } from "./pageBounds";
+import { clampToRect, exitPoint, inRect } from "./pageBounds";
 import type { Rect } from "../tools/spatialIndex";
 
 export interface StrokeOptions {
@@ -16,7 +16,10 @@ export interface StrokeOptions {
   stabilization: number;
   /** settings.fountainPenNibFlatness, 0–100. */
   nibFlatness: number;
-  /** Page mode: every raw point is clamped to this sheet before normalising. */
+  /**
+   * Page mode: the sheet the stroke belongs to. The stroke ends where it crosses the sheet's edge
+   * (the rest of the contact draws nothing); a straight line's end is clamped to the sheet instead.
+   */
   clampRect?: Rect;
   /** Keep only the first and last point (straight line). */
   straight?: boolean;
@@ -66,6 +69,11 @@ export function createStrokeBuilder(opts: StrokeOptions): StrokeBuilder {
     return [line[0], { ...line[1], x: lastRaw.x, y: lastRaw.y }];
   };
 
+  /** The sheet that cuts the stroke (free ink only), the last raw point on it, and whether the pen left it. */
+  const sheet = opts.straight ? undefined : opts.clampRect;
+  let lastOn: Point | null = null;
+  let left = false;
+
   const fountainStep = (p: Point, prev: Point | undefined, commit: boolean): Point => {
     let pressure = p.pressure;
     let real = realPressure;
@@ -99,15 +107,25 @@ export function createStrokeBuilder(opts: StrokeOptions): StrokeBuilder {
   return {
     push(raw) {
       for (const r of raw) {
-        if (out.length >= LIMITS.MAX_POINTS_PER_STROKE) break;
+        if (left || out.length >= LIMITS.MAX_POINTS_PER_STROKE) break;
+        if (sheet && !inRect(r, sheet)) {
+          // Off the sheet: the stroke ends on the edge it crossed, not along it.
+          left = true;
+          if (lastOn) out.push(process({ ...r, ...exitPoint(lastOn, r, sheet) }, true, stab));
+          break;
+        }
+        lastOn = r;
         out.push(process(r, true, stab));
       }
       return opts.straight ? straightened(out) : out;
     },
     preview(predicted) {
-      const all = predicted.length === 0 ? out : out.concat(predicted.map((r) => process(r, false, (p) => p)));
+      // Predictions stop at the sheet's edge too.
+      const off = sheet ? predicted.findIndex((r) => !inRect(r, sheet)) : -1;
+      const ahead = left ? [] : off < 0 ? predicted : predicted.slice(0, off);
+      const all = ahead.length === 0 ? out : out.concat(ahead.map((r) => process(r, false, (p) => p)));
       // Predicted points skip the stabiliser (it is stateful) and are never committed.
-      return opts.straight ? (predicted.length === 0 ? straightened(all) : straightenStroke(all)) : all;
+      return opts.straight ? (ahead.length === 0 ? straightened(all) : straightenStroke(all)) : all;
     },
     points: () => (opts.straight ? straightened(out) : out),
     finish() {

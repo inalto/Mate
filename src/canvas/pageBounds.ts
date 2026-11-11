@@ -22,6 +22,20 @@ export function clampToRect(p: Vec2, r: Rect): Vec2 {
   };
 }
 
+export const inRect = (p: Vec2, r: Rect): boolean => p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y && p.y <= r.y + r.height;
+
+/** Where the segment from `a` (in `r`) to `b` (outside it) crosses the edge of `r`. */
+export function exitPoint(a: Vec2, b: Vec2, r: Rect): Vec2 {
+  let t = 1;
+  const cut = (from: number, to: number, min: number, max: number) => {
+    if (to < min) t = Math.min(t, (min - from) / (to - from));
+    else if (to > max) t = Math.min(t, (max - from) / (to - from));
+  };
+  cut(a.x, b.x, r.x, r.x + r.width);
+  cut(a.y, b.y, r.y, r.y + r.height);
+  return clampToRect({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, r);
+}
+
 export function clampDeltaToStack(bounds: Rect, delta: Vec2, stack: SheetStack): Vec2 {
   const maxX = stack.width - bounds.width;
   const targetX = bounds.x + delta.x;

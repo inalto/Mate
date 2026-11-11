@@ -207,6 +207,9 @@
         "pan": "Pans and zooms"
       },
       "pinchToZoom": "Mit Fingern zoomen",
+      "doubleTapZoom": "Doppeltippen mit dem Finger zum Vergrößern",
+      "twoFingerUndo": "Doppeltippen mit zwei Fingern zum Rückgängigmachen",
+      "centerPage": "Seite horizontal zentriert halten",
       "mouseWheel": {
         "label": "Mausrad",
         "pan": "Verschiebt die Seite",

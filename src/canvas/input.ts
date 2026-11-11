@@ -50,6 +50,10 @@ export interface PanEndInfo {
   timeStamp: number;
   /** A pen/mouse pointer was drawing at some point during the gesture (a resting palm). */
   drewMeanwhile: boolean;
+  /** Most contacts down at once during the gesture. */
+  fingers: number;
+  /** Furthest any contact moved from where it landed (screen px). */
+  travel: number;
 }
 
 export interface PointerHandlers {
@@ -159,6 +163,10 @@ export function createPointerAdapter(
   /** Current gesture: a touch was cancelled / a pen or mouse stroke was open at some point. */
   let panCancelled = false;
   let drewMeanwhile = false;
+  /** Current gesture: where each contact landed, the most down at once, the furthest one moved. */
+  const landed = new Map<number, Vec2>();
+  let maxFingers = 0;
+  let travel = 0;
 
   const local = (e: PointerEvent): Vec2 => {
     const r = el.getBoundingClientRect();
@@ -213,9 +221,14 @@ export function createPointerAdapter(
     if (touches.size === 0) {
       panCancelled = false;
       drewMeanwhile = drawId !== null && drawType !== "touch";
+      landed.clear();
+      maxFingers = 0;
+      travel = 0;
       handlers.onPanStart?.(at, timeStamp);
     }
     touches.set(id, at);
+    landed.set(id, at);
+    maxFingers = Math.max(maxFingers, touches.size);
     capture(id);
     if (touches.size === 2 && pinchEnabled()) {
       pinching = true;
@@ -322,6 +335,8 @@ export function createPointerAdapter(
     if (!prev) return;
     const next = local(e);
     touches.set(e.pointerId, next);
+    const from = landed.get(e.pointerId);
+    if (from) travel = Math.max(travel, Math.hypot(next.x - from.x, next.y - from.y));
     if (pinching) {
       const g = pinchState();
       if (g) handlers.onPinch!(g);
@@ -359,7 +374,7 @@ export function createPointerAdapter(
     if (cancelled) panCancelled = true;
     if (touches.size === 0) {
       if (drawId !== null && drawType !== "touch") drewMeanwhile = true;
-      handlers.onPanEnd?.({ cancelled: panCancelled, timeStamp: e.timeStamp, drewMeanwhile });
+      handlers.onPanEnd?.({ cancelled: panCancelled, timeStamp: e.timeStamp, drewMeanwhile, fingers: maxFingers, travel });
     }
   }
   const onUp = (e: PointerEvent) => end(e, false);
@@ -371,7 +386,26 @@ export function createPointerAdapter(
     if (e.pointerId === drawId) end(e, true);
   };
   const onContext = (e: Event) => e.preventDefault();
+  /**
+   * Touch events are only cancelled, never read (pointer events carry the input). Cancelling them
+   * keeps the system's own tap gestures off the drawing surface: on iPadOS a quick double tap of
+   * the pen otherwise selects nearby page text and raises the Copy menu, which takes the pen away
+   * from the stroke. A cancelled touch no longer moves focus, so a field focused elsewhere is
+   * blurred by hand, and a text selection left on the page is dropped.
+   */
+  const onTouch = (e: TouchEvent) => {
+    if (e.cancelable) e.preventDefault();
+    if (e.type !== "touchstart") return;
+    const doc = el.ownerDocument;
+    const active = doc.activeElement;
+    if (active instanceof HTMLElement && active !== doc.body && !el.contains(active)) active.blur();
+    const sel = doc.getSelection?.();
+    if (sel && !sel.isCollapsed) sel.removeAllRanges();
+  };
+  const touchOpts = { passive: false } as const;
 
+  el.addEventListener("touchstart", onTouch, touchOpts);
+  el.addEventListener("touchend", onTouch, touchOpts);
   el.addEventListener("pointerdown", onDown);
   el.addEventListener("pointermove", onMove);
   el.addEventListener("pointerup", onUp);
@@ -387,6 +421,8 @@ export function createPointerAdapter(
     rejected.clear();
     expectedRelease.clear();
     pinching = false;
+    el.removeEventListener("touchstart", onTouch);
+    el.removeEventListener("touchend", onTouch);
     el.removeEventListener("lostpointercapture", onLostCapture);
     el.removeEventListener("pointerdown", onDown);
     el.removeEventListener("pointermove", onMove);

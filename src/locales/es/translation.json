@@ -207,6 +207,9 @@
         "pan": "Pans and zooms"
       },
       "pinchToZoom": "Pellizcar para ampliar",
+      "doubleTapZoom": "Doble toque con el dedo para ampliar",
+      "twoFingerUndo": "Doble toque con dos dedos para deshacer",
+      "centerPage": "Mantener la página centrada horizontalmente",
       "mouseWheel": {
         "label": "Rueda del ratón",
         "pan": "Desplaza la página",

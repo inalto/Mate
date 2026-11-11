@@ -25,6 +25,7 @@ import { CARD_PADDING, cardOf } from "../model/content";
 import { textContentOf } from "../text/textBox";
 import type { BoxEditorProps } from "./editorRegistry";
 import { renderTextSnapshot, snapshotScale } from "./snapshot";
+import { endEditOnOutsidePress } from "./useEditSession";
 
 /** Quiet period after a change before the draft is rendered to a bitmap. */
 export const DRAFT_SNAPSHOT_MS = 150;
@@ -182,7 +183,7 @@ export default function TextBoxEditor({ el, store }: BoxEditorProps) {
     const onDown = (e: PointerEvent) => {
       const slot = rootRef.current?.closest(".box-editor") ?? rootRef.current;
       if (slot && e.target instanceof Node && slot.contains(e.target)) return;
-      if (store.getState().editingId === el.id) store.getState().endEdit();
+      endEditOnOutsidePress(store, el.id, e.target);
     };
     document.addEventListener("pointerdown", onDown, true);
     return () => document.removeEventListener("pointerdown", onDown, true);

@@ -207,6 +207,9 @@
         "pan": "Pans and zooms"
       },
       "pinchToZoom": "Zoom par pincement",
+      "doubleTapZoom": "Double-toucher du doigt pour zoomer",
+      "twoFingerUndo": "Double-toucher à deux doigts pour annuler",
+      "centerPage": "Garder la page centrée horizontalement",
       "mouseWheel": {
         "label": "Molette de la souris",
         "pan": "Fait défiler la page",

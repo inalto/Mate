@@ -155,6 +155,12 @@ pub struct Settings {
     pub pen_eraser_button_action: String,
     pub scroll_behavior: String,
     pub pinch_to_zoom: bool,
+    /// A finger that pans zooms in (×2) about the spot it double-taps.
+    pub double_tap_zoom: bool,
+    /// Two quick taps with two fingers undo the last action.
+    pub two_finger_double_tap_undo: bool,
+    /// Page mode: a sheet narrower than the view stays centred horizontally.
+    pub center_page_horizontally: bool,
     /// What one finger does on a touch screen: `"auto"` (draws unless a stylus was seen in the
     /// last 2 s), `"draw"` (always draws) or `"pan"` (never draws). Replaces the boolean
     /// `drawWithFinger` (`true` loads as `"draw"`, `false` as `"auto"`).
@@ -273,6 +279,9 @@ impl Default for Settings {
             pen_eraser_button_action: s("eraser"),
             scroll_behavior: s("pan"),
             pinch_to_zoom: true,
+            double_tap_zoom: true,
+            two_finger_double_tap_undo: true,
+            center_page_horizontally: false,
             finger_action: s("auto"),
             conversion_enabled: true,
             correctness_mode: false,

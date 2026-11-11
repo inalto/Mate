@@ -207,6 +207,9 @@
         "pan": "Pans and zooms"
       },
       "pinchToZoom": "ピンチで拡大縮小",
+      "doubleTapZoom": "指でダブルタップして拡大",
+      "twoFingerUndo": "2本指でダブルタップして取り消す",
+      "centerPage": "ページを常に左右中央に表示",
       "mouseWheel": {
         "label": "マウスホイール",
         "pan": "ページを移動",

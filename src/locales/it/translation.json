@@ -204,6 +204,9 @@
         "pan": "Sposta e ingrandisce"
       },
       "pinchToZoom": "Pizzica per ingrandire",
+      "doubleTapZoom": "Doppio tocco con il dito per ingrandire",
+      "twoFingerUndo": "Doppio tocco con due dita per annullare",
+      "centerPage": "Mantieni la pagina centrata in orizzontale",
       "mouseWheel": {
         "label": "Rotellina del mouse",
         "pan": "Sposta la pagina",

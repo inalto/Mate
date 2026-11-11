@@ -62,11 +62,27 @@ describe("strokeCommit", () => {
     expect(b.points()).toHaveLength(5);
   });
 
-  it("clamp_rect_keeps_points_on_the_sheet", () => {
+  it("stroke_ends_where_it_leaves_the_sheet", () => {
     const pt = (x: number, y: number): Point => ({ x, y, pressure: 0.5, timestamp: 0 });
-    const b = createStrokeBuilder({ ...opts(pen), stabilization: 0, clampRect: { x: 0, y: 0, width: 1080, height: 1528 } });
-    b.push([pt(-20, 10), pt(500, 1600), pt(1100, 700)]);
-    expect(b.points().map((p) => [p.x, p.y])).toEqual([[0, 10], [500, 1528], [1080, 700]]);
-    expect(b.preview([pt(2000, -5)]).at(-1)).toMatchObject({ x: 1080, y: 0 });
+    const sheet = { x: 0, y: 0, width: 1080, height: 1528 };
+    const b = createStrokeBuilder({ ...opts(pen), stabilization: 0, clampRect: sheet });
+    // Leaves through the right edge half way to the next point; nothing is traced along the edge.
+    b.push([pt(1000, 100), pt(1060, 200), pt(1100, 300), pt(1200, 900)]);
+    b.push([pt(1300, 1200), pt(900, 1200)]); // coming back does not resume the stroke
+    expect(b.points().map((p) => [p.x, p.y])).toEqual([[1000, 100], [1060, 200], [1080, 250]]);
+    expect(b.preview([pt(500, 500)])).toHaveLength(3);
+
+    // Predicted points stop at the edge as well.
+    const c = createStrokeBuilder({ ...opts(pen), stabilization: 0, clampRect: sheet });
+    c.push([pt(10, 10)]);
+    expect(c.preview([pt(20, 5), pt(30, -5), pt(40, 5)]).map((p) => [p.x, p.y])).toEqual([[10, 10], [20, 5]]);
+    expect(c.points()).toHaveLength(1);
+  });
+
+  it("straight_line_end_is_clamped_to_the_sheet", () => {
+    const pt = (x: number, y: number): Point => ({ x, y, pressure: 0.5, timestamp: 0 });
+    const b = createStrokeBuilder({ ...opts(pen), straight: true, stabilization: 0, clampRect: { x: 0, y: 0, width: 1080, height: 1528 } });
+    b.push([pt(500, 700), pt(1100, 700)]);
+    expect(b.points().map((p) => [p.x, p.y])).toEqual([[500, 700], [1080, 700]]);
   });
 });

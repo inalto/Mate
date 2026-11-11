@@ -1180,6 +1180,9 @@ button.card:hover {
   position: absolute;
   transform: translateX(-50%);
   z-index: 1;
+  /* Never wider than the pane: a long bar wraps onto a second row (see selectionBarPlace). */
+  max-width: calc(100% - 16px);
+  flex-wrap: wrap;
 }
 
 /* Toolbar popovers live on <body> (see DockPopover) and are placed from the anchor's rectangle. */

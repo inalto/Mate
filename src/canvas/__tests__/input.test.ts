@@ -23,6 +23,24 @@ afterEach(() => {
 });
 
 describe("pointer adapter", () => {
+  it("touch_events_are_cancelled_so_system_tap_gestures_stay_off_the_canvas", () => {
+    const { el, handlers, dispose } = setup();
+    const field = document.createElement("input");
+    document.body.appendChild(field);
+    field.focus();
+    const touch = (type: string) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true });
+      el.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    };
+    expect(touch("touchstart")).toBe(true);
+    expect(document.activeElement).not.toBe(field); // a cancelled touch moves no focus: blurred by hand
+    expect(touch("touchend")).toBe(true);
+    expect(handlers.onDown).not.toHaveBeenCalled(); // input still comes from pointer events only
+    dispose();
+    expect(touch("touchstart")).toBe(false);
+  });
+
   it("mouse_down_move_up_calls_handlers", () => {
     const { el, handlers, dispose } = setup();
     const base = { pointerId: 1, pointerType: "mouse" };
@@ -284,7 +302,7 @@ describe("fingerMayDraw", () => {
     at("pointerup", { ...finger, buttons: 0, clientX: 150, clientY: 52 }, 60);
     at("pointerup", { ...finger, pointerId: 8, buttons: 0, clientX: 300, clientY: 50 }, 60);
     expect(h.onPanEnd).toHaveBeenCalledTimes(1);
-    expect(h.onPanEnd).toHaveBeenCalledWith({ cancelled: false, timeStamp: 60, drewMeanwhile: false });
+    expect(h.onPanEnd).toHaveBeenCalledWith(expect.objectContaining({ cancelled: false, timeStamp: 60, drewMeanwhile: false }));
     // Pen input never reports a pan.
     at("pointerdown", { pointerId: 9, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 0, clientY: 0 }, 70);
     at("pointermove", { pointerId: 9, pointerType: "pen", buttons: 1, pressure: 0.5, clientX: 90, clientY: 0 }, 80);
@@ -314,13 +332,13 @@ describe("fingerMayDraw", () => {
     at("pointermove", { ...touch, clientX: 200, clientY: 52 }, 60); // the palm flings
     at("pointerup", { ...pen, buttons: 0, clientX: 120, clientY: 100 }, 70);
     at("pointerup", { ...touch, buttons: 0, clientX: 200, clientY: 52 }, 80);
-    expect(h.onPanEnd).toHaveBeenCalledWith({ cancelled: false, timeStamp: 80, drewMeanwhile: true });
+    expect(h.onPanEnd).toHaveBeenCalledWith(expect.objectContaining({ cancelled: false, timeStamp: 80, drewMeanwhile: true }));
     // The next gesture starts clean.
     at("pointerdown", { pointerId: 1, pointerType: "mouse", button: 0, buttons: 1, clientX: 0, clientY: 0 }, 5000);
     at("pointerup", { pointerId: 1, pointerType: "mouse", button: 0, buttons: 0, clientX: 0, clientY: 0 }, 5010);
     at("pointerdown", { ...touch, clientX: 400, clientY: 50 }, 5020);
     at("pointerup", { ...touch, buttons: 0, clientX: 200, clientY: 50 }, 5100);
-    expect(h.onPanEnd).toHaveBeenLastCalledWith({ cancelled: false, timeStamp: 5100, drewMeanwhile: false });
+    expect(h.onPanEnd).toHaveBeenLastCalledWith(expect.objectContaining({ cancelled: false, timeStamp: 5100, drewMeanwhile: false }));
   });
 
   it("pen_still_down_when_the_pan_ends_is_not_swipe_eligible", () => {
@@ -336,7 +354,7 @@ describe("fingerMayDraw", () => {
     at("pointerdown", { ...touch, clientX: 400, clientY: 50 }, 10);
     at("pointermove", { ...touch, clientX: 200, clientY: 50 }, 60);
     at("pointercancel", { ...touch, buttons: 0, clientX: 200, clientY: 50 }, 90);
-    expect(h.onPanEnd).toHaveBeenCalledWith({ cancelled: true, timeStamp: 90, drewMeanwhile: false });
+    expect(h.onPanEnd).toHaveBeenCalledWith(expect.objectContaining({ cancelled: true, timeStamp: 90, drewMeanwhile: false }));
   });
 });
 

@@ -25,6 +25,9 @@ export default function GesturesSection() {
         ]}
       />
       <ToggleRow k="pinchToZoom" label={t("settings.gestures.pinchToZoom")} />
+      <ToggleRow k="doubleTapZoom" label={t("settings.gestures.doubleTapZoom")} />
+      <ToggleRow k="twoFingerDoubleTapUndo" label={t("settings.gestures.twoFingerUndo")} />
+      <ToggleRow k="centerPageHorizontally" label={t("settings.gestures.centerPage")} />
       <SelectRow
         k="scrollBehavior"
         label={t("settings.gestures.mouseWheel.label")}

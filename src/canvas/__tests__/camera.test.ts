@@ -47,4 +47,14 @@ describe("camera", () => {
     const far = clampCamera({ x: -1e6, y: -1e6, z: 1 }, page("canvas"), vp);
     expect(far).toEqual({ x: -1e6, y: -1e6, z: 1 });
   });
+
+  it("centre_lock_holds_a_narrow_sheet_in_the_middle_and_frees_a_wide_one", () => {
+    const vp = { width: 2000, height: 1000 };
+    const stack = { width: 1080, height: 1528, count: 1 };
+    // Sheet narrower than the view: wherever it was dragged, it comes back to the middle.
+    expect(clampCamera({ x: 30, y: 0, z: 1 }, page("page"), vp, stack, true).x).toBe((2000 - 1080) / 2);
+    expect(clampCamera({ x: 30, y: 0, z: 1 }, page("page"), vp, stack).x).not.toBe((2000 - 1080) / 2);
+    // Zoomed in past the view's width: it pans as usual.
+    expect(clampCamera({ x: -500, y: 0, z: 3 }, page("page"), vp, stack, true).x).toBe(-500);
+  });
 });

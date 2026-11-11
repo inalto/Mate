@@ -35,7 +35,7 @@ import {
   Trash,
   TreeStructure,
 } from "@phosphor-icons/react";
-import { useCallback, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { TKey } from "../i18n";
 import { worldToScreen } from "../canvas/camera";
@@ -64,6 +64,7 @@ import { exportPage, type PageExportFormat } from "../export/exportPage";
 import { useSettingsStore } from "../stores/settings";
 import { boxRect } from "../tools/spatialIndex";
 import { copySelectionAsImage } from "../export/copyImage";
+import { placeSelectionBar } from "./selectionBarPlace";
 import { showToast } from "./Toast";
 import { LineCapsPicker } from "./LineCapsPopover";
 import { FILL_PALETTE, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
@@ -80,11 +81,6 @@ function copyText(text: string): void {
     /* no clipboard access */
   }
 }
-
-const BAR_GAP = 12;
-const BAR_HEIGHT = 44;
-/** Margin kept to the top of the pane (the toolbar is docked outside the canvas). */
-const TOP_RESERVED = 8;
 
 /** The Compute menu with its remote-engine entries (read only when a math box is selected). */
 function MathCompute(props: Omit<ComputeMenuProps, "extraItems">) {
@@ -689,16 +685,22 @@ export default function SelectionBar() {
   const editingText = ed((s) => s.editingId !== null && s.elements.get(s.editingId)?.type === "text-box");
   const editingId = ed((s) => s.editingId);
   const b = selection.size > 0 && !editingText ? selectionBounds(elements, selection) : null;
+  // The bar's real size (its buttons vary with the selection), measured after each render so it is
+  // placed whole inside the pane.
+  const barRef = useRef<HTMLDivElement>(null);
+  const [barSize, setBarSize] = useState({ width: 0, height: 0 });
+  useLayoutEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const width = el.offsetWidth;
+    const height = el.offsetHeight;
+    setBarSize((cur) => (cur.width === width && cur.height === height ? cur : { width, height }));
+  }, [selection, elements, editingId, viewport.width]);
   if (!b) return null;
   const s = ed.getState;
 
   const tl = worldToScreen(camera, { x: b.x, y: b.y });
-  const w = b.width * camera.z;
-  const h = b.height * camera.z;
-  const half = Math.min(220, viewport.width / 2);
-  const left = Math.max(half, Math.min(viewport.width - half, tl.x + w / 2));
-  let top = tl.y - BAR_GAP - BAR_HEIGHT;
-  if (top < TOP_RESERVED) top = Math.min(tl.y + h + BAR_GAP, viewport.height - BAR_HEIGHT - BAR_GAP);
+  const { left, top } = placeSelectionBar({ x: tl.x, y: tl.y, width: b.width * camera.z, height: b.height * camera.z }, viewport, barSize);
 
   const selected = [...selection].map((id) => elements.get(id));
   const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape" || e?.type === "connector");
@@ -728,7 +730,7 @@ export default function SelectionBar() {
   };
 
   return (
-    <div className="selection-bar" role="toolbar" aria-label={t("selection.label")} style={{ left, top }}>
+    <div ref={barRef} className="selection-bar" role="toolbar" aria-label={t("selection.label")} style={{ left, top }}>
       <button type="button" className="tb-btn" aria-label={t("common.copy")} title={t("common.copy")} onClick={() => s().copySelection()}>
         <CopySimple size={16} />
       </button>

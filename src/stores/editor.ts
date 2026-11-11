@@ -459,7 +459,7 @@ export function spaceShift(s: EditorState, lineY: number, dy: number): number {
 /** Clamp a camera to the current page bounds (no overscroll). */
 export function clampToPage(c: Camera, s: EditorState): Camera {
   if (!s.page || s.presenting) return c; // presenting: frames may sit anywhere
-  return clampCamera(c, s.page, s.viewport, sheetStack(s));
+  return clampCamera(c, s.page, s.viewport, sheetStack(s), useSettingsStore.getState().settings.centerPageHorizontally);
 }
 
 /** Page used when the notebook tree has no record for the id (e.g. a stale link). */

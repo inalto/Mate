@@ -91,3 +91,43 @@ export function pinchCamera(start: PinchStart, mid: Vec2, dist: number): Camera 
 export function zoomBy(cam: Camera, factor: number, focus: Vec2, clamp: (c: Camera) => Camera): Camera {
   return clamp(zoomAt(cam, focus, cam.z * factor));
 }
+
+/** A finger tap: where it landed (element-relative screen px) and when it lifted (ms). */
+export interface FingerTap {
+  x: number;
+  y: number;
+  t: number;
+}
+
+export const FINGER_TAP_MS = 300;
+export const FINGER_TAP_SLOP_PX = 10;
+export const FINGER_DOUBLE_TAP_MS = 400;
+/** Fingers land less precisely than a pen: the second tap may be this far from the first. */
+export const FINGER_DOUBLE_TAP_PX = 40;
+/** Two-finger taps are matched by where the first finger landed: looser still. */
+export const TWO_FINGER_DOUBLE_TAP_PX = 80;
+export const DOUBLE_TAP_ZOOM_FACTOR = 2;
+
+/**
+ * The tap a one-finger pan amounts to, or null: lifted within 300 ms of landing and never further
+ * than 10 px from where it landed. `samples` are the pan's screen samples (first = landing).
+ */
+export function fingerTapOf(samples: readonly { x: number; y: number; t: number }[], liftedAt: number): FingerTap | null {
+  const first = samples[0];
+  if (!first || liftedAt - first.t > FINGER_TAP_MS) return null;
+  for (const p of samples) if (Math.hypot(p.x - first.x, p.y - first.y) > FINGER_TAP_SLOP_PX) return null;
+  return { x: first.x, y: first.y, t: liftedAt };
+}
+
+/**
+ * The tap a whole touch gesture amounts to (any number of fingers), or null: every contact lifted
+ * within 300 ms of the first landing at `at`, none moved further than 10 px (`travel`).
+ */
+export function gestureTapOf(at: { x: number; y: number; t: number } | undefined, liftedAt: number, travel: number): FingerTap | null {
+  if (!at || liftedAt - at.t > FINGER_TAP_MS || travel > FINGER_TAP_SLOP_PX) return null;
+  return { x: at.x, y: at.y, t: liftedAt };
+}
+
+/** `next` follows `prev` closely enough in time and place (within `px`) to be a double tap. */
+export const isFingerDoubleTap = (prev: FingerTap | null, next: FingerTap, px = FINGER_DOUBLE_TAP_PX): boolean =>
+  !!prev && next.t - prev.t <= FINGER_DOUBLE_TAP_MS && Math.hypot(next.x - prev.x, next.y - prev.y) <= px;

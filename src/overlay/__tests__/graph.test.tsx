@@ -222,6 +222,28 @@ describe("GraphEditor", () => {
     expect(data(id).domain.yMin).toBeCloseTo(z.yMin);
   });
 
+  it("press_on_the_page_ends_editing_and_drops_the_frame", () => {
+    const { id, ui } = insert();
+    const page = document.createElement("div");
+    page.className = "canvas-view";
+    document.body.appendChild(page);
+    expect(ui.container.querySelector(".box-frame-handle")).not.toBeNull();
+    act(() => void fireEvent.pointerDown(page, { pointerId: 1, button: 0 }));
+    expect(s().editingId).toBeNull();
+    expect(s().selection.size).toBe(0);
+    expect(ui.container.querySelector(".box-frame-handle")).toBeNull();
+    page.remove();
+
+    // A press on other chrome (a toolbar button) ends editing but keeps the graph selected.
+    act(() => s().beginEdit(id));
+    const chrome = document.createElement("button");
+    document.body.appendChild(chrome);
+    act(() => void fireEvent.pointerDown(chrome, { pointerId: 1, button: 0 }));
+    expect(s().editingId).toBeNull();
+    expect([...s().selection]).toEqual([id]);
+    chrome.remove();
+  });
+
   it("plot_area_draws_the_live_scene", () => {
     const { ui } = insert();
     expect(canvasCtx.strokes).not.toContain(GRAPH_PALETTE[0]);
