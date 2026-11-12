@@ -1,7 +1,7 @@
 {
   "name": "mate",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "icons:android": "node scripts/copy-android-icons.mjs",
