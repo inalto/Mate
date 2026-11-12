@@ -152,6 +152,10 @@
         "hint": "Am Ende eines Strichs den Stift ruhig halten, um ihn in eine Form zu verwandeln"
       },
       "snapOnRelease": "Beim Abheben des Stifts einrasten",
+      "shapeFill": {
+        "label": "Perfekte Formen füllen",
+        "hint": "Geschlossene Formen, die mit „Perfekte Formen“ oder der Formerkennung gezeichnet werden, werden mit einem helleren Ton der Tintenfarbe gefüllt."
+      },
       "holdTime": "Haltezeit",
       "milliseconds": "{{value}} ms",
       "scribbleToErase": {
@@ -1329,6 +1333,12 @@
       "yMin": "y min",
       "yMax": "y max",
       "grid": "Raster",
+      "aspect": {
+        "label": "Proportionen",
+        "free": "Rahmen beibehalten",
+        "equal": "Gleicher Maßstab auf beiden Achsen",
+        "hint": "Bei gleichem Maßstab nimmt der Rahmen nach dem Bearbeiten die Form des Ausschnitts an."
+      },
       "plot": "Graph-Darstellung"
     },
     "presets": {

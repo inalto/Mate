@@ -149,6 +149,10 @@
         "hint": "Tieni ferma la penna a fine tratto per trasformarlo in una forma"
       },
       "snapOnRelease": "Aggancia quando sollevi la penna",
+      "shapeFill": {
+        "label": "Riempi le forme perfette",
+        "hint": "Le forme chiuse disegnate con Forme perfette o con la conversione in forme vengono riempite con una tinta più chiara del colore dell'inchiostro."
+      },
       "holdTime": "Tempo di pressione",
       "milliseconds": "{{value}} ms",
       "scribbleToErase": {
@@ -1326,6 +1330,12 @@
       "yMin": "y min",
       "yMax": "y max",
       "grid": "Griglia",
+      "aspect": {
+        "label": "Proporzioni",
+        "free": "Mantieni il riquadro",
+        "equal": "Stessa scala sui due assi",
+        "hint": "Con la stessa scala, il riquadro prende la forma della vista quando finisci di modificare."
+      },
       "plot": "Grafico della funzione"
     },
     "presets": {

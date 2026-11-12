@@ -1293,9 +1293,9 @@ export function createEditorStore(): EditorStore {
     toggleAutoShapes() {
       const s = get();
       const on = !s.autoShapes;
-      // Shapes are drawn with ink: the ink tool in hand stays, any other tool gives way to the pen
-      // (the highlighter never snaps, so it gives way too when it was only the last ink used).
-      if (on && !isInkTool(s.tool) && !s.presenting) get().selectInk(s.preset.type === "highlighter" ? "pen" : s.preset.type);
+      // Shapes are drawn with ink: the ink tool in hand stays (the highlighter too), any other tool
+      // gives way to the ink used last.
+      if (on && !isInkTool(s.tool) && !s.presenting) get().selectInk(s.preset.type);
       set({ autoShapes: on });
     },
     setPanHold: (panHold) => {

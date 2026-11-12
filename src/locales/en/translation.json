@@ -149,6 +149,10 @@
         "hint": "Hold the pen still at the end of a stroke to turn it into a shape"
       },
       "snapOnRelease": "Snap when lifting the pen",
+      "shapeFill": {
+        "label": "Fill perfect shapes",
+        "hint": "Closed shapes drawn with Perfect shapes or ink to shape are filled with a lighter tint of the ink colour."
+      },
       "holdTime": "Hold time",
       "milliseconds": "{{value}} ms",
       "scribbleToErase": {
@@ -1326,6 +1330,12 @@
       "yMin": "y min",
       "yMax": "y max",
       "grid": "Grid",
+      "aspect": {
+        "label": "Proportions",
+        "free": "Keep the box",
+        "equal": "Same scale on both axes",
+        "hint": "With the same scale, the box takes the shape of the view when you finish editing."
+      },
       "plot": "Graph plot"
     },
     "presets": {

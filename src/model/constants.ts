@@ -65,6 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
   eraserEraseImages: false,
   inkToShape: true,
   inkToShapeSnapsOnRelease: false,
+  perfectShapesFill: false,
   inkToShapeDwellMs: 750,
   lineCapsPopover: true,
   scribbleToErase: true,

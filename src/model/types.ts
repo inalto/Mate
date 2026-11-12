@@ -381,6 +381,8 @@ export interface Settings {
   eraserEraseImages: boolean;
   inkToShape: boolean;
   inkToShapeSnapsOnRelease: boolean;
+  /** Closed shapes made by perfect shapes / ink to shape are filled with a light tint of the ink colour. */
+  perfectShapesFill: boolean;
   inkToShapeDwellMs: number;
   /** Offer the line ends popover after a stroke snaps to a line or arrow. */
   lineCapsPopover: boolean;

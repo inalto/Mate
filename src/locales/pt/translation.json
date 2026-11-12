@@ -152,6 +152,10 @@
         "hint": "Segure a caneta parada no fim de um traço para transformá-lo em forma"
       },
       "snapOnRelease": "Ajustar ao levantar a caneta",
+      "shapeFill": {
+        "label": "Preencher as formas perfeitas",
+        "hint": "As formas fechadas desenhadas com Formas perfeitas ou com a conversão em formas são preenchidas com um tom mais claro da cor da tinta."
+      },
       "holdTime": "Tempo de espera",
       "milliseconds": "{{value}} ms",
       "scribbleToErase": {
@@ -1329,6 +1333,12 @@
       "yMin": "y mín",
       "yMax": "y máx",
       "grid": "Grade",
+      "aspect": {
+        "label": "Proporções",
+        "free": "Manter a caixa",
+        "equal": "Mesma escala nos dois eixos",
+        "hint": "Com a mesma escala, a caixa toma a forma da vista quando termina a edição."
+      },
       "plot": "Gráfico"
     },
     "presets": {

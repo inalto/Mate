@@ -295,7 +295,7 @@ function createEngine(
   const penInk = createPenInkHaptics(liveCanvas);
   const onSnap = (r: RecognizedShape) => {
     penInk.click();
-    snapShape = snapShapeElement(r, st().preset, pageId, "live", "");
+    snapShape = snapShapeElement(r, st().preset, pageId, "live", "", getSettings().perfectShapesFill);
     flash = { shape: r, until: performance.now() + SNAP_FLASH_MS };
     if (flashTimer !== null) clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
@@ -414,7 +414,7 @@ function createEngine(
           straight,
         });
         // Perfect-shapes mode: every stroke is recognised on pen-up, whatever the ink-to-shape settings.
-        const snapping = s.autoShapes ? s.preset.type !== "highlighter" : inkSnapAllowed(s.preset.type, set);
+        const snapping = s.autoShapes || inkSnapAllowed(s.preset.type, set); // perfect shapes: the highlighter too
         snap = !straight && snapping
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
@@ -424,7 +424,7 @@ function createEngine(
               points: () => builder?.points() ?? [],
               onSnap,
               onAdjust: (r) => {
-                snapShape = snapShapeElement(r, st().preset, pageId, "live", "");
+                snapShape = snapShapeElement(r, st().preset, pageId, "live", "", getSettings().perfectShapesFill);
                 setLive(null);
               },
             })
@@ -504,7 +504,7 @@ function createEngine(
           inkTap = tap && stroke && !zoomed && t === "commit" ? { tap, id: stroke.id } : null;
           if (stroke && t === "commit" && !zoomed) {
             if (shape) {
-              const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());
+              const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString(), getSettings().perfectShapesFill);
               let added = false;
               commit(el, () => {
                 added = st().replaceStrokeWithShape(stroke, el);

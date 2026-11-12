@@ -3,15 +3,19 @@
 // plain text input (calculator style or LaTeX, see graph/plain), show/hide, delete; under the row a
 // KaTeX rendering of how the input was read, then any parse error, never blocking), the domain
 // inputs and the grid toggle; the plot area fills the box, with wheel zoom about the cursor and
-// drag to pan. The plot is rebuilt at most once per animation frame (latest state wins); an
+// drag to pan, and on touch screens two fingers pinch to zoom (and pan). The panel moves to the
+// right of the box, or over it, when the pane has no room on the left, and up when it would run
+// past the bottom. The "same scale" proportion reshapes the box after the view when the session
+// commits. The plot is rebuilt at most once per animation frame (latest state wins); an
 // expression cut short by the plot's time budget shows a warning under its row. The math engine
 // is loaded on mount. Esc ends editing. The session commits once (useEditSession). Registered
 // lazily for "graph" by ./boxEditors.
 import { Eye, EyeSlash, X } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphData, type GraphDomain, type GraphExpression, type GraphKind } from "../graph/data";
+import { boxForDomain, graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphData, type GraphDomain, type GraphExpression, type GraphKind } from "../graph/data";
 import { loadEngine, engineSync } from "../graph/engine";
+import { pinchDomain, placeGraphPanel, type PanelSide } from "../graph/editorMath";
 import { expressionError, parseExpressionSync } from "../graph/expressions";
 import { toLatex } from "../graph/plain";
 import { applyPreset, rememberGraphKind } from "../graph/presets";
@@ -74,8 +78,10 @@ function DomainInput({ label, value, onValue }: { label: string; value: number; 
 export default function GraphEditor({ el, store }: BoxEditorProps) {
   const { t } = useTranslation();
   const theme = useSettingsStore((s) => s.settings.theme);
-  const zoom = store((s) => s.camera.z);
+  const camera = store((s) => s.camera);
+  const zoom = camera.z;
   const rootRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const plotRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [data, setData] = useState<GraphData>(() => graphDataOf(el));
@@ -91,8 +97,12 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     const stored = graphDataOf(cur);
     const next: GraphData = { ...d, kind: kindOf(d.expressions, stored.kind) };
     rememberGraphKind(next.kind);
-    if (JSON.stringify(next) === JSON.stringify(stored)) return cur;
-    return { ...cur, content: { ...contentOf<GraphContent>(cur), subtype: "graph", graphData: next } };
+    // Same scale on both axes: the box takes the shape of the view (same area, top-left in place).
+    const box = { width: cur.boxWidth ?? w, height: cur.boxHeight ?? h };
+    const fitted = next.aspect === "equal" ? boxForDomain(box, next.domain) : box;
+    const reshaped = fitted.width !== box.width || fitted.height !== box.height;
+    if (!reshaped && JSON.stringify(next) === JSON.stringify(stored)) return cur;
+    return { ...cur, boxWidth: fitted.width, boxHeight: fitted.height, content: { ...contentOf<GraphContent>(cur), subtype: "graph", graphData: next } };
   });
 
   const update = (fn: (d: GraphData) => GraphData) => setData((d) => fn(d));
@@ -182,15 +192,68 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     return () => plot.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Drag to pan.
+  // The panel stays in the pane: beside the box where there is room, over it otherwise.
+  const [panelAt, setPanelAt] = useState<{ side: PanelSide; dy: number }>({ side: "left", dy: 0 });
+  const exprCount = data.expressions.length;
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const panel = panelRef.current;
+    const pane = root?.closest(".overlay-clip");
+    if (!root || !panel || !pane) return;
+    const c = pane.getBoundingClientRect();
+    const b = root.getBoundingClientRect();
+    const p = panel.getBoundingClientRect();
+    if (c.width <= 0 || c.height <= 0 || p.width <= 0) return; // not laid out (tests)
+    const next = placeGraphPanel(b, p, c);
+    setPanelAt((prev) => (prev.side === next.side && prev.dy === next.dy ? prev : next));
+  }, [camera, w, h, exprCount, warnings]);
+
+  // Drag to pan; two fingers pinch to zoom and pan.
   const drag = useRef<{ id: number; x: number; y: number; domain: GraphDomain } | null>(null);
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ a: number; b: number; dist: number; mx: number; my: number; domain: GraphDomain } | null>(null);
+  const startPinch = () => {
+    const [a, b] = [...touches.current.entries()];
+    if (!a || !b) return;
+    pinch.current = {
+      a: a[0],
+      b: b[0],
+      dist: Math.hypot(b[1].x - a[1].x, b[1].y - a[1].y),
+      mx: (a[1].x + b[1].x) / 2,
+      my: (a[1].y + b[1].y) / 2,
+      domain: latest.current.domain,
+    };
+    drag.current = null;
+  };
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, domain: latest.current.domain };
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    if (e.pointerType === "touch") {
+      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.current.size === 2) {
+        startPinch();
+        return;
+      }
+      if (touches.current.size > 2) return;
+    }
+    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, domain: latest.current.domain };
   };
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const two = pinch.current;
+    if (two) {
+      e.stopPropagation();
+      const a = touches.current.get(two.a);
+      const b = touches.current.get(two.b);
+      const box = e.currentTarget.getBoundingClientRect();
+      if (!a || !b || box.width <= 0 || box.height <= 0) return;
+      const fx = (x: number) => (x - box.left) / box.width;
+      const fy = (y: number) => (y - box.top) / box.height;
+      const next = pinchDomain(two.domain, two.dist, Math.hypot(b.x - a.x, b.y - a.y), fx(two.mx), fy(two.my), fx((a.x + b.x) / 2), fy((a.y + b.y) / 2));
+      update((cur) => ({ ...cur, domain: next }));
+      return;
+    }
     const g = drag.current;
     if (!g || g.id !== e.pointerId) return;
     e.stopPropagation();
@@ -202,9 +265,15 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     update((cur) => ({ ...cur, domain: { xMin: d.xMin - dx, xMax: d.xMax - dx, yMin: d.yMin + dy, yMax: d.yMax + dy } }));
   };
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (drag.current?.id !== e.pointerId) return;
-    drag.current = null;
     e.currentTarget.releasePointerCapture?.(e.pointerId);
+    if (touches.current.delete(e.pointerId) && pinch.current) {
+      pinch.current = null;
+      // The finger that stays goes on panning from where it is.
+      const rest = [...touches.current.entries()][0];
+      drag.current = rest ? { id: rest[0], x: rest[1].x, y: rest[1].y, domain: latest.current.domain } : null;
+      return;
+    }
+    if (drag.current?.id === e.pointerId) drag.current = null;
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
@@ -218,7 +287,14 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
 
   return (
     <div ref={rootRef} className="graph-editor" onKeyDown={onKeyDown}>
-      <div className="graph-panel" role="group" aria-label={t("graph.editor.settings")}>
+      <div
+        ref={panelRef}
+        className="graph-panel"
+        role="group"
+        aria-label={t("graph.editor.settings")}
+        data-side={panelAt.side}
+        style={{ "--graph-panel-dy": `${panelAt.dy}px` } as CSSProperties}
+      >
         <ul className="graph-exprs">
           {data.expressions.map((ex, i) => {
             const n = i + 1;
@@ -284,6 +360,18 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
           <DomainInput label={t("graph.editor.yMax")} value={data.domain.yMax} onValue={(v) => setDomain("yMax", v)} />
         </div>
         <GraphPresets kind={currentKind} data={data} onApply={(p) => update((d) => applyPreset(d, p))} />
+        <div className="graph-aspect">
+          <span className="graph-aspect-label">{t("graph.editor.aspect.label")}</span>
+          <div className="segmented" role="group" aria-label={t("graph.editor.aspect.label")}>
+            <button type="button" aria-pressed={data.aspect !== "equal"} onClick={() => update(({ aspect: _drop, ...d }) => d)}>
+              {t("graph.editor.aspect.free")}
+            </button>
+            <button type="button" aria-pressed={data.aspect === "equal"} onClick={() => update((d) => ({ ...d, aspect: "equal" }))}>
+              {t("graph.editor.aspect.equal")}
+            </button>
+          </div>
+          {data.aspect === "equal" && <div className="graph-aspect-hint">{t("graph.editor.aspect.hint")}</div>}
+        </div>
         <label className="graph-grid-toggle">
           <input type="checkbox" aria-label={t("graph.editor.grid")} checked={data.grid} onChange={(e) => update((d) => ({ ...d, grid: e.target.checked }))} />
           {t("graph.editor.grid")}
