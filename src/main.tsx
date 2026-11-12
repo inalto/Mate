@@ -9,6 +9,7 @@ import "./i18n";
 import App from "./App.tsx";
 import { initRecovery, installCloseHandler, installFlushOnHide } from "./lifecycle/close";
 import { watchSaveFailures } from "./lifecycle/saveStatus";
+import { installZoomGuard } from "./lifecycle/zoomGuard";
 import { loadPlatform } from "./platform";
 
 await loadPlatform();
@@ -16,6 +17,7 @@ initRecovery();
 installCloseHandler();
 installFlushOnHide();
 watchSaveFailures();
+installZoomGuard();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

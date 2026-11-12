@@ -22,6 +22,8 @@ export interface OutlineOptions {
   caps?: LineCaps;
   /** Stroke width that sizes dot and bar caps (default 1). */
   capWidth?: number;
+  /** Hand-moved corners of a closed polygon type, as fractions of the box (see `ShapeContent.vertices`). */
+  vertices?: readonly Vec2[];
 }
 
 /** Anchor points and box size of a shape (see `shapeFromDrag`). */
@@ -56,6 +58,9 @@ const ARROW_HEAD_ANGLE = Math.PI / 6;
 
 /** False for the open types (line, arrow), which have no interior and are never filled. */
 export const isClosedShape = (t: ShapeType): boolean => t !== "line" && t !== "arrow";
+
+/** True for the closed types drawn as a polygon with corners (not circle or ellipse, not line or arrow). */
+export const isPolygonType = (t: ShapeType): boolean => isClosedShape(t) && t !== "circle" && t !== "ellipse";
 
 /** Arrow head length for a stroke width. */
 export const arrowHeadLength = (strokeWidth: number): number => Math.max(12, 4 * strokeWidth);
@@ -217,7 +222,9 @@ export function shapeOutline(type: ShapeType, rect: ShapeRect, rotation = 0, opt
   } else {
     const r = normalize(rect);
     const { x, y, width: w, height: h } = r;
-    switch (type) {
+    const own = isPolygonType(type) && Array.isArray(opts.vertices) && opts.vertices.length >= 3 ? opts.vertices : null;
+    if (own) polys = [close(own.map((v) => ({ x: x + v.x * w, y: y + v.y * h })))];
+    else switch (type) {
       case "circle":
       case "ellipse": {
         const pts: Vec2[] = [];
@@ -267,6 +274,7 @@ export function shapeElementOutline(el: Element, withRotation = true): Vec2[][] 
   const c = contentOf<ShapeMeta>(el);
   return shapeOutline(el.shapeType ?? "rectangle", shapeRectOf(el), withRotation ? (c.rotation ?? 0) : 0, {
     sides: c.sides,
+    vertices: c.vertices,
     headLength: arrowHeadLength(el.width),
     caps: effectiveCaps(el),
     capWidth: el.width,

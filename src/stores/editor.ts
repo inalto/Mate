@@ -69,7 +69,7 @@ import { useSettingsStore } from "./settings";
 import { isClosedStroke } from "../ink/closed";
 import i18n from "../i18n";
 import { frameChildren, framesInOrder, isFrame, nextFrameTitle, setPageFrames, withFrameChildren } from "../frames/contain";
-import { clampDeltaToStack, placeInStack } from "../canvas/pageBounds";
+import { clampDeltaToStack, placeInStack, rowBelowDelta } from "../canvas/pageBounds";
 import { frameCamera } from "../canvas/presentCamera";
 import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tree";
 import type { MindmapLayoutMode } from "../mindmap/layout";
@@ -399,7 +399,8 @@ const maxY = (el: Element): number => {
   for (const p of el.points) if (p.y > m) m = p.y;
   return m + el.width / 2;
 };
-const bottomOf = (els: Iterable<Element>): number => {
+/** Lowest edge (world y) of `els`; 0 when there are none. */
+export const bottomOf = (els: Iterable<Element>): number => {
   let m = 0;
   for (const el of els) m = Math.max(m, maxY(el));
   return m;
@@ -413,7 +414,7 @@ export function sheetStack(s: Pick<EditorState, "page" | "contentBottom">): Shee
 }
 
 /** Union bounds of `els` (null when empty). */
-function unionBounds(els: Element[]): Rect | null {
+export function unionBounds(els: Element[]): Rect | null {
   if (els.length === 0) return null;
   let x0 = Infinity;
   let y0 = Infinity;
@@ -511,6 +512,8 @@ const defaultPreset = (): PenPreset =>
 
 // Shared by all editor instances, so copy in one pane can paste into the other.
 let clipboard: Element[] = [];
+/** The page the clipboard was copied from. */
+let clipboardPage: string | null = null;
 let pasteCount = 0;
 
 const stamp = (el: Element, now = new Date().toISOString()): Element => ({ ...el, updatedAt: now });
@@ -1287,7 +1290,14 @@ export function createEditorStore(): EditorStore {
       if (get().straightLines !== straightLines) set({ straightLines });
     },
     toggleStraightLines: () => set({ straightLines: !get().straightLines }),
-    toggleAutoShapes: () => set({ autoShapes: !get().autoShapes }),
+    toggleAutoShapes() {
+      const s = get();
+      const on = !s.autoShapes;
+      // Shapes are drawn with ink: the ink tool in hand stays, any other tool gives way to the pen
+      // (the highlighter never snaps, so it gives way too when it was only the last ink used).
+      if (on && !isInkTool(s.tool) && !s.presenting) get().selectInk(s.preset.type === "highlighter" ? "pen" : s.preset.type);
+      set({ autoShapes: on });
+    },
     setPanHold: (panHold) => {
       if (get().panHold !== panHold) set({ panHold });
     },
@@ -1480,6 +1490,7 @@ export function createEditorStore(): EditorStore {
       const els = withChildren(selectedElements());
       if (els.length === 0) return;
       clipboard = els.map(unlocked);
+      clipboardPage = get().pageId;
       pasteCount = 0;
     },
     cutSelection() {
@@ -1489,6 +1500,17 @@ export function createEditorStore(): EditorStore {
     },
     paste() {
       if (clipboard.length === 0) return;
+      const s = get();
+      const b = clipboardPage !== s.pageId ? unionBounds(clipboard) : null;
+      if (b) {
+        // From another page: the copy takes a row of its own under what is already here (so the
+        // next one lands below it), and the view follows it.
+        const dy = rowBelowDelta(b, s.contentBottom, s.page?.mode === "page" ? sheetStack(s) : undefined);
+        const added = pasteElements(clipboard, { dx: 0, dy }, "Paste");
+        const at = selectionBounds(get().elements, added);
+        if (at) revealRows(at);
+        return;
+      }
       pasteCount++;
       pasteElements(clipboard, DUPLICATE_OFFSET * pasteCount, "Paste");
     },
@@ -2033,6 +2055,19 @@ export function createEditorStore(): EditorStore {
     const cur = S().elements;
     const resolve = (id: string) => moved.get(id) ?? cur.get(id);
     return els.map((e) => (e.type === "connector" ? routeConnector(e, resolve) : e));
+  }
+
+  /** Scroll vertically so the rows of `b` are in view (centred when they fit, else from their top); no-op when they already are. */
+  function revealRows(b: Rect): void {
+    const s = S();
+    const { camera: c, viewport: v } = s;
+    if (!(v.height > 0)) return;
+    const top = b.y * c.z + c.y;
+    const bottom = (b.y + b.height) * c.z + c.y;
+    if (top >= 0 && bottom <= v.height) return;
+    const margin = 48;
+    const y = b.height * c.z <= v.height - 2 * margin ? v.height / 2 - (b.y + b.height / 2) * c.z : margin - b.y * c.z;
+    animateCamera(store, clampToPage({ ...c, y }, S()));
   }
 
   /** Add unlocked copies of `src` shifted by `offset` (on both axes, or by {dx, dy}) and select them; their ids ([] when refused). */

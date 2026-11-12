@@ -1,5 +1,6 @@
 import { Plus } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useChromeStore } from "../stores/chrome";
 import { useTranslation } from "react-i18next";
 import type { Unit } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
@@ -106,7 +107,7 @@ export default function FolderView({ query }: { query: string }) {
         <button
           type="button"
           className="new-tile"
-          onClick={() => void store.createUnit(t("common.untitledBook"), current ?? undefined)}
+          onClick={() => void store.createUnit(t("common.untitledBook"), current ?? undefined).then((u) => useChromeStore.getState().setRenamingUnit(u.id))}
         >
           <Plus size={28} />
           <span>{t("home.newBook")}</span>

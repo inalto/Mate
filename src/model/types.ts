@@ -348,6 +348,8 @@ export interface Settings {
   showZoomIndicator: boolean;
   defaultPageMode: PageMode;
   defaultBackground: BackgroundType;
+  /** Line / grid / dot spacing of a new page's background (page units, 10..200). */
+  defaultBackgroundSpacing: number;
   alignTextToLines: boolean;
   defaultPageAspectRatio: string;
   defaultPageOrientation: string;

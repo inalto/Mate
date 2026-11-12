@@ -1,11 +1,17 @@
 // "Send to another page": the selection is copied (fresh ids) onto another page of any notebook,
-// at the same coordinates, and with `move` removed from this page as one undoable step.
+// on a row of its own under what that page already holds (so each thing sent lands below the last),
+// and with `move` removed from this page as one undoable step.
 import { remapConnectorEnds } from "../connectors";
-import { upsertElements } from "../ipc/elements";
+import { sheetSize } from "../canvas/camera";
+import { rowBelowDelta } from "../canvas/pageBounds";
+import { loadElements, upsertElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { isLocked, isPdfPlacement } from "../model/content";
 import type { Element, NotebookTree, Page } from "../model/types";
-import type { EditorStore } from "./editor";
+import { translateElements } from "../tools/lasso";
+import { bottomOf, keepInStack, unionBounds, type EditorStore } from "./editor";
+import { useNotebookStore } from "./notebook";
+import { useSettingsStore } from "./settings";
 import { editorForPane } from "./focusedEditor";
 
 /** A page that can receive a selection, with where it lives ("Book › Section"). */
@@ -43,6 +49,20 @@ export function copiesForPage(src: readonly Element[], pageId: string, now: stri
 }
 
 /**
+ * `copies` moved, as a block, onto a row of their own under `existing` (the target page's elements),
+ * horizontal position kept; on a paper page they also stay within the sheet width.
+ */
+export function placeBelow(copies: Element[], existing: readonly Element[], page: Page | undefined, defaultAspect = "a4"): Element[] {
+  const b = unionBounds(copies);
+  if (!b) return copies;
+  const contentBottom = bottomOf(existing.filter((e) => !e.deletedAt));
+  const paper = page?.mode === "page" ? page : null;
+  const dy = rowBelowDelta(b, contentBottom, paper ? sheetSize(paper, defaultAspect) : undefined);
+  const moved = translateElements(copies, 0, dy);
+  return paper ? keepInStack(moved, { page: paper, contentBottom }) : moved;
+}
+
+/**
  * Send the selection of `store` to page `targetId`; with `move` it leaves this page (locked
  * elements stay). PDF page placements never travel. Returns how many elements were sent.
  */
@@ -55,7 +75,13 @@ export async function sendSelectionToPage(store: EditorStore, targetId: string, 
   if (src.length === 0) return 0;
   // Edits still in the write-behind queue reach the database before the copies do.
   await elementsQueue.flushAll();
-  const copies = copiesForPage(src, targetId, new Date().toISOString());
+  const page = useNotebookStore.getState().tree.pages.find((p) => p.id === targetId);
+  const copies = placeBelow(
+    copiesForPage(src, targetId, new Date().toISOString()),
+    await loadElements(targetId),
+    page,
+    useSettingsStore.getState().settings.defaultPageAspectRatio,
+  );
   await upsertElements(copies);
   // A pane that shows the target page picks the new elements up.
   for (const i of [0, 1] as const) {

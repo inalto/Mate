@@ -49,3 +49,22 @@ export function clampDeltaToStack(bounds: Rect, delta: Vec2, stack: SheetStack):
 export function placeInStack(bounds: Rect, stack: SheetStack): Vec2 {
   return clampDeltaToStack(bounds, { x: 0, y: 0 }, stack);
 }
+
+/** Space left between a page's content and a block added under it (world units). */
+export const ROW_GAP = 24;
+
+/**
+ * The vertical shift that puts a block with `bounds` on a row of its own under everything on the
+ * page (`contentBottom`; an empty page takes it at the top). On paper (`stack`), a block that would
+ * run over the foot of a sheet starts on the next sheet instead, when it fits on one.
+ */
+export function rowBelowDelta(bounds: Rect, contentBottom: number, stack?: Pick<SheetStack, "height">): number {
+  let top = Math.max(0, contentBottom) + ROW_GAP;
+  if (stack && stack.height > 0) {
+    const stride = stack.height + PAGE_GAP;
+    const i = Math.floor(top / stride);
+    const local = top - i * stride;
+    if (local > stack.height || (local + bounds.height > stack.height && bounds.height + ROW_GAP <= stack.height)) top = (i + 1) * stride + ROW_GAP;
+  }
+  return top - bounds.y;
+}

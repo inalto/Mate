@@ -125,6 +125,11 @@ export interface ShapeContent extends ContentMeta {
   fillOpacity: number;
   /** Line/arrow end caps; absent reads as the shape type's default (see `effectiveCaps`). */
   caps?: LineCaps;
+  /**
+   * Closed polygon types whose corners were moved by hand: the outline's corners, in order, as
+   * fractions of the (unrotated) box. Absent: the regular outline of the shape type.
+   */
+  vertices?: { x: number; y: number }[];
 }
 
 /** media (`imageUrl` asset id, `width/height` box like images): an audio or video player. */

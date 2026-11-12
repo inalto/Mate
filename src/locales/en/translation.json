@@ -112,6 +112,10 @@
         "portrait": "Portrait",
         "landscape": "Landscape"
       },
+      "spacing": {
+        "label": "Line and grid spacing",
+        "hint": "Size of the squares, lines or dots on new pages. Existing pages keep theirs (Page settings)."
+      },
       "alignText": {
         "label": "Align text to lines",
         "hint": "Snap typed text to the ruled lines"

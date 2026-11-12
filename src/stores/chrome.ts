@@ -34,6 +34,8 @@ function load(): Persisted {
 interface ChromeState extends Persisted {
   /** Page whose title is being edited in the sidebar (F2). */
   renamingPageId: string | null;
+  /** Notebook whose title is being edited (set when one is created: it asks for its name at once). */
+  renamingUnitId: string | null;
   pageSettingsFor: string | null;
   shortcutsOpen: boolean;
   /** Paper picker (templates) for the focused page. */
@@ -50,6 +52,7 @@ interface ChromeState extends Persisted {
   toggleSidebar(): void;
   setSidebarWidth(w: number): void;
   setRenaming(id: string | null): void;
+  setRenamingUnit(id: string | null): void;
   openPageSettings(pageId: string | null): void;
   setShortcutsOpen(open: boolean): void;
   setPaperPickerOpen(open: boolean): void;
@@ -75,6 +78,7 @@ export const useChromeStore = create<ChromeState>((set, get) => {
   return {
     ...load(),
     renamingPageId: null,
+    renamingUnitId: null,
     pageSettingsFor: null,
     shortcutsOpen: false,
     paperPickerOpen: false,
@@ -93,6 +97,7 @@ export const useChromeStore = create<ChromeState>((set, get) => {
       persist();
     },
     setRenaming: (renamingPageId) => set({ renamingPageId }),
+    setRenamingUnit: (renamingUnitId) => set({ renamingUnitId }),
     openPageSettings: (pageSettingsFor) => set({ pageSettingsFor }),
     setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
     setPaperPickerOpen: (paperPickerOpen) => set({ paperPickerOpen }),

@@ -1,5 +1,6 @@
 import { FilePdf, FilePlus, Notebook } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useChromeStore } from "../stores/chrome";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
@@ -35,7 +36,8 @@ export default function Home() {
   };
 
   const newBook = () => {
-    void store.createUnit(t("common.untitledBook"));
+    // The new notebook's card opens its title for editing.
+    void store.createUnit(t("common.untitledBook")).then((u) => useChromeStore.getState().setRenamingUnit(u.id));
   };
 
   const newPage = async () => {

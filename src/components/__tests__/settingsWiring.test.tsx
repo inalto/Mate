@@ -152,9 +152,10 @@ describe("appearance settings", () => {
     set({ defaultPageMode: "page", defaultPageAspectRatio: "letter", defaultPageOrientation: "portrait" });
     const a = await useNotebookStore.getState().createPage("s1", "A");
     expect(a).toMatchObject({ mode: "page", pageWidth: PAGE_WIDTH, pageHeight: ASPECT_PRESET_HEIGHTS.letter });
-    set({ defaultPageAspectRatio: "16:9", defaultPageOrientation: "landscape", defaultBackground: "grid" });
+    expect(a.backgroundConfig.spacing).toBe(40);
+    set({ defaultPageAspectRatio: "16:9", defaultPageOrientation: "landscape", defaultBackground: "grid", defaultBackgroundSpacing: 25 });
     const b = await useNotebookStore.getState().createPage("s1", "B");
-    expect(b).toMatchObject({ pageWidth: ASPECT_PRESET_HEIGHTS["16:9"], pageHeight: PAGE_WIDTH, backgroundConfig: { type: "grid" } });
+    expect(b).toMatchObject({ pageWidth: ASPECT_PRESET_HEIGHTS["16:9"], pageHeight: PAGE_WIDTH, backgroundConfig: { type: "grid", spacing: 25 } });
     // The first page keeps its sheet.
     expect(useNotebookStore.getState().tree.pages.find((p) => p.id === a.id)?.pageHeight).toBe(ASPECT_PRESET_HEIGHTS.letter);
     // Canvas pages carry no sheet size.
