@@ -93,6 +93,10 @@ const upsertById = <T extends { id: string }>(list: T[], item: T): T[] =>
     ? list.map((x) => (x.id === item.id ? item : x))
     : [...list, item];
 
+/** Background spacing of a new page: the default from the settings, kept within 10..200 (40 when unset). */
+export const newPageSpacing = (v: unknown): number =>
+  typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.min(200, Math.max(10, v)) : 40;
+
 export const useNotebookStore = create<NotebookState>((set, get) => {
   const tree = () => get().tree;
   const setTree = (p: Partial<NotebookTree>) => set({ tree: { ...get().tree, ...p } });
@@ -261,7 +265,7 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
         isFavourite: false,
         depth: parent ? parent.depth + 1 : 0,
         mode: settings.defaultPageMode,
-        backgroundConfig: { type: settings.defaultBackground, spacing: 40, dotRadius: 1.5 },
+        backgroundConfig: { type: settings.defaultBackground, spacing: newPageSpacing(settings.defaultBackgroundSpacing), dotRadius: 1.5 },
         thumbnailVersion: 0,
         orderIndex: siblings.length,
         createdAt: stamp,

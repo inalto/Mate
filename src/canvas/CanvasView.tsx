@@ -26,7 +26,7 @@ import { boxRect, type Rect } from "../tools/spatialIndex";
 import { FRAME_RADIUS } from "../frames/contain";
 import { clearMindmapCache } from "../mindmap/cache";
 import { animateCamera, screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
-import { applyWheel, DOUBLE_TAP_ZOOM_FACTOR, dragPan, fingerTapOf, gestureTapOf, isFingerDoubleTap, pinchCamera, SNAP_BACK_MS, TWO_FINGER_DOUBLE_TAP_PX, zoomBy, type FingerTap, type PinchStart } from "./gestures";
+import { applyWheel, DOUBLE_TAP_ZOOM_FACTOR, doubleTapFit, dragPan, fingerTapOf, gestureTapOf, isFingerDoubleTap, pinchCamera, SNAP_BACK_MS, TWO_FINGER_DOUBLE_TAP_PX, zoomBy, type FingerTap, type PinchStart } from "./gestures";
 import { createPointerAdapter, type PalmRejection } from "./input";
 import { cameraFlingApply, releaseVelocity, startFling } from "./momentum";
 import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
@@ -36,7 +36,7 @@ import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeEl
 import { clampToRect, sheetRectAt } from "./pageBounds";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
-import { createDismissPress, createToolController, pointerTool } from "./toolInteractions";
+import { createDismissPress, createToolController, HOLD_SLOP_PX, pointerTool, TAP_MS } from "./toolInteractions";
 import { createTutorInk } from "./tutorInk";
 import { consumeDismissDown, paneOfStore } from "../stores/tutor";
 import { useAiStatus } from "../tutor/aiStatus";
@@ -44,6 +44,7 @@ import { drawTutorMarkers, drawTutorTip, hitTutorMarker } from "../tutor/overlay
 import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
 import { createPenInkHaptics } from "./haptics";
+import { platformOs } from "../platform";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
@@ -84,6 +85,12 @@ function createEngine(
 ) {
   const st = store.getState;
   const clamp = (c: Camera) => clampToPage(c, st());
+  /** Double tap: a paper page fits its width (then its height); the infinite canvas zooms in about the tap. */
+  const doubleTapCamera = (cam: Camera, tap: Vec2): Camera => {
+    const s = st();
+    if (s.page?.mode === "page") return clamp(doubleTapFit(cam, tap, s.viewport, sheetStack(s)));
+    return zoomBy(cam, DOUBLE_TAP_ZOOM_FACTOR, tap, clamp);
+  };
   const cache = new SnapshotCache(200);
   const sctx = staticCanvas.getContext("2d");
   const lctx = liveCanvas.getContext("2d");
@@ -356,6 +363,15 @@ function createEngine(
           if (mode === "tool") tools.down(p, tool);
           return;
         }
+        // Perfect shapes: the selected shape is edited by its handles with the pen itself; a press
+        // anywhere else lets go of it and draws.
+        if (s.autoShapes && s.selection.size > 0) {
+          if (tools.editDown(p)) {
+            mode = "tool";
+            return;
+          }
+          s.select([]);
+        }
         // Page mode: strokes belong to the sheet they start on and end where they leave it; the desk
         // around the sheets draws nothing.
         const sheet = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
@@ -454,7 +470,18 @@ function createEngine(
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
           if (dismissPress.active()) dismissPress.move(worldToScreen(st().camera, p));
           const dismissed = dismissPress.up();
-          const t = dismissed === "discard" ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
+          // Perfect shapes: a tap on a shape's outline selects it (its handles show) instead of leaving a dot.
+          let picked = false;
+          if (st().autoShapes && !shape && dismissed !== "discard" && raw.length > 0 && p.timestamp - raw[0].timestamp <= TAP_MS) {
+            const cam = st().camera;
+            const first = worldToScreen(cam, raw[0]);
+            const still = raw.every((q) => {
+              const at = worldToScreen(cam, q);
+              return Math.hypot(at.x - first.x, at.y - first.y) <= HOLD_SLOP_PX;
+            });
+            picked = still && tools.tapSelect(raw[0]);
+          }
+          const t = dismissed === "discard" || picked ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
           // A finger that draws: two quick taps zoom in instead of leaving two dots (the first dot is
           // taken back).
           let tap: FingerTap | null = null;
@@ -471,7 +498,7 @@ function createEngine(
             if (tap && inkTap && isFingerDoubleTap(inkTap.tap, tap)) {
               zoomed = true;
               if (st().elements.has(inkTap.id)) st().undo();
-              stopFling = animateCamera(store, zoomBy(cam, DOUBLE_TAP_ZOOM_FACTOR, tap, clamp));
+              stopFling = animateCamera(store, doubleTapCamera(cam, tap));
             }
           }
           inkTap = tap && stroke && !zoomed && t === "commit" ? { tap, id: stroke.id } : null;
@@ -554,7 +581,7 @@ function createEngine(
         const double = tap !== null && isFingerDoubleTap(fingerTap, tap);
         fingerTap = double ? null : tap;
         if (double && tap && getSettings().doubleTapZoom) {
-          stopFling = animateCamera(store, zoomBy(s.camera, DOUBLE_TAP_ZOOM_FACTOR, tap, clamp)); // a new touch stops it
+          stopFling = animateCamera(store, doubleTapCamera(s.camera, tap)); // a new touch stops it
           return;
         }
         // The lift time closes the gesture: a flick followed by a hold fails the time window.
@@ -612,6 +639,25 @@ function createEngine(
     snapTimer = setTimeout(() => st().setCamera(clamp(st().camera)), SNAP_BACK_MS);
   };
 
+  // WebKit (macOS trackpad) reports a pinch as gesture events with a running scale, not as Ctrl+wheel.
+  let gestureScale = 1;
+  const onGestureStart = (e: Event) => {
+    e.preventDefault();
+    gestureScale = 1;
+  };
+  const onGestureChange = (e: Event) => {
+    e.preventDefault();
+    const g = e as Event & { scale?: number; clientX?: number; clientY?: number };
+    const s = ready();
+    if (!s || !getSettings().pinchToZoom || typeof g.scale !== "number" || !(g.scale > 0)) return;
+    stopFling?.();
+    stopFling = null;
+    const r = host.getBoundingClientRect();
+    const focus = { x: (g.clientX ?? r.left + r.width / 2) - r.left, y: (g.clientY ?? r.top + r.height / 2) - r.top };
+    s.setCamera(zoomBy(s.camera, g.scale / gestureScale, focus, clamp));
+    gestureScale = g.scale;
+  };
+
   const unsubscribe = store.subscribe((s, prev) => {
     if (s.editingId !== prev.editingId) cache.invalidate(); // the edited element is left to its DOM editor
     if (s.elements !== prev.elements || s.page !== prev.page || s.loadedPageId !== prev.loadedPageId || s.editingId !== prev.editingId) {
@@ -653,6 +699,11 @@ function createEngine(
   });
 
   host.addEventListener("wheel", onWheel, { passive: false });
+  // Only on macOS: on iPadOS the same events also fire for fingers, which the pointer adapter already pinches with.
+  if (platformOs() === "macos") {
+    host.addEventListener("gesturestart", onGestureStart);
+    host.addEventListener("gesturechange", onGestureChange);
+  }
   // Mouse hover over a "couldn't check" marker shows its label (pen and touch get the tap instead).
   const onHover = (e: PointerEvent) => {
     if (e.pointerType !== "mouse" || e.buttons !== 0 || st().presenting) return;
@@ -708,6 +759,8 @@ function createEngine(
       ro?.disconnect();
       window.removeEventListener("resize", resize);
       host.removeEventListener("wheel", onWheel);
+      host.removeEventListener("gesturestart", onGestureStart);
+      host.removeEventListener("gesturechange", onGestureChange);
       host.removeEventListener("pointermove", onHover);
       host.removeEventListener("pointerleave", onHoverLeave);
       if (rasterTimer !== null) clearTimeout(rasterTimer);

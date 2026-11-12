@@ -115,6 +115,10 @@
         "portrait": "Vertical",
         "landscape": "Horizontal"
       },
+      "spacing": {
+        "label": "Tamaño de cuadrícula y renglones",
+        "hint": "Tamaño de los cuadros, renglones o puntos en las páginas nuevas. Las páginas existentes conservan el suyo (Ajustes de página)."
+      },
       "alignText": {
         "label": "Alinear el texto a los renglones",
         "hint": "Ajusta el texto escrito a las líneas del papel"

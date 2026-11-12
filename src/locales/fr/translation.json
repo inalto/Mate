@@ -115,6 +115,10 @@
         "portrait": "Portrait",
         "landscape": "Paysage"
       },
+      "spacing": {
+        "label": "Taille des carreaux et des lignes",
+        "hint": "Taille des carreaux, des lignes ou des points sur les nouvelles pages. Les pages existantes gardent la leur (Paramètres de la page)."
+      },
       "alignText": {
         "label": "Aligner le texte sur les lignes",
         "hint": "Aligne le texte saisi sur les lignes"

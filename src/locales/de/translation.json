@@ -115,6 +115,10 @@
         "portrait": "Hochformat",
         "landscape": "Querformat"
       },
+      "spacing": {
+        "label": "Linien- und Rasterabstand",
+        "hint": "Größe der Kästchen, Linien oder Punkte auf neuen Seiten. Vorhandene Seiten behalten ihre (Seiteneinstellungen)."
+      },
       "alignText": {
         "label": "Text an Linien ausrichten",
         "hint": "Getippten Text an den Linien ausrichten"

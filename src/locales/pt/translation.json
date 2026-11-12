@@ -115,6 +115,10 @@
         "portrait": "Retrato",
         "landscape": "Paisagem"
       },
+      "spacing": {
+        "label": "Tamanho da quadrícula e das linhas",
+        "hint": "Tamanho dos quadrados, linhas ou pontos nas páginas novas. As páginas existentes mantêm o seu (Definições da página)."
+      },
       "alignText": {
         "label": "Alinhar texto às linhas",
         "hint": "Encaixa o texto digitado nas linhas da página"

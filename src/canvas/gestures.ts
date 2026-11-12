@@ -1,7 +1,8 @@
 // Wheel / pan / pinch camera maths (pure). Spec 03 §4: Ctrl+wheel zooms at the cursor, plain wheel
 // pans (or zooms when scrollBehavior is "zoom" and the device is not a trackpad); wheel panning may
 // overscroll up to 60 px with resistance 0.25 and snaps back 50 ms after the last wheel event.
-import { panBy, screenToWorld, wheelZoomFactor, zoomAt, clampZoom, type Camera, type Vec2 } from "./camera";
+import { PAGE_GAP } from "../model/constants";
+import { panBy, screenToWorld, wheelZoomFactor, zoomAt, clampZoom, type Camera, type SheetStack, type Vec2, type Viewport } from "./camera";
 
 export const OVERSCROLL_MAX = 60;
 export const OVERSCROLL_RESISTANCE = 0.25;
@@ -90,6 +91,24 @@ export function pinchCamera(start: PinchStart, mid: Vec2, dist: number): Camera 
 /** Zoom by a factor about a screen point (toolbar buttons / keyboard use the viewport centre). */
 export function zoomBy(cam: Camera, factor: number, focus: Vec2, clamp: (c: Camera) => Camera): Camera {
   return clamp(zoomAt(cam, focus, cam.z * factor));
+}
+
+/** How close (relative) the zoom must be to the fit-width zoom to count as "already fitted". */
+const FIT_TOLERANCE = 0.01;
+
+/**
+ * Page mode double tap. Unless the sheet already spans the view's width exactly, zoom so it does
+ * (in or out), keeping the tapped height in place; when it already does, show the whole sheet under
+ * the tap (fit to height, centred). The caller clamps the result.
+ */
+export function doubleTapFit(cam: Camera, tap: Vec2, viewport: Viewport, stack: SheetStack): Camera {
+  if (!(viewport.width > 0) || !(viewport.height > 0) || !(stack.width > 0) || !(stack.height > 0)) return cam;
+  const wz = clampZoom(viewport.width / stack.width);
+  if (Math.abs(cam.z - wz) > wz * FIT_TOLERANCE) return { x: 0, y: zoomAt(cam, tap, wz).y, z: wz };
+  const hz = clampZoom(viewport.height / stack.height);
+  const stride = stack.height + PAGE_GAP;
+  const i = Math.min(Math.max(0, stack.count - 1), Math.max(0, Math.floor(screenToWorld(cam, tap).y / stride)));
+  return { x: (viewport.width - stack.width * hz) / 2, y: -i * stride * hz, z: hz };
 }
 
 /** A finger tap: where it landed (element-relative screen px) and when it lifted (ms). */

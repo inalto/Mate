@@ -1,5 +1,6 @@
 import { DotsThree } from "@phosphor-icons/react";
 import { useRef, useState } from "react";
+import { useChromeStore } from "../stores/chrome";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import { exportUnitArchive } from "../ipc/archive";
@@ -46,6 +47,13 @@ export default function BookCard({ unit }: { unit: Unit }) {
   const [sharing, setSharing] = useState(false);
   const [moving, setMoving] = useState(false);
   const [draft, setDraft] = useState(unit.title);
+  // A notebook just created asks for its name at once.
+  const renameAsked = useChromeStore((s) => s.renamingUnitId === unit.id);
+  const editingTitle = renaming || renameAsked;
+  const endRename = () => {
+    setRenaming(false);
+    if (renameAsked) useChromeStore.getState().setRenamingUnit(null);
+  };
 
   // The cover shows the thumbnail of the book's first page that has one.
   const sectionOrder = new Map(tree.sections.filter((s) => s.unitId === unit.id).map((s) => [s.id, s.orderIndex]));
@@ -70,7 +78,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
   };
 
   const commitRename = async () => {
-    setRenaming(false);
+    endRename();
     const title = draft.trim();
     if (title && title !== unit.title) await rename("unit", unit.id, title);
     else setDraft(unit.title);
@@ -107,17 +115,18 @@ export default function BookCard({ unit }: { unit: Unit }) {
           <img className="book-cover-thumb" alt="" src={thumbnailUrl(cover.id, cover.thumbnailVersion)} />
         )}
       </button>
-      {renaming ? (
+      {editingTitle ? (
         <input
           className="input book-title"
           aria-label={t("library.bookTitle")}
           autoFocus
           value={draft}
+          onFocus={(e) => e.currentTarget.select()}
           onChange={(e) => setDraft(e.target.value)}
           onBlur={commitRename}
           onKeyDown={(e) => {
             if (e.key === "Enter") void commitRename();
-            if (e.key === "Escape") { setRenaming(false); setDraft(unit.title); }
+            if (e.key === "Escape") { endRename(); setDraft(unit.title); }
           }}
         />
       ) : (

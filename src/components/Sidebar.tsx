@@ -1,7 +1,7 @@
 // Notebook sidebar: unit > sections > pages (nested by parentId). Width 240-560; the edge follows
 // handedness (right-handed: left edge, so the writing hand never covers it).
 import { ArrowLineLeft, Books, House, Notebook, Plus } from "@phosphor-icons/react";
-import { useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import type { Page } from "../model/types";
@@ -19,6 +19,7 @@ export default function Sidebar() {
   const tree = useNotebookStore((s) => s.tree);
   const open = useChromeStore((s) => s.sidebarOpen);
   const width = useChromeStore((s) => s.sidebarWidth);
+  const renamingUnitId = useChromeStore((s) => s.renamingUnitId);
   const layout = useSettingsStore((s) => s.settings.sidebarLayout);
   const leftHanded = useSettingsStore((s) => s.settings.handedness) === "left";
   const activePageId = useTabsStore((s) => focusedPageId(s));
@@ -57,7 +58,12 @@ export default function Sidebar() {
     const count = tree.pages.filter((p) => p.sectionId === sectionId).length;
     openPage((await nb.createPage(sectionId, t("common.pageName", { n: count + 1 }))).id, false);
   };
-  const newBook = async () => setUnitOverride((await nb.createUnit(t("common.untitledBook"))).id);
+  const newBook = async () => {
+    const created = await nb.createUnit(t("common.untitledBook"));
+    setUnitOverride(created.id);
+    useChromeStore.getState().setRenamingUnit(created.id); // it asks for its name at once
+  };
+  const renamingUnit = !!unit && renamingUnitId === unit.id;
 
   const onResize = (e: ReactPointerEvent<HTMLDivElement>) => {
     const startX = e.clientX;
@@ -95,12 +101,13 @@ export default function Sidebar() {
         <button className="icon-btn" aria-label={t("sidebar.newNotebook")} title={t("sidebar.newNotebook")} onClick={() => void newBook()}><Notebook size={18} /></button>
         <button className="icon-btn" aria-label={t("palette.openLibrary")} title={t("palette.openLibrary")} onClick={() => navigate("/library")}><Books size={18} /></button>
       </div>
-      {units.length > 1 && (
+      {renamingUnit && unit && <UnitRename key={unit.id} id={unit.id} title={unit.title} />}
+      {!renamingUnit && units.length > 1 && (
         <select className="input sb-unit" aria-label={t("sidebar.notebook")} value={unit?.id} onChange={(e) => setUnitOverride(e.target.value)}>
           {units.map((u) => <option key={u.id} value={u.id}>{u.title}</option>)}
         </select>
       )}
-      {units.length === 1 && <div className="sb-unit-title">{unit.title}</div>}
+      {!renamingUnit && units.length === 1 && <div className="sb-unit-title">{unit.title}</div>}
       <div className="sb-body">
         {sections.length === 0 && <p className="muted sb-empty">{t("sidebar.noSections")}</p>}
         {layout === "split" && sections.length > 0 && (
@@ -148,5 +155,34 @@ export default function Sidebar() {
         onKeyDown={onResizeKey}
       />
     </aside>
+  );
+}
+
+/** Inline title editor of the notebook shown in the sidebar (opens when a notebook is created here). */
+function UnitRename({ id, title }: { id: string; title: string }) {
+  const { t } = useTranslation();
+  const [draft, setDraft] = useState(title);
+  const done = useRef(false);
+  const end = async (save: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    useChromeStore.getState().setRenamingUnit(null);
+    const next = draft.trim();
+    if (save && next && next !== title) await useNotebookStore.getState().rename("unit", id, next);
+  };
+  return (
+    <input
+      className="input sb-unit"
+      aria-label={t("library.bookTitle")}
+      autoFocus
+      value={draft}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void end(true)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") void end(true);
+        if (e.key === "Escape") void end(false);
+      }}
+    />
   );
 }

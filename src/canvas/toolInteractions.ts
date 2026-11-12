@@ -9,7 +9,11 @@
 // selected element: a tap opens the auto-complete popover, a release on an element binds to it, a
 // release in empty space adds a free-ended connector and opens the popover there), frame tool (drag
 // a frame, then back to the cursor; a frame is hit only on its border band or title, a double-click
-// on its title opens the rename popover). Geometry is pure; `createToolController` wires it
+// on its title opens the rename popover), reshape handles of a lone selected shape or snapped curve
+// (a polygon's corners, a circle's or ellipse's four axis ends, a curve's ends and middle; its bounds
+// corners then scale it keeping its form), and shape editing straight from the drawing tools (the
+// shape tool, or ink with perfect shapes on: a tap on a shape selects it, its handles then work
+// without the cursor tool). Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
@@ -23,11 +27,12 @@ import { FRAME_TITLE_BAND, frameTitleRect, isFrame, isNestedFrame, withFrameChil
 import { mindmapHit } from "../mindmap/hit";
 import { isClosedShape, normalizeShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { snapLineEnd } from "../shapes/lineSnap";
+import { isCurveStroke, reshapeHandles } from "../shapes/reshape";
 import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { boxRect, elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { shiftBelow } from "../tools/insertSpace";
-import { sheetStack, spaceShift } from "../stores/editor";
+import { isInkTool, sheetStack, spaceShift } from "../stores/editor";
 import { clampDeltaToStack, clampToRect, sheetRectAt } from "./pageBounds";
 import { renderOrder } from "../tools/zorder";
 import { contentOf, isAttachable, isLocked, isPdfPlacement, type ConnectorContent, type ConnectorEnd, type Side } from "../model/content";
@@ -70,6 +75,19 @@ export const ENDPOINT_HANDLE_PX = 5;
 const ANCHOR_DOT_PX = 3;
 const ANCHOR_HOT_PX = 5;
 const ACCENT = "#4a5d4e";
+/** A lone reshapable shape's selection box stands this far off it (screen px), clear of its corner handles. */
+export const SHAPE_PAD_PX = 12;
+/** Move handle (drawing tools only): distance below the selection's bottom-centre (screen px). */
+export const MOVE_OFFSET_PX = 24;
+
+/** `b` grown by `pad` on every side. */
+export const growRect = (b: Rect, pad: number): Rect => (pad ? { x: b.x - pad, y: b.y - pad, width: b.width + 2 * pad, height: b.height + 2 * pad } : b);
+
+/** World position of the move handle of bounds `b` at zoom `z`. */
+export const moveHandlePoint = (b: Rect, z: number): Vec2 => ({ x: b.x + b.width / 2, y: b.y + b.height + MOVE_OFFSET_PX / z });
+
+/** True when `el`'s form is edited by handles: a shape, or a curve snapped from ink. */
+export const isShapeLike = (el: Element | undefined): el is Element => !!el && (el.type === "shape" || isCurveStroke(el));
 
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
 
@@ -343,7 +361,19 @@ type Gesture =
       /** The copied originals (an Alt+drag): never smart-guide candidates for their own copies. */
       sources: string[];
     }
-  | { kind: "scale"; corner: Corner; bounds: Rect; orig: Element[]; t: { origin: Vec2; sx: number; sy: number } }
+  /** A reshape handle of the lone selected shape or curve follows the pointer (`apply` gives the result). */
+  | { kind: "reshape"; id: string; orig: Element; apply(p: Vec2): Element; start: Vec2; end: Vec2; rect: Rect | null }
+  | {
+      kind: "scale";
+      corner: Corner;
+      bounds: Rect;
+      orig: Element[];
+      t: { origin: Vec2; sx: number; sy: number };
+      /** How far the pressed handle stands off the bounds' corner (a padded selection box). */
+      pad: Vec2;
+      /** The form is kept unless Shift is held (a lone shape); otherwise Shift keeps it. */
+      keepForm: boolean;
+    }
   | { kind: "rotate"; centre: Vec2; from: number; angle: number; orig: Element[] };
 
 /** A connector end under the pointer: the element it would bind to (`end`), the snapped anchor. */
@@ -634,6 +664,128 @@ export function createToolController(deps: ToolDeps) {
     return true;
   };
 
+  /** The lone selected shape or snapped curve when it may be edited (not locked), else null. */
+  const loneShape = (): Element | null => {
+    const s = st();
+    if (s.selection.size !== 1) return null;
+    const el = s.elements.get(s.selection.values().next().value!);
+    return isShapeLike(el) && !isLocked(el) ? el : null;
+  };
+
+  /** A drawing tool is in hand that also edits shapes: the shape tool, or ink with perfect shapes on. */
+  const drawingEdits = (): boolean => {
+    const s = st();
+    const tool: string = s.tempTool ?? s.tool;
+    return tool === "shape" || (isInkTool(tool) && s.autoShapes);
+  };
+
+  /** How far the selection box stands off a lone shape with corner / axis handles (world units). */
+  const padFor = (el: Element | null | undefined): number =>
+    el && el.type === "shape" && !isLocked(el) && reshapeHandles(el).length > 0 ? SHAPE_PAD_PX / st().camera.z : 0;
+
+  /** Pointer-down on a reshape handle of the lone selected shape or curve: that handle follows the pointer. */
+  const startReshape = (p: Vec2): boolean => {
+    const el = loneShape();
+    if (!el) return false;
+    const s = st();
+    const r = Math.max(ENDPOINT_HANDLE_PX, HIT_SLOP_PX) / s.camera.z;
+    let best: ReturnType<typeof reshapeHandles>[number] | null = null;
+    let bestD = Infinity;
+    for (const h of reshapeHandles(el)) {
+      const d = Math.hypot(p.x - h.at.x, p.y - h.at.y);
+      if (d <= r * 1.25 && d < bestD) {
+        best = h;
+        bestD = d;
+      }
+    }
+    if (!best) return false;
+    // Page mode: the handle stays on the sheet it is on.
+    const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), best.at) : null;
+    g = { kind: "reshape", id: el.id, orig: el, apply: best.apply, start: p, end: p, rect };
+    preview = [el];
+    lift([el]);
+    lastTap = null;
+    return true;
+  };
+
+  /** Pointer-down on the rotate handle or a corner handle of bounds `b` (drawn as `hb`): start that gesture. */
+  const startTransform = (p: Vec2, b: Rect, hb: Rect, orig: Element[], opts: { rotate: boolean; scale: boolean; keepForm: boolean }): boolean => {
+    const z = st().camera.z;
+    if (opts.rotate && hitRotateHandle(hb, p, z)) {
+      const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+      g = { kind: "rotate", centre, from: Math.atan2(p.y - centre.y, p.x - centre.x), angle: 0, orig };
+      preview = orig;
+      lift(orig);
+      return true;
+    }
+    const corner = opts.scale ? hitHandle(hb, p, z) : null;
+    if (!corner) return false;
+    const at = cornerPoint(b, corner);
+    const padded = cornerPoint(hb, corner);
+    g = { kind: "scale", corner, bounds: b, orig, t: { origin: p, sx: 1, sy: 1 }, pad: { x: padded.x - at.x, y: padded.y - at.y }, keepForm: opts.keepForm };
+    preview = orig;
+    lift(orig);
+    return true;
+  };
+
+  /**
+   * A drawing tool pressed at `p` while a shape (or snapped curve) is selected: one of its handles
+   * starts its gesture (an end, a corner, an axis, the rotate, scale or move handle). False when
+   * the press is not on a handle: the tool then draws as usual.
+   */
+  const editDown = (p: Vec2): boolean => {
+    const el = loneShape();
+    if (!el) return false;
+    const s = st();
+    const b = selectionBounds(s.elements, s.selection);
+    let started = startLineEnd(p) || startReshape(p);
+    if (!started && b) {
+      const hb = growRect(b, padFor(el));
+      started = startTransform(p, b, hb, [el], { rotate: true, scale: true, keepForm: el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle") });
+      if (!started) {
+        const m = moveHandlePoint(hb, s.camera.z);
+        if (Math.hypot(p.x - m.x, p.y - m.y) * s.camera.z <= Math.max(ROTATE_R_PX, HIT_SLOP_PX) + 2) {
+          g = startMove(p);
+          started = true;
+        }
+      }
+    }
+    if (started) deps.requestLive();
+    return started;
+  };
+
+  /**
+   * A drawing tool tapped at `p`: the topmost shape (or snapped curve) whose outline is there gets
+   * selected, showing its handles. Only the outline counts, so a dot inside a shape stays a dot.
+   */
+  const tapSelect = (p: Vec2): boolean => {
+    const s = st();
+    const tol = HIT_SLOP_PX / s.camera.z;
+    const near = (pts: readonly Vec2[], reach: number): boolean => {
+      for (let i = 0; i + 1 < pts.length; i++) {
+        const a = pts[i];
+        const c = pts[i + 1];
+        const dx = c.x - a.x;
+        const dy = c.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        const t = len2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2)) : 0;
+        if (Math.hypot(a.x + t * dx - p.x, a.y + t * dy - p.y) <= reach) return true;
+      }
+      return false;
+    };
+    const hits: Element[] = [];
+    for (const id of deps.store.spatialIndex().query({ x: p.x - tol, y: p.y - tol, width: 2 * tol, height: 2 * tol })) {
+      const el = s.elements.get(id);
+      if (!isShapeLike(el) || isLocked(el)) continue;
+      if (el.type === "shape" ? shapeHit(el, p, tol, false) : near(el.points, tol + el.width / 2)) hits.push(el);
+    }
+    if (hits.length === 0) return false;
+    const order = renderOrder(hits);
+    s.select([order[order.length - 1].id]);
+    deps.requestLive();
+    return true;
+  };
+
   /** Pointer-down on the label pill of the lone selected connector: start sliding the label. */
   const startLabel = (p: Vec2): boolean => {
     const el = editableLone();
@@ -686,7 +838,10 @@ export function createToolController(deps: ToolDeps) {
     } else if (tool === "insert-space") {
       g = { kind: "space", lineY: p.y, dy: 0, lifted: false };
       preview = [];
+    } else if (tool === "shape" && editDown(p)) {
+      // A handle of the shape selected with this tool: it is edited, nothing new is drawn.
     } else if (tool === "shape") {
+      if (s.selection.size > 0) s.select([]);
       const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
       const q = rect ? clampToRect(snap(p), rect) : snap(p);
       g = rect === null ? { kind: "idle" } : { kind: "shape", start: q, end: q, rect };
@@ -718,6 +873,8 @@ export function createToolController(deps: ToolDeps) {
       // A lone connector's endpoint handle: re-bind or free that end.
     } else if ((tool === "cursor" || tool === "lasso") && startLineEnd(p)) {
       // A lone line's or arrow's end handle: that end follows the pointer.
+    } else if ((tool === "cursor" || tool === "lasso") && startReshape(p)) {
+      // A lone shape's corner or axis handle, a snapped curve's end or middle: it follows the pointer.
     } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
       g = { kind: "idle" };
     } else if ((tool === "cursor" || tool === "lasso") && startLabel(p)) {
@@ -736,16 +893,19 @@ export function createToolController(deps: ToolDeps) {
       const noRotate = moveOnly || orig.some(isFrame);
       // A lone boxed element's handles are all the overlay's (BoxFrame): no canvas corner under them.
       const overlay = framedByOverlay(s.elements, s.selection);
-      const corner = b && orig.length > 0 && !lone && !loneFrame && !moveOnly && !overlay ? hitHandle(b, p, s.camera.z) : null;
-      if (b && orig.length > 0 && !lone && !noRotate && !overlay && hitRotateHandle(b, p, s.camera.z)) {
-        const centre = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-        g = { kind: "rotate", centre, from: Math.atan2(p.y - centre.y, p.x - centre.x), angle: 0, orig };
-        preview = orig;
-        lift(orig);
-      } else if (b && corner) {
-        g = { kind: "scale", corner, bounds: b, orig, t: { origin: p, sx: 1, sy: 1 } };
-        preview = orig;
-        lift(orig);
+      // A lone shape with its own handles: the box stands off it, and its corners keep the shape's form.
+      const shape = loneShape();
+      const hb = b ? growRect(b, padFor(shape)) : null;
+      const transform =
+        b && hb && orig.length > 0 && !lone && !overlay
+          ? startTransform(p, b, hb, orig, {
+              rotate: !noRotate,
+              scale: !loneFrame && !moveOnly,
+              keepForm: !!shape && shape.type === "shape" && isClosedShape(shape.shapeType ?? "rectangle"),
+            })
+          : false;
+      if (transform) {
+        // The rotate handle or a corner handle: that gesture started.
       } else if (b && (lone ? connectorHit(lone, p, HIT_SLOP_PX / s.camera.z) : onSelection(b, p))) {
         g = startMove(p);
       } else {
@@ -835,6 +995,14 @@ export function createToolController(deps: ToolDeps) {
         preview = [normalizeShape({ ...g.orig, points: g.orig.points.map((pt, k) => (k === which ? { ...pt, x: q.x, y: q.y } : pt)) })];
         break;
       }
+      case "reshape": {
+        // Grid snap as for a move (not with Ctrl/Cmd); in page mode the handle stays on its sheet.
+        let q = free ? p : snap(p);
+        if (g.rect) q = clampToRect(q, g.rect);
+        g.end = p;
+        preview = [g.apply(q)];
+        break;
+      }
       case "label": {
         if (!g.moved && Math.hypot(p.x - g.start.x, p.y - g.start.y) * z < MOVE_START_PX) break;
         if (!g.moved) lift([g.orig]);
@@ -891,7 +1059,7 @@ export function createToolController(deps: ToolDeps) {
         break;
       }
       case "scale":
-        g.t = scaleFromDrag(g.bounds, g.corner, p, shift);
+        g.t = scaleFromDrag(g.bounds, g.corner, { x: p.x - g.pad.x, y: p.y - g.pad.y }, g.keepForm ? !shift : shift);
         preview = scaleElements(g.orig, g.t.origin, g.t.sx, g.t.sy);
         break;
       case "rotate":
@@ -900,7 +1068,7 @@ export function createToolController(deps: ToolDeps) {
         break;
     }
     const k = g.kind;
-    if ((k === "move" && g.started) || k === "scale" || k === "rotate" || k === "connector" || k === "endpoint" || k === "line-end") setDragging(true);
+    if ((k === "move" && g.started) || k === "scale" || k === "rotate" || k === "connector" || k === "endpoint" || k === "line-end" || k === "reshape") setDragging(true);
     deps.requestLive();
   };
 
@@ -915,6 +1083,7 @@ export function createToolController(deps: ToolDeps) {
         const style = shapeStyleOf(deps.getSettings());
         const drag = shapeFromDrag(style.shapeType, g.start, g.end, shift);
         if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addShape(style, drag);
+        else tapSelect(g.start); // a tap on a shape selects it for editing with this tool
         break;
       }
       case "space":
@@ -944,6 +1113,15 @@ export function createToolController(deps: ToolDeps) {
         }
         break;
       case "line-end": {
+        const next = preview[0];
+        drop();
+        // One entry on release; a tap on the handle changes nothing.
+        if (next && Math.hypot(g.end.x - g.start.x, g.end.y - g.start.y) * s.camera.z >= MIN_SHAPE_DRAG_PX) {
+          s.updateElements([{ ...next, updatedAt: new Date().toISOString() }]);
+        }
+        break;
+      }
+      case "reshape": {
         const next = preview[0];
         drop();
         // One entry on release; a tap on the handle changes nothing.
@@ -1069,11 +1247,21 @@ export function createToolController(deps: ToolDeps) {
         // Frames ignore rotation: no rotate handle while an unlocked one is selected.
         const rotatable = transformable && !sel.some((e) => isFrame(e) && !isLocked(e));
         const locks = sel.filter(isLocked).map(elementBounds);
+        // A lone shape with its own handles: the box stands off it, clear of them.
+        const one = sel.length === 1 && isShapeLike(sel[0]) && !isLocked(sel[0]) ? sel[0] : null;
+        const pad = padFor(one);
+        const hb = growRect(b, pad);
         if (g.kind === "rotate") {
           // While rotating, the handle stays on the bounds the drag started from, with the angle badge.
-          drawSelectionBounds(ctx, b, c, { handles: false, locks });
-          drawRotateHandle(ctx, selectionBounds(s.elements, s.selection) ?? b, c, angleLabel(g.angle));
-        } else drawSelectionBounds(ctx, b, c, { handles: transformable, rotate: rotatable, locks });
+          drawSelectionBounds(ctx, hb, c, { handles: false, locks });
+          drawRotateHandle(ctx, growRect(selectionBounds(s.elements, s.selection) ?? b, pad), c, angleLabel(g.angle));
+        } else drawSelectionBounds(ctx, hb, c, { handles: transformable, rotate: rotatable, locks });
+        if (one) {
+          const handles = reshapeHandles(one);
+          if (handles.length > 0) drawRoundHandles(ctx, handles.map((h) => h.at), c);
+          // With a drawing tool a press inside the shape draws: it moves by its own handle instead.
+          if (drawingEdits() && g.kind === "idle") drawMoveHandle(ctx, hb, c);
+        }
         animate = true;
       }
       // A lone line or arrow: round handles on its ends (drag one to move that end).
@@ -1191,6 +1379,10 @@ export function createToolController(deps: ToolDeps) {
     up,
     cancel,
     draw,
+    /** Ink with perfect shapes on: a press on a handle of the selected shape edits it (see `editDown`). */
+    editDown,
+    /** Ink with perfect shapes on: a tap on a shape's outline selects it (see `tapSelect`). */
+    tapSelect,
     ...driver,
     dispose() {
       if (autoCompleteDrivers.get(deps.store) === driver) autoCompleteDrivers.delete(deps.store);
@@ -1258,20 +1450,52 @@ export function loneLine(elements: ReadonlyMap<string, Element>, selection: Read
   return isLineShape(el) ? el : null;
 }
 
-/** Round end handles of a lone selected line or arrow. */
-export function drawLineEnds(ctx: CanvasRenderingContext2D, el: Element, c: Camera): void {
+/** Round handles at world points `pts` (line ends, polygon corners, axis ends, curve points). */
+export function drawRoundHandles(ctx: CanvasRenderingContext2D, pts: readonly Vec2[], c: Camera): void {
   ctx.save();
   ctx.setLineDash([]);
   ctx.lineWidth = 1.5;
   ctx.strokeStyle = ACCENT;
   ctx.fillStyle = "#ffffff";
-  for (const pt of el.points.slice(0, 2)) {
+  for (const pt of pts) {
     const q = worldToScreen(c, pt);
     ctx.beginPath();
     ctx.arc(q.x, q.y, ENDPOINT_HANDLE_PX + 1, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }
+  ctx.restore();
+}
+
+/** Round end handles of a lone selected line or arrow. */
+export function drawLineEnds(ctx: CanvasRenderingContext2D, el: Element, c: Camera): void {
+  drawRoundHandles(ctx, el.points.slice(0, 2), c);
+}
+
+/** The move handle of bounds `b` (a stem and a round knob with a four-way cross), below the bottom-centre. */
+export function drawMoveHandle(ctx: CanvasRenderingContext2D, b: Rect, c: Camera): void {
+  const from = worldToScreen(c, { x: b.x + b.width / 2, y: b.y + b.height });
+  const at = worldToScreen(c, moveHandlePoint(b, c.z));
+  const r = ROTATE_R_PX + 2;
+  ctx.save();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = ACCENT;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(at.x, at.y - r);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(at.x - r + 3, at.y);
+  ctx.lineTo(at.x + r - 3, at.y);
+  ctx.moveTo(at.x, at.y - r + 3);
+  ctx.lineTo(at.x, at.y + r - 3);
+  ctx.stroke();
   ctx.restore();
 }
 

@@ -1,6 +1,6 @@
 import { PAPER_TEMPLATES } from "../../../model/paperTemplates";
 import { useTranslation } from "react-i18next";
-import { SelectRow, SettingsSection, ToggleRow } from "../rows";
+import { SelectRow, SettingsSection, SliderRow, ToggleRow } from "../rows";
 
 export default function PaperSection() {
   const { t } = useTranslation();
@@ -18,6 +18,14 @@ export default function PaperSection() {
         k="defaultBackground"
         label={t("settings.paper.background.label")}
         options={PAPER_TEMPLATES.map(([value, key]) => ({ value, label: t(key) }))}
+      />
+      <SliderRow
+        k="defaultBackgroundSpacing"
+        label={t("settings.paper.spacing.label")}
+        hint={t("settings.paper.spacing.hint")}
+        min={10}
+        max={200}
+        step={5}
       />
       <SelectRow
         k="defaultPageAspectRatio"

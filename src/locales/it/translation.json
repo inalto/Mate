@@ -112,6 +112,10 @@
         "portrait": "Verticale",
         "landscape": "Orizzontale"
       },
+      "spacing": {
+        "label": "Dimensione di quadretti e righe",
+        "hint": "Dimensione dei quadretti, delle righe o dei punti nelle nuove pagine. Le pagine esistenti mantengono la propria (Impostazioni pagina)."
+      },
       "alignText": {
         "label": "Allinea il testo alle righe",
         "hint": "Aggancia il testo digitato alle righe"

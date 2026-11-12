@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showZoomIndicator: false,
   defaultPageMode: "canvas",
   defaultBackground: "ruled",
+  defaultBackgroundSpacing: 40,
   alignTextToLines: true,
   defaultPageAspectRatio: "a4",
   defaultPageOrientation: "portrait",

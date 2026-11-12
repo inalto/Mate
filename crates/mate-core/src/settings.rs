@@ -103,6 +103,7 @@ pub struct Settings {
     // New page
     pub default_page_mode: String,
     pub default_background: String,
+    pub default_background_spacing: f64,
     pub align_text_to_lines: bool,
     pub default_page_aspect_ratio: String,
     pub default_page_orientation: String,
@@ -241,6 +242,7 @@ impl Default for Settings {
             show_zoom_indicator: false,
             default_page_mode: s("canvas"),
             default_background: s("ruled"),
+            default_background_spacing: 40.0,
             align_text_to_lines: true,
             default_page_aspect_ratio: s("a4"),
             default_page_orientation: s("portrait"),

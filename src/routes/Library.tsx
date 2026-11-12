@@ -1,5 +1,6 @@
 import { Plus } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useChromeStore } from "../stores/chrome";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import BookCard from "../components/BookCard";
@@ -28,7 +29,8 @@ export default function Library() {
   const empty = tree.units.length === 0;
 
   const newBook = () => {
-    void store.createUnit(t("common.untitledBook"));
+    // The new notebook's card opens its title for editing.
+    void store.createUnit(t("common.untitledBook")).then((u) => useChromeStore.getState().setRenamingUnit(u.id));
   };
   const importBook = async () => {
     try {

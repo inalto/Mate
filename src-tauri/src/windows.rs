@@ -233,11 +233,17 @@ impl WindowHost for TauriHost<'_> {
 
     fn create(&self, label: &str, url: &str, title: &str) -> Result<(), String> {
         // Native decorations; tauri-plugin-window-state restores size/position per label.
-        WebviewWindowBuilder::new(self.0, label, WebviewUrl::App(url.into()))
+        let builder = WebviewWindowBuilder::new(self.0, label, WebviewUrl::App(url.into()))
             .title(title)
             .inner_size(WIDTH, HEIGHT)
             .min_inner_size(600.0, 400.0)
-            .resizable(true)
+            .resizable(true);
+        // WebView2 only reports a touchpad pinch to the page (as Ctrl+wheel) while its own pinch
+        // zoom is on; the page cancels that zoom itself (src/lifecycle/zoomGuard.ts). Same setting
+        // as the main window (tauri.windows.conf.json).
+        #[cfg(windows)]
+        let builder = builder.zoom_hotkeys_enabled(true);
+        builder
             .build()
             .map(|_| ())
             .map_err(|e| e.to_string())
