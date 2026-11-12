@@ -6,7 +6,7 @@
 // and after a hold snapped it, its end follows the pen until it lifts. Any other shape (or curve)
 // a hold snapped is then resized and turned by the pen, about its centre, until the pen lifts.
 import type { Element, PenPreset, Point, Settings } from "../model/types";
-import { shapeElement, shapeFromDrag, shapeOutline } from "../shapes/geometry";
+import { isClosedShape, shapeElement, shapeFromDrag, shapeOutline } from "../shapes/geometry";
 import { snapLineEnd } from "../shapes/lineSnap";
 import { recognizeShape, type RecognizedShape } from "../shapes/recognize";
 import type { Camera } from "./camera";
@@ -171,9 +171,14 @@ export function createInkSnap(opts: InkSnapOptions): InkSnap {
   };
 }
 
+/** Fill opacity of a perfect shape filled with its own (lighter) stroke colour. */
+export const SNAP_FILL_OPACITY = 0.2;
+
 /**
- * The element for a recognised stroke: a shape with the stroke's colour and width and no fill, or,
- * for a curve, an ink stroke along the fitted curve (even pressure, the preset's ink).
+ * The element for a recognised stroke: a shape with the stroke's colour and width, unfilled or (with
+ * `fill`, closed shapes) filled with a light tint of that colour; for a curve, an ink stroke along
+ * the fitted curve (even pressure, the preset's ink). The highlighter stays a highlighter: its
+ * shape is a highlighter stroke along the outline (an arrow becomes a plain line).
  */
 export function snapShapeElement(
   r: RecognizedShape,
@@ -181,7 +186,24 @@ export function snapShapeElement(
   pageId: string,
   id: string,
   now: string,
+  fill = false,
 ): Element {
+  if (preset.type === "highlighter") {
+    const outline = r.curve ?? shapeOutline(r.type, r.rect, r.rotation)[0] ?? [];
+    return {
+      id,
+      pageId,
+      type: "stroke",
+      points: outline.map((p, i) => ({ x: p.x, y: p.y, pressure: 0.5, timestamp: i })),
+      color: preset.color,
+      width: preset.width,
+      isHighlighter: true,
+      penStyle: "highlighter",
+      createdAt: now,
+      updatedAt: now,
+      version: 0,
+    };
+  }
   if (r.curve) {
     return {
       id,
@@ -191,7 +213,7 @@ export function snapShapeElement(
       color: preset.color,
       width: preset.width,
       isHighlighter: false,
-      penStyle: preset.type === "highlighter" || !preset.type ? "pen" : preset.type,
+      penStyle: preset.type ?? "pen",
       content: { curve: true },
       createdAt: now,
       updatedAt: now,
@@ -200,8 +222,9 @@ export function snapShapeElement(
   }
   const { rect } = r;
   const drag = shapeFromDrag(r.type, { x: rect.x, y: rect.y }, { x: rect.x + rect.width, y: rect.y + rect.height }, false);
+  const filled = fill && isClosedShape(r.type);
   const el = shapeElement(
-    { shapeType: r.type, color: preset.color, fillColor: "transparent", width: preset.width, fillOpacity: 1 },
+    { shapeType: r.type, color: preset.color, fillColor: filled ? preset.color : "transparent", width: preset.width, fillOpacity: filled ? SNAP_FILL_OPACITY : 1 },
     drag,
     pageId,
     id,

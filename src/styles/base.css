@@ -915,7 +915,7 @@ button.card:hover {
   width: 260px;
   box-sizing: border-box;
   transform-origin: 100% 0;
-  transform: scale(var(--overlay-inv-z, 1)) translateX(-8px);
+  transform: scale(var(--overlay-inv-z, 1)) translate(-8px, var(--graph-panel-dy, 0px));
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -929,6 +929,35 @@ button.card:hover {
   text-align: left;
   cursor: default;
   z-index: 2;
+}
+/* No room left of the box: the panel goes to its right, or over it. */
+.graph-panel[data-side="right"] {
+  right: auto;
+  left: 100%;
+  transform-origin: 0 0;
+  transform: scale(var(--overlay-inv-z, 1)) translate(8px, var(--graph-panel-dy, 0px));
+}
+.graph-panel[data-side="inside"] {
+  right: auto;
+  left: 0;
+  transform-origin: 0 0;
+  transform: scale(var(--overlay-inv-z, 1)) translate(8px, calc(8px + var(--graph-panel-dy, 0px)));
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+}
+.graph-aspect {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.graph-aspect .segmented button {
+  flex: 1;
+  font-size: 12px;
+}
+.graph-aspect-label,
+.graph-aspect-hint {
+  color: var(--color-text-muted, inherit);
+  font-size: 12px;
 }
 .graph-exprs {
   display: flex;

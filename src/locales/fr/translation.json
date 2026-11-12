@@ -152,6 +152,10 @@
         "hint": "Garde le stylo immobile à la fin d'un tracé pour le transformer en forme"
       },
       "snapOnRelease": "Aligner au relevé du stylo",
+      "shapeFill": {
+        "label": "Remplir les formes parfaites",
+        "hint": "Les formes fermées tracées avec Formes parfaites ou la conversion en formes sont remplies d'une teinte plus claire de la couleur de l'encre."
+      },
       "holdTime": "Durée d'appui",
       "milliseconds": "{{value}} ms",
       "scribbleToErase": {
@@ -1329,6 +1333,12 @@
       "yMin": "y min",
       "yMax": "y max",
       "grid": "Quadrillage",
+      "aspect": {
+        "label": "Proportions",
+        "free": "Garder le cadre",
+        "equal": "Même échelle sur les deux axes",
+        "hint": "Avec la même échelle, le cadre prend la forme de la vue quand vous terminez la modification."
+      },
       "plot": "Tracé du graphe"
     },
     "presets": {

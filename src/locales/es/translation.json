@@ -152,6 +152,10 @@
         "hint": "Mantén el lápiz quieto al final de un trazo para convertirlo en una forma"
       },
       "snapOnRelease": "Ajustar al levantar el lápiz",
+      "shapeFill": {
+        "label": "Rellenar las formas perfectas",
+        "hint": "Las formas cerradas dibujadas con Formas perfectas o con la conversión a formas se rellenan con un tono más claro del color de la tinta."
+      },
       "holdTime": "Tiempo de espera",
       "milliseconds": "{{value}} ms",
       "scribbleToErase": {
@@ -1329,6 +1333,12 @@
       "yMin": "y mín",
       "yMax": "y máx",
       "grid": "Cuadrícula",
+      "aspect": {
+        "label": "Proporciones",
+        "free": "Mantener el recuadro",
+        "equal": "Misma escala en los dos ejes",
+        "hint": "Con la misma escala, el recuadro toma la forma de la vista al terminar de editar."
+      },
       "plot": "Gráfico"
     },
     "presets": {

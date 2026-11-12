@@ -152,6 +152,10 @@
         "hint": "笔画结束时保持笔静止，即可将其转换为图形"
       },
       "snapOnRelease": "抬笔时吸附",
+      "shapeFill": {
+        "label": "填充完美形状",
+        "hint": "用“完美形状”或墨迹转形状画出的闭合形状，会以较浅的墨水颜色填充。"
+      },
       "holdTime": "停留时间",
       "milliseconds": "{{value}} 毫秒",
       "scribbleToErase": {
@@ -1316,6 +1320,12 @@
       "yMin": "y 最小值",
       "yMax": "y 最大值",
       "grid": "网格",
+      "aspect": {
+        "label": "比例",
+        "free": "保持方框",
+        "equal": "两轴使用相同刻度",
+        "hint": "使用相同刻度时，结束编辑后方框会变成视图的形状。"
+      },
       "plot": "图形绘制"
     },
     "presets": {

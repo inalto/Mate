@@ -28,7 +28,14 @@ export interface GraphData {
   expressions: GraphExpression[];
   domain: GraphDomain;
   grid: boolean;
+  /**
+   * How the box relates to the view: "free" (default) keeps the box as it is, so the two axes may
+   * use different scales; "equal" reshapes the box after the view, so one unit is as long on both.
+   */
+  aspect?: GraphAspect;
 }
+
+export type GraphAspect = "free" | "equal";
 
 /** Expression colours (light variants), assigned in order and cycled by the editor's colour dot. */
 export const GRAPH_PALETTE: readonly string[] = [
@@ -46,7 +53,32 @@ export const GRAPH_PALETTE: readonly string[] = [
   "#37474F",
 ];
 
-export const DEFAULT_GRAPH_SIZE = { width: 480, height: 360 };
+/** A new graph is square, like its default view (−10..10 on both axes). */
+export const DEFAULT_GRAPH_SIZE = { width: 400, height: 400 };
+/** Narrowest / widest box the "equal" aspect makes (width : height). */
+const MIN_BOX_RATIO = 0.25;
+const MAX_BOX_RATIO = 4;
+/** Widest box the "equal" aspect makes (page units; a sheet is 1080 wide). */
+const MAX_FITTED_WIDTH = 960;
+
+/**
+ * The box of a graph with the "equal" aspect: the same area as `box`, shaped like the view (width :
+ * height = x span : y span, within 1:4 .. 4:1), so one unit is as long on both axes.
+ */
+export function boxForDomain(box: { width: number; height: number }, d: GraphDomain): { width: number; height: number } {
+  const spanX = d.xMax - d.xMin;
+  const spanY = d.yMax - d.yMin;
+  if (!(spanX > 0) || !(spanY > 0) || !(box.width > 0) || !(box.height > 0)) return box;
+  const r = Math.min(MAX_BOX_RATIO, Math.max(MIN_BOX_RATIO, spanX / spanY));
+  const area = box.width * box.height;
+  let width = Math.sqrt(area * r);
+  let height = Math.sqrt(area / r);
+  if (width > MAX_FITTED_WIDTH) {
+    height *= MAX_FITTED_WIDTH / width;
+    width = MAX_FITTED_WIDTH;
+  }
+  return { width: Math.round(width), height: Math.round(height) };
+}
 export const DEFAULT_DOMAIN: GraphDomain = { xMin: -10, xMax: 10, yMin: -10, yMax: 10 };
 
 const newId = (): string => crypto.randomUUID();
@@ -121,6 +153,7 @@ export function graphDataOf(el: Pick<Element, "content">): GraphData {
     }),
     domain: validDomain(g.domain),
     grid: g.grid !== false,
+    ...(g.aspect === "equal" ? { aspect: "equal" as const } : {}),
   };
 }
 

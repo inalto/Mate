@@ -141,6 +141,7 @@ pub struct Settings {
     // Ink
     pub ink_to_shape: bool,
     pub ink_to_shape_snaps_on_release: bool,
+    pub perfect_shapes_fill: bool,
     pub ink_to_shape_dwell_ms: u32,
     pub line_caps_popover: bool,
     pub scribble_to_erase: bool,
@@ -270,6 +271,7 @@ impl Default for Settings {
             eraser_erase_images: false,
             ink_to_shape: true,
             ink_to_shape_snaps_on_release: false,
+            perfect_shapes_fill: false,
             ink_to_shape_dwell_ms: 750,
             line_caps_popover: true,
             scribble_to_erase: true,

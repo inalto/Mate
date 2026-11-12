@@ -82,7 +82,7 @@ describe("graph renderer", () => {
     drawElement(ctx, graph(["\\sin(x)"]), opts);
     expect(calls.some((c) => c[0] === "drawImage")).toBe(false); // vector, never a snapshot
     expect(calls).toContainEqual(["translate", 100, 50]);
-    expect(calls).toContainEqual(["fillRect", "#ffffff", 0, 0, 480, 360]);
+    expect(calls).toContainEqual(["fillRect", "#ffffff", 0, 0, 400, 400]);
     expect(calls.filter((c) => c[0] === "stroke" && c[1] === 2 && c[2] === GRAPH_PALETTE[0]).length).toBeGreaterThanOrEqual(1);
     const texts = calls.filter((c) => c[0] === "fillText");
     expect(texts.map((c) => c[1])).toContain("4");

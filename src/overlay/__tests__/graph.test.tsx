@@ -120,7 +120,7 @@ describe("GraphEditor", () => {
     const { id } = insert();
     const el = s().elements.get(id)!;
     expect(el.type).toBe("graph");
-    expect([el.boxWidth, el.boxHeight]).toEqual([480, 360]);
+    expect([el.boxWidth, el.boxHeight]).toEqual([400, 400]); // square, like the default view
     expect(s().editingId).toBe(id);
     const g = data(id);
     expect(g.domain).toEqual(DEFAULT_DOMAIN);
