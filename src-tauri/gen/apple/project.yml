@@ -46,6 +46,7 @@ targets:
       properties:
         LSRequiresIPhoneOS: true
         LSSupportsOpeningDocumentsInPlace: false
+        ITSAppUsesNonExemptEncryption: false
         UILaunchStoryboardName: LaunchScreen
         UIRequiredDeviceCapabilities: [arm64, metal]
         UISupportedInterfaceOrientations:
