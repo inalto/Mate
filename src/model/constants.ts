@@ -81,7 +81,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pinchToZoom: true,
   doubleTapZoom: true,
   twoFingerDoubleTapUndo: true,
-  centerPageHorizontally: false,
+  centerPageHorizontally: true,
   fingerAction: "auto",
   conversionEnabled: true,
   correctnessMode: false,

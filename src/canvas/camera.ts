@@ -105,7 +105,8 @@ function clampAxis(off: number, z: number, size: number, min: number, max: numbe
  * Keep the camera in bounds. Canvas mode: cannot scroll above/left of the origin, unbounded
  * right/down. Page mode: x within −SIDE_MARGIN−SIDE_OVERSHOOT .. width+SIDE_MARGIN+SIDE_OVERSHOOT,
  * y within −TOP_MARGIN .. stackBottom+BOTTOM_MARGIN. `stack` defaults to one A4 sheet. With
- * `centre`, a sheet no wider than the view is held centred horizontally (a wider one pans as usual).
+ * `centre`, the sheet is held to the view horizontally: one no wider than the view stays centred,
+ * and a wider one pans only until its edge meets the edge of the view, so no side margin shows.
  */
 export function clampCamera(c: Camera, page: Page, viewport: Viewport, stack?: SheetStack, centre = false): Camera {
   const z = clampZoom(c.z);
@@ -115,7 +116,7 @@ export function clampCamera(c: Camera, page: Page, viewport: Viewport, stack?: S
   const s = stack ?? { ...sheetSize(page), count: 1 };
   const side = PAGE_MODE_SIDE_MARGIN + PAGE_MODE_SIDE_OVERSHOOT;
   return {
-    x: centre && s.width * z <= viewport.width ? (viewport.width - s.width * z) / 2 : clampAxis(c.x, z, viewport.width, -side, s.width + side),
+    x: centre ? clampAxis(c.x, z, viewport.width, 0, s.width) : clampAxis(c.x, z, viewport.width, -side, s.width + side),
     y: clampAxis(c.y, z, viewport.height, -PAGE_MODE_TOP_MARGIN, stackBottom(s) + PAGE_MODE_BOTTOM_MARGIN),
     z,
   };

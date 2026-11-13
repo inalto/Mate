@@ -287,7 +287,7 @@ impl Default for Settings {
             pinch_to_zoom: true,
             double_tap_zoom: true,
             two_finger_double_tap_undo: true,
-            center_page_horizontally: false,
+            center_page_horizontally: true,
             finger_action: s("auto"),
             conversion_enabled: true,
             correctness_mode: false,
