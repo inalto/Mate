@@ -54,7 +54,11 @@ describe("camera", () => {
     // Sheet narrower than the view: wherever it was dragged, it comes back to the middle.
     expect(clampCamera({ x: 30, y: 0, z: 1 }, page("page"), vp, stack, true).x).toBe((2000 - 1080) / 2);
     expect(clampCamera({ x: 30, y: 0, z: 1 }, page("page"), vp, stack).x).not.toBe((2000 - 1080) / 2);
-    // Zoomed in past the view's width: it pans as usual.
+    // Zoomed in past the view's width: it pans, but only until an edge of the sheet meets the view's.
     expect(clampCamera({ x: -500, y: 0, z: 3 }, page("page"), vp, stack, true).x).toBe(-500);
+    expect(clampCamera({ x: 300, y: 0, z: 3 }, page("page"), vp, stack, true).x).toBeCloseTo(0); // left edge held
+    expect(clampCamera({ x: -5000, y: 0, z: 3 }, page("page"), vp, stack, true).x).toBe(2000 - 1080 * 3); // right edge held
+    // Without the setting the side margin and overshoot stay reachable.
+    expect(clampCamera({ x: 300, y: 0, z: 3 }, page("page"), vp, stack).x).toBe(300);
   });
 });
