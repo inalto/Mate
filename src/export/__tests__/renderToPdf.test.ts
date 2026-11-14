@@ -1,6 +1,7 @@
 import { degrees, PDFDocument } from "pdf-lib";
 import { describe, expect, it, vi } from "vitest";
 import { PAGE_GAP } from "../../model/constants";
+import { recordingElement } from "../../recording/marker";
 import type { Element, Page, PenStyle, Point } from "../../model/types";
 import { MAX_PDF_PAGE_PT, overlayPlacement, PT_PER_UNIT, renderToPdf, type PdfDeps, type PdfExportOptions } from "../renderToPdf";
 
@@ -95,6 +96,26 @@ describe("renderToPdf", () => {
     // Canvas mode: one page sized to the content region (+40 padding each side).
     expect(width).toBeGreaterThan(300 * PT_PER_UNIT);
     expect(height).toBeGreaterThan(250 * PT_PER_UNIT);
+  });
+
+  it("draws a recording marker as a circle with its duration, not a bitmap", async () => {
+    const rec = recordingElement(
+      "p1",
+      "rec",
+      STAMP,
+      { x: 100, y: 100 },
+      { unitId: "u", spans: [{ wallStart: STAMP, audioStartMs: 0, durationMs: 900_000 }], segments: [{ assetId: "a0", durationMs: 900_000, mime: "video/webm" }] },
+      "Recording",
+    );
+    const rasterize = vi.fn(() => null);
+    const withMarker = text(await renderToPdf([rec], page(), { ...OPTS, compress: false }, deps({ rasterize })));
+    expect(rasterize).not.toHaveBeenCalled();
+    expect(withMarker).toContain("(15:00) Tj");
+    expect(withMarker).toMatch(/ c$/m); // circle: Bezier curves
+    // A plain audio element still goes through the raster path.
+    const plain = { ...rec, content: { kind: "audio", title: "T" } };
+    await renderToPdf([plain], page(), OPTS, deps({ rasterize }));
+    expect(rasterize).toHaveBeenCalledTimes(1);
   });
 
   it("paints line caps", async () => {

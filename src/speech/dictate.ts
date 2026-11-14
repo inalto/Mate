@@ -22,6 +22,7 @@ import { sanitizeHtml } from "../text/sanitize";
 import { defaultTextAttributes, textAttrsOf, textBoxElement } from "../text/textBox";
 import { withMeta } from "../tools/spatialIndex";
 import { topZ } from "../tools/zorder";
+import { formatElapsed } from "./elapsed";
 import { speechErrorText } from "./errors";
 import { checkLatex, insertMathBox, latexForPlain } from "./mathInsert";
 import { RecorderError, startRecording, type Recorder } from "./recorder";
@@ -41,11 +42,7 @@ interface DictationState {
   askConsent: { provider: string } | null;
 }
 
-/** `ms` as m:ss (the recording's elapsed time on the button). */
-export const formatElapsed = (ms: number): string => {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
+export { formatElapsed };
 
 export const useDictation = create<DictationState>(() => ({ phase: "idle", startedAt: null, askConsent: null }));
 

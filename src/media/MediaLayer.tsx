@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Synt
 import { worldToScreen } from "../canvas/camera";
 import { contentOf, type MediaContent } from "../model/content";
 import type { Element } from "../model/types";
+import { isRecording } from "../recording/types";
 import type { EditorStore } from "../stores/editor";
 import { boxRect } from "../tools/spatialIndex";
 import { mediaUrl } from "./url";
@@ -213,8 +214,8 @@ export default function MediaLayer({ store }: { store: EditorStore }) {
   }, [tool]);
 
   // Every player of the page stays mounted (the layer clips): scrolling one out of view must not
-  // stop it.
-  const players = [...elements.values()].filter((el) => el.type === "media" && !!el.imageUrl);
+  // stop it. A recording marker has none: the canvas draws it as an icon.
+  const players = [...elements.values()].filter((el) => el.type === "media" && !!el.imageUrl && !isRecording(el));
 
   return (
     <div ref={root} className="media-layer" data-testid="media-layer" data-page={pageId ?? undefined}>
