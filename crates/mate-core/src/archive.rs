@@ -19,7 +19,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::assets;
 use crate::model::{Element, ElementType, Page, Section, Unit, format_iso, new_id, now_iso};
-use crate::storage::elements::{MAX_ELEMENTS_PER_PAGE, MAX_POINTS_PER_STROKE};
+use crate::storage::elements::{MAX_ELEMENTS_PER_PAGE, MAX_POINTS_PER_STROKE, is_recording_marker};
 use crate::storage::{EntityKind, Result, Storage, StorageError};
 
 pub const ARCHIVE_FORMAT: &str = "mate-archive";
@@ -601,9 +601,9 @@ pub fn restore_backup_capped<R: Read + Seek>(
     Ok(report)
 }
 
-/// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store,
-/// `incoming/`, `exports/` and `settings.json` under `data_dir`. Missing files are fine. The
-/// caller must have closed or replaced any open connection to the database first.
+/// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store, the recording
+/// work area, `incoming/`, `exports/` and `settings.json` under `data_dir`. Missing files are fine.
+/// The caller must have closed or replaced any open connection to the database first.
 pub fn wipe_local_data(data_dir: &Path) -> std::io::Result<()> {
     use std::fs;
     use std::io::ErrorKind::NotFound;
@@ -614,8 +614,9 @@ pub fn wipe_local_data(data_dir: &Path) -> std::io::Result<()> {
         }
     }
     // `incoming/` holds files opened from other apps and `exports/` files waiting to be shared
-    // (both mobile; absent on desktop).
-    for dir in ["assets", "incoming", "exports"] {
+    // (both mobile; absent on desktop). `recordings/` would otherwise bring an old lecture back at
+    // the next launch.
+    for dir in ["assets", "recordings", "incoming", "exports"] {
         match fs::remove_dir_all(data_dir.join(dir)) {
             Err(e) if e.kind() != NotFound => return Err(e),
             _ => {}
@@ -937,7 +938,7 @@ fn rebind_connector(e: &mut Element, ids: &HashMap<String, String>) {
 /// strings sort chronologically), or `now` when it is not an RFC 3339 time.
 fn keep_created_at(created_at: &str, now: &str) -> String {
     OffsetDateTime::parse(created_at, &Rfc3339)
-        .map(format_iso)
+        .map(|at| format_iso(at.to_offset(time::UtcOffset::UTC)))
         .unwrap_or_else(|_| now.to_owned())
 }
 
@@ -1037,15 +1038,18 @@ fn write_unit(
         let new_page = &page_ids[old_page];
         // Fresh ids first, so connector ends can follow the elements they are bound to.
         let mut kept = Vec::new();
+        // Recording markers are exempt from the page limit, as in storage.
+        let mut counted = 0i64;
         for e in elements {
             if e.deleted_at.is_some() {
                 continue;
             }
-            if e.points.len() > MAX_POINTS_PER_STROKE || kept.len() as i64 >= MAX_ELEMENTS_PER_PAGE
-            {
+            let marker = is_recording_marker(&e);
+            if e.points.len() > MAX_POINTS_PER_STROKE || (!marker && counted >= MAX_ELEMENTS_PER_PAGE) {
                 skipped += 1;
                 continue;
             }
+            counted += i64::from(!marker);
             kept.push((new_id(), e));
         }
         let element_ids: HashMap<String, String> = kept

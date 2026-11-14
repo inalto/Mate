@@ -7,6 +7,7 @@ use mate_core::archive::{
     BackupReport, ImportReport, MAX_ARCHIVE_BYTES, Recordings, RestoreReport, SkippedBook,
     export_unit, import_archive, restore_backup, wipe_local_data, write_backup_capped,
 };
+use mate_core::recording::RecordingDir;
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
 use serde::{Deserialize, Serialize};
@@ -191,6 +192,9 @@ fn restore_from_file(
 /// other error, some books may already have been restored. The UI tells the two apart by it.
 pub const RESTORE_STOPPED: &str = "restore stopped unexpectedly";
 
+/// Starts the error of a reset refused because a recording is not saved yet (matched in the UI).
+pub const RESET_RECORDING_OPEN: &str = "reset refused: a recording is still being saved";
+
 /// The error of a restore whose blocking task did not finish.
 fn restore_stopped(e: impl std::fmt::Display) -> String {
     format!("{RESTORE_STOPPED}: {e}")
@@ -290,6 +294,16 @@ fn run_reset_with(
     before_wipe: &dyn Fn(&Path),
     max_book_bytes: u64,
 ) -> Result<ResetOutcome, String> {
+    // A recording not saved yet (running, or waiting for recovery) has its audio only in its work
+    // folder: refuse before anything is written. A folder that cannot be read counts as one.
+    let recordings = RecordingDir::new(data_dir.join("recordings"));
+    let open = recordings.unfinished().map(|u| !u.is_empty()).unwrap_or(true)
+        || recordings.referenced_asset_ids().is_err();
+    if open {
+        return Err(format!(
+            "{RESET_RECORDING_OPEN}. Stop it, or restart Mate so it can be recovered, then try again."
+        ));
+    }
     // The storage lock is held from the snapshot through the swap, so no write can land after the
     // snapshot and then be deleted without being in the recovery zip. A book that cannot go into
     // the zip (too large) refuses the whole reset: nothing is deleted and the zip is removed.
@@ -504,6 +518,53 @@ mod tests {
             .collect();
         assert!(leftovers.is_empty(), "no recovery zip left: {leftovers:?}");
         assert!(!dir.join(RESET_MARKER).exists());
+    }
+
+    #[test]
+    fn reset_is_refused_while_a_recording_is_unfinished() {
+        let dir = tmp("recording-open");
+        let (st, se) = fixture(&dir);
+        let wiped = Mutex::new(false);
+        let wipe = |_: &Path| -> io::Result<()> {
+            *wiped.lock().unwrap() = true;
+            Ok(())
+        };
+        let recordings = mate_core::recording::RecordingDir::new(dir.join("recordings"));
+        let rec_id = mate_core::model::new_id();
+        recordings.begin(&rec_id, &serde_json::json!({ "recId": rec_id, "segments": [] })).unwrap();
+        let err = run_reset(&dir, &st, &se, &wipe).unwrap_err();
+        assert!(err.starts_with(RESET_RECORDING_OPEN), "{err}");
+        assert!(!*wiped.lock().unwrap(), "nothing wiped");
+        assert!(dir.join("mate.db").exists());
+        let written: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with("mate-recovery-"))
+            .collect();
+        assert!(written.is_empty(), "nothing written: {written:?}");
+        assert_eq!(st.lock().unwrap().list_tree().unwrap().units.len(), 1, "database untouched");
+
+        // A manifest that cannot be read is an unfinished recording too.
+        recordings.close(&rec_id).unwrap();
+        let broken = dir.join("recordings").join(mate_core::model::new_id());
+        fs::create_dir_all(&broken).unwrap();
+        fs::write(broken.join("manifest.json"), b"{ not json").unwrap();
+        let err = run_reset(&dir, &st, &se, &wipe).unwrap_err();
+        assert!(err.starts_with(RESET_RECORDING_OPEN), "{err}");
+        assert!(!*wiped.lock().unwrap(), "nothing wiped");
+    }
+
+    #[test]
+    fn reset_wipes_the_recordings_directory() {
+        let dir = tmp("recordings-wiped");
+        let (st, se) = fixture(&dir);
+        // Left by a recording that finished: a foreign file, nothing to recover.
+        fs::create_dir_all(dir.join("recordings")).unwrap();
+        fs::write(dir.join("recordings").join("stray.part"), b"audio").unwrap();
+        let out = run_reset(&dir, &st, &se, &wipe_local_data).unwrap();
+        assert_eq!(out.wipe_error, None);
+        assert!(!dir.join("recordings").exists());
     }
 
     #[test]

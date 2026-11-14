@@ -12,7 +12,13 @@ vi.mock("../../../ipc/backup", async (importOriginal) => ({
 const notebook = vi.hoisted(() => ({ load: vi.fn(async () => {}) }));
 vi.mock("../../../stores/notebook", () => ({ useNotebookStore: { getState: () => notebook } }));
 
-import { pickBackupFile, restoreBackupFile, type RestoreReport } from "../../../ipc/backup";
+const recording = vi.hoisted(() => ({ active: false, stop: vi.fn(async (): Promise<string | null> => "rec") }));
+vi.mock("../../../recording/session", () => ({
+  isRecordingActive: () => recording.active,
+  useRecording: { getState: () => ({ stop: recording.stop }) },
+}));
+
+import { pickBackupFile, resetLocalData, restoreBackupFile, type RestoreReport } from "../../../ipc/backup";
 import BackupSection from "../sections/BackupSection";
 
 const book = (unitId: string) => ({ unitId, pages: 1, elements: 2, skipped: 0 });
@@ -24,7 +30,10 @@ const report = (over: Partial<RestoreReport> = {}): RestoreReport => ({
   ...over,
 });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  recording.active = false;
+});
 afterEach(cleanup);
 
 /** The row's button, whatever it currently says. */
@@ -165,5 +174,37 @@ describe("BackupSection restore", () => {
     expect(done.textContent).toContain("0 notebooks restored.");
     expect(done.textContent).toContain("Could not be restored: Films");
     expect(notebook.load).not.toHaveBeenCalled();
+  });
+});
+
+describe("BackupSection reset", () => {
+  const confirmReset = async () => {
+    render(<BackupSection />);
+    fireEvent.click(screen.getByRole("button", { name: "Reset local data" }));
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Reset" }));
+    });
+  };
+
+  it("a reset refused for a recording not saved yet says so", async () => {
+    vi.mocked(resetLocalData).mockRejectedValueOnce(
+      "reset refused: a recording is still being saved. Stop it, or restart Mate so it can be recovered, then try again.",
+    );
+    await confirmReset();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "A recording is still being saved. Stop it, or restart Mate so it can be recovered, then try again.",
+    );
+    expect((screen.getByRole("button", { name: "Reset local data" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("stops a running recording before the reset", async () => {
+    recording.active = true;
+    let saved!: () => void;
+    recording.stop.mockImplementationOnce(() => new Promise((ok) => (saved = () => ok("rec"))));
+    await confirmReset();
+    expect(recording.stop).toHaveBeenCalledTimes(1);
+    expect(resetLocalData).not.toHaveBeenCalled();
+    await act(async () => saved());
+    expect(resetLocalData).toHaveBeenCalledTimes(1);
   });
 });

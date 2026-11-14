@@ -820,3 +820,14 @@ fn a_bad_element_created_at_falls_back_to_now() {
         "the two bad stamps became now; the other two kept theirs"
     );
 }
+
+#[test]
+fn a_non_utc_created_at_is_normalised_to_utc() {
+    let (_, els) = import_and_load(
+        &stamped_source(&["2025-03-01T12:00:00.000+02:00", "2025-03-01T05:30:00-04:30"]),
+        "offset-ca",
+    );
+    let mut got: Vec<&str> = els.iter().map(|e| e.created_at.as_str()).collect();
+    got.sort_unstable();
+    assert_eq!(got, ["2025-03-01T10:00:00.000Z", "2025-03-01T10:00:00.000Z", "2025-03-01T10:00:09.000Z", "2025-03-01T10:00:09.000Z"]);
+}

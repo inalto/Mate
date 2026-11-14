@@ -57,9 +57,16 @@ export const pickBackupFile = async (filterName: string): Promise<string | null>
 export const restoreBackupFile = (path: string): Promise<RestoreReport> => invoke("restore_backup_file", { path });
 
 /**
+ * How `resetLocalData`'s error starts when a recording is not saved yet (matches
+ * `RESET_RECORDING_OPEN` in Rust); nothing was written or deleted.
+ */
+export const RESET_RECORDING_OPEN = "reset refused: a recording is still being saved";
+
+/**
  * Write a recovery zip next to the database, delete all books, pages, assets and settings, and
  * restart the app. Resolves only on failure (the process restarts on success); refused, with
- * nothing deleted, when a book is too large for the recovery zip (the error names it).
+ * nothing deleted, when a book is too large for the recovery zip (the error names it) or a
+ * recording is not saved yet (see {@link RESET_RECORDING_OPEN}).
  */
 export const resetLocalData = (): Promise<void> => invoke("reset_local_data", { confirm: "RESET" });
 

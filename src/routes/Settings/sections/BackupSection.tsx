@@ -5,6 +5,7 @@ import { errorMessage as message } from "../../../i18n";
 import {
   exportBackup,
   pickBackupFile,
+  RESET_RECORDING_OPEN,
   resetLocalData,
   restoreBackupFile,
   RESTORE_STOPPED,
@@ -12,6 +13,7 @@ import {
   type RestoreReport,
 } from "../../../ipc/backup";
 import { isMobile } from "../../../platform";
+import { isRecordingActive, useRecording } from "../../../recording/session";
 import { useNotebookStore } from "../../../stores/notebook";
 import { ButtonRow, SettingsSection } from "../rows";
 
@@ -121,9 +123,12 @@ export default function BackupSection() {
     setBusy(true);
     setError(null);
     try {
+      // A running recording is saved first; one that could not be is kept and refuses the reset.
+      if (isRecordingActive()) await useRecording.getState().stop();
       await resetLocalData(); // desktop restarts; mobile shares the backup, then closes
     } catch (err) {
-      setError(message(err));
+      const why = message(err);
+      setError(why.startsWith(RESET_RECORDING_OPEN) ? t("backup.reset.recordingOpen") : why);
       setBusy(false);
     }
   };
