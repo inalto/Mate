@@ -9,6 +9,7 @@ use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::keystore::KeyringStore;
 #[cfg(target_os = "android")]
 use mate_core::ai::keystore::FileKeyStore;
+use mate_core::recording::RecordingDir;
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
 use tauri::Manager;
@@ -18,6 +19,8 @@ pub struct AppState {
     pub storage: Mutex<Storage>,
     pub settings: Mutex<Settings>,
     pub data_dir: PathBuf,
+    /// Work area of recordings in progress, beside the asset folder.
+    pub recordings: RecordingDir,
     /// Window-close attempt state machines, one per window label.
     pub close_attempt: CloseGates,
     /// API keys (OS keychain on desktop and iOS, a file in the app sandbox on Android); never exposed to
@@ -51,6 +54,7 @@ impl AppState {
         Ok(AppState {
             storage: Mutex::new(storage),
             settings: Mutex::new(settings),
+            recordings: RecordingDir::new(data_dir.join("recordings")),
             data_dir,
             close_attempt: CloseGates::default(),
             keys,

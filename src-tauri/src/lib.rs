@@ -5,7 +5,7 @@ mod state;
 mod windows;
 
 use commands::{
-  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, platform, practice, recognition, recognize,
+  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, platform, practice, recognition, recognize, recording,
   settings, semantics, thumbnails, updater,
 };
 use state::AppState;
@@ -148,6 +148,12 @@ pub fn run() {
       assets::delete_asset,
       assets::read_asset,
       assets::gc_assets,
+      recording::recording_begin,
+      recording::recording_save_manifest,
+      recording::recording_append,
+      recording::recording_finish_segment,
+      recording::recording_close,
+      recording::recording_unfinished,
       pdf::read_shared_pdf,
       pdf::take_pending_open_file,
       open_files::take_pending_import_files,

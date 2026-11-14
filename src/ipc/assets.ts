@@ -14,7 +14,7 @@ export interface AssetInfo {
 
 const paths = new Map<string, string>();
 
-const remember = (info: AssetInfo): AssetInfo => {
+export const remember = (info: AssetInfo): AssetInfo => {
   paths.set(info.id, info.path);
   return info;
 };
