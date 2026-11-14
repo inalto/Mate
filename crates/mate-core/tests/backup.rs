@@ -221,6 +221,8 @@ fn restore_reattaches_recording_audio() {
     }
     assert_eq!(marker.image_url.as_deref(), Some(ids[0].as_str()));
     assert_eq!(fs::read_dir(&restored_dir).unwrap().count(), 2, "only the two segments stored");
+    assert_eq!(report.rejected_audio, 0);
+    assert!(report.lost_recordings.is_empty());
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -262,10 +264,14 @@ fn missing_segment_audio_is_reported_not_fatal() {
     // The segment that was found is re-attached; the lost one stays dangling.
     let restored_dir = dir.join("restored");
     let mut dest = Storage::open_in_memory().unwrap();
-    restore_backup(&mut dest, Cursor::new(bytes), &restored_dir).unwrap();
+    let restored = restore_backup(&mut dest, Cursor::new(bytes), &restored_dir).unwrap();
     let ids = segment_ids(&restored_marker(&dest).unwrap());
     assert!(assets::asset_info(&restored_dir, &ids[0]).is_some());
     assert_eq!(ids[1], b.id);
+    assert_eq!(restored.lost_recordings, vec!["Unit u1".to_string()], "dangling segment reported");
+    let json = serde_json::to_value(&restored).unwrap();
+    assert_eq!(json["lostRecordings"], json!(["Unit u1"]));
+    assert_eq!(json["rejectedAudio"], 0);
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -288,6 +294,38 @@ fn a_recording_whose_audio_is_nowhere_restores_like_an_excluded_one() {
     assert!(content.get("recording").is_none());
     assert_eq!(content["title"], "Lecture");
     assert_eq!(marker.image_url, None);
+    assert_eq!(report.lost_recordings, vec!["Unit u1".to_string()], "stripped recording reported");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_segment_that_cannot_be_read_fails_the_backup() {
+    // Present in the store but not readable as a file (here: a directory under its name), as a
+    // locked or permission-denied file would be: not "missing", so the backup must not succeed
+    // (a reset would otherwise delete audio its recovery zip does not hold).
+    let dir = tmp("rec-unreadable");
+    let assets_dir = dir.join("assets");
+    let (st, [_, b]) = books_with_recording(&assets_dir);
+    fs::remove_file(&b.path).unwrap();
+    fs::create_dir(&b.path).unwrap();
+    let err = write_backup_capped(&st, &assets_dir, Cursor::new(Vec::new()), CAP).unwrap_err();
+    assert!(err.to_string().contains(&b.id), "{err}");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn restore_aborts_when_audio_cannot_be_written() {
+    let dir = tmp("rec-nowrite");
+    let assets_dir = dir.join("assets");
+    let (st, _) = books_with_recording(&assets_dir);
+    let (bytes, _) = backup_of(&st, &assets_dir);
+    // The asset store cannot be created: a file is in its way.
+    let blocked = dir.join("blocked");
+    fs::write(&blocked, b"x").unwrap();
+    let mut dest = Storage::open_in_memory().unwrap();
+    let err = restore_backup(&mut dest, Cursor::new(bytes), &blocked).unwrap_err();
+    assert!(matches!(err, mate_core::storage::StorageError::Io(_)), "{err:?}");
+    assert!(dest.list_tree().unwrap().units.is_empty(), "nothing restored");
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -371,12 +409,15 @@ fn restore_ignores_hostile_recording_entries() {
         ("a directory", vec![(format!("recordings/{}.webm/", a.id), Vec::new(), false)]),
     ];
     for (why, entries) in cases {
+        let hostile = entries.len();
         let mut all = vec![book_entry.clone()];
         all.extend(entries);
         let restored_dir = dir.join("restored");
         let mut dest = Storage::open_in_memory().unwrap();
         let report = restore_backup_capped(&mut dest, Cursor::new(zip_of(&all)), &restored_dir, 2048).unwrap();
         assert_eq!(report.books.len(), 1, "{why}");
+        assert_eq!(report.rejected_audio, hostile, "{why}: counted");
+        assert_eq!(report.lost_recordings, vec!["Unit u1".to_string()], "{why}");
         let marker = restored_marker(&dest).unwrap();
         assert!(marker.content.as_ref().unwrap().get("recording").is_none(), "{why}: stripped");
         assert_eq!(marker.image_url, None, "{why}");
@@ -398,7 +439,9 @@ fn restore_ignores_hostile_recording_entries() {
     ];
     let restored_dir = dir.join("restored");
     let mut dest = Storage::open_in_memory().unwrap();
-    restore_backup_capped(&mut dest, Cursor::new(zip_of(&entries)), &restored_dir, 2048).unwrap();
+    let report = restore_backup_capped(&mut dest, Cursor::new(zip_of(&entries)), &restored_dir, 2048).unwrap();
+    // The repeat, both `..` names, the sub-path and the non-uuid; `/abs.webm` is no recording.
+    assert_eq!(report.rejected_audio, 5);
     let ids = segment_ids(&restored_marker(&dest).unwrap());
     let first = assets::asset_info(&restored_dir, &ids[0]).expect("segment a re-attached");
     assert_eq!(fs::read(&first.path).unwrap(), webm, "the first entry for an id wins");

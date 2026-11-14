@@ -491,6 +491,77 @@ mod tests {
     }
 
     #[test]
+    fn an_unreadable_recording_refuses_the_reset() {
+        use mate_core::model::{BackgroundConfig, Element, Page, PageMode, Section};
+        let dir = tmp("unreadable-audio");
+        let (st, se) = fixture(&dir);
+        let now = mate_core::model::now_iso();
+        // The segment is in the store but cannot be read as a file (a directory under its name,
+        // as a locked file would fail): the recovery zip cannot hold it, so nothing is deleted.
+        let seg = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
+        fs::create_dir_all(dir.join("assets").join(format!("{seg}.webm"))).unwrap();
+        {
+            let mut st = st.lock().unwrap();
+            st.upsert_section(&Section {
+                id: "s1".into(),
+                unit_id: "u1".into(),
+                title: "S".into(),
+                color: "#000000".into(),
+                icon: None,
+                order_index: 0,
+                is_expanded: false,
+                created_at: now.clone(),
+                updated_at: now.clone(),
+                deleted_at: None,
+                version: 0,
+            })
+            .unwrap();
+            st.upsert_page(&Page {
+                id: "p1".into(),
+                section_id: "s1".into(),
+                parent_id: None,
+                title: "P".into(),
+                is_expanded: false,
+                is_favourite: false,
+                depth: 0,
+                mode: PageMode::Canvas,
+                background_config: BackgroundConfig::default(),
+                page_width: None,
+                page_height: None,
+                thumbnail_version: 0,
+                icon: None,
+                order_index: 0,
+                created_at: now.clone(),
+                updated_at: now.clone(),
+                deleted_at: None,
+                version: 0,
+                import_metadata: None,
+            })
+            .unwrap();
+            let marker: Element = serde_json::from_value(serde_json::json!({
+                "id": "rec", "pageId": "p1", "type": "media", "points": [], "color": "#000000",
+                "width": 1.0, "isHighlighter": false, "imageUrl": seg,
+                "content": { "kind": "audio", "recording": { "unitId": "u1", "spans": [],
+                    "segments": [{ "assetId": seg, "durationMs": 300000, "mime": "video/webm" }] } },
+                "createdAt": now, "updatedAt": now, "version": 0
+            }))
+            .unwrap();
+            st.upsert_elements(&[marker]).unwrap();
+        }
+        let wiped = Mutex::new(false);
+        let wipe = |_: &Path| -> io::Result<()> {
+            *wiped.lock().unwrap() = true;
+            Ok(())
+        };
+        let err = run_reset(&dir, &st, &se, &wipe).unwrap_err();
+        assert!(err.contains(seg), "{err}");
+        assert!(!*wiped.lock().unwrap(), "nothing wiped");
+        assert!(dir.join("mate.db").exists());
+        assert_eq!(st.lock().unwrap().list_tree().unwrap().units.len(), 1, "database untouched");
+        assert_eq!(se.lock().unwrap().theme, "dark");
+    }
+
+    #[test]
     fn the_backup_result_names_left_out_books_and_missing_audio() {
         let report = BackupReport {
             books: 1,

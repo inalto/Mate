@@ -378,24 +378,7 @@ pub fn write_backup_capped<W: Write + Seek>(
             .map_err(zip_err)?;
         zip.write_all(&book.bytes).map_err(io_err)?;
         report.books += 1;
-        let mut missing = false;
-        for id in &book.segments {
-            if audio_written.contains(id) {
-                continue;
-            }
-            let opened = assets::asset_path(assets_dir, id)
-                .and_then(|path| std::fs::File::open(&path).ok().map(|f| (path, f)));
-            let Some((path, mut file)) = opened else {
-                missing = true;
-                continue;
-            };
-            let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("bin");
-            zip.start_file(format!("{RECORDINGS_DIR}{id}.{ext}"), stored)
-                .map_err(zip_err)?;
-            std::io::copy(&mut file, &mut zip).map_err(io_err)?;
-            audio_written.insert(id.clone());
-        }
-        if missing {
+        if copy_segments(&mut zip, assets_dir, &book.segments, &mut audio_written)? {
             report.missing_audio.push(unit.title.clone());
         }
     }
@@ -412,6 +395,48 @@ pub fn write_backup_capped<W: Write + Seek>(
     Ok((zip.finish().map_err(zip_err)?, report))
 }
 
+/// Copies each of `segments` not yet in `written` from the asset store to
+/// `recordings/<assetId>.<ext>` in `zip` (stored as-is, streamed from disk). Returns whether a
+/// segment was missing: only an asset that is not in the store counts; any other failure to open
+/// or copy one (a locked or unreadable file) fails the backup, so a reset never deletes audio its
+/// recovery zip does not hold.
+fn copy_segments<W: Write + Seek>(
+    zip: &mut ZipWriter<W>,
+    assets_dir: &Path,
+    segments: &[String],
+    written: &mut HashSet<String>,
+) -> Result<bool> {
+    // `large_file`: a semester of audio can put an entry's offset past 4 GiB (zip64).
+    let stored = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Stored)
+        .large_file(true);
+    let mut missing = false;
+    for id in segments {
+        if written.contains(id) {
+            continue;
+        }
+        let Some(path) = assets::asset_path(assets_dir, id) else {
+            missing = true;
+            continue;
+        };
+        let mut file = match std::fs::File::open(&path) {
+            Ok(f) => f,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                missing = true;
+                continue;
+            }
+            Err(e) => return Err(limit(format!("could not read recording audio {id}: {e}"))),
+        };
+        let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("bin");
+        zip.start_file(format!("{RECORDINGS_DIR}{id}.{ext}"), stored)
+            .map_err(zip_err)?;
+        std::io::copy(&mut file, zip)
+            .map_err(|e| limit(format!("could not read recording audio {id}: {e}")))?;
+        written.insert(id.clone());
+    }
+    Ok(missing)
+}
+
 /// [`write_backup`] into memory.
 pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<(Vec<u8>, BackupReport)> {
     let (out, report) = write_backup(storage, assets_dir, Cursor::new(Vec::new()))?;
@@ -426,6 +451,12 @@ pub struct RestoreReport {
     pub books: Vec<ImportReport>,
     /// `<entry>: <error>` for each book that could not be imported (the others still are).
     pub failed: Vec<String>,
+    /// `recordings/` entries skipped as invalid (bad name, repeated id, not stored as-is, not
+    /// audio or video, oversized or unreadable).
+    pub rejected_audio: usize,
+    /// Titles of restored books in which a recording lost (some of) its audio: stripped, or left
+    /// with segments that point nowhere.
+    pub lost_recordings: Vec<String>,
 }
 
 /// The old asset id of a `recordings/<assetId>.<ext>` entry; `None` for any other name (paths,
@@ -440,9 +471,11 @@ fn recording_entry_id(name: &str) -> Option<&str> {
 /// `books/*.mate` is imported as a new book (as [`import_archive`] does) with its markers'
 /// segments re-attached to that audio. A backup without `recordings/` (older ones) restores
 /// exactly as importing each book would. An audio entry that is not stored as-is, not audio or
-/// video, larger than [`assets::MAX_MEDIA_BYTES`] or a repeat of an earlier one is skipped; a
-/// book that cannot be imported is rolled back and listed in [`RestoreReport::failed`]. Audio no
-/// restored book references is removed again.
+/// video, larger than [`assets::MAX_MEDIA_BYTES`] or a repeat of an earlier one is skipped and
+/// counted in [`RestoreReport::rejected_audio`]; failing to write a valid one to the store aborts
+/// the restore (nothing is restored). A book that cannot be imported is rolled back and listed in
+/// [`RestoreReport::failed`]; one whose recordings lost audio is named in
+/// [`RestoreReport::lost_recordings`]. Audio no restored book references is removed again.
 pub fn restore_backup<R: Read + Seek>(
     storage: &mut Storage,
     backup: R,
@@ -470,28 +503,44 @@ pub fn restore_backup_capped<R: Read + Seek>(
     let names: Vec<String> = zip.file_names().map(str::to_owned).collect();
 
     // Audio first, so each book's markers can be pointed at it.
+    let mut report = RestoreReport::default();
     let mut audio: HashMap<String, String> = HashMap::new();
-    for name in &names {
-        let Some(old) = recording_entry_id(name) else {
-            continue;
-        };
+    let saved = |zip: &mut ZipArchive<R>, name: &str, audio: &HashMap<String, String>| {
+        let old = recording_entry_id(name)?;
         if audio.contains_key(old) {
-            continue;
+            return None;
         }
-        let Ok(entry) = zip.by_name(name) else {
-            continue;
-        };
+        let entry = zip.by_name(name).ok()?;
         // A backup stores audio as-is, so an entry can never unpack to more than it occupies.
         if !entry.is_file()
             || entry.compression() != CompressionMethod::Stored
             || entry.size() > max_audio_bytes
         {
-            continue;
+            return None;
         }
-        if let Ok(info) =
-            assets::save_sniffed_from_reader(assets_dir, entry, max_audio_bytes, assets::AssetKind::is_media)
-        {
-            audio.insert(old.to_owned(), info.id);
+        Some((
+            old.to_owned(),
+            assets::save_sniffed_from_reader(
+                assets_dir,
+                entry,
+                max_audio_bytes,
+                assets::AssetKind::is_media,
+            ),
+        ))
+    };
+    // (The bare `recordings/` folder entry some zip tools add is neither audio nor a rejection.)
+    for name in names.iter().filter(|n| n.starts_with(RECORDINGS_DIR) && *n != RECORDINGS_DIR) {
+        match saved(&mut zip, name, &audio) {
+            Some((old, Ok(info))) => {
+                audio.insert(old, info.id);
+            }
+            Some((_, Err(e @ StorageError::Io(_)))) => {
+                for id in audio.values() {
+                    assets::delete_asset(assets_dir, id);
+                }
+                return Err(e);
+            }
+            Some((_, Err(_))) | None => report.rejected_audio += 1,
         }
     }
 
@@ -500,14 +549,18 @@ pub fn restore_backup_capped<R: Read + Seek>(
         .filter(|n| n.starts_with("books/") && n.ends_with(".mate"))
         .collect();
     books.sort();
-    let mut report = RestoreReport::default();
     for name in books {
         let imported = read_entry(&mut zip, name, MAX_ARCHIVE_BYTES as u64).and_then(|bytes| {
             let bytes = bytes.ok_or_else(|| limit("missing"))?;
             import_archive_from(storage, &bytes, assets_dir, ImportLimits::default(), Some(&audio))
         });
         match imported {
-            Ok(r) => report.books.push(r),
+            Ok(book) => {
+                if book.lost_audio {
+                    report.lost_recordings.push(book.title);
+                }
+                report.books.push(book.report);
+            }
             Err(e) => report.failed.push(format!("{name}: {e}")),
         }
     }
@@ -589,7 +642,15 @@ pub fn import_archive_with_limits(
     assets_dir: &Path,
     limits: ImportLimits,
 ) -> Result<ImportReport> {
-    import_archive_from(storage, bytes, assets_dir, limits, None)
+    import_archive_from(storage, bytes, assets_dir, limits, None).map(|book| book.report)
+}
+
+/// What [`import_archive_from`] imported.
+struct ImportedBook {
+    report: ImportReport,
+    title: String,
+    /// A recording kept a segment that points nowhere, or was stripped for having no audio.
+    lost_audio: bool,
 }
 
 /// [`import_archive_with_limits`], resolving recording segments through `external` (old -> new
@@ -602,7 +663,7 @@ fn import_archive_from(
     assets_dir: &Path,
     limits: ImportLimits,
     external: Option<&HashMap<String, String>>,
-) -> Result<ImportReport> {
+) -> Result<ImportedBook> {
     if bytes.len() > MAX_ARCHIVE_BYTES {
         return Err(limit("archive is larger than 512 MiB"));
     }
@@ -626,6 +687,7 @@ fn import_archive_from(
     let order_index = storage.list_tree()?.units.len() as i64;
     let new_unit_id = new_id();
     let mut imported = AssetImport::new(&zip, assets_dir, limits, external)?;
+    let title = unit_file.unit.title.clone();
     let result = write_unit(
         storage,
         &mut zip,
@@ -640,7 +702,7 @@ fn import_archive_from(
             assets::delete_asset(assets_dir, id);
         }
     }
-    result
+    result.map(|report| ImportedBook { report, title, lost_audio: imported.lost_audio })
 }
 
 /// Copies archived assets into the asset store on first reference, remembering old -> new ids.
@@ -655,6 +717,8 @@ struct AssetImport<'a> {
     limits: ImportLimits,
     /// Decompressed bytes of the asset entries read so far.
     total: u64,
+    /// A recording kept a segment that resolved nowhere, or was stripped for having none.
+    lost_audio: bool,
 }
 
 /// What a reference may point at: a media element's `image_url` an audio or video file, any
@@ -705,6 +769,7 @@ impl<'a> AssetImport<'a> {
             minted: HashMap::new(),
             limits,
             total: 0,
+            lost_audio: false,
         })
     }
 
@@ -804,6 +869,7 @@ impl<'a> AssetImport<'a> {
                 }
             }
         }
+        self.lost_audio |= resolved < total;
         if self.external.is_some() && total > 0 && resolved == 0 {
             apply_recordings(e, Recordings::Exclude);
         }

@@ -234,7 +234,9 @@ pub fn save_asset_from_file(dir: &Path, path: &Path, kind: AssetKind) -> Result<
 
 /// Streams `reader` into the store as `<uuid>.<ext>` without holding it whole: the kind is
 /// sniffed from the first [`SVG_SNIFF_BYTES`] and must pass `accept`, and the whole stream must
-/// fit both `max` and the kind's own limit. Nothing is left behind on failure.
+/// fit both `max` and the kind's own limit. Nothing is left behind on failure. A stream that is
+/// empty, of an unaccepted kind, too large or unreadable fails with `StorageError::Limit` (the
+/// input's fault); failing to write the store fails with `StorageError::Io`.
 pub fn save_sniffed_from_reader(
     dir: &Path,
     mut reader: impl std::io::Read,
@@ -242,8 +244,9 @@ pub fn save_sniffed_from_reader(
     accept: impl Fn(AssetKind) -> bool,
 ) -> Result<AssetInfo, StorageError> {
     use std::io::{Read, Write};
+    let unreadable = |e: std::io::Error| StorageError::Limit(format!("unreadable asset: {e}"));
     let mut head = Vec::with_capacity(SVG_SNIFF_BYTES);
-    (&mut reader).take(SVG_SNIFF_BYTES as u64).read_to_end(&mut head).map_err(io)?;
+    (&mut reader).take(SVG_SNIFF_BYTES as u64).read_to_end(&mut head).map_err(unreadable)?;
     if head.is_empty() {
         return Err(StorageError::Limit("empty asset".into()));
     }
@@ -251,23 +254,31 @@ pub fn save_sniffed_from_reader(
         .filter(|k| accept(*k))
         .ok_or_else(|| StorageError::Limit("unsupported file type".into()))?;
     let max = max.min(kind.max_bytes() as u64);
-    fs::create_dir_all(dir).map_err(io)?;
+    fs::create_dir_all(dir).map_err(StorageError::Io)?;
     let id = Uuid::new_v4().to_string();
     let tmp = dir.join(format!("{id}.tmp"));
     let path = dir.join(format!("{id}.{}", kind.ext()));
     let written = (|| {
-        let mut file = fs::File::create(&tmp).map_err(io)?;
-        file.write_all(&head).map_err(io)?;
-        // One byte past the limit is enough to know the stream is too large.
-        let left = (max + 1).saturating_sub(head.len() as u64);
-        let rest = std::io::copy(&mut reader.take(left), &mut file).map_err(io)?;
-        let bytes = head.len() as u64 + rest;
-        if bytes > max {
-            return Err(StorageError::Limit(format!("asset is larger than {max} bytes")));
+        let mut file = fs::File::create(&tmp).map_err(StorageError::Io)?;
+        file.write_all(&head).map_err(StorageError::Io)?;
+        let mut bytes = head.len() as u64;
+        let mut buf = vec![0u8; 64 * 1024];
+        loop {
+            let n = match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(unreadable(e)),
+            };
+            bytes += n as u64;
+            if bytes > max {
+                return Err(StorageError::Limit(format!("asset is larger than {max} bytes")));
+            }
+            file.write_all(&buf[..n]).map_err(StorageError::Io)?;
         }
-        file.sync_all().map_err(io)?;
+        file.sync_all().map_err(StorageError::Io)?;
         drop(file);
-        fs::rename(&tmp, &path).map_err(io)?;
+        fs::rename(&tmp, &path).map_err(StorageError::Io)?;
         Ok(bytes)
     })();
     match written {
