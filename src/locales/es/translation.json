@@ -314,7 +314,7 @@
       "done_one": "{{count}} cuaderno restaurado.",
       "done_other": "{{count}} cuadernos restaurados.",
       "failed": "No se pudo restaurar: {{titles}}",
-      "lostRecordings": "Las grabaciones de estos cuadernos volvieron sin su audio: {{titles}}",
+      "lostRecordings": "Las grabaciones de estos cuadernos se restauraron sin su audio: {{titles}}",
       "rejectedAudio_one": "{{count}} archivo de audio de la copia de seguridad no era válido y se omitió.",
       "rejectedAudio_other": "{{count}} archivos de audio de la copia de seguridad no eran válidos y se omitieron.",
       "error": "No se pudo restaurar la copia de seguridad. No se cambió nada.",
@@ -322,6 +322,9 @@
       "resultTitle": "Copia de seguridad restaurada",
       "resultTitleNone": "No se restauró nada",
       "errorUnknown": "La restauración se detuvo de forma inesperada. Es posible que se hayan restaurado algunos cuadernos."
+    },
+    "reset": {
+      "recordingOpen": "Todavía se está guardando una grabación. Detenla o reinicia Mate para que pueda recuperarse, y vuelve a intentarlo."
     }
   },
   "common": {
@@ -1446,6 +1449,7 @@
     "interrupted": "Sin grabar {{time}}",
     "gap": "No se grabaron {{time}} mientras Mate estaba en segundo plano.",
     "menu": "Grabación",
+    "keptForLater": "No se pudo añadir la grabación a la página. Se conserva y se añadirá la próxima vez que se inicie Mate.",
     "leave": {
       "title": "¿Detener la grabación?",
       "body": "La grabación pertenece a este cuaderno. Al salir, se detiene y se guarda.",

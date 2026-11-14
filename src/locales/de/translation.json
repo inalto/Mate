@@ -322,6 +322,9 @@
       "resultTitle": "Sicherung wiederhergestellt",
       "resultTitleNone": "Es wurde nichts wiederhergestellt",
       "errorUnknown": "Die Wiederherstellung wurde unerwartet beendet. Einige Notizbücher wurden möglicherweise wiederhergestellt."
+    },
+    "reset": {
+      "recordingOpen": "Eine Aufnahme wird noch gespeichert. Beende sie oder starte Mate neu, damit sie wiederhergestellt werden kann, und versuche es dann erneut."
     }
   },
   "common": {
@@ -1444,8 +1447,9 @@
     "pill": "Aufnahme {{time}}",
     "paused": "Pausiert {{time}}",
     "interrupted": "Keine Aufnahme {{time}}",
-    "gap": "{{time}} wurden nicht aufgenommen, während Mate im Hintergrund war.",
+    "gap": "Es wurden {{time}} nicht aufgenommen, während Mate im Hintergrund war.",
     "menu": "Aufnahme",
+    "keptForLater": "Die Aufnahme konnte nicht zur Seite hinzugefügt werden. Sie bleibt erhalten und wird beim nächsten Start von Mate hinzugefügt.",
     "leave": {
       "title": "Aufnahme beenden?",
       "body": "Die Aufnahme gehört zu diesem Notizbuch. Beim Verlassen wird sie beendet und gespeichert.",
@@ -1462,7 +1466,7 @@
     "position": "Position",
     "time": "{{position}} / {{total}}",
     "speed": "Geschwindigkeit",
-    "follow": "Seiten folgen",
+    "follow": "Seitenwechsel folgen",
     "transcript": "Transkript",
     "close": "Schließen",
     "notRecorded": "Das wurde geschrieben, während nichts aufgenommen wurde.",

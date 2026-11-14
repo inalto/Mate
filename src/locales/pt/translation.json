@@ -314,14 +314,17 @@
       "done_one": "{{count}} caderno restaurado.",
       "done_other": "{{count}} cadernos restaurados.",
       "failed": "Não foi possível restaurar: {{titles}}",
-      "lostRecordings": "As gravações destes cadernos voltaram sem o áudio: {{titles}}",
+      "lostRecordings": "As gravações destes cadernos foram restauradas sem o áudio: {{titles}}",
       "rejectedAudio_one": "{{count}} arquivo de áudio do backup não era válido e foi ignorado.",
       "rejectedAudio_other": "{{count}} arquivos de áudio do backup não eram válidos e foram ignorados.",
       "error": "Não foi possível restaurar o backup. Nada foi alterado.",
-      "busy": "A restaurar…",
+      "busy": "Restaurando…",
       "resultTitle": "Backup restaurado",
       "resultTitleNone": "Nada foi restaurado",
       "errorUnknown": "A restauração parou inesperadamente. Alguns cadernos podem ter sido restaurados."
+    },
+    "reset": {
+      "recordingOpen": "Uma gravação ainda está sendo salva. Pare a gravação ou reinicie o Mate para que ela possa ser recuperada e tente novamente."
     }
   },
   "common": {
@@ -1446,6 +1449,7 @@
     "interrupted": "Sem gravar {{time}}",
     "gap": "{{time}} não foram gravados enquanto o Mate estava em segundo plano.",
     "menu": "Gravação",
+    "keptForLater": "Não foi possível adicionar a gravação à página. Ela foi mantida e será adicionada na próxima vez que o Mate for iniciado.",
     "leave": {
       "title": "Parar a gravação?",
       "body": "A gravação pertence a este caderno. Ao sair, ela é parada e salva.",
@@ -1465,18 +1469,18 @@
     "follow": "Seguir as páginas",
     "transcript": "Transcrição",
     "close": "Fechar",
-    "notRecorded": "Isto foi escrito enquanto nada estava a ser gravado.",
+    "notRecorded": "Isto foi escrito enquanto nada estava sendo gravado.",
     "missingSegment": "Falta uma parte desta gravação."
   },
   "transcript": {
     "title": "Transcrição",
     "start": "Transcrever",
-    "progress": "A transcrever a parte {{done}} de {{total}}",
+    "progress": "Transcrevendo a parte {{done}} de {{total}}",
     "cancel": "Cancelar",
     "failedPart": "Não foi possível transcrever esta parte.",
     "retry": "Tentar novamente",
     "lostMarker": "A gravação foi removida, por isso a transcrição não foi salva.",
-    "busyOther": "Outra gravação está a ser transcrita.",
+    "busyOther": "Outra gravação está sendo transcrita.",
     "retryAt": "Tentar novamente a parte em {{time}}",
     "copy": "Copiar",
     "insert": "Inserir como caixa de texto",

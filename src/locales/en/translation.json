@@ -319,6 +319,9 @@
       "resultTitle": "Backup restored",
       "resultTitleNone": "Nothing was restored",
       "errorUnknown": "The restore stopped unexpectedly. Some notebooks may have been restored."
+    },
+    "reset": {
+      "recordingOpen": "A recording is still being saved. Stop it, or restart Mate so it can be recovered, then try again."
     }
   },
   "common": {
@@ -1443,6 +1446,7 @@
     "interrupted": "Not recording {{time}}",
     "gap": "{{time}} was not recorded while Mate was in the background.",
     "menu": "Recording",
+    "keptForLater": "The recording could not be added to the page. It is kept and will be added the next time Mate starts.",
     "leave": {
       "title": "Stop recording?",
       "body": "The recording belongs to this notebook. Leaving it stops the recording and saves it.",

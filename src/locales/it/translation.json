@@ -319,6 +319,9 @@
       "resultTitle": "Backup ripristinato",
       "resultTitleNone": "Non è stato ripristinato nulla",
       "errorUnknown": "Il ripristino si è interrotto in modo imprevisto. Alcuni quaderni potrebbero essere stati ripristinati."
+    },
+    "reset": {
+      "recordingOpen": "Una registrazione è ancora in fase di salvataggio. Interrompila, oppure riavvia Mate per recuperarla, poi riprova."
     }
   },
   "common": {
@@ -1443,6 +1446,7 @@
     "interrupted": "Registrazione sospesa {{time}}",
     "gap": "Per {{time}} non è stato registrato nulla mentre Mate era in background.",
     "menu": "Registrazione",
+    "keptForLater": "Non è stato possibile aggiungere la registrazione alla pagina. È conservata e verrà aggiunta al prossimo avvio di Mate.",
     "leave": {
       "title": "Interrompere la registrazione?",
       "body": "Se esci, la registrazione si ferma e viene salvata.",

@@ -306,15 +306,15 @@
     "missingAudio": "L'audio des enregistrements est introuvable dans : {{titles}}",
     "restore": {
       "label": "Restaurer à partir d'une sauvegarde…",
-      "hint": "Ajoute les cahiers d'une sauvegarde zip de Mate, avec leurs enregistrements, à côté de ceux que vous avez",
+      "hint": "Ajoute les cahiers d'une sauvegarde zip de Mate, avec leurs enregistrements, à côté de ceux que tu as",
       "filter": "Sauvegarde Mate",
       "title": "Restaurer cette sauvegarde ?",
-      "body": "Les cahiers de la sauvegarde sont ajoutés à côté de ceux que vous avez déjà. Rien n'est remplacé ni supprimé.",
+      "body": "Les cahiers de la sauvegarde sont ajoutés à côté de ceux que tu as déjà. Rien n'est remplacé ni supprimé.",
       "confirm": "Restaurer",
       "done_one": "{{count}} cahier restauré.",
       "done_other": "{{count}} cahiers restaurés.",
       "failed": "Restauration impossible : {{titles}}",
-      "lostRecordings": "Les enregistrements de ces cahiers sont revenus sans leur audio : {{titles}}",
+      "lostRecordings": "Les enregistrements de ces cahiers ont été restaurés sans leur audio : {{titles}}",
       "rejectedAudio_one": "{{count}} fichier audio de la sauvegarde n'était pas valide et a été ignoré.",
       "rejectedAudio_other": "{{count}} fichiers audio de la sauvegarde n'étaient pas valides et ont été ignorés.",
       "error": "La sauvegarde n'a pas pu être restaurée. Rien n'a été modifié.",
@@ -322,6 +322,9 @@
       "resultTitle": "Sauvegarde restaurée",
       "resultTitleNone": "Rien n'a été restauré",
       "errorUnknown": "La restauration s'est arrêtée de façon inattendue. Certains cahiers ont peut-être été restaurés."
+    },
+    "reset": {
+      "recordingOpen": "Un enregistrement est encore en cours de sauvegarde. Arrête-le, ou redémarre Mate pour qu'il puisse être récupéré, puis réessaie."
     }
   },
   "common": {
@@ -1430,13 +1433,13 @@
     "title": "Enregistrement {{date}}",
     "tooShort": "Rien n'a été enregistré.",
     "recovered": "Un enregistrement interrompu a été récupéré.",
-    "dictationBusy": "Arrêtez l'enregistrement pour dicter.",
+    "dictationBusy": "Arrête l'enregistrement pour dicter.",
     "limitSoon": "L'enregistrement s'arrêtera dans 5 minutes (limite de 4 heures).",
     "limit": "La limite de 4 heures a été atteinte. L'enregistrement a été sauvegardé.",
     "writeFailed": "L'enregistrement s'est arrêté, car il n'a pas pu être sauvegardé. Ce qui a été enregistré jusqu'ici est conservé.",
     "failed": "L'enregistrement s'est arrêté à cause d'un problème de microphone. Ce qui a été enregistré jusqu'ici est conservé.",
     "busy": "Un enregistrement est déjà en cours.",
-    "dictationActive": "Terminez la dictée avant d'enregistrer.",
+    "dictationActive": "Termine la dictée avant d'enregistrer.",
     "start": "Enregistrer l'audio",
     "stop": "Arrêter l'enregistrement",
     "pause": "Pause",
@@ -1446,15 +1449,16 @@
     "interrupted": "Pas d'enregistrement {{time}}",
     "gap": "Rien n'a été enregistré pendant {{time}} : Mate était en arrière-plan.",
     "menu": "Enregistrement",
+    "keptForLater": "L'enregistrement n'a pas pu être ajouté à la page. Il est conservé et sera ajouté au prochain démarrage de Mate.",
     "leave": {
       "title": "Arrêter l'enregistrement ?",
-      "body": "L'enregistrement appartient à ce cahier. Si vous le quittez, l'enregistrement s'arrête et est sauvegardé.",
+      "body": "L'enregistrement appartient à ce cahier. Si tu le quittes, l'enregistrement s'arrête et est sauvegardé.",
       "stop": "Arrêter et quitter",
       "stay": "Rester"
     }
   },
   "replay": {
-    "bar": "Relecture de l'enregistrement",
+    "bar": "Lecture de l'enregistrement",
     "play": "Lire",
     "pause": "Pause",
     "back": "Reculer de 10 secondes",
@@ -1479,7 +1483,7 @@
     "busyOther": "Un autre enregistrement est en cours de transcription.",
     "retryAt": "Réessayer la partie à {{time}}",
     "copy": "Copier",
-    "insert": "Insérer comme zone de texte",
+    "insert": "Insérer en tant que zone de texte",
     "empty": "Aucune parole n'a été reconnue.",
     "close": "Fermer la transcription",
     "replace": {

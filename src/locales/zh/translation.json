@@ -319,6 +319,9 @@
       "resultTitle": "备份已还原",
       "resultTitleNone": "未还原任何内容",
       "errorUnknown": "还原意外中断。部分笔记本可能已还原。"
+    },
+    "reset": {
+      "recordingOpen": "仍有录音正在保存。请先停止录音，或重新启动 Mate 以便恢复录音，然后重试。"
     }
   },
   "common": {
@@ -1430,11 +1433,12 @@
     "interrupted": "未在录音 {{time}}",
     "gap": "Mate 在后台期间有 {{time}} 未录音。",
     "menu": "录音",
+    "keptForLater": "无法将录音添加到页面。录音已保留，将在下次启动 Mate 时添加。",
     "leave": {
       "title": "停止录音？",
       "body": "录音属于此笔记本。离开将停止录音并保存。",
       "stop": "停止并离开",
-      "stay": "留下"
+      "stay": "留在此处"
     }
   },
   "replay": {
