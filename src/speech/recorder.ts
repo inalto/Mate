@@ -53,7 +53,7 @@ export function pickMime(isSupported: (type: string) => boolean = (t) => MediaRe
   return "";
 }
 
-function startError(e: unknown): RecorderError {
+export function startError(e: unknown): RecorderError {
   const name = e instanceof DOMException || e instanceof Error ? e.name : "";
   const message = e instanceof Error ? e.message : String(e);
   if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError")
