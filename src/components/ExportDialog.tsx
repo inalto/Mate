@@ -46,6 +46,12 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [recordings, setRecordings] = useState(false);
   const hasRecordings = useHasRecordings(unitId);
+  // A ticked box belongs to its book: another book starts unticked.
+  const [recordingsOf, setRecordingsOf] = useState(unitId);
+  if (recordingsOf !== unitId) {
+    setRecordingsOf(unitId);
+    setRecordings(false);
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

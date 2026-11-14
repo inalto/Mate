@@ -193,6 +193,24 @@ describe("ShareDialog", () => {
       expect(box.checked).toBe(true);
     });
 
+    it("a different notebook starts unticked and hidden until its lookup resolves", async () => {
+      let resolve!: (v: boolean) => void;
+      vi.mocked(unitHasRecordings)
+        .mockResolvedValueOnce(true)
+        .mockReturnValueOnce(new Promise((r) => (resolve = r)));
+      vi.mocked(saveArchiveTo).mockResolvedValue("C:/Dropbox/Mate/Geometry.mate");
+      const view = render(<ShareDialog unit={unit} onClose={onClose} />);
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Include recordings" }));
+      view.rerender(<ShareDialog unit={{ id: "u2", title: "Geometry" } as Unit} onClose={onClose} />);
+      await waitFor(() => expect(unitHasRecordings).toHaveBeenLastCalledWith("u2"));
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+      fireEvent.click(await screen.findByRole("button", { name: "Dropbox" }));
+      await waitFor(() => expect(saveArchiveTo).toHaveBeenLastCalledWith("u2", "C:/Dropbox", false));
+      await act(async () => resolve(true));
+      const box = (await screen.findByRole("checkbox", { name: "Include recordings" })) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+    });
+
     it("treats a failed lookup as no recordings", async () => {
       vi.mocked(unitHasRecordings).mockRejectedValueOnce(new Error("db"));
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

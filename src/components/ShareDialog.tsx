@@ -41,6 +41,14 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
   const [copied, setCopied] = useState(false);
   const [recordings, setRecordings] = useState(false);
   const hasRecordings = useHasRecordings(unit.id);
+  // A ticked box belongs to its book: another book starts unticked.
+  const [recordingsOf, setRecordingsOf] = useState(unit.id);
+  if (recordingsOf !== unit.id) {
+    setRecordingsOf(unit.id);
+    setRecordings(false);
+  }
+  /** Recordings go only when the box is both offered and ticked. */
+  const withRecordings = recordings && hasRecordings;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,19 +74,19 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
 
   const saveTo = (dir: string) =>
     run(async () => {
-      setSaved(await saveArchiveTo(unit.id, dir, recordings));
+      setSaved(await saveArchiveTo(unit.id, dir, withRecordings));
     });
 
   const chooseFolder = () =>
     run(async () => {
       const dir = await pickFolder();
-      if (dir) setSaved(await saveArchiveTo(unit.id, dir, recordings));
+      if (dir) setSaved(await saveArchiveTo(unit.id, dir, withRecordings));
     });
 
   const upload = () =>
     run(async () => {
       setCopied(false);
-      const res = await nextcloudShare(unit.id, expiry === "never" ? null : Number(expiry), recordings);
+      const res = await nextcloudShare(unit.id, expiry === "never" ? null : Number(expiry), withRecordings);
       setLink(res.url);
     });
 

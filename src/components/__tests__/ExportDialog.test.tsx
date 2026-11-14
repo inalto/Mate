@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Page, Section, Unit } from "../../model/types";
@@ -257,6 +257,28 @@ describe("ExportDialog", () => {
       await waitFor(() => expect(warn).toHaveBeenCalled());
       expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
       warn.mockRestore();
+    });
+
+    it("a different notebook starts unticked and hidden until its lookup resolves", async () => {
+      const section2: Section = { ...section, id: "s2", unitId: "u2" };
+      const page2: Page = { ...page, id: "p2", sectionId: "s2" };
+      useNotebookStore.setState({ tree: { bookshelves: [], units: [], sections: [section, section2], pages: [page, page2] }, loaded: true });
+      useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, defaultExportFormat: "mate" } });
+      let resolve!: (v: boolean) => void;
+      vi.mocked(unitHasRecordings)
+        .mockResolvedValueOnce(true)
+        .mockReturnValueOnce(new Promise((r) => (resolve = r)));
+      const view = render(<ExportDialog pageId="p1" onClose={onClose} />);
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Include recordings" }));
+      view.rerender(<ExportDialog pageId="p2" onClose={onClose} />);
+      await waitFor(() => expect(unitHasRecordings).toHaveBeenLastCalledWith("u2"));
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+      await act(async () => resolve(true));
+      const box = (await screen.findByRole("checkbox", { name: "Include recordings" })) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u2", false);
     });
 
     it("shows the archive size error from the export", async () => {
