@@ -10,5 +10,6 @@ describe("constants", () => {
   it("LIMITS", () => {
     expect(LIMITS.MAX_ELEMENTS_PER_PAGE).toBe(5000);
     expect(LIMITS.MAX_POINTS_PER_STROKE).toBe(50000);
+    expect(LIMITS.MAX_MARKERS_PER_PAGE).toBe(200);
   });
 });

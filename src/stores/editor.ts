@@ -288,7 +288,7 @@ export interface EditorState {
   /**
    * Place a recording's marker with its top-left at `at` (moved right past markers it would cover);
    * one history entry "Recording". Tool and selection are left alone. `id` defaults to a new one.
-   * Its id, or null without a page.
+   * Its id, or null without a page or past LIMITS.MAX_MARKERS_PER_PAGE.
    */
   addRecording(rec: RecordingContent, at: Vec2, title: string, id?: string): string | null;
   /**
@@ -1829,11 +1829,21 @@ export function createEditorStore(): EditorStore {
 
   /**
    * True when applying `actions` would grow the page past the backend element limit. A recording
-   * marker is exempt (as in the backend): refusing it would leave the lecture unreachable.
+   * marker is exempt (as in the backend): refusing it would leave the lecture unreachable. Markers
+   * have their own cap instead (LIMITS.MAX_MARKERS_PER_PAGE, as the backend's).
    */
   function exceedsLimit(actions: Action[]): boolean {
-    const n = countAfter(actions.filter((a) => !isRecording(a.type === "update" ? a.after : a.el)));
-    return n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size;
+    const marker = (a: Action) => isRecording(a.type === "update" ? a.after : a.el);
+    const n = countAfter(actions.filter((a) => !marker(a)));
+    if (n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size) return true;
+    const touched = actions.filter(marker);
+    if (touched.length === 0) return false;
+    const live = new Map<string, boolean>();
+    for (const el of S().elements.values()) if (!el.deletedAt && isRecording(el)) live.set(el.id, true);
+    const before = live.size;
+    for (const a of touched) live.set(a.type === "update" ? a.after.id : a.el.id, a.type !== "delete");
+    const m = [...live.values()].filter(Boolean).length;
+    return m > LIMITS.MAX_MARKERS_PER_PAGE && m > before;
   }
 
   /**

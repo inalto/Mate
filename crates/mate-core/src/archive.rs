@@ -19,6 +19,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::assets;
 use crate::model::{Element, ElementType, Page, Section, Unit, format_iso, new_id, now_iso};
+use crate::import::MAX_MARKERS_PER_PAGE;
 use crate::storage::elements::{MAX_ELEMENTS_PER_PAGE, MAX_POINTS_PER_STROKE, is_recording_marker};
 use crate::storage::{EntityKind, Result, Storage, StorageError};
 
@@ -1038,18 +1039,22 @@ fn write_unit(
         let new_page = &page_ids[old_page];
         // Fresh ids first, so connector ends can follow the elements they are bound to.
         let mut kept = Vec::new();
-        // Recording markers are exempt from the page limit, as in storage.
+        // Recording markers are exempt from the page limit, as in storage, but have their own cap
+        // (a marker past it is skipped before its audio is imported).
         let mut counted = 0i64;
+        let mut markers = 0usize;
         for e in elements {
             if e.deleted_at.is_some() {
                 continue;
             }
             let marker = is_recording_marker(&e);
-            if e.points.len() > MAX_POINTS_PER_STROKE || (!marker && counted >= MAX_ELEMENTS_PER_PAGE) {
+            let full = if marker { markers >= MAX_MARKERS_PER_PAGE } else { counted >= MAX_ELEMENTS_PER_PAGE };
+            if e.points.len() > MAX_POINTS_PER_STROKE || full {
                 skipped += 1;
                 continue;
             }
             counted += i64::from(!marker);
+            markers += usize::from(marker);
             kept.push((new_id(), e));
         }
         let element_ids: HashMap<String, String> = kept

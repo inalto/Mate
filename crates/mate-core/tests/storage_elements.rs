@@ -87,6 +87,44 @@ fn a_recording_marker_is_exempt_from_the_page_element_limit() {
     let mut clip = marker("clip");
     clip.content = Some(serde_json::json!({ "kind": "audio" }));
     assert!(matches!(st.upsert_elements(&[clip]).unwrap_err(), StorageError::Limit(_)));
+
+    // Stored markers are not counted against the limit: (limit - 1) strokes and 2 markers still
+    // take one more stroke, and refuse the next.
+    let mut st = seeded();
+    let almost: Vec<_> = (0..4999).map(|i| stroke(&format!("e{i}"), "p1", 1)).collect();
+    st.upsert_elements(&almost).unwrap();
+    st.upsert_elements(&[marker("rec1"), marker("rec2")]).unwrap();
+    st.upsert_elements(&[stroke("last", "p1", 1)]).unwrap();
+    assert_eq!(st.count_elements("p1").unwrap(), 5002);
+    let err = st.upsert_elements(&[stroke("one-more", "p1", 1)]).unwrap_err();
+    assert!(matches!(err, StorageError::Limit(_)), "got {err:?}");
+}
+
+#[test]
+fn the_marker_cap_refuses_one_more_marker() {
+    use mate_core::import::MAX_MARKERS_PER_PAGE;
+    let mut st = seeded();
+    let marker = |id: &str| {
+        let mut m = stroke(id, "p1", 0);
+        m.r#type = ElementType::Media;
+        m.pen_style = None;
+        m.content = Some(serde_json::json!({ "kind": "audio", "recording": {} }));
+        m
+    };
+    let cap: Vec<_> = (0..MAX_MARKERS_PER_PAGE).map(|i| marker(&format!("rec{i}"))).collect();
+    st.upsert_elements(&cap).unwrap();
+    let err = st.upsert_elements(&[marker("one-more")]).unwrap_err();
+    assert!(matches!(err, StorageError::Limit(_)), "got {err:?}");
+    assert_eq!(st.count_elements("p1").unwrap(), MAX_MARKERS_PER_PAGE as i64, "nothing written");
+    // A marker already there can still be changed (a transcript saved), and a stroke still fits.
+    let mut again = marker("rec0");
+    again.content = Some(serde_json::json!({ "kind": "audio", "recording": { "transcript": {} } }));
+    st.upsert_elements(&[again]).unwrap();
+    st.upsert_elements(&[stroke("ink", "p1", 1)]).unwrap();
+    // A single batch past the cap is refused too.
+    let mut st = seeded();
+    let over: Vec<_> = (0..=MAX_MARKERS_PER_PAGE).map(|i| marker(&format!("r{i}"))).collect();
+    assert!(matches!(st.upsert_elements(&over).unwrap_err(), StorageError::Limit(_)));
 }
 
 #[test]

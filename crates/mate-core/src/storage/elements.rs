@@ -9,6 +9,7 @@ use super::recognition::invalidate_in;
 use super::{
     Result, Storage, StorageError, enum_col, enum_to_sql, json_col, opt_enum_col, opt_json_col,
 };
+use crate::import::MAX_MARKERS_PER_PAGE;
 use crate::model::{Element, ElementType, now_iso};
 
 /// Maximum live elements on one page.
@@ -305,7 +306,8 @@ pub(crate) fn is_recording_marker(e: &Element) -> bool {
 }
 
 /// `Limit` if any element has too many points, or if a page would end up with more than
-/// [`MAX_ELEMENTS_PER_PAGE`] live elements after the batch. Recording markers do not count.
+/// [`MAX_ELEMENTS_PER_PAGE`] live elements after the batch. Recording markers do not count there;
+/// a batch adding markers past [`MAX_MARKERS_PER_PAGE`] on a page is refused.
 fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
     if let Some(e) = elements
         .iter()
@@ -348,6 +350,42 @@ fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
         if total > MAX_ELEMENTS_PER_PAGE {
             return Err(StorageError::Limit(format!(
                 "page {page_id} would have {total} elements (max {MAX_ELEMENTS_PER_PAGE})"
+            )));
+        }
+    }
+
+    // Markers have their own small cap, so they stay bounded too. Changing a marker already there
+    // (a transcript saved) is never refused.
+    let mut markers: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for e in elements.iter().filter(|e| e.deleted_at.is_none() && is_recording_marker(e)) {
+        markers.entry(&e.page_id).or_default().insert(&e.id);
+    }
+    let mut is_live_marker = conn.prepare(&format!(
+        "SELECT 1 FROM elements WHERE id = ?1 AND page_id = ?2 AND deleted_at IS NULL AND {MARKER_ROW}"
+    ))?;
+    for (page_id, ids) in markers {
+        let mut added = 0i64;
+        for id in ids {
+            if is_live_marker
+                .query_row(params![id, page_id], |_| Ok(()))
+                .optional()?
+                .is_none()
+            {
+                added += 1;
+            }
+        }
+        if added == 0 {
+            continue;
+        }
+        let stored: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM elements WHERE page_id = ?1 AND deleted_at IS NULL AND {MARKER_ROW}"),
+            [page_id],
+            |r| r.get(0),
+        )?;
+        let total = stored + added;
+        if total > MAX_MARKERS_PER_PAGE as i64 {
+            return Err(StorageError::Limit(format!(
+                "page {page_id} would have {total} recordings (max {MAX_MARKERS_PER_PAGE})"
             )));
         }
     }

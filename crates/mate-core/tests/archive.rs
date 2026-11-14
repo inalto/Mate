@@ -831,3 +831,60 @@ fn a_non_utc_created_at_is_normalised_to_utc() {
     got.sort_unstable();
     assert_eq!(got, ["2025-03-01T10:00:00.000Z", "2025-03-01T10:00:00.000Z", "2025-03-01T10:00:09.000Z", "2025-03-01T10:00:09.000Z"]);
 }
+
+#[test]
+fn an_import_keeps_at_most_the_marker_cap_per_page() {
+    use mate_core::import::MAX_MARKERS_PER_PAGE;
+    let src = source();
+    let bytes = export_unit(&src, "u1", &tmp("none"), Recordings::Exclude).unwrap();
+
+    // Re-pack the archive with cap + 5 minimal recording markers added to page `pa1`.
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
+    let mut out = Cursor::new(Vec::new());
+    {
+        let mut zip = zip::ZipWriter::new(&mut out);
+        for i in 0..archive.len() {
+            let mut f = archive.by_index(i).unwrap();
+            let name = f.name().to_string();
+            let mut data = Vec::new();
+            std::io::Read::read_to_end(&mut f, &mut data).unwrap();
+            if name == "pages/pa1.json" {
+                let mut els: Vec<serde_json::Value> = serde_json::from_slice(&data).unwrap();
+                for k in 0..MAX_MARKERS_PER_PAGE + 5 {
+                    let mut m = stroke(&format!("rec{k}"), "pa1", 0);
+                    m.r#type = mate_core::model::ElementType::Media;
+                    m.pen_style = None;
+                    m.content = Some(json!({ "kind": "audio", "recording": {} }));
+                    els.push(serde_json::to_value(m).unwrap());
+                }
+                data = serde_json::to_vec(&els).unwrap();
+            }
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(&data).unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, out.get_ref(), &tmp("marker-cap-dst")).unwrap();
+    assert_eq!(report.pages, 3, "the book imports");
+    assert_eq!(report.elements, 10 + MAX_MARKERS_PER_PAGE);
+    assert_eq!(report.skipped, 5, "the markers past the cap are skipped");
+    let tree = dst.list_tree().unwrap();
+    let sections: Vec<_> = tree.sections.iter().filter(|s| s.unit_id == report.unit_id).map(|s| s.id.clone()).collect();
+    let (mut markers, mut strokes) = (0, 0);
+    for p in tree.pages.iter().filter(|p| sections.contains(&p.section_id)) {
+        let els = dst.load_elements(&p.id).unwrap();
+        let m = els.iter().filter(|e| e.r#type == mate_core::model::ElementType::Media).count();
+        if p.title == "Page pa1" {
+            assert_eq!(m, MAX_MARKERS_PER_PAGE, "page pa1 keeps exactly the cap");
+        } else {
+            assert_eq!(m, 0);
+        }
+        markers += m;
+        strokes += els.iter().filter(|e| e.r#type == mate_core::model::ElementType::Stroke).count();
+    }
+    assert_eq!(markers, MAX_MARKERS_PER_PAGE);
+    assert_eq!(strokes, 10, "the rest of the page and the other pages import normally");
+}
