@@ -9,6 +9,7 @@ import { isDarkTheme } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import { contentOf, type MediaContent } from "../model/content";
 import type { Element } from "../model/types";
+import { MARKER_SIZE } from "../recording/marker";
 import { isRecording, recordingOf } from "../recording/types";
 import { totalMs } from "../recording/timeline";
 import { formatElapsed } from "../speech/elapsed";
@@ -109,11 +110,22 @@ export function markerLayout(r: Rect): MarkerLayout {
   };
 }
 
-/** The duration shown under a recording marker's microphone. */
-export const markerDuration = (el: Element): string => {
+/** The duration shown under a recording marker's microphone; null for a marker without its recording. */
+export const markerDuration = (el: Element): string | null => {
   const rec = recordingOf(el);
-  return rec ? formatElapsed(totalMs(rec)) : "0:00";
+  return rec ? formatElapsed(totalMs(rec)) : null;
 };
+
+/**
+ * Drawn as a recording marker: a recording, or a marker exported without its recording (an audio
+ * element in the 44 × 44 marker box with no file), which keeps the icon but has no duration.
+ */
+export function drawsAsMarker(el: Element): boolean {
+  if (isRecording(el)) return true;
+  if (el.type !== "media" || el.imageUrl || mediaKind(el) !== "audio") return false;
+  const r = boxRect(el);
+  return r.width === MARKER_SIZE && r.height === MARKER_SIZE;
+}
 
 function drawMarker(ctx: CanvasRenderingContext2D, el: Element, r: Rect, theme: ThemeName, zoomBucket: number): void {
   const L = markerLayout(r);
@@ -139,11 +151,13 @@ function drawMarker(ctx: CanvasRenderingContext2D, el: Element, r: Rect, theme: 
   ctx.lineCap = "round";
   ctx.strokeStyle = ink;
   ctx.stroke();
+  const duration = markerDuration(el);
+  if (duration === null) return;
   ctx.font = `${L.label.size}px system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = ink;
-  ctx.fillText(markerDuration(el), L.label.x, L.label.y);
+  ctx.fillText(duration, L.label.x, L.label.y);
 }
 
 function markerSvg(el: Element, r: Rect, theme: ThemeName, zoomBucket: number): string {
@@ -151,12 +165,15 @@ function markerSvg(el: Element, r: Rect, theme: ThemeName, zoomBucket: number): 
   const ink = mediaInk(theme);
   const c = L.capsule;
   const a = L.arc;
+  const duration = markerDuration(el);
   return (
     `<g data-media="recording">` +
     `<circle cx="${n(L.cx)}" cy="${n(L.cy)}" r="${n(L.radius)}" fill="${mediaFill(theme)}" stroke="${PLACEHOLDER_COLOR}" stroke-width="${n(1 / zoomBucket)}"/>` +
     `<rect x="${n(c.x)}" y="${n(c.y)}" width="${n(c.width)}" height="${n(c.height)}" rx="${n(c.radius)}" fill="${ink}"/>` +
     `<path d="M${n(a.cx - a.radius)} ${n(a.cy)}A${n(a.radius)} ${n(a.radius)} 0 0 0 ${n(a.cx + a.radius)} ${n(a.cy)}M${n(L.stem.x)} ${n(L.stem.y1)}L${n(L.stem.x)} ${n(L.stem.y2)}" fill="none" stroke="${ink}" stroke-width="${n(a.width)}" stroke-linecap="round"/>` +
-    `<text x="${n(L.label.x)}" y="${n(L.label.y)}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${n(L.label.size)}" fill="${ink}">${esc(markerDuration(el))}</text>` +
+    (duration === null
+      ? ""
+      : `<text x="${n(L.label.x)}" y="${n(L.label.y)}" text-anchor="middle" font-family="system-ui, sans-serif" font-size="${n(L.label.size)}" fill="${ink}">${esc(duration)}</text>`) +
     `</g>`
   );
 }
@@ -165,7 +182,7 @@ export const mediaRenderer: ElementRenderer = {
   draw(ctx, el, o) {
     const r = boxRect(el);
     if (r.width <= 0 || r.height <= 0) return;
-    const marker = isRecording(el);
+    const marker = drawsAsMarker(el);
     const rot = contentOf<MediaContent>(el).rotation ?? 0;
     ctx.save();
     if (rot) {
@@ -204,7 +221,7 @@ export const mediaRenderer: ElementRenderer = {
   svg(el, o) {
     const r = boxRect(el);
     if (r.width <= 0 || r.height <= 0) return "";
-    if (isRecording(el)) return rotatedSvg(el, markerSvg(el, r, o.theme, o.zoomBucket));
+    if (drawsAsMarker(el)) return rotatedSvg(el, markerSvg(el, r, o.theme, o.zoomBucket));
     const L = mediaLayout(r);
     const ink = mediaInk(o.theme);
     const glyph = L.glyph.map(([x, y]) => `${n(x)},${n(y)}`).join(" ");

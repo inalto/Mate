@@ -3,6 +3,7 @@
 //! `<index>.part` per segment. A finished part is moved into the asset store; the folder goes away
 //! once the marker element is saved. Folders found at startup are unfinished recordings to recover.
 
+use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -150,6 +151,34 @@ impl RecordingDir {
         }
         found.sort_by_key(|(at, _)| *at);
         Ok(found.into_iter().map(|(_, u)| u).collect())
+    }
+
+    /// Every `segments[].assetId` named by a recording's manifest: finished segments whose marker is not
+    /// saved yet, which the asset GC must keep. A manifest that cannot be read or parsed is an error, so
+    /// the caller can skip the collection instead of guessing; a folder without one names nothing.
+    pub fn referenced_asset_ids(&self) -> Result<HashSet<String>> {
+        let read = match fs::read_dir(&self.root) {
+            Ok(read) => read,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(HashSet::new()),
+            Err(e) => return Err(io(e)),
+        };
+        let mut ids = HashSet::new();
+        for entry in read {
+            let path = entry.map_err(io)?.path();
+            let is_ours = path.file_name().and_then(|n| n.to_str()).is_some_and(assets::valid_id);
+            if !is_ours || !path.is_dir() {
+                continue;
+            }
+            let raw = match fs::read(path.join(MANIFEST)) {
+                Ok(raw) => raw,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(io(e)),
+            };
+            let manifest: serde_json::Value = serde_json::from_slice(&raw)?;
+            let segments = manifest.get("segments").and_then(|s| s.as_array()).into_iter().flatten();
+            ids.extend(segments.filter_map(|s| s.get("assetId")?.as_str()).map(str::to_owned));
+        }
+        Ok(ids)
     }
 }
 

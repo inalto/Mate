@@ -117,6 +117,8 @@ const setup = (over: Partial<LongRecorderDeps> = {}) => {
     getStream,
     createRecorder: (s, o) => new FakeRecorder(s, o) as unknown as MediaRecorder,
     onEvent: (e) => events.push(e),
+    // The mobile behaviour; a desktop window keeps recording while hidden (tested below).
+    interruptWhenHidden: true,
     ...over,
   };
   return { deps, sink, appended, track: first.track, stream: first.stream, streams, events, getStream, refuse };
@@ -235,6 +237,23 @@ describe("startLongRecording", () => {
       { wallStart: iso(T0 + 90_000), audioStartMs: 60_000, durationMs: 60_000 },
     ]);
     expect(segments.map((s) => s.durationMs)).toEqual([60_000, 60_000]);
+  });
+
+  it("a hidden desktop window keeps recording", async () => {
+    const t = setup({ interruptWhenHidden: false });
+    const rec = await startLongRecording(t.deps);
+    await advance(60_000);
+    setVisibility("hidden");
+    expect(ofType(t.events, "interrupted")).toEqual([]);
+    expect(FakeRecorder.all[0].state).toBe("recording");
+    await advance(30_000);
+    setVisibility("visible");
+    await advance(30_000);
+    expect(ofType(t.events, "resumed")).toEqual([]);
+    expect(FakeRecorder.all).toHaveLength(1);
+    const { spans, segments } = await rec.stop();
+    expect(spans).toEqual([{ wallStart: iso(T0), audioStartMs: 0, durationMs: 120_000 }]);
+    expect(segments.map((s) => s.durationMs)).toEqual([120_000]);
   });
 
   it("a track that ends closes the span", async () => {

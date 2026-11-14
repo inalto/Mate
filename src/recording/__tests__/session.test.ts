@@ -53,7 +53,8 @@ vi.mock("../../stores/focusedEditor", () => ({
 
 import { showToast } from "../../components/Toast";
 import i18n from "../../i18n";
-import { DEFAULT_SETTINGS } from "../../model/constants";
+import { DEFAULT_SETTINGS, LIMITS } from "../../model/constants";
+import { el } from "../../tools/__tests__/fixtures";
 import { toggleDictation, useDictation } from "../../speech/dictate";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
@@ -327,7 +328,7 @@ describe("recording session", () => {
     fake.emit({ type: "ended", reason: "limit" });
     await vi.waitFor(() => expect(rs().phase).toBe("idle"));
     await Promise.resolve();
-    expect(showToast).toHaveBeenCalledWith(i18n.t("errors.generic"));
+    expect(showToast).toHaveBeenCalledWith(i18n.t("recording.keptForLater"));
     expect(showToast).not.toHaveBeenCalledWith(i18n.t("recording.limit"));
 
     await rs().start("u", "pg", { x: 0, y: 0 });
@@ -365,6 +366,40 @@ describe("recording session", () => {
     await rs().start("u", "pg", { x: 0, y: 0 });
     await rs().pause();
     expect(rs().phase).toBe("recording");
+  });
+
+  it("a recording is placed on a full page", async () => {
+    const fill = Array.from({ length: LIMITS.MAX_ELEMENTS_PER_PAGE }, (_, i) => el(`f${i}`, [[i, 1000], [i, 1001]]));
+    ipcElements.loadElements.mockResolvedValueOnce(fill);
+    await pane0.getState().loadPage("pg");
+    expect(pane0.getState().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE);
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    const recId = rs().recId!;
+    expect(await rs().stop()).toBe(recId);
+    expect(markers(pane0).map((m) => m.id)).toEqual([recId]);
+    expect(sinkMock.closeRecording).toHaveBeenCalledWith(recId);
+  });
+
+  it("a stop while presenting still places the marker", async () => {
+    pane0.setState({ presenting: { index: 0, fill: false } });
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    const recId = rs().recId!;
+    expect(await rs().stop()).toBe(recId);
+    const [[els]] = ipcElements.upsertElements.mock.calls as unknown as [[Element[]]];
+    expect(els.map((e) => [e.id, e.pageId])).toEqual([[recId, "pg"]]);
+    expect(sinkMock.closeRecording).toHaveBeenCalledWith(recId);
+    expect(showToast).not.toHaveBeenCalledWith(i18n.t("errors.generic"));
+  });
+
+  it("a stop that cannot place the marker says it is kept", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await pane0.getState().loadPage("other");
+    ipcElements.upsertElements.mockRejectedValueOnce(new Error("disk full"));
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    expect(await rs().stop()).toBeNull();
+    expect(showToast).toHaveBeenCalledWith(i18n.t("recording.keptForLater"));
+    expect(showToast).not.toHaveBeenCalledWith(i18n.t("errors.generic"));
+    expect(sinkMock.closeRecording).not.toHaveBeenCalled();
   });
 
   it("recovers an unfinished recording", async () => {

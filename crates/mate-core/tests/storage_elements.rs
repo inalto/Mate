@@ -64,6 +64,32 @@ fn limit_elements_per_page() {
 }
 
 #[test]
+fn a_recording_marker_is_exempt_from_the_page_element_limit() {
+    let mut st = seeded();
+    let full: Vec<_> = (0..5000).map(|i| stroke(&format!("e{i}"), "p1", 1)).collect();
+    st.upsert_elements(&full).unwrap();
+    let marker = |id: &str| {
+        let mut m = stroke(id, "p1", 0);
+        m.r#type = ElementType::Media;
+        m.pen_style = None;
+        m.image_url = Some("seg-0".into());
+        m.content = Some(serde_json::json!({ "kind": "audio", "recording": { "unitId": "u1", "spans": [], "segments": [] } }));
+        m
+    };
+    st.upsert_elements(&[marker("rec1")]).unwrap();
+    // A marker on the page does not use up a place either: a second one fits.
+    st.upsert_elements(&[marker("rec2")]).unwrap();
+    assert_eq!(st.count_elements("p1").unwrap(), 5002);
+    // Anything else is still refused, with the markers there.
+    let err = st.upsert_elements(&[stroke("one-more", "p1", 1)]).unwrap_err();
+    assert!(matches!(err, StorageError::Limit(_)), "got {err:?}");
+    // A plain audio clip is not a marker.
+    let mut clip = marker("clip");
+    clip.content = Some(serde_json::json!({ "kind": "audio" }));
+    assert!(matches!(st.upsert_elements(&[clip]).unwrap_err(), StorageError::Limit(_)));
+}
+
+#[test]
 fn limit_points_per_stroke() {
     let mut st = seeded();
     let elements = [stroke("ok", "p1", 2), stroke("huge", "p1", 50001)];

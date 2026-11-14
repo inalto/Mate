@@ -1,5 +1,6 @@
 // A lecture-length recording: one microphone stream, a new self-contained MediaRecorder file every
 // five minutes, chunks streamed to the sink as they arrive, and wall-clock spans of what was heard.
+import { isMobile } from "../platform";
 import { pickMime, RecorderError, startError } from "../speech/recorder";
 import type { SegmentSink } from "./sink";
 import type { Segment, Span } from "./types";
@@ -36,6 +37,11 @@ export interface LongRecorderDeps {
   /** Default `getUserMedia({ audio: true })`. */
   getStream?: () => Promise<MediaStream>;
   createRecorder?: (s: MediaStream, o: MediaRecorderOptions) => MediaRecorder;
+  /**
+   * Hiding the app interrupts the recording (the system may take the microphone away); default
+   * `isMobile()`. A hidden or minimised desktop window keeps recording.
+   */
+  interruptWhenHidden?: boolean;
   onEvent(e: LongRecorderEvent): void;
 }
 
@@ -81,6 +87,7 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
   const mono = deps.mono ?? (() => performance.now());
   const getStream = deps.getStream ?? defaultGetStream;
   const createRecorder = deps.createRecorder ?? defaultCreateRecorder;
+  const interruptWhenHidden = deps.interruptWhenHidden ?? isMobile();
   const wanted = pickMime();
   const options: MediaRecorderOptions = wanted
     ? { mimeType: wanted, audioBitsPerSecond: AUDIO_BITS_PER_SECOND }
@@ -308,8 +315,9 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
   }
 
   const onVisibility = () => {
-    if (document.visibilityState === "hidden") interrupt("hidden");
-    else if (state === "interrupted") void reinstate(true);
+    if (document.visibilityState === "hidden") {
+      if (interruptWhenHidden) interrupt("hidden");
+    } else if (state === "interrupted") void reinstate(true);
   };
 
   function end(reason: "stopped" | "limit" | "writeFailed" | "failed"): Promise<void> {

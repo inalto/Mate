@@ -16,7 +16,9 @@ vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.f
 vi.mock("../../ipc/speech", async (orig) => ({ ...(await orig<object>()), transcribeAsset: ipc.asset, getSpeechStatus: ipc.status }));
 
 import { useToastStore } from "../../components/Toast";
+import { upsertElements } from "../../ipc/elements";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
+import { editorForPane } from "../../stores/focusedEditor";
 import { useNotebookStore } from "../../stores/notebook";
 import { recordingElement } from "../marker";
 import { transcribeRecording } from "../transcribe";
@@ -158,6 +160,28 @@ describe("transcribeRecording", () => {
     await expect(transcribeRecording(store, "rec", {})).resolves.toEqual([]);
     expect(store.getState().elements.get("rec")).toBeUndefined();
     expect(useToastStore.getState().message).toBe("The recording was removed, so the transcript was not saved.");
+  });
+
+  it("a transcript finished off-page is written through the other pane when it shows the marker's page", async () => {
+    await load();
+    const source = { pageId: "pg", rec: recordingOf(store.getState().elements.get("rec")!)! };
+    const other = editorForPane(1);
+    try {
+      await other.getState().loadPage("pg");
+      // The replay turned this pane to another page; only the other pane holds the marker's page.
+      ipc.els = [];
+      await store.getState().loadPage("other");
+      vi.mocked(upsertElements).mockClear();
+      ipc.asset.mockResolvedValue([sentence(0, 1000, "hello")]);
+      expect(await transcribeRecording(store, "rec", { source })).toEqual([]);
+      const written = recordingOf(other.getState().elements.get("rec")!)?.transcript;
+      expect(written?.segments.map((s) => s.text)).toEqual(["hello", "hello"]);
+      expect(other.getState().canUndo).toBe(true);
+      expect(upsertElements).not.toHaveBeenCalled();
+      expect(useToastStore.getState().message).toBeNull();
+    } finally {
+      other.setState({ pageId: null, loadedPageId: null, elements: new Map() });
+    }
   });
 
   it("sentences past a segment's end stay in that segment", async () => {

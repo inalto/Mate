@@ -9,7 +9,7 @@ use super::recognition::invalidate_in;
 use super::{
     Result, Storage, StorageError, enum_col, enum_to_sql, json_col, opt_enum_col, opt_json_col,
 };
-use crate::model::{Element, now_iso};
+use crate::model::{Element, ElementType, now_iso};
 
 /// Maximum live elements on one page.
 pub(crate) const MAX_ELEMENTS_PER_PAGE: i64 = 5000;
@@ -294,8 +294,18 @@ fn count_in(conn: &Connection, page_id: &str) -> Result<i64> {
     )?)
 }
 
+/// A stored row that is a recording marker: a `media` element whose content has a `recording` object.
+const MARKER_ROW: &str = "(type = 'media' AND content IS NOT NULL AND json_valid(content) \
+                          AND json_type(content, '$.recording') = 'object')";
+
+/// A recording marker: a `media` element whose content has a `recording` object.
+pub(crate) fn is_recording_marker(e: &Element) -> bool {
+    e.r#type == ElementType::Media
+        && e.content.as_ref().and_then(|c| c.get("recording")).is_some_and(serde_json::Value::is_object)
+}
+
 /// `Limit` if any element has too many points, or if a page would end up with more than
-/// [`MAX_ELEMENTS_PER_PAGE`] live elements after the batch.
+/// [`MAX_ELEMENTS_PER_PAGE`] live elements after the batch. Recording markers do not count.
 fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
     if let Some(e) = elements
         .iter()
@@ -308,14 +318,16 @@ fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
         )));
     }
 
-    // Ids that would become live on each page.
+    // Ids that would become live on each page. A recording marker is exempt: refusing it would leave
+    // the lecture unreachable.
     let mut incoming: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for e in elements.iter().filter(|e| e.deleted_at.is_none()) {
+    for e in elements.iter().filter(|e| e.deleted_at.is_none() && !is_recording_marker(e)) {
         incoming.entry(&e.page_id).or_default().insert(&e.id);
     }
-    let mut is_live = conn.prepare(
-        "SELECT 1 FROM elements WHERE id = ?1 AND page_id = ?2 AND deleted_at IS NULL",
-    )?;
+    // A live row that is a marker now stays outside the count (it is not counted below either).
+    let mut is_live = conn.prepare(&format!(
+        "SELECT 1 FROM elements WHERE id = ?1 AND page_id = ?2 AND deleted_at IS NULL AND NOT {MARKER_ROW}"
+    ))?;
     for (page_id, ids) in incoming {
         let mut added = 0i64;
         for id in ids {
@@ -327,7 +339,12 @@ fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
                 added += 1;
             }
         }
-        let total = count_in(conn, page_id)? + added;
+        let counted: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM elements WHERE page_id = ?1 AND deleted_at IS NULL AND NOT {MARKER_ROW}"),
+            [page_id],
+            |r| r.get(0),
+        )?;
+        let total = counted + added;
         if total > MAX_ELEMENTS_PER_PAGE {
             return Err(StorageError::Limit(format!(
                 "page {page_id} would have {total} elements (max {MAX_ELEMENTS_PER_PAGE})"

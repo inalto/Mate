@@ -39,8 +39,7 @@ import { frameBorder, frameFill, frameTitleColour } from "../renderers/frame";
 import { lineY, mindmapScene, nodeRadius } from "../renderers/mindmap";
 import { FRAME_RADIUS, frameTitle, frameTitleHidden, frameTitleRect, isNestedFrame } from "../frames/contain";
 import "../renderers/builtins";
-import { markerLayout, mediaFill, mediaInk, markerDuration } from "../renderers/media";
-import { isRecording } from "../recording/types";
+import { drawsAsMarker, markerLayout, mediaFill, mediaInk, markerDuration } from "../renderers/media";
 import { drawElement } from "../renderers/registry";
 import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
 import { LABEL_LINE_HEIGHT, labelLines, labelMeasure, shapeInnerRect, shapeLabelOf } from "../shapes/label";
@@ -706,8 +705,10 @@ function paintRecordingMarker(p: Painter, el: Element, theme: ThemeName): void {
   p.colour(ink, "text");
   p.pdf.setFont("helvetica", "normal");
   p.pdf.setFontSize(L.label.size * p.k);
+  const duration = markerDuration(el);
+  if (duration === null) return; // a marker exported without its recording
   const [tx, ty] = turn(L.label.x, L.label.y);
-  p.pdf.text(markerDuration(el), tx, ty, { align: "center", angle: (-rot * 180) / Math.PI });
+  p.pdf.text(duration, tx, ty, { align: "center", angle: (-rot * 180) / Math.PI });
 }
 
 /** Latin-1 only: the standard PDF fonts cannot encode anything else. */
@@ -747,7 +748,7 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): void {
   if (!backing && ctx.opts.background === "plain") paintBackground(p, ctx.page, sheet, theme);
   const onSheet = ctx.list.filter((el) => el.id !== backing?.elementId && rectsOverlap(elementBounds(el), rect));
   for (const el of renderOrder(onSheet)) {
-    if (el.type === "media" && isRecording(el)) {
+    if (el.type === "media" && drawsAsMarker(el)) {
       paintRecordingMarker(p, el, theme);
       p.setOpacity(1);
       continue;

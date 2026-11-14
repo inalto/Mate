@@ -110,5 +110,33 @@ describe("media renderer", () => {
       expect(calls).toContain("arc");
       expect(texts).toEqual(["15:00"]);
     });
+
+    it("a marker exported without its recording draws the round icon without a duration", () => {
+      const m = marker();
+      const { recording: _, ...content } = m.content as Record<string, unknown>;
+      const stripped: Element = { ...m, content, imageUrl: undefined };
+      const svg = mediaRenderer.svg!(stripped, opts);
+      expect(svg).toContain('data-media="recording"');
+      expect(svg).toContain("<circle");
+      expect(svg).not.toContain("<polygon");
+      expect(svg).not.toContain("<text");
+      const calls: string[] = [];
+      const ctx = new Proxy(
+        {},
+        {
+          get: (_t, k) =>
+            typeof k === "string" && !["fillStyle", "strokeStyle", "lineWidth", "font", "textBaseline", "textAlign", "lineCap"].includes(k)
+              ? () => calls.push(k)
+              : undefined,
+          set: () => true,
+        },
+      ) as unknown as CanvasRenderingContext2D;
+      mediaRenderer.draw(ctx, stripped, opts);
+      expect(calls).toContain("arc");
+      expect(calls).not.toContain("fillText");
+      // A real audio clip of another size, or one with its file, is still a player.
+      expect(mediaRenderer.svg!({ ...stripped, width: 320, height: 56 }, opts)).toContain('data-media="audio"');
+      expect(mediaRenderer.svg!({ ...stripped, imageUrl: "asset" }, opts)).toContain('data-media="audio"');
+    });
   });
 });

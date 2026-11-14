@@ -1,7 +1,7 @@
 // The timed transcript of a finished recording: its segments sent one at a time to the configured
 // speech service (Rust reads each file; consent, key and address are checked there and by the
 // caller first), each one's sentences offset by the segment's start, and the result stored on the
-// marker when the run ends: as one history entry while the marker's page is loaded in the pane,
+// marker when the run ends: as one history entry while the marker's page is loaded in either pane,
 // else straight into storage (the replay's Follow pages may have turned the pane away). The job
 // works from the recording as captured when it started. A part that fails is listed in `failed`, so the
 // panel can offer to retry just that part; silence is no failure, only no sentences.
@@ -14,6 +14,7 @@ import { getSpeechStatus, transcribeAsset } from "../ipc/speech";
 import { languageHint } from "../speech/dictate";
 import { speechErrorText } from "../speech/errors";
 import type { EditorStore } from "../stores/editor";
+import { editorForPane } from "../stores/focusedEditor";
 import { segmentAt } from "./timeline";
 import { contentOf } from "../model/content";
 import type { Element } from "../model/types";
@@ -62,16 +63,19 @@ function withTranscript(el: Element, rec: RecordingContent, transcript: Transcri
 }
 
 /**
- * Stores `transcript` on marker `markerId` of page `pageId`: through the pane's store (one history
- * entry) while that page is loaded there, else in storage. False when the marker is gone.
+ * Stores `transcript` on marker `markerId` of page `pageId`: through the store (one history entry)
+ * of this pane or the other one while that page is loaded there, else in storage. False when the
+ * marker is gone.
  */
 async function saveTranscript(store: EditorStore, markerId: string, pageId: string, transcript: Transcript): Promise<boolean> {
-  const loaded = () => store.getState().loadedPageId === pageId;
-  if (loaded()) return store.getState().setRecordingTranscript(markerId, transcript);
+  const showing = () => [store, editorForPane(0), editorForPane(1)].find((s) => s?.getState().loadedPageId === pageId);
+  const now = showing();
+  if (now) return now.getState().setRecordingTranscript(markerId, transcript);
   await elementsQueue.flushAll(); // edits of that page still queued land first
   const el = (await loadElements(pageId)).find((e) => e.id === markerId && !e.deletedAt);
-  // The page was opened meanwhile: its copy in the pane is the one to change.
-  if (loaded()) return store.getState().setRecordingTranscript(markerId, transcript);
+  // The page was opened meanwhile: its copy in that pane is the one to change.
+  const opened = showing();
+  if (opened) return opened.getState().setRecordingTranscript(markerId, transcript);
   const rec = el ? recordingOf(el) : null;
   if (!el || !rec) return false;
   await upsertElements([withTranscript(el, rec, transcript)]);

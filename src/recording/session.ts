@@ -236,7 +236,7 @@ function stop(): Promise<string | null> {
   })()
     .catch((err) => {
       console.error("saving the recording failed", err);
-      showToast(i18n.t("errors.generic"));
+      showToast(i18n.t(err instanceof MarkerNotPlaced ? "recording.keptForLater" : "errors.generic"));
       failedStop = true;
       return null;
     })
@@ -256,6 +256,13 @@ export async function stopRecordingBeforeExit(waitMs = EXIT_WAIT_MS): Promise<vo
   clearTimeout(timer);
 }
 
+/** The marker could not be saved; the work folder stays, so the next launch adds it. */
+class MarkerNotPlaced extends Error {
+  constructor(cause: unknown) {
+    super("the recording marker could not be placed", { cause });
+  }
+}
+
 /**
  * Places the marker for `rec` and removes the work folder; drops a recording under a second (and
  * its folder). Throws, leaving the folder for the next launch, when the marker cannot be saved.
@@ -266,7 +273,12 @@ async function finalise(recId: string, rec: RecordingContent, pageId: string, at
     await closeRecording(recId).catch(() => {});
     return null;
   }
-  const id = await placeMarker(recId, rec, pageId, at);
+  let id: string;
+  try {
+    id = await placeMarker(recId, rec, pageId, at);
+  } catch (err) {
+    throw new MarkerNotPlaced(err);
+  }
   await closeRecording(recId).catch((err) => console.error("removing the recording folder failed", err));
   return id;
 }
@@ -312,7 +324,8 @@ async function placeMarker(recId: string, rec: RecordingContent, pageId: string,
   if (!target) throw new Error("no page for the recording marker");
   const title = titleOf(rec);
   const pane = ([0, 1] as const).map(editorForPane).find((s: EditorStore) => s.getState().pageId === target);
-  if (pane) {
+  // A presenting pane is read-only: the marker then goes straight to storage.
+  if (pane && !pane.getState().presenting) {
     // Id = recId, as on the other paths: a retry by recovery overwrites instead of duplicating.
     const id = pane.getState().addRecording(rec, at, title, recId);
     if (!id) throw new Error("the recording marker could not be added");

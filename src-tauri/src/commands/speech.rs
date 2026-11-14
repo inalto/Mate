@@ -175,6 +175,10 @@ pub fn run_asset(
         return Err(AiError::Rejected("the recording is larger than 25 MB".into()).into());
     }
     let bytes = std::fs::read(&info.path).map_err(|_| missing())?;
+    // Only a recording's audio (or video) is sent, never another stored file named by its id.
+    if !mate_core::assets::sniff(&bytes).is_some_and(|k| k.is_media()) {
+        return Err(AiError::Rejected("the asset is not audio or video".into()).into());
+    }
     run(store, settings, bytes, &info.mime, language, |s, key, model, base, bytes, mime, lang, math| {
         match send(s, key, model, base, bytes, mime, lang, math, duration_ms) {
             Err(AiError::InvalidResponse(m)) if m == NO_TEXT => Ok(Vec::new()),
@@ -628,6 +632,20 @@ connection: close
         })
         .unwrap();
         assert!(out.is_empty());
+    }
+
+    #[test]
+    fn an_asset_that_is_not_audio_or_video_is_refused_before_sending() {
+        let (dir, _) = webm_asset("notmedia");
+        let store = MemoryStore::default();
+        store.set("speech:groq", "gk").unwrap();
+        let settings = Settings { speech_provider: "groq".into(), speech_consent: Some(true), ..Settings::default() };
+        let png = mate_core::assets::save_sniffed(&dir, &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0]).unwrap();
+        let pdf = mate_core::assets::save_sniffed(&dir, b"%PDF-1.7\n%stub\n").unwrap();
+        for id in [png.id, pdf.id] {
+            let err = run_asset(&store, &settings, &dir, &id, 1, None, never_timed).unwrap_err();
+            assert_eq!(err.kind, "rejected", "{id}");
+        }
     }
 
     #[test]

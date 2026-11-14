@@ -34,7 +34,7 @@ import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
 import { MEDIA_DEFAULT_SIZE, mediaElement, type MediaKind } from "../media/element";
 import { freeMarkerSpot, recordingElement } from "../recording/marker";
-import { recordingOf, type RecordingContent, type Transcript } from "../recording/types";
+import { isRecording, recordingOf, type RecordingContent, type Transcript } from "../recording/types";
 import { defaultGraphData, graphElement, inferGraphKind, presetFor } from "../graph/data";
 import { lastGraphKind } from "../graph/presets";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
@@ -1826,9 +1826,12 @@ export function createEditorStore(): EditorStore {
     return n;
   }
 
-  /** True when applying `actions` would grow the page past the backend element limit. */
+  /**
+   * True when applying `actions` would grow the page past the backend element limit. A recording
+   * marker is exempt (as in the backend): refusing it would leave the lecture unreachable.
+   */
   function exceedsLimit(actions: Action[]): boolean {
-    const n = countAfter(actions);
+    const n = countAfter(actions.filter((a) => !isRecording(a.type === "update" ? a.after : a.el)));
     return n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size;
   }
 

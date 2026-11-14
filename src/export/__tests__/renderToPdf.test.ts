@@ -118,6 +118,23 @@ describe("renderToPdf", () => {
     expect(rasterize).toHaveBeenCalledTimes(1);
   });
 
+  it("draws a marker exported without its recording as the round icon without a duration", async () => {
+    const rec = recordingElement(
+      "p1",
+      "rec",
+      STAMP,
+      { x: 100, y: 100 },
+      { unitId: "u", spans: [{ wallStart: STAMP, audioStartMs: 0, durationMs: 900_000 }], segments: [{ assetId: "a0", durationMs: 900_000, mime: "video/webm" }] },
+      "Recording",
+    );
+    const stripped: Element = { ...rec, content: { kind: "audio", title: "Recording" }, imageUrl: undefined };
+    const rasterize = vi.fn(() => null);
+    const out = text(await renderToPdf([stripped], page(), { ...OPTS, compress: false }, deps({ rasterize })));
+    expect(rasterize).not.toHaveBeenCalled();
+    expect(out).toMatch(/ c$/m); // circle: Bezier curves
+    expect(out).not.toContain(" Tj");
+  });
+
   it("turns a recording marker's duration label with its rotation", async () => {
     const marker = (rotation: number): Element => {
       const el = recordingElement(
