@@ -132,3 +132,21 @@ fn asset_gc_only_when_unreferenced() {
     assert!(!pdf.path.exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn referenced_asset_ids_follow_recording_segments() {
+    let mut st = seeded();
+    let mut rec = stroke("rec", "p1", 0);
+    rec.r#type = ElementType::Media;
+    rec.image_url = Some("seg-a".into());
+    rec.content = Some(serde_json::json!({
+        "kind": "audio",
+        "recording": { "unitId": "u1", "spans": [], "segments": [
+            { "assetId": "seg-a", "durationMs": 1, "mime": "audio/webm" },
+            { "assetId": "seg-b", "durationMs": 1, "mime": "audio/webm" }
+        ] }
+    }));
+    st.upsert_elements(&[rec]).unwrap();
+    let want: std::collections::HashSet<String> = ["seg-a", "seg-b"].iter().map(|s| s.to_string()).collect();
+    assert_eq!(st.referenced_asset_ids().unwrap(), want);
+}

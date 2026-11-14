@@ -4,7 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use mate_core::archive::{
-    BackupReport, ImportReport, MAX_ARCHIVE_BYTES, SkippedBook, export_unit, import_archive,
+    BackupReport, ImportReport, MAX_ARCHIVE_BYTES, Recordings, SkippedBook, export_unit,
+    import_archive,
     wipe_local_data, write_backup_capped,
 };
 use mate_core::settings::Settings;
@@ -39,7 +40,12 @@ pub async fn export_unit_archive(
             .map(|u| u.title)
             .unwrap_or_default();
         (
-            export_unit(&storage, &unit_id, &state.data_dir.join("assets"))
+            export_unit(
+                &storage,
+                &unit_id,
+                &state.data_dir.join("assets"),
+                Recordings::Exclude,
+            )
                 .map_err(|e| e.to_string())?,
             title,
         )

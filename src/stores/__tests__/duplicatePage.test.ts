@@ -78,4 +78,20 @@ describe("duplicatePage", () => {
     // The freed end keeps its point.
     expect(d.points[1]).toMatchObject({ x: 400, y: 25 });
   });
+
+  it("duplicating a page keeps each element's createdAt", async () => {
+    const page: Page = {
+      id: "p1", sectionId: "s1", title: "T", isExpanded: false, isFavourite: false, depth: 0, mode: "canvas",
+      backgroundConfig: { type: "blank", spacing: 40, dotRadius: 1.5 }, thumbnailVersion: 0, orderIndex: 0,
+      createdAt: STAMP, updatedAt: STAMP, version: 0,
+    };
+    useNotebookStore.setState({ tree: { bookshelves: [], units: [], sections: [], pages: [page] }, loaded: true });
+    const drawn = "2025-05-05T08:30:00.000Z";
+    io.els = [{ ...box("a", 0), createdAt: drawn }, { ...box("b", 10), createdAt: "2025-05-05T08:31:00.000Z" }];
+    io.written = [];
+    const copy = await useNotebookStore.getState().duplicatePage("p1");
+    expect(copy).not.toBeNull();
+    expect(io.written.map((e) => e.createdAt)).toEqual([drawn, "2025-05-05T08:31:00.000Z"]);
+    expect(io.written.every((e) => e.updatedAt !== drawn)).toBe(true);
+  });
 });

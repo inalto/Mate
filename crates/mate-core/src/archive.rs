@@ -2,8 +2,8 @@
 //!
 //! Layout: `manifest.json` (format marker + schema version), `unit.json`
 //! (`{unit, sections, pages}`), `pages/<pageId>.json` (that page's live elements) and
-//! `assets/<assetId>.<ext>` (every stored image, PDF or media file those elements reference through `image_url`
-//! or `content.pdfSourceKey`). Importing re-mints every id, asset ids included, so an archive can
+//! `assets/<assetId>.<ext>` (every stored image, PDF or media file those elements reference through `image_url`,
+//! `content.pdfSourceKey` or a recording's `content.recording.segments[].assetId`). Importing re-mints every id, asset ids included, so an archive can
 //! be imported any number of times; a referenced asset missing from the archive leaves the
 //! element's id dangling (the element renders its placeholder).
 
@@ -12,11 +12,13 @@ use std::io::{Cursor, Read, Seek, Write};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use time::OffsetDateTime;
+use time::format_description::well_known::Rfc3339;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::assets;
-use crate::model::{Element, ElementType, Page, Section, Unit, new_id, now_iso};
+use crate::model::{Element, ElementType, Page, Section, Unit, format_iso, new_id, now_iso};
 use crate::storage::elements::{MAX_ELEMENTS_PER_PAGE, MAX_POINTS_PER_STROKE};
 use crate::storage::{EntityKind, Result, Storage, StorageError};
 
@@ -93,21 +95,60 @@ fn io_err(e: std::io::Error) -> StorageError {
     limit(format!("archive i/o error: {e}"))
 }
 
-/// Asset ids an element references: `image_url` and `content.pdfSourceKey`.
+/// Asset ids an element references: `image_url`, `content.pdfSourceKey` and the
+/// `content.recording.segments[].assetId` of a recording marker.
 fn asset_refs(e: &Element) -> impl Iterator<Item = &str> {
     let pdf = e
         .content
         .as_ref()
         .and_then(|c| c.get("pdfSourceKey"))
         .and_then(|k| k.as_str());
-    e.image_url.as_deref().into_iter().chain(pdf)
+    let segments = e
+        .content
+        .as_ref()
+        .and_then(|c| c.get("recording"))
+        .and_then(|r| r.get("segments"))
+        .and_then(|s| s.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s.get("assetId").and_then(|a| a.as_str()));
+    e.image_url.as_deref().into_iter().chain(pdf).chain(segments)
+}
+
+/// Applies the export's recordings choice to `e`: without recordings a marker keeps its other
+/// content but loses `content.recording` and its `image_url` (the first segment).
+fn apply_recordings(e: &mut Element, recordings: Recordings) {
+    match recordings {
+        Recordings::Include => {}
+        Recordings::Exclude => {
+            if let Some(serde_json::Value::Object(c)) = e.content.as_mut()
+                && c.remove("recording").is_some()
+            {
+                e.image_url = None;
+            }
+        }
+    }
+}
+
+/// Whether an export carries the lecture recordings (audio segments) of its `media` markers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recordings {
+    /// Keep each marker's `recording` and ship its segment assets.
+    Include,
+    /// Strip `recording` and `image_url` from the markers and ship no segment assets.
+    Exclude,
 }
 
 /// Serialises one live unit, its live sections and pages, their live elements and the assets
 /// (from `assets_dir`) those elements reference to a zip. Referenced assets that are not stored
 /// are left out; the whole archive is capped at [`MAX_ARCHIVE_BYTES`].
-pub fn export_unit(storage: &Storage, unit_id: &str, assets_dir: &Path) -> Result<Vec<u8>> {
-    export_unit_capped(storage, unit_id, assets_dir, MAX_ARCHIVE_BYTES as u64)?
+pub fn export_unit(
+    storage: &Storage,
+    unit_id: &str,
+    assets_dir: &Path,
+    recordings: Recordings,
+) -> Result<Vec<u8>> {
+    export_unit_capped(storage, unit_id, assets_dir, MAX_ARCHIVE_BYTES as u64, recordings)?
         .ok_or_else(|| limit(TOO_LARGE))
 }
 
@@ -119,6 +160,7 @@ fn export_unit_capped(
     unit_id: &str,
     assets_dir: &Path,
     cap: u64,
+    recordings: Recordings,
 ) -> Result<Option<Vec<u8>>> {
     let tree = storage.list_tree()?;
     let unit = tree
@@ -157,7 +199,10 @@ fn export_unit_capped(
     let mut asset_ids: Vec<String> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     for p in &pages {
-        let elements = storage.load_elements(&p.id)?;
+        let mut elements = storage.load_elements(&p.id)?;
+        for e in &mut elements {
+            apply_recordings(e, recordings);
+        }
         for id in elements.iter().flat_map(asset_refs) {
             if seen.insert(id.to_owned()) {
                 asset_ids.push(id.to_owned());
@@ -272,7 +317,13 @@ pub fn write_backup_capped<W: Write + Seek>(
     let mut zip = ZipWriter::new(out);
     let mut report = BackupReport::default();
     for (i, unit) in units.iter().enumerate() {
-        let Some(bytes) = export_unit_capped(storage, &unit.id, assets_dir, max_book_bytes)? else {
+        let Some(bytes) = export_unit_capped(
+            storage,
+            &unit.id,
+            assets_dir,
+            max_book_bytes,
+            Recordings::Exclude,
+        )? else {
             report.skipped.push(SkippedBook {
                 unit_id: unit.id.clone(),
                 title: unit.title.clone(),
@@ -351,7 +402,8 @@ fn read_entry(
 }
 
 /// Imports an archive as a new, unshelved unit placed after the existing ones. Every id is
-/// re-minted; timestamps are reset to now. Elements over the storage limits are skipped and
+/// re-minted; timestamps are reset to now, except an element's `created_at` (replay links notes to
+/// audio by it), which is kept unless it is not an RFC 3339 time. Elements over the storage limits are skipped and
 /// counted. Archived assets are stored in `assets_dir` under new ids (content-sniffed, size
 /// limited) and the elements are rewritten to them; a referenced asset that is absent or invalid
 /// is skipped and its element kept. On failure, anything already written for the new unit
@@ -499,8 +551,14 @@ impl<'a> AssetImport<'a> {
         Ok(new)
     }
 
-    /// Rewrites `e`'s asset references to the imported copies.
-    fn rewrite(&mut self, zip: &mut ZipArchive<Cursor<&[u8]>>, e: &mut Element) -> Result<()> {
+    /// Rewrites `e`'s asset references to the imported copies, and a recording marker's
+    /// `recording.unitId` to `new_unit_id`.
+    fn rewrite(
+        &mut self,
+        zip: &mut ZipArchive<Cursor<&[u8]>>,
+        e: &mut Element,
+        new_unit_id: &str,
+    ) -> Result<()> {
         let want = if e.r#type == ElementType::Media { Want::Media } else { Want::Image };
         if let Some(old) = e.image_url.clone()
             && let Some(new) = self.map(zip, &old, want)?
@@ -518,6 +576,36 @@ impl<'a> AssetImport<'a> {
             && let Some(serde_json::Value::Object(c)) = e.content.as_mut()
         {
             c.insert("pdfSourceKey".into(), serde_json::Value::String(new));
+        }
+        self.rewrite_recording(zip, e, new_unit_id)
+    }
+
+    /// Points a recording's segments at the imported copies (an audio or video file, like a media
+    /// element's `image_url`) and its `unitId` at the imported unit.
+    fn rewrite_recording(
+        &mut self,
+        zip: &mut ZipArchive<Cursor<&[u8]>>,
+        e: &mut Element,
+        new_unit_id: &str,
+    ) -> Result<()> {
+        let Some(serde_json::Value::Object(rec)) = e
+            .content
+            .as_mut()
+            .and_then(|c| c.get_mut("recording"))
+        else {
+            return Ok(());
+        };
+        rec.insert("unitId".into(), serde_json::Value::String(new_unit_id.to_owned()));
+        if let Some(serde_json::Value::Array(segments)) = rec.get_mut("segments") {
+            for seg in segments {
+                let old = seg.get("assetId").and_then(|a| a.as_str()).map(str::to_owned);
+                if let Some(old) = old
+                    && let Some(new) = self.map(zip, &old, Want::Media)?
+                    && let Some(seg) = seg.as_object_mut()
+                {
+                    seg.insert("assetId".into(), serde_json::Value::String(new));
+                }
+            }
         }
         Ok(())
     }
@@ -547,6 +635,14 @@ fn rebind_connector(e: &mut Element, ids: &HashMap<String, String>) {
             }
         }
     }
+}
+
+/// `created_at` as an element's creation time (normalised to UTC milliseconds, so the stored
+/// strings sort chronologically), or `now` when it is not an RFC 3339 time.
+fn keep_created_at(created_at: &str, now: &str) -> String {
+    OffsetDateTime::parse(created_at, &Rfc3339)
+        .map(format_iso)
+        .unwrap_or_else(|_| now.to_owned())
 }
 
 fn write_unit(
@@ -662,7 +758,7 @@ fn write_unit(
             .collect();
         let mut batch = Vec::new();
         for (id, mut e) in kept {
-            imported.rewrite(zip, &mut e)?;
+            imported.rewrite(zip, &mut e, new_unit_id)?;
             if e.r#type == ElementType::Connector {
                 rebind_connector(&mut e, &element_ids);
             }
@@ -670,11 +766,13 @@ fn write_unit(
                 .ui_group_id
                 .as_ref()
                 .map(|g| group_ids.entry(g.clone()).or_insert_with(new_id).clone());
+            // Replay links notes to audio by creation time: elements keep theirs.
+            let created_at = keep_created_at(&e.created_at, &now);
             batch.push(Element {
                 id,
                 page_id: new_page.clone(),
                 ui_group_id,
-                created_at: now.clone(),
+                created_at,
                 updated_at: now.clone(),
                 deleted_at: None,
                 version: 0,

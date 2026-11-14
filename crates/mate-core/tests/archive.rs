@@ -5,7 +5,7 @@ use std::io::{Cursor, Write};
 use std::path::PathBuf;
 
 use common::{page, section, stroke, unit};
-use mate_core::archive::{ImportLimits, export_unit, import_archive, import_archive_with_limits};
+use mate_core::archive::{ImportLimits, Recordings, export_unit, import_archive, import_archive_with_limits};
 use mate_core::assets;
 use mate_core::storage::{Storage, StorageError};
 
@@ -47,7 +47,7 @@ fn source() -> Storage {
 #[test]
 fn round_trip_preserves_structure_and_elements() {
     let src = source();
-    let bytes = export_unit(&src, "u1", &tmp("none")).unwrap();
+    let bytes = export_unit(&src, "u1", &tmp("none"), Recordings::Exclude).unwrap();
 
     let mut dst = Storage::open_in_memory().unwrap();
     dst.upsert_unit(&unit("existing", None)).unwrap();
@@ -160,7 +160,7 @@ fn skips_elements_over_limits() {
     src.upsert_section(&section("s", "u1")).unwrap();
     src.upsert_page(&page("p", "s", None)).unwrap();
     src.upsert_elements(&[stroke("ok", "p", 3)]).unwrap();
-    let bytes = export_unit(&src, "u1", &tmp("none")).unwrap();
+    let bytes = export_unit(&src, "u1", &tmp("none"), Recordings::Exclude).unwrap();
 
     // Re-pack the archive with one oversized element added to the page.
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).unwrap();
@@ -221,7 +221,7 @@ fn imported_elements(dst: &Storage, unit_id: &str) -> Vec<mate_core::model::Elem
 fn archive_round_trips_assets() {
     let src_dir = tmp("assets-src");
     let (src, img_id, pdf_id) = source_with_assets(&src_dir);
-    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
 
     let mut zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
     let names: Vec<String> = zip.file_names().map(str::to_owned).collect();
@@ -278,7 +278,7 @@ fn import_tolerates_missing_asset() {
     let (src, img_id, pdf_id) = source_with_assets(&src_dir);
     // The PDF file vanished before export: its entry is simply absent.
     assert!(assets::delete_asset(&src_dir, &pdf_id));
-    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
     let zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
     assert!(!zip.file_names().any(|n| n.contains(&pdf_id)));
 
@@ -342,7 +342,7 @@ fn import_rejects_decompressed_assets_over_cap() {
     // up to 256 MiB per asset entry, so at full size three media files of ~200 MiB would trip it).
     let src_dir = tmp("cap-src");
     let src = source_with_images(&src_dir, 3, 200 * 1024);
-    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
 
     let dst_dir = tmp("cap-dst");
     let mut dst = Storage::open_in_memory().unwrap();
@@ -385,7 +385,7 @@ fn import_rejects_decompressed_assets_over_cap() {
 fn import_rejects_too_many_assets() {
     let src_dir = tmp("count-src");
     let src = source_with_images(&src_dir, 3, 64);
-    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
     let dst_dir = tmp("count-dst");
     let mut dst = Storage::open_in_memory().unwrap();
     let limits = ImportLimits {
@@ -419,7 +419,7 @@ fn import_skips_asset_kind_mismatch() {
     pdf_page.r#type = mate_core::model::ElementType::Image;
     pdf_page.content = Some(serde_json::json!({ "pdfSourceKey": img.id }));
     src.upsert_elements(&[image, pdf_page]).unwrap();
-    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
 
     let dst_dir = tmp("kind-dst");
     let mut dst = Storage::open_in_memory().unwrap();
@@ -459,7 +459,7 @@ fn archive_round_trips_media_assets() {
     src.upsert_elements(&[media]).unwrap();
     assert!(src.referenced_asset_ids().unwrap().contains(&audio.id), "media stays GC-safe");
 
-    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
     let zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
     assert!(
         zip.file_names().any(|n| n == format!("assets/{}.mp3", audio.id)),
@@ -500,7 +500,7 @@ fn import_matches_the_element_type_to_the_asset_kind() {
     media.r#type = mate_core::model::ElementType::Media;
     media.image_url = Some(img.id.clone());
     src.upsert_elements(&[image, media]).unwrap();
-    let bytes = export_unit(&src, "u1", &src_dir).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
 
     let dst_dir = tmp("media-kind-dst");
     let mut dst = Storage::open_in_memory().unwrap();
@@ -594,7 +594,7 @@ fn archive_round_trips_whiteboard_elements() {
     let dangling_points = dangling.points.clone();
     src.upsert_elements(&[conn, card, frame, map, dangling]).unwrap();
 
-    let bytes = export_unit(&src, "u1", &tmp("wb-src")).unwrap();
+    let bytes = export_unit(&src, "u1", &tmp("wb-src"), Recordings::Exclude).unwrap();
     let mut dst = Storage::open_in_memory().unwrap();
     let report = import_archive(&mut dst, &bytes, &tmp("wb-dst")).unwrap();
     assert_eq!(report.elements, 5);
@@ -625,4 +625,198 @@ fn archive_round_trips_whiteboard_elements() {
     // The freed end keeps its absolute point, and the cached route is kept.
     assert_eq!(free.points, dangling_points);
     assert_eq!(fc["route"], dangling_route);
+}
+
+use serde_json::json;
+
+const WEBM: &[u8] = &[0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81];
+/// When the stroke of [`source_with_recording`] was drawn.
+const STROKE_AT: &str = "2026-11-14T09:05:00.000Z";
+
+/// Unit `u1` / `s` / `p` with a recording marker over two WebM segments and one stroke taken at
+/// [`STROKE_AT`]. Returns the source and the two segment assets.
+fn source_with_recording(dir: &std::path::Path) -> (Storage, [assets::AssetInfo; 2]) {
+    let seg = |tail: u8| {
+        let mut d = WEBM.to_vec();
+        d.push(tail);
+        assets::save_sniffed(dir, &d).unwrap()
+    };
+    let (a, b) = (seg(1), seg(2));
+    let mut st = Storage::open_in_memory().unwrap();
+    st.upsert_unit(&unit("u1", None)).unwrap();
+    st.upsert_section(&section("s", "u1")).unwrap();
+    st.upsert_page(&page("p", "s", None)).unwrap();
+    let mut marker = stroke("rec", "p", 0);
+    marker.r#type = mate_core::model::ElementType::Media;
+    marker.image_url = Some(a.id.clone());
+    marker.content = Some(json!({
+        "kind": "audio", "title": "Lecture",
+        "recording": {
+            "unitId": "u1",
+            "spans": [{ "wallStart": "2026-11-14T09:00:00.000Z", "audioStartMs": 0, "durationMs": 600000 }],
+            "segments": [
+                { "assetId": a.id, "durationMs": 300000, "mime": "audio/webm" },
+                { "assetId": b.id, "durationMs": 300000, "mime": "audio/webm" }
+            ]
+        }
+    }));
+    let mut ink = stroke("ink", "p", 3);
+    ink.created_at = STROKE_AT.into();
+    st.upsert_elements(&[marker, ink]).unwrap();
+    (st, [a, b])
+}
+
+fn recording_segment_ids(e: &mate_core::model::Element) -> Vec<String> {
+    e.content.as_ref().unwrap()["recording"]["segments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["assetId"].as_str().unwrap().to_owned())
+        .collect()
+}
+
+fn marker_of(els: &[mate_core::model::Element]) -> &mate_core::model::Element {
+    els.iter().find(|e| e.r#type == mate_core::model::ElementType::Media).unwrap()
+}
+
+#[test]
+fn recording_round_trips_through_an_archive() {
+    let src_dir = tmp("rec-src");
+    let (src, [a, b]) = source_with_recording(&src_dir);
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Include).unwrap();
+    let zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
+    let names: Vec<&str> = zip.file_names().collect();
+    for id in [&a.id, &b.id] {
+        assert!(names.contains(&format!("assets/{id}.webm").as_str()), "segment {id} archived");
+    }
+
+    let dst_dir = tmp("rec-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    let els = imported_elements(&dst, &report.unit_id);
+    let ink = els.iter().find(|e| e.r#type == mate_core::model::ElementType::Stroke).unwrap();
+    assert_eq!(ink.created_at, STROKE_AT, "the stroke keeps its creation time");
+    let marker = marker_of(&els);
+    let rec = &marker.content.as_ref().unwrap()["recording"];
+    assert_eq!(rec["unitId"], report.unit_id.as_str());
+    assert_eq!(rec["spans"][0]["wallStart"], "2026-11-14T09:00:00.000Z");
+    let ids = recording_segment_ids(marker);
+    assert_eq!(ids.len(), 2);
+    assert!(ids.iter().all(|i| *i != a.id && *i != b.id), "ids are new");
+    for id in &ids {
+        assert_eq!(assets::asset_info(&dst_dir, id).unwrap().mime, "video/webm", "WebM sniffs as video");
+    }
+    assert_eq!(marker.image_url.as_deref(), Some(ids[0].as_str()));
+    assert!(dst.referenced_asset_ids().unwrap().contains(&ids[1]));
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn recordings_are_left_out_unless_asked() {
+    let src_dir = tmp("rec-off-src");
+    let (src, _) = source_with_recording(&src_dir);
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Exclude).unwrap();
+    let zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
+    assert!(!zip.file_names().any(|n| n.starts_with("assets/")), "no audio in the archive");
+
+    let dst_dir = tmp("rec-off-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    assert_eq!(report.elements, 2);
+    let els = imported_elements(&dst, &report.unit_id);
+    let marker = marker_of(&els);
+    let content = marker.content.as_ref().unwrap();
+    assert!(content.get("recording").is_none());
+    assert_eq!(content["title"], "Lecture");
+    assert_eq!(marker.image_url, None);
+    assert_eq!(asset_files(&dst_dir), 0);
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+#[test]
+fn recording_segments_must_be_audio_or_video() {
+    let src_dir = tmp("rec-kind-src");
+    let img = assets::save_sniffed(&src_dir, PNG).unwrap();
+    let (mut src, [a, _]) = source_with_recording(&src_dir);
+    let mut marker = src.load_elements("p").unwrap().into_iter().find(|e| e.id == "rec").unwrap();
+    marker.content.as_mut().unwrap()["recording"]["segments"][1]["assetId"] = json!(img.id);
+    src.upsert_elements(&[marker]).unwrap();
+    let bytes = export_unit(&src, "u1", &src_dir, Recordings::Include).unwrap();
+
+    let dst_dir = tmp("rec-kind-dst");
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &dst_dir).unwrap();
+    let els = imported_elements(&dst, &report.unit_id);
+    let ids = recording_segment_ids(marker_of(&els));
+    assert_ne!(ids[0], a.id);
+    assert_eq!(ids[1], img.id, "an image is no segment: left dangling");
+    assert_eq!(asset_files(&dst_dir), 1, "only the audio segment imported");
+    let _ = fs::remove_dir_all(&src_dir);
+    let _ = fs::remove_dir_all(&dst_dir);
+}
+
+/// Source `u1` / `sa` / `pa1` whose strokes were created at `stamps`.
+fn stamped_source(stamps: &[&str]) -> Storage {
+    let mut st = Storage::open_in_memory().unwrap();
+    st.upsert_unit(&unit("u1", None)).unwrap();
+    st.upsert_section(&section("sa", "u1")).unwrap();
+    st.upsert_page(&page("pa1", "sa", None)).unwrap();
+    let els: Vec<_> = (0..4)
+        .map(|i| {
+            let mut e = stroke(&format!("e{i}"), "pa1", 2);
+            e.created_at = stamps.get(i).copied().unwrap_or("2025-03-01T10:00:09.000Z").into();
+            e
+        })
+        .collect();
+    st.upsert_elements(&els).unwrap();
+    st
+}
+
+/// Imports `src`'s unit and returns the new unit's tree and the loaded elements of its page titled
+/// "Page pa1".
+fn import_and_load(src: &Storage, name: &str) -> (mate_core::storage::NotebookTree, Vec<mate_core::model::Element>) {
+    let bytes = export_unit(src, "u1", &tmp(name), Recordings::Exclude).unwrap();
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &bytes, &tmp(&format!("{name}-dst"))).unwrap();
+    let tree = dst.list_tree().unwrap();
+    let secs: Vec<_> = tree.sections.iter().filter(|s| s.unit_id == report.unit_id).map(|s| s.id.clone()).collect();
+    let page = tree.pages.iter().find(|p| secs.contains(&p.section_id) && p.title == "Page pa1").unwrap();
+    let els = dst.load_elements(&page.id).unwrap();
+    (tree, els)
+}
+
+#[test]
+fn imported_elements_keep_created_at() {
+    let stamps = [
+        "2025-03-01T10:00:00.000Z",
+        "2025-03-01T10:00:01.000Z",
+        "2025-03-01T10:00:02.000Z",
+        "2025-03-01T10:00:03.000Z",
+    ];
+    let (tree, els) = import_and_load(&stamped_source(&stamps), "keep-ca");
+    assert_eq!(els.iter().map(|e| e.created_at.as_str()).collect::<Vec<_>>(), stamps);
+    // Units, sections and pages still get the import time.
+    assert!(tree.units.iter().all(|u| !u.created_at.starts_with("2025")));
+    assert!(tree.sections.iter().all(|s| !s.created_at.starts_with("2025")));
+    assert!(tree.pages.iter().all(|p| !p.created_at.starts_with("2025")));
+}
+
+#[test]
+fn a_bad_element_created_at_falls_back_to_now() {
+    let (_, els) = import_and_load(&stamped_source(&["not a time", ""]), "bad-ca");
+    assert_eq!(els.len(), 4);
+    for e in &els {
+        assert!(
+            time::OffsetDateTime::parse(&e.created_at, &time::format_description::well_known::Rfc3339).is_ok(),
+            "{:?} parses",
+            e.created_at
+        );
+    }
+    assert_eq!(
+        els.iter().filter(|e| e.created_at.as_str() >= "2026").count(),
+        2,
+        "the two bad stamps became now; the other two kept theirs"
+    );
 }

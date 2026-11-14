@@ -94,23 +94,31 @@ impl Storage {
         Ok(())
     }
 
-    /// Every asset id referenced by any element row (`image_url` and `content.pdfSourceKey`),
-    /// including soft-deleted rows: the trash can be restored. Purged rows are gone.
+    /// Every asset id referenced by any element row (`image_url`, `content.pdfSourceKey` and a
+    /// recording's `content.recording.segments[].assetId`), including soft-deleted rows: the trash
+    /// can be restored. Purged rows are gone.
     pub fn referenced_asset_ids(&self) -> Result<std::collections::HashSet<String>> {
         let mut stmt = self.conn.prepare(
-            "SELECT image_url, content FROM elements              WHERE image_url IS NOT NULL OR (content IS NOT NULL AND content LIKE '%pdfSourceKey%')",
+            "SELECT image_url, content FROM elements \
+             WHERE image_url IS NOT NULL OR (content IS NOT NULL \
+               AND (content LIKE '%pdfSourceKey%' OR content LIKE '%\"recording\"%'))",
         )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)))?;
         let mut ids = std::collections::HashSet::new();
         for row in rows {
             let (url, content) = row?;
             ids.extend(url);
-            if let Some(key) = content
-                .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-                .and_then(|v| v.get("pdfSourceKey").and_then(|k| k.as_str()).map(str::to_owned))
-            {
-                ids.insert(key);
-            }
+            let Some(content) = content.and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok()) else {
+                continue;
+            };
+            ids.extend(content.get("pdfSourceKey").and_then(|k| k.as_str()).map(str::to_owned));
+            let segments = content
+                .get("recording")
+                .and_then(|r| r.get("segments"))
+                .and_then(|s| s.as_array())
+                .into_iter()
+                .flatten();
+            ids.extend(segments.filter_map(|s| s.get("assetId").and_then(|a| a.as_str()).map(str::to_owned)));
         }
         Ok(ids)
     }

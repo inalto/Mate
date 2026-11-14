@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 use mate_core::ai::keystore::KeyStore;
-use mate_core::archive::export_unit;
+use mate_core::archive::{Recordings, export_unit};
 use mate_core::share::folders::{OsEnv, SyncFolder, detect};
 use mate_core::share::nextcloud::{
     Credentials, LOGIN_EXPIRED, LOGIN_TIMEOUT, LoginFlow, NextcloudClient, PollError,
@@ -150,7 +150,7 @@ fn export_book(
         .find(|u| u.id == unit_id && u.deleted_at.is_none())
         .map(|u| u.title)
         .ok_or_else(|| "That book no longer exists.".to_string())?;
-    let bytes = export_unit(&storage, unit_id, assets_dir).map_err(|e| e.to_string())?;
+    let bytes = export_unit(&storage, unit_id, assets_dir, Recordings::Exclude).map_err(|e| e.to_string())?;
     Ok((title, bytes))
 }
 

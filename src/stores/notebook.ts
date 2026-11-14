@@ -365,10 +365,10 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
       await savePage(copy);
       const els = await loadElements(src.id);
       if (els.length > 0) {
-        // Fresh ids; copied connectors bind to the copies of their elements (as an archive import does).
+        // Fresh ids, original creation times (replay links notes to audio by them); copied connectors bind to the copies of their elements (as an archive import does).
         const ids = new Map(els.map((e) => [e.id, crypto.randomUUID()]));
         await upsertElements(
-          els.map((e) => remapConnectorEnds({ ...e, id: ids.get(e.id)!, pageId: copy.id, createdAt: stamp, updatedAt: stamp, version: 0 }, ids)),
+          els.map((e) => remapConnectorEnds({ ...e, id: ids.get(e.id)!, pageId: copy.id, updatedAt: stamp, version: 0 }, ids)),
         );
       }
       return copy;
