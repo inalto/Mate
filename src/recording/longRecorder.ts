@@ -29,8 +29,10 @@ export type LongRecorderEvent =
 
 export interface LongRecorderDeps {
   sink: SegmentSink;
-  /** Wall clock, default `Date.now`. */
+  /** Wall clock, only for span starts; default `Date.now`. */
   now?: () => number;
+  /** Monotonic clock every duration is measured with; default `performance.now`. */
+  mono?: () => number;
   /** Default `getUserMedia({ audio: true })`. */
   getStream?: () => Promise<MediaStream>;
   createRecorder?: (s: MediaStream, o: MediaRecorderOptions) => MediaRecorder;
@@ -76,6 +78,7 @@ const defaultCreateRecorder = (s: MediaStream, o: MediaRecorderOptions): MediaRe
 export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRecorder> {
   const { sink, onEvent } = deps;
   const now = deps.now ?? Date.now;
+  const mono = deps.mono ?? (() => performance.now());
   const getStream = deps.getStream ?? defaultGetStream;
   const createRecorder = deps.createRecorder ?? defaultCreateRecorder;
   const wanted = pickMime();
@@ -93,10 +96,12 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
   let state: State = "recording";
   const spans: Span[] = [];
   const segments: Segment[] = [];
-  /** The running span: its clamped wall start and the raw clock reading durations are measured from. */
-  let open: { wall: number; raw: number } | null = null;
+  /** The running span: its clamped wall start and the monotonic reading durations are measured from. */
+  let open: { wall: number; mono: number } | null = null;
   let closedMs = 0;
+  /** Where the last span ended, on the wall clock (its start plus its length) and on the monotonic one. */
   let lastEnd = -Infinity;
+  let lastEndMono = 0;
   let warned = false;
   /** Recorder errors since the last stretch of at least `MIN_GOOD_STRETCH_MS`. */
   let errorStreak = 0;
@@ -117,12 +122,17 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
   const watch = (s: MediaStream) => s.getTracks().forEach((t) => t.addEventListener("ended", onTrackEnded));
   const unwatch = (s: MediaStream) => s.getTracks().forEach((t) => t.removeEventListener("ended", onTrackEnded));
 
-  const enqueue = (task: () => Promise<void>) => {
+  /**
+   * Queues a sink write. The first failure ends the recording; after it appends are skipped, but
+   * finishes still run so chunks already saved become segments (a finish that fails then is dropped).
+   */
+  const enqueue = (kind: "append" | "finish", task: () => Promise<void>) => {
     chain = chain.then(async () => {
-      if (writeFailed) return;
+      if (writeFailed && kind === "append") return;
       try {
         await task();
       } catch {
+        if (writeFailed) return;
         writeFailed = true;
         void end("writeFailed");
       }
@@ -145,11 +155,11 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
     clearTimeout(limitTimer);
   };
 
-  /** Starts a span now (never before the previous one ends); the wall time lost since that end. */
+  /** Starts a span now (its wall start never before the previous one ends); the time lost since that end. */
   const openSpan = (): number => {
-    const raw = now();
-    const wall = Math.max(raw, lastEnd);
-    open = { wall, raw };
+    const t = mono();
+    const wall = Math.max(now(), lastEnd);
+    open = { wall, mono: t };
     const warnIn = MAX_TOTAL_MS - WARN_BEFORE_MS - closedMs;
     if (!warned)
       warnTimer = setTimeout(() => {
@@ -158,16 +168,17 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
       }, Math.max(0, warnIn));
     limitTimer = setTimeout(() => void end("limit"), Math.max(0, MAX_TOTAL_MS - closedMs));
     emitSpans();
-    return spans.length > 0 ? wall - lastEnd : 0;
+    return spans.length > 0 ? Math.max(0, t - lastEndMono) : 0;
   };
 
   const closeSpan = () => {
     if (!open) return;
     clearLimits();
-    const durationMs = Math.max(0, now() - open.raw);
+    const durationMs = Math.max(0, mono() - open.mono);
     spans.push({ wallStart: new Date(open.wall).toISOString(), audioStartMs: closedMs, durationMs });
     closedMs += durationMs;
     lastEnd = open.wall + durationMs;
+    lastEndMono = open.mono + durationMs;
     open = null;
     emitSpans();
   };
@@ -177,9 +188,9 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
     if (p.finalised) return;
     p.finalised = true;
     clearTimeout(p.stopTimer);
-    p.durationMs ??= Math.max(0, now() - p.startedAt);
+    p.durationMs ??= Math.max(0, mono() - p.startedAt);
     const durationMs = p.durationMs;
-    enqueue(async () => {
+    enqueue("finish", async () => {
       const info = await sink.finish(p.index);
       if (!info) return;
       const segment: Segment = { assetId: info.id, durationMs, mime: info.mime };
@@ -189,16 +200,15 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
     p.markStopped();
   };
 
+  /** Asks the part to stop; it is finalised by its `stop` event, which comes after its last chunk. */
   const stopPart = (p: Part) => {
-    p.durationMs ??= Math.max(0, now() - p.startedAt);
+    p.durationMs ??= Math.max(0, mono() - p.startedAt);
     if (p.finalised) return;
+    // An engine that never fires `stop`: finish the segment with what the sink already has.
+    p.stopTimer ??= setTimeout(() => finalise(p), STOP_TIMEOUT_MS);
+    // Already inactive (an error, or the engine stopped by itself): its last chunk and `stop` are on the way.
+    if (p.rec.state === "inactive") return;
     try {
-      if (p.rec.state === "inactive") {
-        finalise(p);
-        return;
-      }
-      // An engine that never fires `stop`: finish the segment with what the sink already has.
-      p.stopTimer ??= setTimeout(() => finalise(p), STOP_TIMEOUT_MS);
       p.rec.stop();
     } catch {
       finalise(p);
@@ -210,11 +220,11 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
     const rec = createRecorder(stream, options);
     let markStopped!: () => void;
     const stopped = new Promise<void>((r) => (markStopped = r));
-    const p: Part = { index: nextIndex, rec, startedAt: now(), durationMs: null, finalised: false, stopped, markStopped };
+    const p: Part = { index: nextIndex, rec, startedAt: mono(), durationMs: null, finalised: false, stopped, markStopped };
     rec.ondataavailable = (ev: BlobEvent) => {
       const blob = ev.data;
       if (p.finalised || !blob || blob.size === 0) return;
-      enqueue(async () => sink.append(p.index, new Uint8Array(await blob.arrayBuffer())));
+      enqueue("append", async () => sink.append(p.index, new Uint8Array(await blob.arrayBuffer())));
     };
     rec.onstop = () => finalise(p);
     rec.onerror = () => {
@@ -337,7 +347,7 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
     get mime() {
       return mime;
     },
-    elapsedMs: () => closedMs + (open ? Math.max(0, now() - open.raw) : 0),
+    elapsedMs: () => closedMs + (open ? Math.max(0, mono() - open.mono) : 0),
     async pause() {
       if (state === "interrupted" || state === "reopening") state = "paused";
       if (state !== "recording") return;

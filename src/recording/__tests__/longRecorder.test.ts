@@ -50,8 +50,12 @@ class FakeRecorder {
   push(text: string) {
     this.ondataavailable?.({ data: new Blob([text]) });
   }
+  /** The spec's error steps: inactive, `error`, the last chunk, `stop`. */
   fail() {
+    this.state = "inactive";
     this.onerror?.(new Event("error"));
+    this.push(`end${FakeRecorder.all.indexOf(this)}`);
+    this.onstop?.();
   }
 }
 
@@ -124,7 +128,7 @@ const ofType = <T extends LongRecorderEvent["type"]>(events: LongRecorderEvent[]
 
 beforeEach(() => {
   FakeRecorder.all = [];
-  vi.useFakeTimers({ now: T0, toFake: ["setTimeout", "clearTimeout", "Date"] });
+  vi.useFakeTimers({ now: T0, toFake: ["setTimeout", "clearTimeout", "Date", "performance"] });
   vi.stubGlobal("MediaRecorder", { isTypeSupported: () => true });
   Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
 });
@@ -259,7 +263,12 @@ describe("startLongRecording", () => {
     const t = setup();
     const rec = await startLongRecording(t.deps);
     await advance(60_000);
+    // The engine stops by itself when its only track ends: inactive first, then its last chunk and `stop`.
+    const r0 = FakeRecorder.all[0];
+    r0.state = "inactive";
     t.track.end();
+    r0.push("end0");
+    r0.onstop?.();
     await advance(0);
     expect(t.getStream).toHaveBeenCalledTimes(2);
     expect(FakeRecorder.all[1].stream).toBe(t.streams[1].stream);
@@ -275,7 +284,17 @@ describe("startLongRecording", () => {
     await advance(2_000);
     const { spans, segments } = await rec.stop();
     expect(spans.map((s) => s.durationMs)).toEqual([60_000, 5_000, 2_000]);
-    expect(segments.map((s) => s.durationMs)).toEqual([60_000, 5_000, 2_000]);
+    expect(segments.map((s) => [s.assetId, s.durationMs])).toEqual([
+      ["a0", 60_000],
+      ["a1", 5_000],
+      ["a2", 2_000],
+    ]);
+    // The last chunk of a recorder that went inactive on its own (track end, error) is kept.
+    expect(t.appended).toEqual([
+      [0, "end0"],
+      [1, "end1"],
+      [2, "end2"],
+    ]);
     expect(t.streams[1].track.stop).toHaveBeenCalled();
   });
 
@@ -330,6 +349,7 @@ describe("startLongRecording", () => {
     const { spans, segments } = await rec.stop();
     expect(spans.map((s) => s.durationMs)).toEqual([60_000, 500, 1_000, 500, 500]);
     expect(segments.map((s) => s.durationMs)).toEqual([60_000, 500, 1_000, 500, 500]);
+    expect(t.appended).toEqual([0, 1, 2, 3, 4].map((i) => [i, `end${i}`]));
     expect(ofType(t.events, "ended")).toHaveLength(1);
   });
 
@@ -352,6 +372,18 @@ describe("startLongRecording", () => {
     expect(t.appended).toEqual([[0, "a"]]);
     expect(t.track.stop).toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a wall clock that jumps forward does not lengthen the span", async () => {
+    const t = setup();
+    const rec = await startLongRecording(t.deps);
+    await advance(30_000);
+    vi.setSystemTime(Date.now() + 60 * 60_000);
+    await advance(30_000);
+    expect(rec.elapsedMs()).toBe(60_000);
+    const { spans, segments } = await rec.stop();
+    expect(spans).toEqual([{ wallStart: iso(T0), audioStartMs: 0, durationMs: 60_000 }]);
+    expect(segments.map((s) => s.durationMs)).toEqual([60_000]);
   });
 
   it("a clock that steps back", async () => {
@@ -388,6 +420,26 @@ describe("startLongRecording", () => {
     expect(segments).toEqual([{ assetId: "a0", durationMs: 300_000, mime: "audio/webm" }]);
     expect(spans).toEqual([{ wallStart: iso(T0), audioStartMs: 0, durationMs: 310_000 }]);
     expect(ofType(t.events, "ended")).toHaveLength(1);
+  });
+
+  it("a failed append still finishes the chunks already saved", async () => {
+    const t = setup();
+    const rec = await startLongRecording(t.deps);
+    const append = t.sink.append;
+    t.sink.append = vi.fn(async (index: number, bytes: Uint8Array) => {
+      if (new TextDecoder().decode(bytes) === "b") throw new Error("disk full");
+      await append(index, bytes);
+    });
+    FakeRecorder.all[0].push("a");
+    await advance(30_000);
+    FakeRecorder.all[0].push("b");
+    await advance(0);
+    expect(ofType(t.events, "ended")).toEqual([{ type: "ended", reason: "writeFailed" }]);
+    expect(t.track.stop).toHaveBeenCalled();
+    const { segments } = await rec.stop();
+    expect(t.appended).toEqual([[0, "a"]]);
+    expect(t.sink.finish).toHaveBeenCalledWith(0);
+    expect(segments).toEqual([{ assetId: "a0", durationMs: 30_000, mime: "audio/webm" }]);
   });
 
   it("warns five minutes before the four-hour cap and ends at it", async () => {
