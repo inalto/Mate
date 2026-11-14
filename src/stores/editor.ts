@@ -293,7 +293,7 @@ export interface EditorState {
   addRecording(rec: RecordingContent, at: Vec2, title: string, id?: string): string | null;
   /**
    * Store `transcript` on recording marker `markerId` (replacing any earlier one); one history
-   * entry "Transcript". False when the marker is gone or is not a recording.
+   * entry "Transcript", also while presenting. False when the marker is gone or is not a recording.
    */
   setRecordingTranscript(markerId: string, transcript: Transcript): boolean;
   /**
@@ -1149,7 +1149,8 @@ export function createEditorStore(): EditorStore {
       const rec = cur && !cur.deletedAt ? recordingOf(cur) : null;
       if (!cur || !rec) return false;
       const after: Element = { ...cur, content: { ...contentOf<Record<string, unknown>>(cur), recording: { ...rec, transcript } } };
-      return record("Transcript", [{ type: "update", before: cur, after: stamp(after) }]);
+      // Allowed while presenting, as a frame reorder is: a transcription ending then must not lose its result.
+      return commitEntry("Transcript", [{ type: "update", before: cur, after: stamp(after) }]);
     },
 
     commitTextEdit(after) {

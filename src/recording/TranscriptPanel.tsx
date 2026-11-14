@@ -90,7 +90,8 @@ type Source = { pageId: string; rec: RecordingContent };
 
 /**
  * Runs a transcription of marker `markerId` from the panel `state` (after the setup check), from
- * `source` whichever page the pane shows; the saved transcript is kept in `state` for display.
+ * `source` whichever page the pane shows; the transcript (saved, or not written) is kept in `state`
+ * for display.
  */
 async function run(store: EditorStore, state: StoreApi<TranscriptState>, markerId: string, source: Source, only?: number[]): Promise<void> {
   if (jobOf(state)) return;
@@ -110,6 +111,7 @@ async function run(store: EditorStore, state: StoreApi<TranscriptState>, markerI
       source,
       onProgress: (p) => state.setState({ done: p.done, total: p.total, failed: p.failed }),
       onSaved: (value) => state.setState({ transcript: { markerId, value } }),
+      onUnsaved: (value) => state.setState({ transcript: { markerId, value, unsaved: true } }),
     });
   } finally {
     setJob(state, null);
@@ -333,7 +335,9 @@ export default function TranscriptPanel({ store, replay }: Props) {
       if (!el || !rec) return;
       const cur = state.getState();
       if (cur.marker?.id !== markerId || cur.marker.pageId !== el.pageId) state.setState({ marker: { id: markerId, pageId: el.pageId } });
-      const held = cur.transcript?.markerId === markerId ? cur.transcript.value : null;
+      const mine = cur.transcript?.markerId === markerId ? cur.transcript : null;
+      if (mine?.unsaved) return; // a result not written yet stays shown until one is saved
+      const held = mine?.value ?? null;
       if (rec.transcript && rec.transcript !== held) state.setState({ transcript: { markerId, value: rec.transcript } });
       else if (!rec.transcript && held) state.setState({ transcript: null });
     };

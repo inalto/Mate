@@ -43,7 +43,7 @@ import { recordingElement } from "../marker";
 import { createReplay, type ReplayState } from "../replay";
 import TranscriptPanel from "../TranscriptPanel";
 import { transcriptStateFor } from "../transcriptState";
-import type { RecordingContent, Transcript } from "../types";
+import { recordingOf, type RecordingContent, type Transcript } from "../types";
 
 const T0 = "2026-11-14T09:00:00.000Z";
 const transcript: Transcript = {
@@ -199,6 +199,34 @@ describe("TranscriptPanel on another page", () => {
     });
     expect(ipc.upsert).not.toHaveBeenCalled();
     expect(useToastStore.getState().message).toBe("The recording was removed, so the transcript was not saved.");
+  });
+
+  it("a failed write is not reported as a removed recording", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    ipc.run.mockImplementation((...a) => ipc.real(...a));
+    ipc.asset.mockResolvedValue([{ startMs: 0, endMs: 1000, text: "Kept." }]);
+    await mount(null);
+    await turnPage();
+    ipc.upsert.mockRejectedValueOnce(new Error("disk full"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Transcribe" }));
+    });
+    expect(ipc.upsert).toHaveBeenCalledTimes(1);
+    expect(useToastStore.getState().message).toBe("Something went wrong.");
+    // The transcript is kept in the panel, also when the pane turns back to the marker's page.
+    expect(screen.getAllByText("Kept.").length).toBeGreaterThan(0);
+    await act(async () => {
+      await store.getState().loadPage("pg");
+    });
+    expect(screen.getAllByText("Kept.").length).toBeGreaterThan(0);
+    // Transcribing again saves it.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Transcribe" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole("button", { name: "Transcribe" }).at(-1)!);
+    });
+    expect(recordingOf(store.getState().elements.get("rec")!)?.transcript?.segments.map((s) => s.text)).toEqual(["Kept.", "Kept."]);
   });
 });
 

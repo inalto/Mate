@@ -39,6 +39,8 @@ export interface TranscribeOptions {
   source?: { pageId: string; rec: RecordingContent };
   /** Called with the transcript once it is saved. */
   onSaved?(t: Transcript): void;
+  /** Called with the transcript when it could not be written (the marker still there). */
+  onUnsaved?(t: Transcript): void;
 }
 
 /** Errors that will fail every following part too: the run stops at the first. */
@@ -62,24 +64,39 @@ function withTranscript(el: Element, rec: RecordingContent, transcript: Transcri
   return { ...el, updatedAt: new Date().toISOString(), content: { ...contentOf<Record<string, unknown>>(el), recording: { ...rec, transcript } } };
 }
 
+/** How saving a transcript ended: stored, the marker gone, or not written (an error). */
+type Saved = "saved" | "gone" | "failed";
+
+/** Through `s`, which has the marker's page loaded: gone when the marker is not on it. */
+function saveIn(s: EditorStore, markerId: string, transcript: Transcript): Saved {
+  const el = s.getState().elements.get(markerId);
+  if (!el || el.deletedAt || !recordingOf(el)) return "gone";
+  return s.getState().setRecordingTranscript(markerId, transcript) ? "saved" : "failed";
+}
+
 /**
  * Stores `transcript` on marker `markerId` of page `pageId`: through the store (one history entry)
- * of this pane or the other one while that page is loaded there, else in storage. False when the
- * marker is gone.
+ * of this pane or the other one while that page is loaded there (presenting or not), else in
+ * storage.
  */
-async function saveTranscript(store: EditorStore, markerId: string, pageId: string, transcript: Transcript): Promise<boolean> {
+async function saveTranscript(store: EditorStore, markerId: string, pageId: string, transcript: Transcript): Promise<Saved> {
   const showing = () => [store, editorForPane(0), editorForPane(1)].find((s) => s?.getState().loadedPageId === pageId);
   const now = showing();
-  if (now) return now.getState().setRecordingTranscript(markerId, transcript);
-  await elementsQueue.flushAll(); // edits of that page still queued land first
-  const el = (await loadElements(pageId)).find((e) => e.id === markerId && !e.deletedAt);
-  // The page was opened meanwhile: its copy in that pane is the one to change.
-  const opened = showing();
-  if (opened) return opened.getState().setRecordingTranscript(markerId, transcript);
-  const rec = el ? recordingOf(el) : null;
-  if (!el || !rec) return false;
-  await upsertElements([withTranscript(el, rec, transcript)]);
-  return true;
+  if (now) return saveIn(now, markerId, transcript);
+  try {
+    await elementsQueue.flushAll(); // edits of that page still queued land first
+    const el = (await loadElements(pageId)).find((e) => e.id === markerId && !e.deletedAt);
+    // The page was opened meanwhile: its copy in that pane is the one to change.
+    const opened = showing();
+    if (opened) return saveIn(opened, markerId, transcript);
+    const rec = el ? recordingOf(el) : null;
+    if (!el || !rec) return "gone";
+    await upsertElements([withTranscript(el, rec, transcript)]);
+    return "saved";
+  } catch (err) {
+    console.error("saving the transcript failed", err);
+    return "failed";
+  }
 }
 
 /** Audio ms at which each segment starts. */
@@ -170,8 +187,14 @@ export async function transcribeRecording(store: EditorStore, markerId: string, 
     segments: [...keep, ...got].sort((a, b) => a.startMs - b.startMs),
     ...(stillFailed.length > 0 ? { failed: stillFailed } : {}),
   };
-  // The marker may have been deleted meanwhile: the result is dropped, and the user told.
-  if (await saveTranscript(store, markerId, source.pageId, transcript)) opts.onSaved?.(transcript);
-  else showToast(i18n.t("transcript.lostMarker"));
+  // The marker may have been deleted meanwhile: the result is dropped, and the user told. One that
+  // could not be written is handed back unsaved, so the panel keeps it for another try.
+  const saved = await saveTranscript(store, markerId, source.pageId, transcript);
+  if (saved === "saved") opts.onSaved?.(transcript);
+  else if (saved === "gone") showToast(i18n.t("transcript.lostMarker"));
+  else {
+    showToast(i18n.t("errors.generic"));
+    opts.onUnsaved?.(transcript);
+  }
   return failed;
 }

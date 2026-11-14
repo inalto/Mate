@@ -184,6 +184,42 @@ describe("transcribeRecording", () => {
     }
   });
 
+  it("a transcript is saved while the marker's page is being presented", async () => {
+    await load();
+    store.setState({ presenting: { index: 0, fill: false } });
+    ipc.asset.mockResolvedValue([sentence(0, 1000, "hello")]);
+    expect(await transcribeRecording(store, "rec", {})).toEqual([]);
+    expect(transcriptOf()?.segments.map((s) => s.text)).toEqual(["hello", "hello"]);
+    expect(useToastStore.getState().message).toBeNull();
+    // One history entry: a single undo (after the presentation) takes it away.
+    store.setState({ presenting: null });
+    store.getState().undo();
+    expect(transcriptOf()).toBeUndefined();
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it("a transcript finished off-page is saved through a presenting other pane", async () => {
+    await load();
+    const source = { pageId: "pg", rec: recordingOf(store.getState().elements.get("rec")!)! };
+    const other = editorForPane(1);
+    try {
+      await other.getState().loadPage("pg");
+      other.setState({ presenting: { index: 0, fill: false } });
+      ipc.els = [];
+      await store.getState().loadPage("other");
+      vi.mocked(upsertElements).mockClear();
+      ipc.asset.mockResolvedValue([sentence(0, 1000, "hello")]);
+      expect(await transcribeRecording(store, "rec", { source })).toEqual([]);
+      const written = recordingOf(other.getState().elements.get("rec")!)?.transcript;
+      expect(written?.segments.map((s) => s.text)).toEqual(["hello", "hello"]);
+      expect(other.getState().canUndo).toBe(true);
+      expect(upsertElements).not.toHaveBeenCalled();
+      expect(useToastStore.getState().message).toBeNull();
+    } finally {
+      other.setState({ presenting: null, pageId: null, loadedPageId: null, elements: new Map() });
+    }
+  });
+
   it("sentences past a segment's end stay in that segment", async () => {
     await load();
     ipc.asset.mockImplementation(async (id) => (id === "a1" ? [sentence(400_000, 500_000, "edge")] : []));

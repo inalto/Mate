@@ -15,9 +15,10 @@ export interface TranscriptState {
   open: boolean;
   /**
    * The latest transcript of a marker, kept here because the pane's element map holds only the
-   * page it shows (the replay's Follow pages turns it away from the marker's page).
+   * page it shows (the replay's Follow pages turns it away from the marker's page). `unsaved`: a
+   * run's result that could not be written, shown (and the base of a retry) until one is saved.
    */
-  transcript: { markerId: string; value: Transcript } | null;
+  transcript: { markerId: string; value: Transcript; unsaved?: boolean } | null;
   /** The marker the replay opened and the page it lives on (noted while that page was loaded). */
   marker: { id: string; pageId: string } | null;
 }
