@@ -5,6 +5,7 @@ import type { GraphData } from "../graph/data";
 import type { MindmapLayoutMode } from "../mindmap/layout";
 import type { MindmapStyle } from "../mindmap/styles";
 import type { MindNode } from "../mindmap/tree";
+import type { RecordingContent } from "../recording/types";
 import type { Element, ElementType } from "./types";
 
 /** Metadata any element's content may carry (see spatialIndex.contentMeta). */
@@ -131,6 +132,8 @@ export interface ShapeContent extends ContentMeta {
 export interface MediaContent extends ContentMeta {
   kind: "audio" | "video";
   title?: string;
+  /** Lecture recording: wall-clock spans over audio segments (see recording/timeline). */
+  recording?: RecordingContent;
 }
 
 /** A side of an element's (rotated) bounds, where a connector end attaches. */
