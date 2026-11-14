@@ -57,7 +57,7 @@ function rowsOf(rec: RecordingContent, t: Transcript): Row[] {
   return rows.sort((a, b) => time(a) - time(b) || (a.kind === "failed" ? -1 : 1));
 }
 
-/** Index of the sentence containing `ms` (the last one starting at or before it), or -1. */
+/** Index of the sentence whose [start, end) holds `ms` (the last such one), or -1. */
 function currentIndex(sentences: TimedSentence[], ms: number): number {
   let found = -1;
   sentences.forEach((s, i) => {
@@ -85,8 +85,14 @@ function insertTranscript(store: EditorStore, sentences: TimedSentence[]): boole
   return s.addElements("Transcript", [top > 0 ? withMeta(box, { zIndex: top }) : box]);
 }
 
-/** Runs a transcription of marker `markerId` from the panel `state` (after consent and setup checks). */
-async function run(store: EditorStore, state: StoreApi<TranscriptState>, markerId: string, only?: number[]): Promise<void> {
+/** What a run works from: the marker's page and its recording (with the transcript shown). */
+type Source = { pageId: string; rec: RecordingContent };
+
+/**
+ * Runs a transcription of marker `markerId` from the panel `state` (after the setup check), from
+ * `source` whichever page the pane shows; the saved transcript is kept in `state` for display.
+ */
+async function run(store: EditorStore, state: StoreApi<TranscriptState>, markerId: string, source: Source, only?: number[]): Promise<void> {
   if (jobOf(state)) return;
   const status = await getSpeechStatus();
   if (!status.configured) {
@@ -101,7 +107,9 @@ async function run(store: EditorStore, state: StoreApi<TranscriptState>, markerI
     await transcribeRecording(store, markerId, {
       only,
       signal: abort.signal,
+      source,
       onProgress: (p) => state.setState({ done: p.done, total: p.total, failed: p.failed }),
+      onSaved: (value) => state.setState({ transcript: { markerId, value } }),
     });
   } finally {
     setJob(state, null);
@@ -113,33 +121,57 @@ function Sheet({ store, replay, state }: Props & { state: StoreApi<TranscriptSta
   const markerId = useStore(replay, (s) => s.markerId);
   const positionMs = useStore(replay, (s) => s.positionMs);
   const playing = useStore(replay, (s) => s.playing);
-  const rec = store((s) => {
+  // The marker is in the element map only while its page is loaded; the replay keeps its own copy.
+  const loadedRec = store((s) => {
     const el = markerId ? s.elements.get(markerId) : undefined;
     return el && !el.deletedAt ? recordingOf(el) : null;
   });
+  const replayRec = useStore(replay, (s) => s.rec);
+  const rec = loadedRec ?? replayRec;
+  const held = useStore(state, (s) => (s.transcript && s.transcript.markerId === markerId ? s.transcript.value : null));
+  const markerPage = useStore(state, (s) => (s.marker && s.marker.id === markerId ? s.marker.pageId : null));
   const running = useStore(state, (s) => s.running);
   const done = useStore(state, (s) => s.done);
   const total = useStore(state, (s) => s.total);
   const mine = running && jobOf(state)?.markerId === markerId;
-  const transcript = rec?.transcript;
+  const transcript = held ?? rec?.transcript;
   const rows = useMemo(() => (rec && transcript ? rowsOf(rec, transcript) : []), [rec, transcript]);
   const sentences = transcript?.segments ?? [];
   const current = currentIndex(sentences, positionMs);
   const [ask, setAsk] = useState<{ provider: string; only?: number[] } | null>(null);
   const [replace, setReplace] = useState(false);
+  const sheet = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const userScrolled = useRef(0);
-  const close = () => state.setState({ open: false });
+  /** When the list last scrolled itself to the current sentence (its own scroll events are not the user's). */
+  const autoScrolled = useRef(0);
+  /** Closes the sheet; focus goes back to the bar's Transcript button. */
+  const close = () => {
+    const toggle = (sheet.current?.closest(".pane") ?? document).querySelector<HTMLElement>("[data-transcript-toggle]");
+    state.setState({ open: false });
+    toggle?.focus();
+  };
 
   useEffect(() => {
     if (!playing || current < 0 || Date.now() - userScrolled.current < USER_SCROLL_MS) return;
     const el = list.current?.querySelector<HTMLElement>('[aria-current="true"]');
-    el?.scrollIntoView?.({ block: "nearest" });
+    if (!el?.scrollIntoView) return;
+    autoScrolled.current = Date.now();
+    el.scrollIntoView({ block: "nearest" });
   }, [playing, current]);
 
+  /** The marker's page and recording, with the transcript shown (the base a retry merges into). */
+  const sourceOf = (): Source | null => {
+    const pageId = markerPage ?? (markerId ? store.getState().elements.get(markerId)?.pageId : undefined);
+    if (!rec || !pageId) return null;
+    const bare: RecordingContent = { ...rec };
+    delete bare.transcript;
+    return { pageId, rec: transcript ? { ...bare, transcript } : bare };
+  };
   /** Transcribe (all, or the parts `only`): consent first, as dictation. */
   const start = async (only?: number[]) => {
-    if (!markerId || jobOf(state)) return;
+    const source = sourceOf();
+    if (!markerId || !source || jobOf(state)) return;
     const consent = useSettingsStore.getState().settings.speechConsent;
     if (consent === false) {
       showToast(t("speech.off"), settingsAction());
@@ -150,16 +182,17 @@ function Sheet({ store, replay, state }: Props & { state: StoreApi<TranscriptSta
       setAsk({ provider, only });
       return;
     }
-    await run(store, state, markerId, only);
+    await run(store, state, markerId, source, only);
   };
   const attempt = (what: string, fn: () => Promise<unknown>) => userAction(what, fn);
   const onAnswer = (allow: boolean) => {
     const pending = ask;
     setAsk(null);
-    if (!allow || !pending || !markerId) return;
+    const source = sourceOf();
+    if (!allow || !pending || !markerId || !source) return;
     attempt("transcribing the recording", async () => {
       await useSettingsStore.getState().update({ speechConsent: true });
-      await run(store, state, markerId, pending.only);
+      await run(store, state, markerId, source, pending.only);
     });
   };
   const copy = () =>
@@ -173,11 +206,15 @@ function Sheet({ store, replay, state }: Props & { state: StoreApi<TranscriptSta
   const markUserScroll = () => {
     userScrolled.current = Date.now();
   };
+  const onScroll = () => {
+    if (Date.now() - autoScrolled.current > 300) markUserScroll();
+  };
 
   return (
     <>
       <div className="transcript-host">
         <div
+          ref={sheet}
           className="transcript-sheet"
           role="dialog"
           aria-modal="false"
@@ -214,16 +251,20 @@ function Sheet({ store, replay, state }: Props & { state: StoreApi<TranscriptSta
               </>
             )}
           </div>
-          {mine && (
-            <div className="transcript-progress" role="status">
-              <span>{t("transcript.progress", { done: Math.min(done + 1, Math.max(total, 1)), total: Math.max(total, 1) })}</span>
+          {running && (
+            <div className="transcript-progress">
+              <span role="status">
+                {mine
+                  ? t("transcript.progress", { done: Math.min(done + 1, Math.max(total, 1)), total: Math.max(total, 1) })
+                  : t("transcript.busyOther")}
+              </span>
               <button type="button" className="btn" onClick={() => jobOf(state)?.abort.abort()}>
                 {t("transcript.cancel")}
               </button>
             </div>
           )}
           {transcript && rows.length === 0 && !mine && <p className="transcript-empty">{t("transcript.empty")}</p>}
-          <ol ref={list} className="transcript-list" onWheel={markUserScroll} onTouchMove={markUserScroll} onPointerDown={markUserScroll}>
+          <ol ref={list} className="transcript-list" onScroll={onScroll} onWheel={markUserScroll} onTouchMove={markUserScroll}>
             {rows.map((r) =>
               r.kind === "sentence" ? (
                 <li key={`s${r.index}`}>
@@ -241,7 +282,13 @@ function Sheet({ store, replay, state }: Props & { state: StoreApi<TranscriptSta
                 <li key={`f${r.segment}`} className="transcript-failed">
                   <span className="transcript-time">{formatElapsed(r.startMs)}</span>
                   <span className="transcript-text">{t("transcript.failedPart")}</span>
-                  <button type="button" className="btn" disabled={running} onClick={() => attempt("retrying the transcript", () => start([r.segment]))}>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={running}
+                    aria-label={t("transcript.retryAt", { time: formatElapsed(r.startMs) })}
+                    onClick={() => attempt("retrying the transcript", () => start([r.segment]))}
+                  >
                     {t("transcript.retry")}
                   </button>
                 </li>
@@ -268,10 +315,32 @@ function Sheet({ store, replay, state }: Props & { state: StoreApi<TranscriptSta
   );
 }
 
-/** The transcript sheet of `replay`'s pane while it is open; it closes with the replay bar. */
+/**
+ * The transcript sheet of `replay`'s pane while it is open; it closes with the replay bar. While
+ * the marker's page is loaded it notes that page and keeps the held transcript in step with the
+ * element (a run's result, an undo), so the sheet still has both after the pane turns the page.
+ */
 export default function TranscriptPanel({ store, replay }: Props) {
   const state = transcriptStateFor(replay);
   const open = useStore(state, (s) => s.open);
+  const markerId = useStore(replay, (s) => s.markerId);
   useEffect(() => () => state.setState({ open: false }), [state]);
+  useEffect(() => {
+    if (!markerId) return;
+    const sync = () => {
+      const el = store.getState().elements.get(markerId);
+      const rec = el && !el.deletedAt ? recordingOf(el) : null;
+      if (!el || !rec) return;
+      const cur = state.getState();
+      if (cur.marker?.id !== markerId || cur.marker.pageId !== el.pageId) state.setState({ marker: { id: markerId, pageId: el.pageId } });
+      const held = cur.transcript?.markerId === markerId ? cur.transcript.value : null;
+      if (rec.transcript && rec.transcript !== held) state.setState({ transcript: { markerId, value: rec.transcript } });
+      else if (!rec.transcript && held) state.setState({ transcript: null });
+    };
+    sync();
+    return store.subscribe((s, prev) => {
+      if (s.elements !== prev.elements) sync();
+    });
+  }, [store, state, markerId]);
   return open ? <Sheet store={store} replay={replay} state={state} /> : null;
 }

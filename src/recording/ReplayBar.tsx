@@ -216,6 +216,7 @@ function Bar({ store, replay }: Props) {
           type="button"
           className={transcriptOpen ? "tb-btn active" : "tb-btn"}
           aria-expanded={transcriptOpen}
+          data-transcript-toggle=""
           aria-label={t("replay.transcript")}
           title={t("replay.transcript")}
           onClick={() => transcript.setState({ open: !transcriptOpen })}

@@ -11,7 +11,7 @@ const ipc = vi.hoisted(() => ({
   status: vi.fn(async () => ({ provider: "groq", model: "whisper-large-v3-turbo", configured: true })),
 }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
-vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => ipc.els) }));
+vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => ipc.els), upsertElements: vi.fn(async () => {}) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/speech", async (orig) => ({ ...(await orig<object>()), transcribeAsset: ipc.asset, getSpeechStatus: ipc.status }));
 
@@ -157,6 +157,7 @@ describe("transcribeRecording", () => {
     });
     await expect(transcribeRecording(store, "rec", {})).resolves.toEqual([]);
     expect(store.getState().elements.get("rec")).toBeUndefined();
+    expect(useToastStore.getState().message).toBe("The recording was removed, so the transcript was not saved.");
   });
 
   it("sentences past a segment's end stay in that segment", async () => {

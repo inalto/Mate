@@ -1475,13 +1475,16 @@
     "cancel": "Cancel",
     "failedPart": "This part could not be transcribed.",
     "retry": "Retry",
+    "lostMarker": "The recording was removed, so the transcript was not saved.",
+    "busyOther": "Another recording is being transcribed.",
+    "retryAt": "Retry part at {{time}}",
     "copy": "Copy",
     "insert": "Insert as text box",
     "empty": "No speech was recognised.",
     "close": "Close transcript",
     "replace": {
       "title": "Transcribe again?",
-      "body": "The current transcript is replaced."
+      "body": "This replaces the current transcript."
     },
     "copied": "Transcript copied.",
     "inserted": "Transcript added to the page.",

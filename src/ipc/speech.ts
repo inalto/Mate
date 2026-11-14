@@ -51,7 +51,7 @@ export const transcribeAudio = (bytes: Uint8Array, mime: string, language?: stri
  * like `transcribeAudio`.
  */
 export const transcribeAsset = (assetId: string, durationMs: number, language?: string): Promise<TimedSentence[]> =>
-  invoke<TimedSentence[]>("transcribe_asset", { assetId, durationMs, language: language ?? null });
+  invoke<TimedSentence[]>("transcribe_asset", { assetId, durationMs: Math.round(durationMs), language: language ?? null });
 
 /**
  * Sends half a second of silence to the configured service (with the same consent, key and

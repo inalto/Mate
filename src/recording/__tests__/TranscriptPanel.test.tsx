@@ -7,19 +7,32 @@ import type { Element } from "../../model/types";
 
 const queue = vi.hoisted(() => ({ enqueueUpsert: vi.fn(), enqueueDelete: vi.fn(), flushAll: vi.fn(async () => {}), pending: () => 0, failed: () => 0 }));
 const ipc = vi.hoisted(() => ({
-  els: [] as Element[],
+  /** Stored elements per page. */
+  pages: {} as Record<string, Element[]>,
   status: vi.fn(async () => ({ provider: "groq", model: "m", configured: true })),
   run: vi.fn(async (..._args: unknown[]): Promise<number[]> => []),
+  /** The real `transcribeRecording`, for the tests that run the job end to end. */
+  real: null as unknown as (...args: unknown[]) => Promise<number[]>,
+  asset: vi.fn(async (..._args: unknown[]): Promise<{ startMs: number; endMs: number; text: string }[]> => []),
+  upsert: vi.fn(async (_els: Element[]) => {}),
 }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
-vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => ipc.els), unitElementTimes: vi.fn(async () => []) }));
+vi.mock("../../ipc/elements", () => ({
+  loadElements: vi.fn(async (pageId: string) => ipc.pages[pageId] ?? []),
+  upsertElements: ipc.upsert,
+  unitElementTimes: vi.fn(async () => []),
+}));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/speech", async (orig) => ({
   ...(await orig<object>()),
   getSpeechStatus: ipc.status,
+  transcribeAsset: ipc.asset,
   listSpeechProviders: vi.fn(async () => [{ id: "openai", label: "OpenAI" }]),
 }));
-vi.mock("../transcribe", () => ({ transcribeRecording: ipc.run }));
+vi.mock("../transcribe", async (orig) => {
+  ipc.real = (await orig<{ transcribeRecording: typeof ipc.real }>()).transcribeRecording;
+  return { transcribeRecording: ipc.run };
+});
 
 import { useToastStore } from "../../components/Toast";
 import { contentOf, type TextBoxContent } from "../../model/content";
@@ -63,7 +76,7 @@ let store: EditorStore;
 let replay: StoreApi<ReplayState>;
 
 async function mount(t: Transcript | null = transcript) {
-  ipc.els = [recordingElement("pg", "rec", T0, { x: 0, y: 0 }, rec(t ?? undefined), "Lecture")];
+  ipc.pages = { pg: [recordingElement("pg", "rec", T0, { x: 0, y: 0 }, rec(t ?? undefined), "Lecture")], p2: [] };
   useNotebookStore.setState({ loaded: true });
   store = createEditorStore();
   await store.getState().loadPage("pg");
@@ -78,6 +91,9 @@ async function mount(t: Transcript | null = transcript) {
 beforeEach(() => {
   ipc.run.mockReset();
   ipc.run.mockResolvedValue([]);
+  ipc.asset.mockReset();
+  ipc.asset.mockResolvedValue([]);
+  ipc.upsert.mockClear();
   useSettingsStore.setState((s) => ({ settings: { ...s.settings, speechConsent: true } }));
   useToastStore.getState().dismiss();
 });
@@ -87,6 +103,104 @@ afterEach(() => {
 });
 
 const sentenceButton = (text: string) => screen.getByText(text).closest("button")!;
+
+/** The pane turns to page p2 (as the replay's Follow pages does), the replay staying open. */
+const turnPage = () =>
+  act(async () => {
+    await store.getState().loadPage("p2");
+  });
+
+/** The marker as stored by the last direct write to storage. */
+const upserted = () => ipc.upsert.mock.calls.at(-1)![0][0] as unknown as { id: string; content: { recording: RecordingContent & { transcript: Transcript } } };
+
+describe("TranscriptPanel rulings", () => {
+  it("each Retry has its own name", async () => {
+    await mount({ ...transcript, failed: [0, 1] });
+    expect(screen.getByRole("button", { name: "Retry part at 0:00" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Retry part at 5:00" })).toBeTruthy();
+  });
+
+  it("a run for another recording shows busy with Cancel", async () => {
+    ipc.run.mockImplementation(() => new Promise<number[]>(() => {}));
+    await mount(null);
+    ipc.pages.pg.push(recordingElement("pg", "rec2", T0, { x: 100, y: 0 }, rec(), "Second"));
+    await act(async () => {
+      await store.getState().loadPage("pg");
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Transcribe" }));
+    });
+    await act(async () => {
+      await replay.getState().open(store, "rec2");
+    });
+    expect(screen.getByRole("status").textContent).toBe("Another recording is being transcribed.");
+    const signal = (ipc.run.mock.calls[0][2] as { signal: AbortSignal }).signal;
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(signal.aborted).toBe(true);
+  });
+});
+
+describe("TranscriptPanel on another page", () => {
+  it("the transcript stays visible and highlighted after the replay turns the page", async () => {
+    await mount();
+    await turnPage();
+    expect(store.getState().elements.has("rec")).toBe(false);
+    expect(sentenceButton("Good morning.").getAttribute("aria-current")).toBe("true");
+    act(() => replay.getState().seek(5000));
+    expect(sentenceButton("Today: <b>limits</b> & series.").getAttribute("aria-current")).toBe("true");
+    fireEvent.click(sentenceButton("After the break."));
+    expect(replay.getState().positionMs).toBe(300_000);
+    expect(screen.getByText("This part could not be transcribed.")).toBeTruthy();
+  });
+
+  it("a run that finishes on another page is saved to the marker's page", async () => {
+    ipc.run.mockImplementation((...a) => ipc.real(...a));
+    ipc.asset.mockImplementation(async (id) => (id === "a2" ? [{ startMs: 1000, endMs: 2000, text: "Second part." }] : [{ startMs: 0, endMs: 900, text: "First part." }]));
+    await mount(null);
+    await turnPage();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Transcribe" }));
+    });
+    expect(ipc.asset).toHaveBeenCalledTimes(2);
+    expect(ipc.upsert).toHaveBeenCalledTimes(1);
+    const saved = upserted();
+    expect(saved.id).toBe("rec");
+    expect(saved.content.recording.transcript.segments).toEqual([
+      { startMs: 0, endMs: 900, text: "First part." },
+      { startMs: 301_000, endMs: 302_000, text: "Second part." },
+    ]);
+    expect(screen.getByText("Second part.")).toBeTruthy();
+  });
+
+  it("retry works from another page", async () => {
+    ipc.run.mockImplementation((...a) => ipc.real(...a));
+    ipc.asset.mockResolvedValue([{ startMs: 0, endMs: 1000, text: "Recovered." }]);
+    await mount();
+    await turnPage();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^Retry/ }));
+    });
+    expect(ipc.asset).toHaveBeenCalledTimes(1);
+    expect(ipc.asset.mock.calls[0][0]).toBe("a2");
+    expect(upserted().content.recording.transcript.failed).toBeUndefined();
+    expect(screen.getByText("Recovered.")).toBeTruthy();
+    expect(screen.getByText("Good morning.")).toBeTruthy();
+    expect(screen.queryByText("This part could not be transcribed.")).toBeNull();
+  });
+
+  it("a run for a removed recording says so", async () => {
+    ipc.run.mockImplementation((...a) => ipc.real(...a));
+    ipc.asset.mockResolvedValue([{ startMs: 0, endMs: 1000, text: "Lost." }]);
+    await mount(null);
+    await turnPage();
+    ipc.pages.pg = []; // removed meanwhile (on another device, or from the trash)
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Transcribe" }));
+    });
+    expect(ipc.upsert).not.toHaveBeenCalled();
+    expect(useToastStore.getState().message).toBe("The recording was removed, so the transcript was not saved.");
+  });
+});
 
 describe("TranscriptPanel", () => {
   it("highlights the current sentence", async () => {
@@ -114,7 +228,7 @@ describe("TranscriptPanel", () => {
     await mount();
     expect(screen.getByText("This part could not be transcribed.")).toBeTruthy();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      fireEvent.click(screen.getByRole("button", { name: "Retry part at 5:00" }));
     });
     expect(ipc.run).toHaveBeenCalledTimes(1);
     expect(ipc.run.mock.calls[0][0]).toBe(store);
@@ -126,7 +240,7 @@ describe("TranscriptPanel", () => {
     useSettingsStore.setState((s) => ({ settings: { ...s.settings, speechConsent: null } }));
     await mount();
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      fireEvent.click(screen.getByRole("button", { name: "Retry part at 5:00" }));
     });
     expect(screen.getByRole("alertdialog")).toBeTruthy();
     await act(async () => {
@@ -202,6 +316,8 @@ describe("TranscriptPanel", () => {
       fireEvent.click(screen.getByRole("button", { name: "Transcribe" }));
     });
     expect(screen.getByText("Transcribing part 1 of 2")).toBeTruthy();
+    // Only the progress text is announced, not the Cancel button beside it.
+    expect(screen.getByRole("status").textContent).toBe("Transcribing part 1 of 2");
     const signal = (ipc.run.mock.calls[0][2] as { signal: AbortSignal }).signal;
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(signal.aborted).toBe(true);

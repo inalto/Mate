@@ -1,16 +1,22 @@
 // The timed transcript of a finished recording: its segments sent one at a time to the configured
 // speech service (Rust reads each file; consent, key and address are checked there and by the
 // caller first), each one's sentences offset by the segment's start, and the result stored on the
-// marker as one history entry when the run ends. A part that fails is listed in `failed`, so the
+// marker when the run ends: as one history entry while the marker's page is loaded in the pane,
+// else straight into storage (the replay's Follow pages may have turned the pane away). The job
+// works from the recording as captured when it started. A part that fails is listed in `failed`, so the
 // panel can offer to retry just that part; silence is no failure, only no sentences.
 import { showToast } from "../components/Toast";
 import i18n from "../i18n";
+import { loadElements, upsertElements } from "../ipc/elements";
+import { elementsQueue } from "../ipc/elementsQueue";
 import { isRecognizeError } from "../ipc/recognize";
 import { getSpeechStatus, transcribeAsset } from "../ipc/speech";
 import { languageHint } from "../speech/dictate";
 import { speechErrorText } from "../speech/errors";
 import type { EditorStore } from "../stores/editor";
 import { segmentAt } from "./timeline";
+import { contentOf } from "../model/content";
+import type { Element } from "../model/types";
 import { recordingOf, type RecordingContent, type Segment, type TimedSentence, type Transcript } from "./types";
 
 export interface TranscribeProgress {
@@ -25,6 +31,13 @@ export interface TranscribeOptions {
   onProgress?(p: TranscribeProgress): void;
   /** Stops the run: the parts not done are marked failed (the part in flight is not waited for). */
   signal?: AbortSignal;
+  /**
+   * The marker's page and recording as the caller sees it (needed when the marker's page is not the
+   * one loaded in the pane); default: the marker in the pane's loaded page.
+   */
+  source?: { pageId: string; rec: RecordingContent };
+  /** Called with the transcript once it is saved. */
+  onSaved?(t: Transcript): void;
 }
 
 /** Errors that will fail every following part too: the run stops at the first. */
@@ -43,10 +56,26 @@ function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
   });
 }
 
-/** The live (not deleted) recording of marker `id`. */
-function liveRecording(store: EditorStore, id: string): RecordingContent | null {
-  const el = store.getState().elements.get(id);
-  return el && !el.deletedAt ? recordingOf(el) : null;
+/** `el` with `transcript` on its recording (and a fresh `updatedAt`, as the store stamps edits). */
+function withTranscript(el: Element, rec: RecordingContent, transcript: Transcript): Element {
+  return { ...el, updatedAt: new Date().toISOString(), content: { ...contentOf<Record<string, unknown>>(el), recording: { ...rec, transcript } } };
+}
+
+/**
+ * Stores `transcript` on marker `markerId` of page `pageId`: through the pane's store (one history
+ * entry) while that page is loaded there, else in storage. False when the marker is gone.
+ */
+async function saveTranscript(store: EditorStore, markerId: string, pageId: string, transcript: Transcript): Promise<boolean> {
+  const loaded = () => store.getState().loadedPageId === pageId;
+  if (loaded()) return store.getState().setRecordingTranscript(markerId, transcript);
+  await elementsQueue.flushAll(); // edits of that page still queued land first
+  const el = (await loadElements(pageId)).find((e) => e.id === markerId && !e.deletedAt);
+  // The page was opened meanwhile: its copy in the pane is the one to change.
+  if (loaded()) return store.getState().setRecordingTranscript(markerId, transcript);
+  const rec = el ? recordingOf(el) : null;
+  if (!el || !rec) return false;
+  await upsertElements([withTranscript(el, rec, transcript)]);
+  return true;
 }
 
 /** Audio ms at which each segment starts. */
@@ -80,8 +109,10 @@ function placed(out: unknown, startMs: number, durationMs: number): TimedSentenc
 
 /** Sends segments one at a time, offsets each by its start, stores the result on the marker. Resolves to the indexes that failed. */
 export async function transcribeRecording(store: EditorStore, markerId: string, opts: TranscribeOptions = {}): Promise<number[]> {
-  const rec = liveRecording(store, markerId);
-  if (!rec) return [];
+  const own = store.getState().elements.get(markerId);
+  const source = opts.source ?? (own && !own.deletedAt && recordingOf(own) ? { pageId: own.pageId, rec: recordingOf(own)! } : null);
+  if (!source) return [];
+  const rec = source.rec;
   const n = rec.segments.length;
   const todo = [...new Set(opts.only ?? rec.segments.map((_, i) => i))].filter((i) => Number.isInteger(i) && i >= 0 && i < n).sort((a, b) => a - b);
   if (todo.length === 0) return [];
@@ -124,12 +155,9 @@ export async function transcribeRecording(store: EditorStore, markerId: string, 
     const why = speechErrorText(error.e);
     showToast(todo.length === 1 ? why : `${i18n.t("transcript.partial", { count })} ${why}`);
   }
-  // The marker may have been deleted, or its page closed, meanwhile: nothing is written then.
-  const now = liveRecording(store, markerId);
-  if (!now) return failed;
   const redone = new Set(todo);
-  const prev = opts.only ? now.transcript : undefined;
-  const keep = (prev?.segments ?? []).filter((s) => !redone.has(segmentAt(now.segments, s.startMs).index));
+  const prev = opts.only ? rec.transcript : undefined;
+  const keep = (prev?.segments ?? []).filter((x) => !redone.has(segmentAt(rec.segments, x.startMs).index));
   const stillFailed = [...new Set([...(prev?.failed ?? []).filter((i) => !redone.has(i)), ...failed])].sort((a, b) => a - b);
   const transcript: Transcript = {
     provider,
@@ -138,6 +166,8 @@ export async function transcribeRecording(store: EditorStore, markerId: string, 
     segments: [...keep, ...got].sort((a, b) => a.startMs - b.startMs),
     ...(stillFailed.length > 0 ? { failed: stillFailed } : {}),
   };
-  store.getState().setRecordingTranscript(markerId, transcript);
+  // The marker may have been deleted meanwhile: the result is dropped, and the user told.
+  if (await saveTranscript(store, markerId, source.pageId, transcript)) opts.onSaved?.(transcript);
+  else showToast(i18n.t("transcript.lostMarker"));
   return failed;
 }

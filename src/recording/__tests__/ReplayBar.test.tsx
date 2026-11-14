@@ -97,6 +97,18 @@ describe("ReplayBar", () => {
     expect(transcript.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(transcript);
     expect(screen.queryByRole("dialog", { name: "Transcript" })).toBeNull();
+    // Closing the sheet, by its button or Escape inside it, gives focus back to the bar's button.
+    fireEvent.click(transcript);
+    fireEvent.click(screen.getByRole("button", { name: "Close transcript" }));
+    expect(screen.queryByRole("dialog", { name: "Transcript" })).toBeNull();
+    expect(document.activeElement).toBe(transcript);
+    fireEvent.click(transcript);
+    const sheet = screen.getByRole("dialog", { name: "Transcript" });
+    screen.getByRole("button", { name: "Close transcript" }).focus();
+    fireEvent.keyDown(sheet, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Transcript" })).toBeNull();
+    expect(document.activeElement).toBe(transcript);
+    expect(replay.getState().markerId).toBe("rec");
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     expect(replay.getState().playing).toBe(true);
     expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();

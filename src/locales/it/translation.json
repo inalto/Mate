@@ -1472,13 +1472,16 @@
     "cancel": "Annulla",
     "failedPart": "Questa parte non è stata trascritta.",
     "retry": "Riprova",
+    "lostMarker": "La registrazione è stata rimossa, quindi la trascrizione non è stata salvata.",
+    "busyOther": "È in corso la trascrizione di un'altra registrazione.",
+    "retryAt": "Riprova la parte a {{time}}",
     "copy": "Copia",
     "insert": "Inserisci come casella di testo",
     "empty": "Non è stato riconosciuto alcun parlato.",
     "close": "Chiudi la trascrizione",
     "replace": {
       "title": "Trascrivere di nuovo?",
-      "body": "La trascrizione attuale viene sostituita."
+      "body": "La trascrizione attuale verrà sostituita."
     },
     "copied": "Trascrizione copiata.",
     "inserted": "Trascrizione aggiunta alla pagina.",
