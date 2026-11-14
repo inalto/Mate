@@ -27,7 +27,7 @@ import { polylineTouches } from "../tools/eraser";
 import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
 import { boxRect, elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { shiftBelow } from "../tools/insertSpace";
-import { spaceShift } from "../stores/editor";
+import { isInkTool, spaceShift } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
 import { contentOf, isAttachable, isLocked, isPdfPlacement, type ConnectorContent, type ConnectorEnd, type Side } from "../model/content";
 import { equalSpacing, snapMove, type Guide } from "../tools/smartGuides";
@@ -380,8 +380,8 @@ export const REPLAY_TAP_MS = 300;
 /**
  * Tap-to-seek while a replay is open: a press (any tool but the eraser) on a note written during the
  * recording that is released within REPLAY_TAP_MS and REPLAY_TAP_PX seeks the audio there (`up`
- * returns the tap: the press is consumed). A second tap on the same note within the double-tap window
- * is not consumed (a double-click still opens editors). Anything else behaves as without a replay.
+ * returns the tap: the press is consumed). With a non-ink tool, a second tap on the same note within
+ * the double-tap window is not consumed (a double-click still opens editors). Anything else behaves as without a replay.
  */
 export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number) {
   let press: Tap | null = null;
@@ -402,7 +402,8 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
       if (!id || !replay.canSeek(id)) return false;
       const scr = worldToScreen(s.camera, p);
       const tap: Tap = { id, x: scr.x, y: scr.y, t: now() };
-      if (isDoubleTap(seeked, tap)) {
+      // Double-click opens editors on the tool path; ink never opens one, so its second tap seeks too.
+      if (!isInkTool(tool) && isDoubleTap(seeked, tap)) {
         seeked = null;
         return false;
       }

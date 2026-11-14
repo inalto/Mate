@@ -96,6 +96,9 @@ export function pageTicks(times: { pageId: string; createdAt: string }[], rec: R
   return out;
 }
 
+/** Audio ms of the first tick after `ms` (Infinity when none). */
+const nextTickAfter = (ticks: PageTick[], ms: number): number => ticks.find((k) => k.audioMs > ms)?.audioMs ?? Infinity;
+
 const sameSet = (a: ReadonlySet<string> | null, b: ReadonlySet<string>): boolean => !!a && a.size === b.size && [...b].every((id) => a.has(id));
 
 /** The page of the last tick at or before `ms` (null before the first). */
@@ -126,7 +129,7 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
     pendingMs: number;
     tickPage: string | null;
     /** After a tap-to-seek: `page` stays the tick page until the playhead reaches `untilMs`. */
-    hold: { page: string | null; untilMs: number } | null;
+    hold: { page: string | null; fromMs: number; untilMs: number } | null;
     /** Page the replay itself asked for (its notePageChanged keeps following). */
     ownTurn: string | null;
     timer: ReturnType<typeof setInterval> | null;
@@ -254,9 +257,11 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
     if (session?.srcSet) skipMissing();
   };
 
-  const goto = (ms: number) => {
+  /** Jump the playhead; any page hold ends unless `hold` (a tap's own seek) replaces it. */
+  const goto = (ms: number, hold: NonNullable<typeof session>["hold"] = null) => {
     const s = session;
     if (!s) return;
+    s.hold = hold;
     setPos(ms);
     const { index, offsetMs } = segmentAt(s.rec.segments, store.getState().positionMs);
     if (index !== s.cur) void load(index, offsetMs);
@@ -321,7 +326,9 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
       const times = from && to ? await unitElementTimes(rec.unitId, from, to).catch(() => []) : [];
       if (session !== s) return;
       const ticks = pageTicks(times, rec);
-      s.tickPage = tickPageAt(ticks, get().positionMs);
+      // A tap made before the ticks arrived: its page is held until the next tick after it.
+      if (s.hold) s.hold.untilMs = nextTickAfter(ticks, s.hold.fromMs);
+      s.tickPage = s.hold ? s.hold.page : tickPageAt(ticks, get().positionMs);
       set({ ticks });
     },
 
@@ -338,7 +345,6 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
     },
 
     seek(ms) {
-      if (session) session.hold = null;
       goto(ms);
     },
 
@@ -368,10 +374,8 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
       // A tap on the open page never turns it: that page stays the tick page until the next tick
       // after the target (the target is 2 s early, often before the tick of the page's first notes).
       const page = s.editor.getState().pageId;
-      const next = get().ticks.find((k) => k.audioMs > t.audioMs);
-      s.hold = { page, untilMs: next?.audioMs ?? Infinity };
       s.tickPage = page;
-      goto(t.audioMs);
+      goto(t.audioMs, { page, fromMs: t.audioMs, untilMs: nextTickAfter(get().ticks, t.audioMs) });
       if (t.inGap) deps.onGapSeek?.();
       return true;
     },

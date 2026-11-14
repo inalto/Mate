@@ -153,6 +153,15 @@ describe("replay on the canvas", () => {
     expect([...store.getState().elements.keys()].sort()).toEqual(["rec", "x", "y"]);
   });
 
+  it("a pen double tap on an in-recording note never leaves a dot", async () => {
+    await mount();
+    const { seek } = await openReplay();
+    tap({ x: 10, y: 10 });
+    tap({ x: 10, y: 10 });
+    expect(seek).toHaveBeenCalledTimes(2);
+    expect([...store.getState().elements.keys()].sort()).toEqual(["rec", "x", "y"]);
+  });
+
   it("a pen tap on empty paper still draws a dot", async () => {
     await mount();
     const { seek } = await openReplay();

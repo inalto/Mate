@@ -247,6 +247,54 @@ describe("replay engine", () => {
     expect(goToPage).toHaveBeenCalledWith("pgC");
   });
 
+  it("restarting from the end follows pages again after a tap", async () => {
+    // "b" (390 000) is after the last tick: the tap's hold has no end of its own.
+    ipc.times.mockResolvedValue([
+      { id: "z0", pageId: "pgA", createdAt: iso(0) },
+      { id: "a", pageId: "pg", createdAt: iso(60_000) },
+    ]);
+    const { s, goToPage } = await setup();
+    expect(s().seekToElement("b")).toBe(true); // 388 000, in segment 2
+    s().toggle();
+    await settle();
+    audio.fire("loadedmetadata");
+    audio.currentTime = 199.5; // played to the end
+    audio.fire("ended");
+    expect(s().playing).toBe(false);
+    expect(s().positionMs).toBe(500_000);
+    goToPage.mockClear();
+    s().toggle(); // restart from 0: page A's tick is followed again
+    expect(goToPage).toHaveBeenCalledWith("pgA");
+  });
+
+  it("a tap before the ticks have loaded releases the page at the next tick once they arrive", async () => {
+    let resolveTimes!: (t: { id: string; pageId: string; createdAt: string }[]) => void;
+    ipc.times.mockReturnValue(new Promise((res) => (resolveTimes = res)));
+    const goToPage = vi.fn();
+    const replay = createReplay({ audio: audio as unknown as HTMLAudioElement, urlOf: async (id) => `url:${id}`, goToPage });
+    const s = () => replay.getState();
+    const opening = s().open(editor, "rec");
+    await settle();
+    audio.fire("loadedmetadata");
+    expect(s().seekToElement("a")).toBe(true); // no ticks yet
+    resolveTimes([
+      { id: "z0", pageId: "pgA", createdAt: iso(0) },
+      { id: "a", pageId: "pg", createdAt: iso(60_000) },
+      { id: "z2", pageId: "pgC", createdAt: iso(120_000) },
+    ]);
+    await opening;
+    s().toggle();
+    audio.currentTime = 59;
+    audio.fire("timeupdate");
+    audio.currentTime = 61;
+    audio.fire("timeupdate");
+    expect(goToPage).not.toHaveBeenCalled();
+    audio.currentTime = 121;
+    audio.fire("timeupdate");
+    expect(goToPage).toHaveBeenCalledWith("pgC");
+    expect(goToPage).toHaveBeenCalledTimes(1);
+  });
+
   it("an error while playing skips to the next segment", async () => {
     const { s, onMissingSegment } = await setup();
     s().toggle();
