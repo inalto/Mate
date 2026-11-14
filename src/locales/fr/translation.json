@@ -300,28 +300,28 @@
   },
   "backup": {
     "skipped": {
-      "title": "Some notebooks were not backed up",
-      "body": "These notebooks are too large to back up and are NOT in this backup: {{titles}}"
+      "title": "Certains cahiers n'ont pas été sauvegardés",
+      "body": "Ces cahiers sont trop volumineux pour être sauvegardés et ne sont PAS dans cette sauvegarde : {{titles}}"
     },
-    "missingAudio": "Audio could not be found for recordings in: {{titles}}",
+    "missingAudio": "L'audio des enregistrements est introuvable dans : {{titles}}",
     "restore": {
-      "label": "Restore from backup…",
-      "hint": "Adds the notebooks of a Mate backup zip, with their recordings, beside the ones you have",
-      "filter": "Mate backup",
-      "title": "Restore this backup?",
-      "body": "Notebooks from the backup are added beside the ones you already have. Nothing is replaced or deleted.",
-      "confirm": "Restore",
-      "done_one": "{{count}} notebook restored.",
-      "done_other": "{{count}} notebooks restored.",
-      "failed": "Could not be restored: {{titles}}",
-      "lostRecordings": "Recordings in these notebooks came back without their audio: {{titles}}",
-      "rejectedAudio_one": "{{count}} audio file in the backup was not valid and was skipped.",
-      "rejectedAudio_other": "{{count}} audio files in the backup were not valid and were skipped.",
-      "error": "The backup could not be restored. Nothing was changed.",
-      "busy": "Restoring…",
-      "resultTitle": "Backup restored",
-      "resultTitleNone": "Nothing was restored",
-      "errorUnknown": "The restore stopped unexpectedly. Some notebooks may have been restored."
+      "label": "Restaurer à partir d'une sauvegarde…",
+      "hint": "Ajoute les cahiers d'une sauvegarde zip de Mate, avec leurs enregistrements, à côté de ceux que vous avez",
+      "filter": "Sauvegarde Mate",
+      "title": "Restaurer cette sauvegarde ?",
+      "body": "Les cahiers de la sauvegarde sont ajoutés à côté de ceux que vous avez déjà. Rien n'est remplacé ni supprimé.",
+      "confirm": "Restaurer",
+      "done_one": "{{count}} cahier restauré.",
+      "done_other": "{{count}} cahiers restaurés.",
+      "failed": "Restauration impossible : {{titles}}",
+      "lostRecordings": "Les enregistrements de ces cahiers sont revenus sans leur audio : {{titles}}",
+      "rejectedAudio_one": "{{count}} fichier audio de la sauvegarde n'était pas valide et a été ignoré.",
+      "rejectedAudio_other": "{{count}} fichiers audio de la sauvegarde n'étaient pas valides et ont été ignorés.",
+      "error": "La sauvegarde n'a pas pu être restaurée. Rien n'a été modifié.",
+      "busy": "Restauration…",
+      "resultTitle": "Sauvegarde restaurée",
+      "resultTitleNone": "Rien n'a été restauré",
+      "errorUnknown": "La restauration s'est arrêtée de façon inattendue. Certains cahiers ont peut-être été restaurés."
     }
   },
   "common": {
@@ -593,7 +593,7 @@
       "openPageWindow": "Ouvrir la page dans une nouvelle fenêtre",
       "palette": "Recherche et actions",
       "shortcuts": "Raccourcis clavier",
-      "recordingToggle": "Start or stop recording"
+      "recordingToggle": "Démarrer ou arrêter l'enregistrement"
     }
   },
   "palette": {
@@ -848,8 +848,8 @@
     "latexHint": "Enregistre un fichier .tex ; les images deviennent des espaces réservés.",
     "mateHint": "Exporte tout le cahier auquel appartient cette page.",
     "recordings": {
-      "label": "Include recordings",
-      "hint": "Recordings can contain other people's voices."
+      "label": "Inclure les enregistrements",
+      "hint": "Les enregistrements peuvent contenir la voix d'autres personnes."
     },
     "shareHint": "Pour envoyer ce cahier à quelqu'un, utilise Partager… depuis le menu du cahier.",
     "shareInstead": "Partager plutôt…",
@@ -1427,68 +1427,68 @@
     "done": "Done"
   },
   "recording": {
-    "title": "Recording {{date}}",
-    "tooShort": "Nothing was recorded.",
-    "recovered": "A recording that was interrupted was recovered.",
-    "dictationBusy": "Stop the recording to dictate.",
-    "limitSoon": "Recording stops in 5 minutes (4-hour limit).",
-    "limit": "The 4-hour limit was reached. The recording was saved.",
-    "writeFailed": "The recording stopped because it could not be saved. What was recorded so far is kept.",
-    "failed": "The recording stopped because of a microphone problem. What was recorded so far is kept.",
-    "busy": "A recording is already running.",
-    "dictationActive": "Finish dictating before you record.",
-    "start": "Record audio",
-    "stop": "Stop recording",
+    "title": "Enregistrement {{date}}",
+    "tooShort": "Rien n'a été enregistré.",
+    "recovered": "Un enregistrement interrompu a été récupéré.",
+    "dictationBusy": "Arrêtez l'enregistrement pour dicter.",
+    "limitSoon": "L'enregistrement s'arrêtera dans 5 minutes (limite de 4 heures).",
+    "limit": "La limite de 4 heures a été atteinte. L'enregistrement a été sauvegardé.",
+    "writeFailed": "L'enregistrement s'est arrêté, car il n'a pas pu être sauvegardé. Ce qui a été enregistré jusqu'ici est conservé.",
+    "failed": "L'enregistrement s'est arrêté à cause d'un problème de microphone. Ce qui a été enregistré jusqu'ici est conservé.",
+    "busy": "Un enregistrement est déjà en cours.",
+    "dictationActive": "Terminez la dictée avant d'enregistrer.",
+    "start": "Enregistrer l'audio",
+    "stop": "Arrêter l'enregistrement",
     "pause": "Pause",
-    "resume": "Resume",
-    "pill": "Recording {{time}}",
-    "paused": "Paused {{time}}",
-    "interrupted": "Not recording {{time}}",
-    "gap": "{{time}} was not recorded while Mate was in the background.",
-    "menu": "Recording",
+    "resume": "Reprendre",
+    "pill": "Enregistrement {{time}}",
+    "paused": "En pause {{time}}",
+    "interrupted": "Pas d'enregistrement {{time}}",
+    "gap": "Rien n'a été enregistré pendant {{time}} : Mate était en arrière-plan.",
+    "menu": "Enregistrement",
     "leave": {
-      "title": "Stop recording?",
-      "body": "The recording belongs to this notebook. Leaving it stops the recording and saves it.",
-      "stop": "Stop and leave",
-      "stay": "Stay"
+      "title": "Arrêter l'enregistrement ?",
+      "body": "L'enregistrement appartient à ce cahier. Si vous le quittez, l'enregistrement s'arrête et est sauvegardé.",
+      "stop": "Arrêter et quitter",
+      "stay": "Rester"
     }
   },
   "replay": {
-    "bar": "Recording replay",
-    "play": "Play",
+    "bar": "Relecture de l'enregistrement",
+    "play": "Lire",
     "pause": "Pause",
-    "back": "Back 10 seconds",
-    "forward": "Forward 10 seconds",
+    "back": "Reculer de 10 secondes",
+    "forward": "Avancer de 10 secondes",
     "position": "Position",
     "time": "{{position}} / {{total}}",
-    "speed": "Speed",
-    "follow": "Follow pages",
-    "transcript": "Transcript",
-    "close": "Close",
-    "notRecorded": "This was written while nothing was being recorded.",
-    "missingSegment": "Part of this recording is missing."
+    "speed": "Vitesse",
+    "follow": "Suivre les pages",
+    "transcript": "Transcription",
+    "close": "Fermer",
+    "notRecorded": "Ceci a été écrit alors que rien n'était enregistré.",
+    "missingSegment": "Une partie de cet enregistrement est manquante."
   },
   "transcript": {
-    "title": "Transcript",
-    "start": "Transcribe",
-    "progress": "Transcribing part {{done}} of {{total}}",
-    "cancel": "Cancel",
-    "failedPart": "This part could not be transcribed.",
-    "retry": "Retry",
-    "lostMarker": "The recording was removed, so the transcript was not saved.",
-    "busyOther": "Another recording is being transcribed.",
-    "retryAt": "Retry part at {{time}}",
-    "copy": "Copy",
-    "insert": "Insert as text box",
-    "empty": "No speech was recognised.",
-    "close": "Close transcript",
+    "title": "Transcription",
+    "start": "Transcrire",
+    "progress": "Transcription de la partie {{done}} sur {{total}}",
+    "cancel": "Annuler",
+    "failedPart": "Cette partie n'a pas pu être transcrite.",
+    "retry": "Réessayer",
+    "lostMarker": "L'enregistrement a été supprimé, la transcription n'a donc pas été sauvegardée.",
+    "busyOther": "Un autre enregistrement est en cours de transcription.",
+    "retryAt": "Réessayer la partie à {{time}}",
+    "copy": "Copier",
+    "insert": "Insérer comme zone de texte",
+    "empty": "Aucune parole n'a été reconnue.",
+    "close": "Fermer la transcription",
     "replace": {
-      "title": "Transcribe again?",
-      "body": "This replaces the current transcript."
+      "title": "Transcrire à nouveau ?",
+      "body": "Cela remplace la transcription actuelle."
     },
-    "copied": "Transcript copied.",
-    "inserted": "Transcript added to the page.",
-    "partial_one": "{{count}} part could not be transcribed.",
-    "partial_other": "{{count}} parts could not be transcribed."
+    "copied": "Transcription copiée.",
+    "inserted": "Transcription ajoutée à la page.",
+    "partial_one": "{{count}} partie n'a pas pu être transcrite.",
+    "partial_other": "{{count}} parties n'ont pas pu être transcrites."
   }
 }

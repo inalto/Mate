@@ -299,26 +299,26 @@
   },
   "backup": {
     "skipped": {
-      "title": "Some notebooks were not backed up",
-      "body": "These notebooks are too large to back up and are NOT in this backup: {{titles}}"
+      "title": "部分笔记本未备份",
+      "body": "以下笔记本过大，无法备份，未包含在此备份中：{{titles}}"
     },
-    "missingAudio": "Audio could not be found for recordings in: {{titles}}",
+    "missingAudio": "找不到以下笔记本中录音的音频：{{titles}}",
     "restore": {
-      "label": "Restore from backup…",
-      "hint": "Adds the notebooks of a Mate backup zip, with their recordings, beside the ones you have",
-      "filter": "Mate backup",
-      "title": "Restore this backup?",
-      "body": "Notebooks from the backup are added beside the ones you already have. Nothing is replaced or deleted.",
-      "confirm": "Restore",
-      "done_other": "{{count}} notebooks restored.",
-      "failed": "Could not be restored: {{titles}}",
-      "lostRecordings": "Recordings in these notebooks came back without their audio: {{titles}}",
-      "rejectedAudio_other": "{{count}} audio files in the backup were not valid and were skipped.",
-      "error": "The backup could not be restored. Nothing was changed.",
-      "busy": "Restoring…",
-      "resultTitle": "Backup restored",
-      "resultTitleNone": "Nothing was restored",
-      "errorUnknown": "The restore stopped unexpectedly. Some notebooks may have been restored."
+      "label": "从备份还原…",
+      "hint": "将 Mate 备份 zip 中的笔记本及其录音添加到你现有的笔记本中",
+      "filter": "Mate 备份",
+      "title": "还原此备份？",
+      "body": "备份中的笔记本将添加到你现有的笔记本中，不会替换或删除任何内容。",
+      "confirm": "还原",
+      "done_other": "已还原 {{count}} 个笔记本。",
+      "failed": "无法还原：{{titles}}",
+      "lostRecordings": "以下笔记本中的录音已还原，但没有音频：{{titles}}",
+      "rejectedAudio_other": "备份中有 {{count}} 个音频文件无效，已跳过。",
+      "error": "无法还原备份。未做任何更改。",
+      "busy": "正在还原…",
+      "resultTitle": "备份已还原",
+      "resultTitleNone": "未还原任何内容",
+      "errorUnknown": "还原意外中断。部分笔记本可能已还原。"
     }
   },
   "common": {
@@ -590,7 +590,7 @@
       "openPageWindow": "在新窗口中打开页面",
       "palette": "搜索与操作",
       "shortcuts": "键盘快捷键",
-      "recordingToggle": "Start or stop recording"
+      "recordingToggle": "开始或停止录音"
     }
   },
   "palette": {
@@ -845,8 +845,8 @@
     "latexHint": "保存为 .tex 文件；图片将转换为占位符。",
     "mateHint": "导出此页面所属的整个笔记本。",
     "recordings": {
-      "label": "Include recordings",
-      "hint": "Recordings can contain other people's voices."
+      "label": "包含录音",
+      "hint": "录音可能包含他人的声音。"
     },
     "shareHint": "如需将此笔记本发送给他人，请使用笔记本菜单中的“分享…”。",
     "shareInstead": "改为分享…",
@@ -1411,67 +1411,67 @@
     "done": "Done"
   },
   "recording": {
-    "title": "Recording {{date}}",
-    "tooShort": "Nothing was recorded.",
-    "recovered": "A recording that was interrupted was recovered.",
-    "dictationBusy": "Stop the recording to dictate.",
-    "limitSoon": "Recording stops in 5 minutes (4-hour limit).",
-    "limit": "The 4-hour limit was reached. The recording was saved.",
-    "writeFailed": "The recording stopped because it could not be saved. What was recorded so far is kept.",
-    "failed": "The recording stopped because of a microphone problem. What was recorded so far is kept.",
-    "busy": "A recording is already running.",
-    "dictationActive": "Finish dictating before you record.",
-    "start": "Record audio",
-    "stop": "Stop recording",
-    "pause": "Pause",
-    "resume": "Resume",
-    "pill": "Recording {{time}}",
-    "paused": "Paused {{time}}",
-    "interrupted": "Not recording {{time}}",
-    "gap": "{{time}} was not recorded while Mate was in the background.",
-    "menu": "Recording",
+    "title": "录音 {{date}}",
+    "tooShort": "未录到任何内容。",
+    "recovered": "已恢复一段被中断的录音。",
+    "dictationBusy": "请先停止录音再听写。",
+    "limitSoon": "录音将在 5 分钟后停止（上限 4 小时）。",
+    "limit": "已达到 4 小时上限。录音已保存。",
+    "writeFailed": "录音因无法保存而停止。已录内容已保留。",
+    "failed": "录音因麦克风问题而停止。已录内容已保留。",
+    "busy": "已有录音正在进行。",
+    "dictationActive": "请先结束听写再录音。",
+    "start": "录制音频",
+    "stop": "停止录音",
+    "pause": "暂停",
+    "resume": "继续",
+    "pill": "录音 {{time}}",
+    "paused": "已暂停 {{time}}",
+    "interrupted": "未在录音 {{time}}",
+    "gap": "Mate 在后台期间有 {{time}} 未录音。",
+    "menu": "录音",
     "leave": {
-      "title": "Stop recording?",
-      "body": "The recording belongs to this notebook. Leaving it stops the recording and saves it.",
-      "stop": "Stop and leave",
-      "stay": "Stay"
+      "title": "停止录音？",
+      "body": "录音属于此笔记本。离开将停止录音并保存。",
+      "stop": "停止并离开",
+      "stay": "留下"
     }
   },
   "replay": {
-    "bar": "Recording replay",
-    "play": "Play",
-    "pause": "Pause",
-    "back": "Back 10 seconds",
-    "forward": "Forward 10 seconds",
-    "position": "Position",
+    "bar": "录音回放",
+    "play": "播放",
+    "pause": "暂停",
+    "back": "后退 10 秒",
+    "forward": "前进 10 秒",
+    "position": "位置",
     "time": "{{position}} / {{total}}",
-    "speed": "Speed",
-    "follow": "Follow pages",
-    "transcript": "Transcript",
-    "close": "Close",
-    "notRecorded": "This was written while nothing was being recorded.",
-    "missingSegment": "Part of this recording is missing."
+    "speed": "速度",
+    "follow": "跟随页面",
+    "transcript": "转写文本",
+    "close": "关闭",
+    "notRecorded": "这是在没有录音时写下的。",
+    "missingSegment": "此录音缺少一部分。"
   },
   "transcript": {
-    "title": "Transcript",
-    "start": "Transcribe",
-    "progress": "Transcribing part {{done}} of {{total}}",
-    "cancel": "Cancel",
-    "failedPart": "This part could not be transcribed.",
-    "retry": "Retry",
-    "lostMarker": "The recording was removed, so the transcript was not saved.",
-    "busyOther": "Another recording is being transcribed.",
-    "retryAt": "Retry part at {{time}}",
-    "copy": "Copy",
-    "insert": "Insert as text box",
-    "empty": "No speech was recognised.",
-    "close": "Close transcript",
+    "title": "转写文本",
+    "start": "转写",
+    "progress": "正在转写第 {{done}} 段，共 {{total}} 段",
+    "cancel": "取消",
+    "failedPart": "这一段无法转写。",
+    "retry": "重试",
+    "lostMarker": "录音已被移除，因此转写文本未保存。",
+    "busyOther": "正在转写另一段录音。",
+    "retryAt": "重试 {{time}} 处的这一段",
+    "copy": "复制",
+    "insert": "作为文本框插入",
+    "empty": "未识别到语音。",
+    "close": "关闭转写文本",
     "replace": {
-      "title": "Transcribe again?",
-      "body": "This replaces the current transcript."
+      "title": "重新转写？",
+      "body": "这将替换当前的转写文本。"
     },
-    "copied": "Transcript copied.",
-    "inserted": "Transcript added to the page.",
-    "partial_other": "{{count}} parts could not be transcribed."
+    "copied": "已复制转写文本。",
+    "inserted": "已将转写文本添加到页面。",
+    "partial_other": "有 {{count}} 段无法转写。"
   }
 }
