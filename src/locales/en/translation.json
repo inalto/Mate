@@ -1401,6 +1401,7 @@
     "limit": "The 4-hour limit was reached. The recording was saved.",
     "writeFailed": "The recording stopped because it could not be saved. What was recorded so far is kept.",
     "failed": "The recording stopped because of a microphone problem. What was recorded so far is kept.",
-    "busy": "A recording is already running."
+    "busy": "A recording is already running.",
+    "dictationActive": "Finish dictating before you record."
   }
 }

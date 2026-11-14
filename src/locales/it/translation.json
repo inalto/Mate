@@ -1401,6 +1401,7 @@
     "limit": "È stato raggiunto il limite di 4 ore. La registrazione è stata salvata.",
     "writeFailed": "La registrazione si è interrotta perché non è stato possibile salvarla. Quanto registrato finora è conservato.",
     "failed": "La registrazione si è interrotta per un problema del microfono. Quanto registrato finora è conservato.",
-    "busy": "È già in corso una registrazione."
+    "busy": "È già in corso una registrazione.",
+    "dictationActive": "Termina la dettatura prima di registrare."
   }
 }

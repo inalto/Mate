@@ -6,7 +6,9 @@ const queue = vi.hoisted(() => ({
   enqueueDelete: vi.fn(),
   flushAll: vi.fn(async () => {}),
   pending: () => 0,
-  failed: () => 0,
+  failedOps: [] as unknown[],
+  failed: () => queue.failedOps.length,
+  snapshot: () => ({ pending: [], failed: queue.failedOps }),
 }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 const ipcElements = vi.hoisted(() => ({
@@ -97,6 +99,7 @@ const markers = (s: EditorStore) => [...s.getState().elements.values()].filter((
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  queue.failedOps = [];
   pane0 = createEditorStore();
   pane1 = createEditorStore();
   stores.panes = [pane0, pane1];
@@ -259,6 +262,109 @@ describe("recording session", () => {
     expect(rs().phase).toBe("saving");
     finish(fake.result);
     await vi.waitFor(() => expect(rs().phase).toBe("idle"));
+  });
+
+  it("a recording placed in an open pane uses the recording id", async () => {
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    const recId = rs().recId!;
+    expect(await rs().stop()).toBe(recId);
+    expect(markers(pane0).map((m) => m.id)).toEqual([recId]);
+  });
+
+  it("an unrelated failed write does not fail the recording", async () => {
+    queue.failedOps = [{ op: "delete", id: "x" }, { op: "upsert", element: { id: "other" } }];
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    const recId = rs().recId!;
+    expect(await rs().stop()).toBe(recId);
+    expect(sinkMock.closeRecording).toHaveBeenCalledWith(recId);
+    expect(showToast).not.toHaveBeenCalledWith(i18n.t("errors.generic"));
+  });
+
+  it("a marker whose write failed keeps the work folder", async () => {
+    queue.flushAll.mockImplementationOnce(async () => {
+      queue.failedOps = [...markers(pane0)].map((element) => ({ op: "upsert", element }));
+    });
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    expect(await rs().stop()).toBeNull();
+    expect(sinkMock.closeRecording).not.toHaveBeenCalled();
+  });
+
+  it("recovery does not duplicate a marker that was already saved", async () => {
+    await pane0.getState().loadPage("other");
+    const manifest = {
+      recId: "r1",
+      unitId: "u",
+      pageId: "pg",
+      at: { x: 0, y: 0 },
+      spans: [span(5000)],
+      segments: [seg("a0", 5000)],
+      openIndex: 1,
+      openSpanWallStart: null,
+      mime: "audio/webm",
+    };
+    sinkMock.unfinishedRecordings.mockResolvedValueOnce([{ recId: "r1", manifest, parts: [] }]);
+    ipcElements.loadElements.mockResolvedValueOnce([{ id: "r1", pageId: "pg", type: "media" } as Element]);
+    expect(await recoverRecordings(vi.fn(async () => 0))).toBe(0);
+    expect(ipcElements.upsertElements).not.toHaveBeenCalled();
+    expect(sinkMock.beginRecording).not.toHaveBeenCalled();
+    expect(sinkMock.closeRecording).toHaveBeenCalledWith("r1");
+  });
+
+  it("recovery into an open pane does not add a second marker", async () => {
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    const recId = rs().recId!;
+    await rs().stop();
+    const manifest = { recId, unitId: "u", pageId: "pg", at: { x: 0, y: 0 }, spans: [span(5000)], segments: [seg("a0", 5000)], openIndex: 1, openSpanWallStart: null, mime: "audio/webm" };
+    sinkMock.unfinishedRecordings.mockResolvedValueOnce([{ recId, manifest, parts: [] }]);
+    expect(await recoverRecordings(vi.fn(async () => 0))).toBe(0);
+    expect(markers(pane0)).toHaveLength(1);
+  });
+
+  it("the limit toast shows only when the marker was placed", async () => {
+    await pane0.getState().loadPage("other");
+    ipcElements.upsertElements.mockRejectedValueOnce(new Error("disk full"));
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    fake.emit({ type: "ended", reason: "limit" });
+    await vi.waitFor(() => expect(rs().phase).toBe("idle"));
+    await Promise.resolve();
+    expect(showToast).toHaveBeenCalledWith(i18n.t("errors.generic"));
+    expect(showToast).not.toHaveBeenCalledWith(i18n.t("recording.limit"));
+
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    fake.emit({ type: "ended", reason: "limit" });
+    await vi.waitFor(() => expect(showToast).toHaveBeenCalledWith(i18n.t("recording.limit")));
+  });
+
+  it("a start while dictating says to finish dictating", async () => {
+    useDictation.setState({ phase: "recording" });
+    try {
+      await rs().start("u", "pg", { x: 0, y: 0 });
+      expect(fake.start).not.toHaveBeenCalled();
+      expect(showToast).toHaveBeenCalledWith(i18n.t("recording.dictationActive"));
+      expect(rs().phase).toBe("idle");
+    } finally {
+      useDictation.setState({ phase: "idle" });
+    }
+  });
+
+  it("a resumed event does not override a pause", async () => {
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    await rs().pause();
+    expect(rs().phase).toBe("paused");
+    fake.emit({ type: "span", spans: [span(2000)], open: WALL });
+    fake.emit({ type: "resumed", lostMs: 1000 });
+    expect(rs().phase).toBe("paused");
+  });
+
+  it("a failed pause keeps the phase", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fake.start.mockImplementationOnce(async (deps: { onEvent(e: Ev): void }) => {
+      fake.emit = (e) => deps.onEvent(e as Ev);
+      return { mime: "audio/webm", elapsedMs: () => 0, pause: vi.fn(async () => Promise.reject(new Error("x"))), resume: vi.fn(async () => {}), stop: fake.stop };
+    });
+    await rs().start("u", "pg", { x: 0, y: 0 });
+    await rs().pause();
+    expect(rs().phase).toBe("recording");
   });
 
   it("recovers an unfinished recording", async () => {

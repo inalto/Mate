@@ -58,6 +58,8 @@ interface Run {
   rec: LongRecorder | null;
   /** `stop` was called: a start still in flight goes no further. */
   cancelled: boolean;
+  /** `resume` is in flight: a span opening now ends the user's pause. */
+  resuming: boolean;
   /** Settles when `start` is done (recording, or given up). */
   starting: Promise<void>;
   tick?: ReturnType<typeof setInterval>;
@@ -75,14 +77,26 @@ export const useRecording = create<RecordingState>((set, get) => ({
   start: (unitId, pageId, at) => start(unitId, pageId, at),
   async pause() {
     const r = run;
-    if (!r?.rec || (get().phase !== "recording" && get().phase !== "interrupted")) return;
+    const before = get().phase;
+    if (!r?.rec || (before !== "recording" && before !== "interrupted")) return;
     set({ phase: "paused" });
-    await r.rec.pause();
+    try {
+      await r.rec.pause();
+    } catch (err) {
+      console.error("pausing the recording failed", err);
+      if (run === r && get().phase === "paused") set({ phase: before });
+    }
   },
   async resume() {
     const r = run;
     if (!r?.rec || (get().phase !== "paused" && get().phase !== "interrupted")) return;
-    await r.rec.resume(); // the phase follows the recorder's events: it may not have reopened
+    // The phase follows the recorder's events: it may not have reopened.
+    r.resuming = true;
+    try {
+      await r.rec.resume();
+    } finally {
+      r.resuming = false;
+    }
   },
   stop,
   dismissGap: () => set({ lostMs: null }),
@@ -133,28 +147,30 @@ function onEvent(e: LongRecorderEvent): void {
     m.spans = e.spans;
     m.openSpanWallStart = e.open;
     persist(m);
-    if (e.open && (phase === "paused" || phase === "interrupted")) set({ phase: "recording" });
+    if (e.open && (phase === "interrupted" || (phase === "paused" && r.resuming))) set({ phase: "recording" });
   } else if (e.type === "interrupted") {
     if (phase !== "saving") set({ phase: "interrupted" });
   } else if (e.type === "resumed") {
-    if (phase !== "saving") set({ phase: "recording", lostMs: e.lostMs });
+    if (phase === "interrupted") set({ phase: "recording", lostMs: e.lostMs });
+    else if (phase !== "saving") set({ lostMs: e.lostMs }); // a user pause stays a pause
     void lockScreen();
   } else if (e.type === "warnLimit") {
     showToast(i18n.t("recording.limitSoon"));
   } else if (e.reason !== "stopped") {
     const reason: EndReason = e.reason;
-    void stop().then(() => showToast(i18n.t(END_TOAST[reason])));
+    // Only when the marker was placed: a failed save has already said so.
+    void stop().then((id) => id !== null && showToast(i18n.t(END_TOAST[reason])));
   }
 }
 
 async function start(unitId: string, pageId: string, at: Vec2): Promise<void> {
   if (run || isRecordingActive()) return showToast(i18n.t("recording.busy"));
   const d = useDictation.getState();
-  if (d.phase !== "idle" || d.askConsent) return showToast(i18n.t("recording.busy"));
+  if (d.phase !== "idle" || d.askConsent) return showToast(i18n.t("recording.dictationActive"));
   const recId = crypto.randomUUID();
   const manifest: Manifest = { recId, unitId, pageId, at: { x: at.x, y: at.y }, spans: [], segments: [], openIndex: 0, openSpanWallStart: null, mime: "" };
   let done!: () => void;
-  const r: Run = { manifest, rec: null, cancelled: false, starting: new Promise<void>((ok) => (done = ok)), wake: null };
+  const r: Run = { manifest, rec: null, cancelled: false, resuming: false, starting: new Promise<void>((ok) => (done = ok)), wake: null };
   run = r;
   useRecording.setState({ ...IDLE, phase: "starting", recId, unitId });
   try {
@@ -276,16 +292,26 @@ export function markerPage(pageId: string, unitId: string): string | null {
 }
 
 /** Adds the marker (undoably in a pane showing the page, else straight to storage); its id. Throws when not saved. */
+/** The marker with id `recId` is already on `pageId` (in a pane showing it, or in storage). */
+async function markerSaved(recId: string, pageId: string): Promise<boolean> {
+  const pane = ([0, 1] as const).map(editorForPane).find((s: EditorStore) => s.getState().pageId === pageId);
+  if (pane?.getState().elements.has(recId)) return true;
+  const stored: Element[] = await loadElements(pageId).catch(() => []);
+  return stored.some((e) => e.id === recId);
+}
+
 async function placeMarker(recId: string, rec: RecordingContent, pageId: string, at: Vec2): Promise<string> {
   const target = markerPage(pageId, rec.unitId);
   if (!target) throw new Error("no page for the recording marker");
   const title = titleOf(rec);
   const pane = ([0, 1] as const).map(editorForPane).find((s: EditorStore) => s.getState().pageId === target);
   if (pane) {
-    const id = pane.getState().addRecording(rec, at, title);
+    // Id = recId, as on the other paths: a retry by recovery overwrites instead of duplicating.
+    const id = pane.getState().addRecording(rec, at, title, recId);
     if (!id) throw new Error("the recording marker could not be added");
     await elementsQueue.flushAll();
-    if (elementsQueue.failed() > 0) throw new Error("the recording marker is not saved yet");
+    if (elementsQueue.snapshot().failed.some((op) => op.op === "upsert" && op.element.id === id))
+      throw new Error("the recording marker is not saved yet");
     return id;
   }
   const existing: Element[] = await loadElements(target).catch(() => []);
@@ -326,6 +352,12 @@ export function probeDurationMs(url: string, bytes: number): Promise<number> {
 /** Salvages one recording a crash left behind; false when it held nothing worth keeping. */
 async function recoverOne(u: { recId: string; manifest: Manifest; parts: number[] }, probe: typeof probeDurationMs): Promise<boolean> {
   const m = u.manifest;
+  const target = markerPage(m.pageId, m.unitId);
+  if (target && (await markerSaved(u.recId, target))) {
+    // Saved before the folder could be removed (a slow close): nothing to add.
+    await closeRecording(u.recId).catch((err) => console.error("removing the recording folder failed", err));
+    return false;
+  }
   const sink = await beginRecording(m);
   const segments = [...m.segments];
   for (const index of u.parts) {

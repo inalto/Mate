@@ -282,9 +282,10 @@ export interface EditorState {
   addMedia(assetId: string, kind: MediaKind, size?: { width: number; height: number }, at?: Vec2, title?: string): string | null;
   /**
    * Place a recording's marker with its top-left at `at` (moved right past markers it would cover);
-   * one history entry "Recording". Tool and selection are left alone. Its id, or null without a page.
+   * one history entry "Recording". Tool and selection are left alone. `id` defaults to a new one.
+   * Its id, or null without a page.
    */
-  addRecording(rec: RecordingContent, at: Vec2, title: string): string | null;
+  addRecording(rec: RecordingContent, at: Vec2, title: string, id?: string): string | null;
   /**
    * End of a text edit session: persist `after` (HTML sanitised, plain text derived) as one history
    * entry; nothing when unchanged. A new box's creation and first session are one entry; a box
@@ -1116,13 +1117,13 @@ export function createEditorStore(): EditorStore {
       return el.id;
     },
 
-    addRecording(rec, at, title) {
+    addRecording(rec, at, title, id) {
       closeEdit();
       const s = get();
       if (!s.pageId) return null;
       const spot = freeMarkerSpot(at, s.elements.values());
       const top = topZ(s.elements.values());
-      const marker = recordingElement(s.pageId, crypto.randomUUID(), new Date().toISOString(), spot, rec, title);
+      const marker = recordingElement(s.pageId, id ?? crypto.randomUUID(), new Date().toISOString(), spot, rec, title);
       const el = top > 0 ? withMeta(marker, { zIndex: top }) : marker;
       return record("Recording", [{ type: "add", el }]) ? el.id : null;
     },
