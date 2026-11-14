@@ -34,7 +34,7 @@ import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
 import { MEDIA_DEFAULT_SIZE, mediaElement, type MediaKind } from "../media/element";
 import { freeMarkerSpot, recordingElement } from "../recording/marker";
-import type { RecordingContent } from "../recording/types";
+import { recordingOf, type RecordingContent, type Transcript } from "../recording/types";
 import { defaultGraphData, graphElement, inferGraphKind, presetFor } from "../graph/data";
 import { lastGraphKind } from "../graph/presets";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
@@ -291,6 +291,11 @@ export interface EditorState {
    * Its id, or null without a page.
    */
   addRecording(rec: RecordingContent, at: Vec2, title: string, id?: string): string | null;
+  /**
+   * Store `transcript` on recording marker `markerId` (replacing any earlier one); one history
+   * entry "Transcript". False when the marker is gone or is not a recording.
+   */
+  setRecordingTranscript(markerId: string, transcript: Transcript): boolean;
   /**
    * End of a text edit session: persist `after` (HTML sanitised, plain text derived) as one history
    * entry; nothing when unchanged. A new box's creation and first session are one entry; a box
@@ -1137,6 +1142,14 @@ export function createEditorStore(): EditorStore {
       const marker = recordingElement(s.pageId, id ?? crypto.randomUUID(), new Date().toISOString(), spot, rec, title);
       const el = top > 0 ? withMeta(marker, { zIndex: top }) : marker;
       return record("Recording", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    setRecordingTranscript(markerId, transcript) {
+      const cur = get().elements.get(markerId);
+      const rec = cur && !cur.deletedAt ? recordingOf(cur) : null;
+      if (!cur || !rec) return false;
+      const after: Element = { ...cur, content: { ...contentOf<Record<string, unknown>>(cur), recording: { ...rec, transcript } } };
+      return record("Transcript", [{ type: "update", before: cur, after: stamp(after) }]);
     },
 
     commitTextEdit(after) {

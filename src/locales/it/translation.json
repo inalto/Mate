@@ -1464,5 +1464,25 @@
     "close": "Chiudi",
     "notRecorded": "Questo è stato scritto mentre non si registrava nulla.",
     "missingSegment": "Manca una parte di questa registrazione."
+  },
+  "transcript": {
+    "title": "Trascrizione",
+    "start": "Trascrivi",
+    "progress": "Trascrizione della parte {{done}} di {{total}}",
+    "cancel": "Annulla",
+    "failedPart": "Questa parte non è stata trascritta.",
+    "retry": "Riprova",
+    "copy": "Copia",
+    "insert": "Inserisci come casella di testo",
+    "empty": "Non è stato riconosciuto alcun parlato.",
+    "close": "Chiudi la trascrizione",
+    "replace": {
+      "title": "Trascrivere di nuovo?",
+      "body": "La trascrizione attuale viene sostituita."
+    },
+    "copied": "Trascrizione copiata.",
+    "inserted": "Trascrizione aggiunta alla pagina.",
+    "partial_one": "{{count}} parte non è stata trascritta.",
+    "partial_other": "{{count}} parti non sono state trascritte."
   }
 }

@@ -56,7 +56,8 @@ let origin: { store: EditorStore; pageId: string } | null = null;
 /** Bumped by `cancelDictation`: a start or transcription still in flight then drops its result. */
 let session = 0;
 
-const settingsAction = () => ({ label: i18n.t("speech.openSettings"), onClick: () => navigateTo("/settings#dictation") });
+/** The toast action that opens Settings, Dictation. */
+export const settingsAction = () => ({ label: i18n.t("speech.openSettings"), onClick: () => navigateTo("/settings#dictation") });
 
 /** The text box (not an equation) the focused pane is editing, if any. */
 function editedTextBox(store: EditorStore = getFocusedEditor()): { store: EditorStore; id: string } | null {
@@ -142,7 +143,7 @@ export function insertDictation(
 }
 
 /** The language hint for the service: the interface language, unless it follows the system. */
-function languageHint(): string | undefined {
+export function languageHint(): string | undefined {
   if (useSettingsStore.getState().settings.language === "system") return undefined;
   return uiLanguage();
 }
@@ -342,7 +343,7 @@ async function finish(): Promise<void> {
 }
 
 /** The label of the configured speech service, for the consent question. */
-async function providerLabel(): Promise<string> {
+export async function providerLabel(): Promise<string> {
   const id = useSettingsStore.getState().settings.speechProvider;
   try {
     return (await listSpeechProviders()).find((p) => p.id === id)?.label ?? id;

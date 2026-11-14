@@ -1,6 +1,6 @@
 // The replay bar of one pane, docked at the pane's bottom edge while a recording replays: play or
 // pause, 10 s back and forward, the scrubber (page ticks, pauses hatched), "position / total", speed,
-// Follow pages, Transcript (not yet available) and Close. It owns its keys while its pane is focused
+// Follow pages, Transcript (the side panel) and Close. It owns its keys while its pane is focused
 // (capture phase, not rebindable): Space plays or pauses on release unless the pointer went down
 // meanwhile (that is the pan hold), ← / → skip 10 s, Escape closes; never while a dialog or menu is
 // open, a box is being edited, or focus is on a control or a text field (only the page itself, the
@@ -17,6 +17,8 @@ import type { EditorStore } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { RATES, type ReplayState } from "./replay";
 import { gaps, totalMs } from "./timeline";
+import TranscriptPanel from "./TranscriptPanel";
+import { transcriptStateFor } from "./transcriptState";
 import "./recording.css";
 
 const SKIP_MS = 10_000;
@@ -161,6 +163,8 @@ function Bar({ store, replay }: Props) {
   const total = totalMs(rec);
   const time = t("replay.time", { position: formatElapsed(positionMs), total: formatElapsed(total) });
   const playLabel = playing ? t("replay.pause") : t("replay.play");
+  const transcript = transcriptStateFor(replay);
+  const transcriptOpen = useStore(transcript, (s) => s.open);
   return (
     <div ref={ref} className="selection-bar replay-bar" role="toolbar" aria-label={t("replay.bar")}>
       <div className="replay-controls">
@@ -208,7 +212,14 @@ function Bar({ store, replay }: Props) {
         >
           <span className="replay-label">{t("replay.follow")}</span>
         </button>
-        <button type="button" className="tb-btn" aria-disabled="true" aria-label={t("replay.transcript")} title={t("replay.transcript")}>
+        <button
+          type="button"
+          className={transcriptOpen ? "tb-btn active" : "tb-btn"}
+          aria-expanded={transcriptOpen}
+          aria-label={t("replay.transcript")}
+          title={t("replay.transcript")}
+          onClick={() => transcript.setState({ open: !transcriptOpen })}
+        >
           <Subtitles size={18} />
         </button>
         <button type="button" className="tb-btn" aria-label={t("replay.close")} title={t("replay.close")} onClick={() => r.close()}>
@@ -219,9 +230,14 @@ function Bar({ store, replay }: Props) {
   );
 }
 
-/** The replay bar of `store`'s pane; nothing while no replay is open or the pane presents. */
+/** The replay bar of `store`'s pane and its transcript panel; nothing while no replay is open or the pane presents. */
 export default function ReplayBar({ store, replay }: Props) {
   const open = useStore(replay, (s) => s.markerId !== null && s.rec !== null);
   const presenting = store((s) => s.presenting !== null);
-  return open && !presenting ? <Bar store={store} replay={replay} /> : null;
+  return open && !presenting ? (
+    <>
+      <Bar store={store} replay={replay} />
+      <TranscriptPanel store={store} replay={replay} />
+    </>
+  ) : null;
 }

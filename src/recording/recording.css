@@ -180,3 +180,126 @@
 .rec-shell-status:empty {
   display: none;
 }
+
+/* Transcript: a right-hand sheet of its pane (320 px; the whole pane below 700 px), over the
+   canvas and under the replay bar (which stays usable over its foot) and popovers. */
+.transcript-host {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.transcript-sheet {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 320px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-3);
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  pointer-events: auto;
+}
+
+@container (max-width: 699px) {
+  .transcript-sheet {
+    width: 100%;
+    border-left: none;
+  }
+}
+
+.transcript-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.transcript-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.transcript-actions,
+.transcript-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.transcript-progress {
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.transcript-empty {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.transcript-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  /* Room to scroll the last sentences above the replay bar. */
+  padding: 0 0 128px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.transcript-sentence,
+.transcript-failed {
+  display: flex;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  text-align: start;
+}
+
+.transcript-sentence {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.transcript-sentence:hover {
+  background: var(--color-surface-2);
+}
+
+.transcript-sentence[aria-current="true"] {
+  background: var(--color-surface-2);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.transcript-failed {
+  flex-wrap: wrap;
+  align-items: center;
+  color: var(--color-text-muted);
+}
+
+.transcript-time {
+  flex: none;
+  min-width: 4ch;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.transcript-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

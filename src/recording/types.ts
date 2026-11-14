@@ -28,6 +28,8 @@ export interface Transcript {
   model: string;
   language?: string;
   segments: TimedSentence[];
+  /** Indexes of the recording's segments that could not be transcribed (shown with a Retry). */
+  failed?: number[];
 }
 
 export interface RecordingContent {

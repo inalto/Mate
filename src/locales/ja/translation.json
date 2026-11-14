@@ -1451,5 +1451,24 @@
     "close": "Close",
     "notRecorded": "This was written while nothing was being recorded.",
     "missingSegment": "Part of this recording is missing."
+  },
+  "transcript": {
+    "title": "Transcript",
+    "start": "Transcribe",
+    "progress": "Transcribing part {{done}} of {{total}}",
+    "cancel": "Cancel",
+    "failedPart": "This part could not be transcribed.",
+    "retry": "Retry",
+    "copy": "Copy",
+    "insert": "Insert as text box",
+    "empty": "No speech was recognised.",
+    "close": "Close transcript",
+    "replace": {
+      "title": "Transcribe again?",
+      "body": "The current transcript is replaced."
+    },
+    "copied": "Transcript copied.",
+    "inserted": "Transcript added to the page.",
+    "partial_other": "{{count}} parts could not be transcribed."
   }
 }

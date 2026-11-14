@@ -1,5 +1,5 @@
 // The replay bar of one pane: transport buttons, scrubber with page ticks and gaps, speed menu,
-// Follow, the (disabled) Transcript button, Close and its keys.
+// Follow, the Transcript button (opening the side panel), Close and its keys.
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
@@ -89,8 +89,14 @@ describe("ReplayBar", () => {
     expect(screen.getByRole("toolbar", { name: "Recording replay" })).toBeTruthy();
     expect(screen.getByText("0:00 / 8:20")).toBeTruthy();
     const transcript = screen.getByRole("button", { name: "Transcript" });
-    expect(transcript.getAttribute("aria-disabled")).toBe("true");
+    expect(transcript.getAttribute("aria-disabled")).toBeNull();
     expect(transcript.title).toBe("Transcript");
+    expect(transcript.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(transcript);
+    expect(screen.getByRole("dialog", { name: "Transcript" })).toBeTruthy();
+    expect(transcript.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(transcript);
+    expect(screen.queryByRole("dialog", { name: "Transcript" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     expect(replay.getState().playing).toBe(true);
     expect(screen.getByRole("button", { name: "Pause" })).toBeTruthy();
