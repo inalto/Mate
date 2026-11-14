@@ -8,6 +8,7 @@ import {
   type LongRecorderEvent,
   MAX_TOTAL_MS,
   SEGMENT_MS,
+  STOP_TIMEOUT_MS,
   startLongRecording,
   WARN_BEFORE_MS,
 } from "../longRecorder";
@@ -36,10 +37,13 @@ class FakeRecorder {
     this.state = "recording";
     this.timeslice = timeslice;
   }
+  /** When true, `stop()` fires nothing (an engine that never reports the stop). */
+  silent = false;
   /** Like the engine: the last chunk, then `stop`. */
   stop() {
     if (this.state === "inactive") return;
     this.state = "inactive";
+    if (this.silent) return;
     this.push(`end${FakeRecorder.all.indexOf(this)}`);
     this.onstop?.();
   }
@@ -91,9 +95,17 @@ const setup = (over: Partial<LongRecorderDeps> = {}) => {
   const first = fakeStream();
   const streams = [first];
   const events: LongRecorderEvent[] = [];
+  /** How many of the next reopenings the microphone refuses. */
+  const refuse = { count: 0 };
   /** The first call opens `first`; every later one a new stream. */
   const getStream = vi.fn(async () => {
-    if (getStream.mock.calls.length > 1) streams.push(fakeStream());
+    if (getStream.mock.calls.length > 1) {
+      if (refuse.count > 0) {
+        refuse.count--;
+        throw new DOMException("busy", "NotReadableError");
+      }
+      streams.push(fakeStream());
+    }
     return streams.at(-1)!.stream;
   });
   const deps: LongRecorderDeps = {
@@ -103,7 +115,7 @@ const setup = (over: Partial<LongRecorderDeps> = {}) => {
     onEvent: (e) => events.push(e),
     ...over,
   };
-  return { deps, sink, appended, track: first.track, stream: first.stream, streams, events, getStream };
+  return { deps, sink, appended, track: first.track, stream: first.stream, streams, events, getStream, refuse };
 };
 
 const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms);
@@ -223,6 +235,7 @@ describe("startLongRecording", () => {
 
   it("a track that ends closes the span", async () => {
     const t = setup();
+    t.refuse.count = 1;
     const rec = await startLongRecording(t.deps);
     await advance(60_000);
     t.track.end();
@@ -233,9 +246,25 @@ describe("startLongRecording", () => {
     await advance(10_000);
     setVisibility("visible");
     await advance(0);
-    expect(t.getStream).toHaveBeenCalledTimes(2);
+    expect(t.getStream).toHaveBeenCalledTimes(3);
     expect(FakeRecorder.all[1].stream).toBe(t.streams[1].stream);
     expect(t.events.at(-1)).toEqual({ type: "resumed", lostMs: 10_000 });
+    await advance(5_000);
+    const { spans } = await rec.stop();
+    expect(spans.map((s) => s.durationMs)).toEqual([60_000, 5_000]);
+    expect(t.streams[1].track.stop).toHaveBeenCalled();
+  });
+
+  it("a track that ends while visible reopens the microphone at once", async () => {
+    const t = setup();
+    const rec = await startLongRecording(t.deps);
+    await advance(60_000);
+    t.track.end();
+    await advance(0);
+    expect(t.getStream).toHaveBeenCalledTimes(2);
+    expect(FakeRecorder.all[1].stream).toBe(t.streams[1].stream);
+    expect(ofType(t.events, "resumed")).toEqual([{ type: "resumed", lostMs: 0 }]);
+    expect(t.track.stop).toHaveBeenCalled();
     await advance(5_000);
     // A recorder error closes the span too and retries at once on the same stream.
     FakeRecorder.all[1].fail();
@@ -248,6 +277,81 @@ describe("startLongRecording", () => {
     expect(spans.map((s) => s.durationMs)).toEqual([60_000, 5_000, 2_000]);
     expect(segments.map((s) => s.durationMs)).toEqual([60_000, 5_000, 2_000]);
     expect(t.streams[1].track.stop).toHaveBeenCalled();
+  });
+
+  it("stays interrupted when the microphone cannot be reopened, until resume()", async () => {
+    const t = setup();
+    t.refuse.count = 2;
+    const rec = await startLongRecording(t.deps);
+    await advance(60_000);
+    t.track.end();
+    await advance(5_000);
+    // One immediate attempt, no retry loop.
+    expect(t.getStream).toHaveBeenCalledTimes(2);
+    expect(ofType(t.events, "resumed")).toEqual([]);
+    expect(rec.elapsedMs()).toBe(60_000);
+    await rec.resume();
+    expect(t.getStream).toHaveBeenCalledTimes(3);
+    expect(ofType(t.events, "resumed")).toEqual([]);
+    await advance(5_000);
+    await rec.resume();
+    expect(t.getStream).toHaveBeenCalledTimes(4);
+    expect(ofType(t.events, "resumed")).toEqual([{ type: "resumed", lostMs: 10_000 }]);
+    expect(FakeRecorder.all[1].stream).toBe(t.streams[1].stream);
+    await advance(1_000);
+    const { spans } = await rec.stop();
+    expect(spans).toEqual([
+      { wallStart: iso(T0), audioStartMs: 0, durationMs: 60_000 },
+      { wallStart: iso(T0 + 70_000), audioStartMs: 60_000, durationMs: 1_000 },
+    ]);
+    expect(ofType(t.events, "ended")).toEqual([{ type: "ended", reason: "stopped" }]);
+  });
+
+  it("three recorder errors in a row end the recording as failed", async () => {
+    const t = setup();
+    const rec = await startLongRecording(t.deps);
+    const failCurrent = async (afterMs: number) => {
+      await advance(afterMs);
+      FakeRecorder.all.at(-1)!.fail();
+      await advance(0);
+    };
+    await failCurrent(60_000);
+    await failCurrent(500);
+    // A stretch of a full second resets the count.
+    await failCurrent(1_000);
+    await failCurrent(500);
+    expect(ofType(t.events, "ended")).toEqual([]);
+    expect(ofType(t.events, "resumed")).toHaveLength(4);
+    await failCurrent(500);
+    expect(ofType(t.events, "resumed")).toHaveLength(4);
+    expect(ofType(t.events, "ended")).toEqual([{ type: "ended", reason: "failed" }]);
+    expect(t.track.stop).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    const { spans, segments } = await rec.stop();
+    expect(spans.map((s) => s.durationMs)).toEqual([60_000, 500, 1_000, 500, 500]);
+    expect(segments.map((s) => s.durationMs)).toEqual([60_000, 500, 1_000, 500, 500]);
+    expect(ofType(t.events, "ended")).toHaveLength(1);
+  });
+
+  it("stop settles even when the recorder never fires stop", async () => {
+    const t = setup();
+    const rec = await startLongRecording(t.deps);
+    FakeRecorder.all[0].push("a");
+    await advance(60_000);
+    FakeRecorder.all[0].silent = true;
+    let result: Awaited<ReturnType<typeof rec.stop>> | null = null;
+    void rec.stop().then((r) => (result = r));
+    await advance(STOP_TIMEOUT_MS - 1);
+    expect(result).toBeNull();
+    expect(t.track.stop).not.toHaveBeenCalled();
+    await advance(1);
+    expect(result).toEqual({
+      spans: [{ wallStart: iso(T0), audioStartMs: 0, durationMs: 60_000 }],
+      segments: [{ assetId: "a0", durationMs: 60_000, mime: "audio/webm" }],
+    });
+    expect(t.appended).toEqual([[0, "a"]]);
+    expect(t.track.stop).toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("a clock that steps back", async () => {

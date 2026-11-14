@@ -13,6 +13,11 @@ export const MAX_TOTAL_MS = 4 * 60 * 60_000;
 /** `warnLimit` comes this long before the cap. */
 export const WARN_BEFORE_MS = 5 * 60_000;
 export const AUDIO_BITS_PER_SECOND = 32_000;
+/** A recorder asked to stop that has not fired `stop` by then is treated as stopped. */
+export const STOP_TIMEOUT_MS = 5_000;
+/** Recorder errors in a row (each after less than `MIN_GOOD_STRETCH_MS` of audio) that end the recording. */
+export const MAX_ERROR_RETRIES = 3;
+const MIN_GOOD_STRETCH_MS = 1_000;
 
 export type LongRecorderEvent =
   | { type: "segment"; segment: Segment }
@@ -49,6 +54,7 @@ interface Part {
   startedAt: number;
   durationMs: number | null;
   finalised: boolean;
+  stopTimer?: ReturnType<typeof setTimeout>;
   stopped: Promise<void>;
   markStopped(): void;
 }
@@ -92,6 +98,8 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
   let closedMs = 0;
   let lastEnd = -Infinity;
   let warned = false;
+  /** Recorder errors since the last stretch of at least `MIN_GOOD_STRETCH_MS`. */
+  let errorStreak = 0;
   let nextIndex = 0;
   let current: Part | null = null;
   const parts: Part[] = [];
@@ -168,6 +176,7 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
   const finalise = (p: Part) => {
     if (p.finalised) return;
     p.finalised = true;
+    clearTimeout(p.stopTimer);
     p.durationMs ??= Math.max(0, now() - p.startedAt);
     const durationMs = p.durationMs;
     enqueue(async () => {
@@ -182,9 +191,15 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
 
   const stopPart = (p: Part) => {
     p.durationMs ??= Math.max(0, now() - p.startedAt);
+    if (p.finalised) return;
     try {
-      if (p.rec.state !== "inactive") p.rec.stop();
-      else finalise(p);
+      if (p.rec.state === "inactive") {
+        finalise(p);
+        return;
+      }
+      // An engine that never fires `stop`: finish the segment with what the sink already has.
+      p.stopTimer ??= setTimeout(() => finalise(p), STOP_TIMEOUT_MS);
+      p.rec.stop();
     } catch {
       finalise(p);
     }
@@ -231,22 +246,38 @@ export async function startLongRecording(deps: LongRecorderDeps): Promise<LongRe
     }
   };
 
-  /** Closes the span like a pause; a recorder error retries at once, the rest on return to the app. */
+  /**
+   * Closes the span like a pause. A recorder error retries at once (until it keeps failing); a
+   * track that ends while the app is visible reopens the microphone at once; the rest wait for
+   * the app to come back.
+   */
   function interrupt(reason: "hidden" | "trackEnded" | "recorderError") {
     if (state !== "recording") return;
     closeSpan();
     stopCurrent();
     state = "interrupted";
     onEvent({ type: "interrupted", reason });
-    if (reason === "recorderError") void reinstate(true);
+    if (reason === "recorderError") {
+      if (spans[spans.length - 1].durationMs >= MIN_GOOD_STRETCH_MS) errorStreak = 0;
+      errorStreak++;
+      if (errorStreak >= MAX_ERROR_RETRIES) void end("failed");
+      else void reinstate(true);
+    } else if (reason === "trackEnded" && document.visibilityState === "visible") void reinstate(true);
   }
 
-  /** Reopens the stream if its track ended, then a new span and segment. */
+  /** Reopens the stream if its track ended, then a new span and segment. A refused microphone leaves things as they were. */
   async function reinstate(afterInterruption: boolean) {
+    const before = state;
     state = "reopening";
     try {
       if (stream.getTracks().every((t) => t.readyState === "ended")) {
-        const fresh = await getStream();
+        let fresh: MediaStream;
+        try {
+          fresh = await getStream();
+        } catch {
+          if (state === "reopening") state = before;
+          return;
+        }
         if (state !== "reopening") {
           release(fresh);
           return;
