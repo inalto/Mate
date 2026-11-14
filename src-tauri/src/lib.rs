@@ -135,6 +135,7 @@ pub fn run() {
       commands::speech::set_speech_key,
       commands::speech::clear_speech_key,
       commands::speech::transcribe_audio,
+      commands::speech::transcribe_asset,
       commands::speech::test_speech_key,
       commands::speech::tidy_dictation,
       math::set_wolfram_appid,

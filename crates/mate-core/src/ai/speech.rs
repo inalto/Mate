@@ -8,6 +8,7 @@ use std::thread;
 use std::time::Duration;
 
 use reqwest::blocking::multipart::{Form, Part};
+use serde::Serialize;
 use serde_json::Value;
 
 use super::catalog::{BAD_ADDRESS, is_local_host};
@@ -223,6 +224,121 @@ fn accepts_prompt(spec: &SpeechSpec) -> bool {
     spec.id != "mistral"
 }
 
+/// The file name and part type of a lecture recording's segment. Its type comes from the stored
+/// file's sniffed container, and WebM or MP4 audio sniffs as video: it is sent as audio.
+pub fn recording_upload(mime: &str) -> (&'static str, &'static str) {
+    let base = mime.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    match base.as_str() {
+        "audio/mp4" | "audio/m4a" | "audio/x-m4a" | "video/mp4" => ("audio.m4a", "audio/mp4"),
+        "audio/ogg" | "application/ogg" | "video/ogg" => ("audio.ogg", "audio/ogg"),
+        "audio/wav" | "audio/x-wav" | "audio/wave" | "audio/vnd.wave" => ("audio.wav", "audio/wav"),
+        "audio/mpeg" | "audio/mp3" => ("audio.mp3", "audio/mpeg"),
+        _ => ("audio.webm", "audio/webm"),
+    }
+}
+
+/// One request to `{base}/audio/transcriptions`, everything but the reply format decided.
+struct Upload {
+    base: String,
+    key: String,
+    model: String,
+    bytes: Vec<u8>,
+    file_name: &'static str,
+    part_type: String,
+    language: Option<String>,
+    prompt: Option<&'static str>,
+    client: reqwest::blocking::Client,
+}
+
+impl Upload {
+    /// The checks before anything is sent (address, size), then the client.
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        spec: &SpeechSpec,
+        key: &str,
+        model: &str,
+        base_url: &str,
+        bytes: Vec<u8>,
+        (file_name, part_type): (&'static str, String),
+        language: Option<&str>,
+        math_hint: bool,
+    ) -> Result<Self, AiError> {
+        let base = effective_base_url(spec, base_url).map_err(|_| AiError::BadAddress)?;
+        if base.is_empty() {
+            return Err(AiError::BadAddress);
+        }
+        if bytes.len() > MAX_AUDIO_BYTES {
+            return Err(AiError::Rejected("the recording is larger than 25 MB".into()));
+        }
+        let language = language_code(language);
+        let prompt = if math_hint && accepts_prompt(spec) { language.as_deref().and_then(|l| hint_for(Some(l))) } else { None };
+        let client = reqwest::blocking::Client::builder()
+            .timeout(timeout_for(&base))
+            .connect_timeout(Duration::from_secs(10))
+            .build()
+            .map_err(|_| AiError::Network("the request failed".into()))?;
+        Ok(Upload {
+            base,
+            key: key.trim().to_string(),
+            model: effective_model(spec, model),
+            bytes,
+            file_name,
+            part_type,
+            language,
+            prompt,
+            client,
+        })
+    }
+
+    fn form(&self, fields: &[(&'static str, &'static str)]) -> Result<Form, AiError> {
+        let file = Part::bytes(self.bytes.clone())
+            .file_name(self.file_name)
+            .mime_str(&self.part_type)
+            .map_err(|_| AiError::Rejected("unknown recording type".into()))?;
+        let mut form = Form::new().part("file", file).text("model", self.model.clone());
+        for (name, value) in fields {
+            form = form.text(*name, *value);
+        }
+        if let Some(lang) = &self.language {
+            form = form.text("language", lang.clone());
+        }
+        if let Some(prompt) = self.prompt {
+            form = form.text("prompt", prompt);
+        }
+        Ok(form)
+    }
+
+    fn send_once(&self, fields: &[(&'static str, &'static str)]) -> Result<(u16, String), AiError> {
+        let mut req = self.client.post(format!("{}/audio/transcriptions", self.base)).multipart(self.form(fields)?);
+        if !self.key.is_empty() {
+            req = req.bearer_auth(&self.key);
+        }
+        let res = req.send().map_err(|e| network_error(&e))?;
+        let status = res.status().as_u16();
+        let text = res.text().map_err(|e| network_error(&e))?;
+        Ok((status, text))
+    }
+
+    /// Sends with `fields`; one retry when the service is busy or failing for a moment (not when
+    /// the quota is spent).
+    fn send(&self, fields: &[(&'static str, &'static str)]) -> Result<(u16, String), AiError> {
+        let (status, text) = self.send_once(fields)?;
+        if is_transient(status, &text) {
+            thread::sleep(RETRY_BACKOFF);
+            return self.send_once(fields);
+        }
+        Ok((status, text))
+    }
+
+    /// Whether `text` is just the style hint played back.
+    fn echoed(&self, text: &str) -> bool {
+        self.prompt.is_some_and(|h| echoes_hint(text, h))
+    }
+}
+
+const PLAIN_JSON: &[(&str, &str)] = &[("response_format", "json")];
+const TIMED_JSON: &[(&str, &str)] = &[("response_format", "verbose_json"), ("timestamp_granularities[]", "segment")];
+
 /// Sends one recording to `{base}/audio/transcriptions` and returns the trimmed text.
 ///
 /// `base_url` is the address setting (empty = the service default; ignored where the service does
@@ -240,59 +356,96 @@ pub fn transcribe(
     language: Option<&str>,
     math_hint: bool,
 ) -> Result<String, AiError> {
-    let base = effective_base_url(spec, base_url).map_err(|_| AiError::BadAddress)?;
-    if base.is_empty() {
-        return Err(AiError::BadAddress);
-    }
-    if bytes.len() > MAX_AUDIO_BYTES {
-        return Err(AiError::Rejected("the recording is larger than 25 MB".into()));
-    }
-    let model = effective_model(spec, model);
-    let language = language_code(language);
-    let prompt = if math_hint && accepts_prompt(spec) { language.as_deref().and_then(|l| hint_for(Some(l))) } else { None };
-    let form = || -> Result<Form, AiError> {
-        let file = Part::bytes(bytes.clone())
-            .file_name(file_name_for(mime))
-            .mime_str(&part_mime(mime))
-            .map_err(|_| AiError::Rejected("unknown recording type".into()))?;
-        let mut form = Form::new().part("file", file).text("model", model.clone()).text("response_format", "json");
-        if let Some(lang) = &language {
-            form = form.text("language", lang.clone());
-        }
-        if let Some(prompt) = prompt {
-            form = form.text("prompt", prompt);
-        }
-        Ok(form)
-    };
-    let client = reqwest::blocking::Client::builder()
-        .timeout(timeout_for(&base))
-        .connect_timeout(Duration::from_secs(10))
-        .build()
-        .map_err(|_| AiError::Network("the request failed".into()))?;
-    let key = key.trim();
-    let send = || -> Result<(u16, String), AiError> {
-        let mut req = client.post(format!("{base}/audio/transcriptions")).multipart(form()?);
-        if !key.is_empty() {
-            req = req.bearer_auth(key);
-        }
-        let res = req.send().map_err(|e| network_error(&e))?;
-        let status = res.status().as_u16();
-        let text = res.text().map_err(|e| network_error(&e))?;
-        Ok((status, text))
-    };
-    let (status, text) = send()?;
-    // One retry when the service is busy or failing for a moment (not when the quota is spent).
-    let (status, text) = if is_transient(status, &text) {
-        thread::sleep(RETRY_BACKOFF);
-        send()?
-    } else {
-        (status, text)
-    };
+    let file = (file_name_for(mime), part_mime(mime));
+    let up = Upload::new(spec, key, model, base_url, bytes, file, language, math_hint)?;
+    let (status, text) = up.send(PLAIN_JSON)?;
     let out = reply(status, &text)?;
-    if prompt.is_some_and(|h| echoes_hint(&out, h)) {
+    if up.echoed(&out) {
         return Err(AiError::InvalidResponse(NO_TEXT.into()));
     }
     Ok(out)
+}
+
+/// One timed sentence of a recording segment, in milliseconds from the segment's start.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimedText {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub text: String,
+}
+
+/// A 400 that names the timed reply's parameters: the service does not offer them.
+fn refuses_timestamps(status: u16, body: &str) -> bool {
+    status == 400 && (body.contains("timestamp_granularities") || body.contains("response_format"))
+}
+
+/// As [`transcribe`], for a lecture recording's segment of `duration_ms`, with
+/// `response_format=verbose_json` and `timestamp_granularities[]=segment`. A reply without
+/// `segments` yields one [`TimedText`] covering `0..duration_ms` with the whole text; a service
+/// that refuses the timed parameters is asked once more for plain text, with the same result.
+#[allow(clippy::too_many_arguments)]
+pub fn transcribe_timed(
+    spec: &SpeechSpec,
+    key: &str,
+    model: &str,
+    base_url: &str,
+    bytes: Vec<u8>,
+    mime: &str,
+    language: Option<&str>,
+    math_hint: bool,
+    duration_ms: u64,
+) -> Result<Vec<TimedText>, AiError> {
+    let (name, part) = recording_upload(mime);
+    let up = Upload::new(spec, key, model, base_url, bytes, (name, part.to_string()), language, math_hint)?;
+    let (status, text) = up.send(TIMED_JSON)?;
+    let sentences = if refuses_timestamps(status, &text) {
+        let (status, text) = up.send(PLAIN_JSON)?;
+        vec![TimedText { start_ms: 0, end_ms: duration_ms, text: reply(status, &text)? }]
+    } else {
+        timed_reply(status, &text, duration_ms)?
+    };
+    let kept: Vec<TimedText> = sentences.into_iter().filter(|s| !up.echoed(&s.text)).collect();
+    if kept.is_empty() {
+        return Err(AiError::InvalidResponse(NO_TEXT.into()));
+    }
+    Ok(kept)
+}
+
+/// Seconds (a float) as milliseconds, rounded and clamped into `0..=duration_ms`.
+fn ms_within(seconds: Option<f64>, fallback: u64, duration_ms: u64) -> u64 {
+    match seconds {
+        Some(s) if s.is_finite() => (s * 1000.0).round().clamp(0.0, duration_ms as f64) as u64,
+        _ => fallback,
+    }
+}
+
+/// Maps a timed transcription reply: the status rules of [`reply`]; each segment with text is one
+/// sentence (trimmed, times clamped into `0..=duration_ms`); no segments but text is one sentence
+/// for the whole duration; no text at all is [`NO_TEXT`].
+pub fn timed_reply(status: u16, body: &str, duration_ms: u64) -> Result<Vec<TimedText>, AiError> {
+    let whole = || reply(status, body).map(|text| vec![TimedText { start_ms: 0, end_ms: duration_ms, text }]);
+    if !(200..=299).contains(&status) {
+        return whole();
+    }
+    let v: Value = serde_json::from_str(body).map_err(|_| AiError::InvalidResponse("the reply was not JSON".into()))?;
+    let out: Vec<TimedText> = v["segments"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+        .iter()
+        .filter_map(|s| {
+            let text = s["text"].as_str().map(str::trim).unwrap_or("");
+            if text.is_empty() {
+                return None;
+            }
+            let start_ms = ms_within(s["start"].as_f64(), 0, duration_ms);
+            let end_ms = ms_within(s["end"].as_f64(), duration_ms, duration_ms).max(start_ms);
+            Some(TimedText { start_ms, end_ms, text: text.to_string() })
+        })
+        .collect();
+    // No segments (or none with text): the whole text, if any, is one sentence.
+    if out.is_empty() { whole() } else { Ok(out) }
 }
 
 fn is_transient(status: u16, body: &str) -> bool {
@@ -376,6 +529,10 @@ mod tests {
         assert_eq!(file_name_for("audio/mpeg"), "audio.mp3");
         assert_eq!(file_name_for(""), "audio.webm");
         assert_eq!(part_mime("audio/webm;codecs=opus"), "audio/webm");
+        assert_eq!(recording_upload("video/webm"), ("audio.webm", "audio/webm"));
+        assert_eq!(recording_upload("video/mp4"), ("audio.m4a", "audio/mp4"));
+        assert_eq!(recording_upload("audio/mp4"), ("audio.m4a", "audio/mp4"));
+        assert_eq!(recording_upload("audio/ogg"), ("audio.ogg", "audio/ogg"));
     }
 
     #[test]
