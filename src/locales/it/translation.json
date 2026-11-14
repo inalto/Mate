@@ -1435,16 +1435,17 @@
     "busy": "È già in corso una registrazione.",
     "dictationActive": "Termina la dettatura prima di registrare.",
     "start": "Registra audio",
-    "stop": "Interrompi registrazione",
+    "stop": "Interrompi la registrazione",
     "pause": "Pausa",
     "resume": "Riprendi",
     "pill": "Registrazione {{time}}",
     "paused": "In pausa {{time}}",
-    "gap": "{{time}} non sono stati registrati mentre Mate era in background.",
+    "interrupted": "Registrazione sospesa {{time}}",
+    "gap": "Per {{time}} non è stato registrato nulla mentre Mate era in background.",
     "menu": "Registrazione",
     "leave": {
       "title": "Interrompere la registrazione?",
-      "body": "La registrazione appartiene a questo quaderno. Uscendo la registrazione si ferma e viene salvata.",
+      "body": "Se esci, la registrazione si ferma e viene salvata.",
       "stop": "Interrompi ed esci",
       "stay": "Resta"
     }

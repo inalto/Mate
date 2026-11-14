@@ -499,8 +499,8 @@ export function createToolController(deps: ToolDeps) {
   let lastTap: Tap | null = null;
   const now = deps.now ?? (() => performance.now());
   const replayTap = createReplayTap(deps.store, deps.replay, now, deps.markers);
-  /** A cursor press on the already selected recording marker: its release without a drag opens it. */
-  let markerClick: { id: string; x: number; y: number } | null = null;
+  /** A cursor press on the already selected recording marker: its quick release without a drag opens it. */
+  let markerClick: Tap | null = null;
 
   /**
    * Double-click on a boxed element opens its editor, on a connector its label popover (never on a
@@ -803,7 +803,7 @@ export function createToolController(deps: ToolDeps) {
     } else if (tool === "cursor" || tool === "lasso") {
       const under = tool === "cursor" && deps.markers ? hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z) : null;
       const scr = worldToScreen(s.camera, p);
-      markerClick = under && s.selection.has(under) && deps.markers?.isMarker(under) ? { id: under, x: scr.x, y: scr.y } : null;
+      markerClick = under && s.selection.has(under) && deps.markers?.isMarker(under) ? { id: under, x: scr.x, y: scr.y, t: now() } : null;
       const b = selectionBounds(s.elements, s.selection);
       // A lone connector has no bounds box: no corner or rotate handles, and only its route moves it.
       const lone = loneConnector(s.elements, s.selection);
@@ -998,7 +998,8 @@ export function createToolController(deps: ToolDeps) {
     const s = st();
     if (markerClick) {
       const scr = at ? worldToScreen(s.camera, at) : markerClick;
-      const id = Math.hypot(scr.x - markerClick.x, scr.y - markerClick.y) <= REPLAY_TAP_PX ? markerClick.id : null;
+      const tap = Math.hypot(scr.x - markerClick.x, scr.y - markerClick.y) <= REPLAY_TAP_PX && now() - markerClick.t <= REPLAY_TAP_MS;
+      const id = tap ? markerClick.id : null;
       markerClick = null;
       if (id) deps.markers?.open(id);
     }

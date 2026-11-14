@@ -48,6 +48,14 @@ describe("RecordingPill", () => {
     expect(stop).toHaveBeenCalled();
   });
 
+  it("an interrupted recording does not look like it is recording", () => {
+    useRecording.setState({ phase: "interrupted", elapsedMs: 70_000 });
+    render(both());
+    const pill = screen.getByRole("button", { name: "Not recording 1:10" });
+    expect(pill.className).toContain("interrupted");
+    expect(screen.queryByRole("button", { name: /^Recording/ })).toBeNull();
+  });
+
   it("says Paused while paused", () => {
     useRecording.setState({ phase: "paused", elapsedMs: 9_000 });
     render(both());

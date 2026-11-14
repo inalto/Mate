@@ -1,6 +1,6 @@
 // When leaving the notebook being recorded asks first (see LeaveGuard), and the pending question.
 import { create } from "zustand";
-import { focusedPageId, useTabsStore, type TabsSnapshot } from "../stores/tabs";
+import type { TabsSnapshot } from "../stores/tabs";
 import { unitOfPage } from "./controls";
 import { useRecording } from "./session";
 
@@ -12,31 +12,14 @@ function recordingUnit(): string | null {
 
 const shows = (s: TabsSnapshot, unit: string) => s.tabs.some((t) => t.panes.some((p) => unitOfPage(p.pageId) === unit));
 
-/** The change from `prev` to `next` leaves the notebook being recorded. */
+/**
+ * The change from `prev` to `next` leaves the notebook being recorded: afterwards no tab of this
+ * window shows one of its pages (another notebook in its only tab, its last tab closed). New tabs
+ * and switching tabs never do; other routes (Home, Library, Settings) do not touch the tabs.
+ */
 export function tabsLeaveRecording(prev: TabsSnapshot, next: TabsSnapshot): boolean {
   const unit = recordingUnit();
-  if (!unit) return false;
-  // The last tab showing the notebook closed (or its last pane turned elsewhere).
-  if (shows(prev, unit) && !shows(next, unit)) return true;
-  // The focused pane of the same tab turned from the notebook to another one.
-  const a = prev.tabs.find((t) => t.id === prev.activeTabId);
-  const b = next.tabs.find((t) => t.id === next.activeTabId);
-  if (!a || !b || a.id !== b.id || a.focusedPaneIndex !== b.focusedPaneIndex) return false;
-  const from = a.panes[a.focusedPaneIndex]?.pageId ?? null;
-  const to = b.panes[b.focusedPaneIndex]?.pageId ?? null;
-  return from !== to && unitOfPage(from) === unit && to !== null && unitOfPage(to) !== unit;
-}
-
-/** A route change from `from` to `to` leaves the notebook being recorded. */
-export function routeLeavesRecording(from: string, to: string): boolean {
-  const unit = recordingUnit();
-  if (!unit || !from.startsWith("/edit/") || to === from) return false;
-  if (to === "/settings") return false;
-  if (!to.startsWith("/edit/")) return true;
-  // A page the tabs already show is the URL following them (the tab guard has had its say).
-  const target = decodeURIComponent(to.slice("/edit/".length));
-  const focused = focusedPageId(useTabsStore.getState());
-  return target !== focused && unitOfPage(focused) === unit && unitOfPage(target) !== unit;
+  return !!unit && shows(prev, unit) && !shows(next, unit);
 }
 
 export const useLeavePrompt = create<{ answer: ((leave: boolean) => void) | null }>(() => ({ answer: null }));

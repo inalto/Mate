@@ -1,14 +1,15 @@
-// "Stop recording?" before leaving the recording's notebook: the focused pane turning to a page of
-// another notebook, closing the last tab that shows the notebook, or leaving the editor for another
-// route (Settings excepted). Stay cancels; "Stop and leave" waits for the recording to be saved,
-// then goes. Mounted by the editor.
-import { useCallback, useContext, useEffect, useRef } from "react";
+// "Stop recording?" before a tab change leaves no tab showing the notebook being recorded (another
+// notebook in its only tab, its last tab closed). Stay cancels; "Stop and leave" waits for the
+// recording to be saved, then does the change on the tabs as they are by then; a failed save stays.
+// Mounted once by the Shell, so it guards every route (and URL-driven opens on a fresh editor).
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { UNSAFE_DataRouterContext, useBlocker, type BlockerFunction } from "react-router";
 import ConfirmDialog from "../components/ConfirmDialog";
+import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { setTabsGuard } from "../stores/tabs";
-import { askToLeave, routeLeavesRecording, tabsLeaveRecording, useLeavePrompt } from "./leave";
-import { useRecording } from "./session";
+import { askToLeave, tabsLeaveRecording, useLeavePrompt } from "./leave";
+import { lastStopFailed, useRecording } from "./session";
 
 function LeaveDialog() {
   const { t } = useTranslation();
@@ -26,11 +27,16 @@ function LeaveDialog() {
       onCancel={() => done(false)}
       onConfirm={() => {
         useLeavePrompt.setState({ answer: null });
-        void useRecording
+        useRecording
           .getState()
           .stop()
-          .catch(() => null)
-          .then(() => answer(true));
+          // A failed save has toasted already (and kept the recording's folder): stay.
+          .then(() => answer(!lastStopFailed()))
+          .catch((err: unknown) => {
+            console.error("stopping the recording failed", err);
+            showToast(i18n.t("errors.generic"));
+            answer(false);
+          });
       }}
     >
       {t("recording.leave.body")}
@@ -38,36 +44,11 @@ function LeaveDialog() {
   );
 }
 
-/** Route changes away from the notebook wait for the answer (data routers only: the app's router). */
-function RouteGuard() {
-  const shouldBlock = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => routeLeavesRecording(currentLocation.pathname, nextLocation.pathname), []);
-  const blocker = useBlocker(shouldBlock);
-  const current = useRef(blocker);
-  useEffect(() => {
-    current.current = blocker;
-  });
-  useEffect(() => {
-    if (blocker.state !== "blocked") return;
-    let live = true;
-    askToLeave((leave) => {
-      const b = current.current;
-      if (!live || b.state !== "blocked") return;
-      if (leave) b.proceed();
-      else b.reset();
-    });
-    return () => {
-      live = false;
-    };
-  }, [blocker.state]);
-  return null;
-}
-
 export default function RecordingLeaveGuard() {
-  const dataRouter = useContext(UNSAFE_DataRouterContext);
   useEffect(() => {
-    setTabsGuard((prev, next, apply) => {
+    setTabsGuard((prev, next, retry) => {
       if (!tabsLeaveRecording(prev, next)) return false;
-      askToLeave((leave) => leave && apply());
+      askToLeave((leave) => leave && retry());
       return true;
     });
     return () => {
@@ -77,10 +58,5 @@ export default function RecordingLeaveGuard() {
       useLeavePrompt.setState({ answer: null });
     };
   }, []);
-  return (
-    <>
-      {dataRouter && <RouteGuard />}
-      <LeaveDialog />
-    </>
-  );
+  return <LeaveDialog />;
 }

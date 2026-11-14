@@ -126,6 +126,21 @@ describe("markerPress", () => {
     expect(replay.getState().markerId).toBe("rec");
   });
 
+  it("a slow click on the selected marker (over 300 ms) does not open it", async () => {
+    await mount();
+    store.getState().setTool("cursor");
+    store.getState().select(["rec"]);
+    let clock = 10_000;
+    const spy = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    const s = worldToScreen(store.getState().camera, ON_MARKER);
+    const base = { pointerId: 7, pointerType: "mouse", bubbles: true, cancelable: true, pressure: 0.5, clientX: s.x, clientY: s.y, button: 0 };
+    host.dispatchEvent(new PointerEvent("pointerdown", { ...base, buttons: 1 }));
+    clock += 500;
+    host.dispatchEvent(new PointerEvent("pointerup", { ...base, buttons: 0 }));
+    spy.mockRestore();
+    expect(replay.getState().markerId).toBeNull();
+  });
+
   it("cursor drag on the selected marker moves it without opening", async () => {
     await mount();
     store.getState().setTool("cursor");

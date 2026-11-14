@@ -69,6 +69,8 @@ interface Run {
 /** The running recording; null when idle. */
 let run: Run | null = null;
 let stopping: Promise<string | null> | null = null;
+/** The last stop could not save the recording (it toasted the error and resolved null). */
+let failedStop = false;
 
 const IDLE = { phase: "idle", recId: null, unitId: null, elapsedMs: 0, lostMs: null } as const;
 
@@ -103,6 +105,9 @@ export const useRecording = create<RecordingState>((set, get) => ({
 }));
 
 export const isRecordingActive = (): boolean => useRecording.getState().phase !== "idle";
+
+/** The last `stop` failed to save the recording (as opposed to dropping one too short to keep). */
+export const lastStopFailed = (): boolean => failedStop;
 
 const startFailure = (e: unknown): string => {
   if (e instanceof RecorderError) {
@@ -212,6 +217,7 @@ function stop(): Promise<string | null> {
   const r = run;
   if (!r) return Promise.resolve(null);
   r.cancelled = true;
+  failedStop = false;
   stopping = (async () => {
     await r.starting;
     if (!r.rec) return null;
@@ -231,6 +237,7 @@ function stop(): Promise<string | null> {
     .catch((err) => {
       console.error("saving the recording failed", err);
       showToast(i18n.t("errors.generic"));
+      failedStop = true;
       return null;
     })
     .finally(() => {

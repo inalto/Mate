@@ -184,6 +184,33 @@ describe("ReplayBar", () => {
     input.remove();
   });
 
+  it("space on a focused bar button presses that button, not play", async () => {
+    await mount();
+    const follow = screen.getByRole("button", { name: "Follow pages" });
+    follow.focus();
+    const down = fireEvent.keyDown(follow, { key: " ", code: "Space" });
+    const up = fireEvent.keyUp(follow, { key: " ", code: "Space" });
+    // Nothing prevented: the browser activates the focused button as usual.
+    expect(down && up).toBe(true);
+    expect(replay.getState().playing).toBe(false);
+  });
+
+  it("arrows on a focused separator are left alone", async () => {
+    await mount();
+    const sep = document.createElement("div");
+    sep.setAttribute("role", "separator");
+    sep.tabIndex = 0;
+    document.body.append(sep);
+    const seen = vi.fn();
+    sep.addEventListener("keydown", seen);
+    expect(fireEvent.keyDown(sep, { key: "ArrowRight" })).toBe(true);
+    expect(fireEvent.keyDown(sep, { key: "Escape" })).toBe(true);
+    expect(seen).toHaveBeenCalledTimes(2);
+    expect(replay.getState().positionMs).toBe(0);
+    expect(replay.getState().markerId).toBe("rec");
+    sep.remove();
+  });
+
   it("the bar of an unfocused pane leaves the keys alone", async () => {
     const other = createEditorStore();
     await other.getState().loadPage("pg");

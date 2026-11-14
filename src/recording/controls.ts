@@ -1,4 +1,6 @@
 // What the record button, the pill and the `recording.toggle` shortcut do with the session.
+import { showToast } from "../components/Toast";
+import i18n from "../i18n";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
@@ -13,6 +15,14 @@ export function unitOfPage(pageId: string | null): string | null {
   return sections.find((s) => s.id === sectionId)?.unitId ?? null;
 }
 
+/** Runs a recording action the user asked for: a failure is logged and toasted. */
+export function userAction(what: string, run: () => Promise<unknown>): void {
+  run().catch((err: unknown) => {
+    console.error(`${what} failed`, err);
+    showToast(i18n.t("errors.generic"));
+  });
+}
+
 /** A recording runs (or is starting) and can be paused, resumed or stopped. */
 export const isLive = (phase: RecordingPhase): boolean => phase === "recording" || phase === "paused" || phase === "interrupted";
 
@@ -22,7 +32,7 @@ export function startOnFocusedPage(): void {
   const pageId = ed.pageId ?? focusedPageId(useTabsStore.getState());
   const unitId = unitOfPage(pageId);
   if (!pageId || !unitId) return;
-  void useRecording.getState().start(unitId, pageId, markerAnchor(ed.camera));
+  userAction("starting the recording", () => useRecording.getState().start(unitId, pageId, markerAnchor(ed.camera)));
 }
 
 /**
@@ -32,5 +42,5 @@ export function startOnFocusedPage(): void {
 export function toggleRecording(): void {
   const { phase, stop } = useRecording.getState();
   if (phase === "idle") startOnFocusedPage();
-  else if (isLive(phase)) void stop();
+  else if (isLive(phase)) userAction("stopping the recording", stop);
 }

@@ -27,7 +27,6 @@ import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
 import TutorController from "../tutor/TutorController";
 import { disposeAll, disposeClosedPages } from "../code/runtime";
-import RecordingLeaveGuard from "../recording/LeaveGuard";
 import { replayForPane, watchPaneReplays } from "../recording/panes";
 import ReplayBar from "../recording/ReplayBar";
 
@@ -166,7 +165,6 @@ export default function Editor() {
         </div>
       </div>
       <FrameOrderPanel />
-      <RecordingLeaveGuard />
       {settingsPage && (
         <PageSettingsDialog key={settingsPage.id} page={settingsPage} onClose={() => useChromeStore.getState().openPageSettings(null)} />
       )}

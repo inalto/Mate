@@ -1440,6 +1440,7 @@
     "resume": "Resume",
     "pill": "Recording {{time}}",
     "paused": "Paused {{time}}",
+    "interrupted": "Not recording {{time}}",
     "gap": "{{time}} was not recorded while Mate was in the background.",
     "menu": "Recording",
     "leave": {

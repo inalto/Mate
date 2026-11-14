@@ -23,7 +23,7 @@ export function RecordingPill() {
     <div ref={ref} className="menu-anchor">
       <button
         type="button"
-        className={phase === "paused" ? "rec-pill paused" : "rec-pill"}
+        className={phase === "paused" || phase === "interrupted" ? `rec-pill ${phase}` : "rec-pill"}
         aria-label={label}
         title={label}
         aria-haspopup="menu"

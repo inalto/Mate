@@ -3,9 +3,10 @@
 // Follow pages, Transcript (not yet available) and Close. It owns its keys while its pane is focused
 // (capture phase, not rebindable): Space plays or pauses on release unless the pointer went down
 // meanwhile (that is the pan hold), ← / → skip 10 s, Escape closes; never while a dialog or menu is
-// open, a box is being edited or focus is in a text field.
+// open, a box is being edited, or focus is on a control or a text field (only the page itself, the
+// pane or its canvas: a focused button keeps Space, a separator its arrows).
 import { ClockClockwise, ClockCounterClockwise, Pause, Play, Subtitles, X } from "@phosphor-icons/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore, type StoreApi } from "zustand";
 import { useDismiss } from "../components/useDismiss";
@@ -19,6 +20,15 @@ import { gaps, totalMs } from "./timeline";
 import "./recording.css";
 
 const SKIP_MS = 10_000;
+/** Focus on (or in) one of these keeps its own keys. */
+const OWN_KEYS = "button, a, input, select, textarea, [contenteditable], [role=slider], [role=separator], [role=tab], [role=treeitem], [role=menuitem], [role=dialog]";
+
+/** The key is aimed at the page itself, `pane` or its canvas, not at a control. */
+function aimedAtPage(target: EventTarget | null, pane: Element | null): boolean {
+  if (typeof document === "undefined") return false;
+  if (target === document.body || target === document.documentElement) return true;
+  return target instanceof Element && !!pane?.contains(target) && target.closest(OWN_KEYS) === null;
+}
 
 interface Props {
   store: EditorStore;
@@ -26,7 +36,7 @@ interface Props {
 }
 
 /** Keys of the bar of `store`'s pane; only while that pane is focused and nothing else owns them. */
-function useReplayKeys(store: EditorStore, replay: StoreApi<ReplayState>) {
+function useReplayKeys(store: EditorStore, replay: StoreApi<ReplayState>, bar: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
     let spaceDown = false;
     let pointerDown = false;
@@ -34,7 +44,7 @@ function useReplayKeys(store: EditorStore, replay: StoreApi<ReplayState>) {
     let panned = false;
     const free = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTypingTarget(e.target)) return false;
-      if (e.target instanceof HTMLInputElement && e.target.type === "range") return false; // the scrubber steps itself
+      if (!aimedAtPage(e.target, bar.current?.closest(".pane") ?? null)) return false;
       if (getFocusedEditor() !== store || useChromeStore.getState().modalDepth > 0) return false;
       const s = store.getState();
       return s.editingId === null && !s.presenting && replay.getState().markerId !== null;
@@ -88,7 +98,7 @@ function useReplayKeys(store: EditorStore, replay: StoreApi<ReplayState>) {
       window.removeEventListener("pointerup", onUp, true);
       window.removeEventListener("pointercancel", onUp, true);
     };
-  }, [store, replay]);
+  }, [store, replay, bar]);
 }
 
 /** "1.25×" in the interface language's number format. */
@@ -146,12 +156,13 @@ function Bar({ store, replay }: Props) {
   const follow = useStore(replay, (s) => s.follow);
   const ticks = useStore(replay, (s) => s.ticks);
   const r = replay.getState();
-  useReplayKeys(store, replay);
+  const ref = useRef<HTMLDivElement>(null);
+  useReplayKeys(store, replay, ref);
   const total = totalMs(rec);
   const time = t("replay.time", { position: formatElapsed(positionMs), total: formatElapsed(total) });
   const playLabel = playing ? t("replay.pause") : t("replay.play");
   return (
-    <div className="selection-bar replay-bar" role="toolbar" aria-label={t("replay.bar")}>
+    <div ref={ref} className="selection-bar replay-bar" role="toolbar" aria-label={t("replay.bar")}>
       <div className="replay-controls">
         <button type="button" className="tb-btn" aria-label={playLabel} title={playLabel} onClick={() => r.toggle()}>
           {playing ? <Pause size={18} weight="fill" /> : <Play size={18} weight="fill" />}

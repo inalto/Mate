@@ -7,6 +7,7 @@ import i18n from "../i18n";
 import type { EditorStore } from "../stores/editor";
 import { editorForPane } from "../stores/focusedEditor";
 import { useTabsStore, type PaneIndex } from "../stores/tabs";
+import { userAction } from "./controls";
 import { createReplay, type ReplayState } from "./replay";
 import { isRecording } from "./types";
 
@@ -60,7 +61,7 @@ export function markerTargetOf(editor: EditorStore) {
       const el = editor.getState().elements.get(id);
       if (!replay || !el || !isRecording(el) || replay.getState().markerId === id) return;
       markerPage.set(replay, el.pageId);
-      void replay.getState().open(editor, id);
+      userAction("opening the replay", () => replay.getState().open(editor, id));
     },
   };
 }

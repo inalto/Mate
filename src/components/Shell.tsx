@@ -12,6 +12,8 @@ import ImportDialog from "./ImportDialog";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
+import RecordingLeaveGuard from "../recording/LeaveGuard";
+import { RecordingGapBanner, RecordingPill } from "../recording/RecordingPill";
 
 const link = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-link active" : "nav-link");
 
@@ -79,8 +81,16 @@ export default function Shell() {
       </nav>
       )}
       <main className="shell-main">
+        {/* Outside the editor (its top bar has them) a recording still shows, on every route. */}
+        {!inEditor && (
+          <div className="rec-shell-status">
+            <RecordingPill />
+            <RecordingGapBanner />
+          </div>
+        )}
         <Outlet />
       </main>
+      <RecordingLeaveGuard />
       <CommandPalette />
       <ImportDialog />
       <ShortcutHelp />

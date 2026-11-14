@@ -73,6 +73,12 @@ describe("RecordButton", () => {
     expect(resume).toHaveBeenCalled();
   });
 
+  it("says Not recording while interrupted", () => {
+    useRecording.setState({ phase: "interrupted", elapsedMs: 5_000, unitId: "u1" });
+    render(<RecordButton />);
+    expect(screen.getByRole("button", { name: "Not recording 0:05" })).toBeTruthy();
+  });
+
   it("is disabled during dictation", () => {
     useDictation.setState({ phase: "recording", startedAt: Date.now() });
     render(<RecordButton />);
