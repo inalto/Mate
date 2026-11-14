@@ -125,6 +125,8 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
     srcSet: boolean;
     pendingMs: number;
     tickPage: string | null;
+    /** After a tap-to-seek: `page` stays the tick page until the playhead reaches `untilMs`. */
+    hold: { page: string | null; untilMs: number } | null;
     /** Page the replay itself asked for (its notePageChanged keeps following). */
     ownTurn: string | null;
     timer: ReturnType<typeof setInterval> | null;
@@ -152,7 +154,8 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
 
   const followTicks = (ms: number) => {
     const s = session!;
-    const page = tickPageAt(store.getState().ticks, ms);
+    if (s.hold && ms >= s.hold.untilMs) s.hold = null;
+    const page = s.hold ? s.hold.page : tickPageAt(store.getState().ticks, ms);
     if (page === s.tickPage) return;
     s.tickPage = page;
     if (!page || !store.getState().follow || page === s.editor.getState().pageId) return;
@@ -197,6 +200,7 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
     const s = session!;
     const token = ++s.token;
     Object.assign(s, { cur: i, loading: true, srcSet: false, pendingMs: offsetMs });
+    media().pause(); // silent until the new source is positioned (onLoaded resumes)
     const url = await urlOf(s.rec.segments[i].assetId).catch(() => null);
     if (session !== s || token !== s.token) return;
     if (!url) return skipMissing();
@@ -231,8 +235,9 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
     const s = session;
     if (!s || s.loading) return;
     const ms = media().currentTime * 1000;
-    if (ms >= s.rec.segments[s.cur].durationMs + END_SLACK_MS) return advance();
-    setPos(segStart(s.cur) + ms);
+    const dur = s.rec.segments[s.cur].durationMs;
+    if (ms >= dur + END_SLACK_MS) return advance();
+    setPos(segStart(s.cur) + Math.min(ms, dur));
   };
 
   const onLoaded = () => {
@@ -244,9 +249,9 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
     s.loading = false;
     if (store.getState().playing) play();
   };
+  /** The current source failed (while loading or later): skipped like a missing segment. */
   const onError = () => {
-    const s = session;
-    if (s?.loading && s.srcSet) skipMissing();
+    if (session?.srcSet) skipMissing();
   };
 
   const goto = (ms: number) => {
@@ -290,7 +295,7 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
       const a = media();
       a.preload = "auto";
       const s: NonNullable<typeof session> = {
-        editor, rec, cur: -1, token: 0, loading: false, srcSet: false, pendingMs: 0, tickPage: null, ownTurn: null, timer: null, dispose: [],
+        editor, rec, cur: -1, token: 0, loading: false, srcSet: false, pendingMs: 0, tickPage: null, hold: null, ownTurn: null, timer: null, dispose: [],
       };
       session = s;
       const listen = (type: string, fn: () => void) => {
@@ -332,10 +337,13 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
       if (!s.loading) play();
     },
 
-    seek: goto,
+    seek(ms) {
+      if (session) session.hold = null;
+      goto(ms);
+    },
 
     skip(deltaMs) {
-      goto(get().positionMs + deltaMs);
+      get().seek(get().positionMs + deltaMs);
     },
 
     setRate(r) {
@@ -355,7 +363,14 @@ export function createReplay(deps: ReplayDeps): StoreApi<ReplayState> {
 
     seekToElement(id) {
       const t = targetOf(id);
-      if (!t) return false;
+      const s = session;
+      if (!t || !s) return false;
+      // A tap on the open page never turns it: that page stays the tick page until the next tick
+      // after the target (the target is 2 s early, often before the tick of the page's first notes).
+      const page = s.editor.getState().pageId;
+      const next = get().ticks.find((k) => k.audioMs > t.audioMs);
+      s.hold = { page, untilMs: next?.audioMs ?? Infinity };
+      s.tickPage = page;
       goto(t.audioMs);
       if (t.inGap) deps.onGapSeek?.();
       return true;

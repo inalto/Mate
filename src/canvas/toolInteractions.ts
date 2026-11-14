@@ -380,10 +380,13 @@ export const REPLAY_TAP_MS = 300;
 /**
  * Tap-to-seek while a replay is open: a press (any tool but the eraser) on a note written during the
  * recording that is released within REPLAY_TAP_MS and REPLAY_TAP_PX seeks the audio there (`up`
- * returns true: the press is consumed). Anything else behaves as without a replay.
+ * returns the tap: the press is consumed). A second tap on the same note within the double-tap window
+ * is not consumed (a double-click still opens editors). Anything else behaves as without a replay.
  */
 export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number) {
-  let press: { id: string; x: number; y: number; t: number } | null = null;
+  let press: Tap | null = null;
+  /** The last tap that seeked (its second tap falls through). */
+  let seeked: Tap | null = null;
   const moved = (p: Vec2) => {
     if (!press) return;
     const s = worldToScreen(store.getState().camera, p);
@@ -398,7 +401,12 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
       const id = hitTest(store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
       if (!id || !replay.canSeek(id)) return false;
       const scr = worldToScreen(s.camera, p);
-      press = { id, x: scr.x, y: scr.y, t: now() };
+      const tap: Tap = { id, x: scr.x, y: scr.y, t: now() };
+      if (isDoubleTap(seeked, tap)) {
+        seeked = null;
+        return false;
+      }
+      press = tap;
       return true;
     },
     /** The pointer is at `p`: false once the press can no longer be a tap. */
@@ -406,12 +414,13 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
       moved(p);
       return press !== null;
     },
-    /** Release at `p`: true when it was a tap and the replay seeked. */
-    up(p?: Vec2): boolean {
+    /** Release at `p`: the tap when it was one and the replay seeked, else null. */
+    up(p?: Vec2): Tap | null {
       if (p) moved(p);
       const tap = press;
       press = null;
-      return !!tap && now() - tap.t <= REPLAY_TAP_MS && !!replay?.seekToElement(tap.id);
+      seeked = tap && now() - tap.t <= REPLAY_TAP_MS && replay?.seekToElement(tap.id) ? tap : null;
+      return seeked;
     },
     cancel() {
       press = null;
@@ -922,18 +931,21 @@ export function createToolController(deps: ToolDeps) {
     deps.requestLive();
   };
 
-  const up = () => {
+  const up = (at?: Vec2) => {
     if (g.kind === "replayTap") {
       const { press, tool, points } = g;
       g = { kind: "idle" };
-      if (replayTap.up()) {
-        lastTap = null;
+      const tap = replayTap.up(at);
+      if (tap) {
+        // As a first click for double-click detection: a second one opens the editor (tapEdit).
+        lastTap = tap;
         deps.requestLive();
         return;
       }
-      // Held too long: the press behaves as without a replay.
+      // Held too long or released away: the press behaves as without a replay.
       down(press, tool, true);
-      if (points.length > 0) move(points);
+      const pts = at ? [...points, at] : points;
+      if (pts.length > 0) move(pts);
     }
     const s = st();
     switch (g.kind) {

@@ -65,6 +65,10 @@ const rec: RecordingContent = {
 const marker = recordingElement("pg", "rec", iso(0), { x: 300, y: 300 }, rec, "Lecture");
 const x = el("x", [[10, 10]], { width: 4, createdAt: iso(60_000) }); // written during the recording
 const y = el("y", [[60, 10]], { width: 4, createdAt: iso(-60_000) }); // before it
+const tb = el("tb", [[100, 100]], {
+  type: "text-box", boxWidth: 80, boxHeight: 40, penStyle: undefined, createdAt: iso(120_000),
+  content: { contentHtml: "<p>hi</p>", rawContent: "hi" },
+});
 
 let store: EditorStore;
 let host: HTMLElement;
@@ -84,11 +88,11 @@ async function mount() {
 const frame = () => act(async () => void (await new Promise((r) => setTimeout(r, 40))));
 
 /** A quick tap at world point `p` with `pointerType` (pen draws with the pen tool, mouse with the cursor). */
-function tap(p: { x: number; y: number }, pointerType = "pen") {
+function tap(p: { x: number; y: number }, pointerType = "pen", releaseDx = 0) {
   const s = worldToScreen(store.getState().camera, p);
   const base = { pointerId: 7, pointerType, bubbles: true, cancelable: true, pressure: 0.5, clientX: s.x, clientY: s.y, button: 0 };
   host.dispatchEvent(new PointerEvent("pointerdown", { ...base, buttons: 1 }));
-  host.dispatchEvent(new PointerEvent("pointerup", { ...base, buttons: 0 }));
+  host.dispatchEvent(new PointerEvent("pointerup", { ...base, clientX: s.x + releaseDx, buttons: 0 }));
 }
 
 async function openReplay() {
@@ -170,5 +174,27 @@ describe("replay on the canvas", () => {
     // A note from before the recording selects as usual.
     tap({ x: 60, y: 10 }, "mouse");
     expect(store.getState().selection).toEqual(new Set(["y"]));
+  });
+
+  it("a cursor release more than 10 px from the press is not a tap", async () => {
+    await mount();
+    store.getState().setTool("cursor");
+    const { seek } = await openReplay();
+    tap({ x: 10, y: 10 }, "mouse", 30);
+    expect(seek).not.toHaveBeenCalled();
+    expect(store.getState().selection).toEqual(new Set(["x"]));
+  });
+
+  it("a double click on an in-recording text box still opens it", async () => {
+    ipc.els = [marker, x, y, tb];
+    await mount();
+    store.getState().setTool("cursor");
+    const { seek } = await openReplay();
+    tap({ x: 140, y: 120 }, "mouse");
+    expect(seek).toHaveBeenCalledWith("tb");
+    expect(store.getState().editingId).toBeNull();
+    tap({ x: 140, y: 120 }, "mouse");
+    expect(store.getState().editingId).toBe("tb");
+    expect(seek).toHaveBeenCalledTimes(1);
   });
 });

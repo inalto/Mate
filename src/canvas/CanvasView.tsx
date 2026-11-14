@@ -424,7 +424,7 @@ function createEngine(
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
           if (dismissPress.active()) dismissPress.move(worldToScreen(st().camera, p));
           const dismissed = dismissPress.up();
-          const seeked = tools.replayTap.up(p);
+          const seeked = tools.replayTap.up(p) !== null;
           const t = seeked || dismissed === "discard" ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
           if (stroke && t === "commit") {
             if (shape) {
@@ -437,7 +437,7 @@ function createEngine(
               if (added && (el.shapeType === "line" || el.shapeType === "arrow") && getSettings().lineCapsPopover) openLineCaps(store, el.id);
             } else if (!scribbleErased(raw)) commit(stroke);
           }
-        } else if (mode === "tool") tools.up();
+        } else if (mode === "tool") tools.up(p);
         else if (mode === "marker") tutor.selectUp();
         markerPress = null;
         if (tutorStroke) tutor.cancel(); // a snapped shape or an aborted stroke: clear any hold

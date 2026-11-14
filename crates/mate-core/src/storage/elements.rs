@@ -87,7 +87,12 @@ impl Storage {
     /// excluding `media`.
     pub fn unit_element_times(&self, unit_id: &str, from: &str, to: &str) -> Result<Vec<ElementTime>> {
         let mut stmt = self.conn.prepare(
-            "SELECT e.id, e.page_id, e.created_at FROM elements e              JOIN pages p ON p.id = e.page_id JOIN sections s ON s.id = p.section_id              WHERE s.unit_id = ?1 AND e.created_at >= ?2 AND e.created_at <= ?3                AND e.type <> 'media' AND e.deleted_at IS NULL AND p.deleted_at IS NULL                AND s.deleted_at IS NULL              ORDER BY e.created_at, e.rowid",
+            "SELECT e.id, e.page_id, e.created_at FROM elements e \
+             JOIN pages p ON p.id = e.page_id JOIN sections s ON s.id = p.section_id \
+             WHERE s.unit_id = ?1 AND e.created_at >= ?2 AND e.created_at <= ?3 \
+               AND e.type <> 'media' AND e.deleted_at IS NULL AND p.deleted_at IS NULL \
+               AND s.deleted_at IS NULL \
+             ORDER BY e.created_at, e.rowid",
         )?;
         let rows = stmt.query_map(params![unit_id, from, to], |r| {
             Ok(ElementTime { id: r.get(0)?, page_id: r.get(1)?, created_at: r.get(2)? })

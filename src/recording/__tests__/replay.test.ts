@@ -221,6 +221,79 @@ describe("replay engine", () => {
     expect(goToPage).toHaveBeenCalledTimes(1);
   });
 
+  it("a tap on a page's first note never turns the page away", async () => {
+    // Ticks A@0, B@60 000 (the open page "pg"), C@120 000; "a" is B's first note, at 60 000.
+    ipc.times.mockResolvedValue([
+      { id: "z0", pageId: "pgA", createdAt: iso(0) },
+      { id: "a", pageId: "pg", createdAt: iso(60_000) },
+      { id: "z2", pageId: "pgC", createdAt: iso(120_000) },
+    ]);
+    const { s, goToPage } = await setup();
+    expect(s().ticks.map((t) => t.audioMs)).toEqual([0, 60_000, 120_000]);
+    s().seek(70_000); // listening on B
+    expect(goToPage).not.toHaveBeenCalled();
+    expect(s().seekToElement("a")).toBe(true); // 58 000: before B's tick
+    expect(s().positionMs).toBe(58_000);
+    expect(goToPage).not.toHaveBeenCalled();
+    s().toggle();
+    audio.currentTime = 59;
+    audio.fire("timeupdate");
+    audio.currentTime = 61; // past B's tick: already on B
+    audio.fire("timeupdate");
+    expect(goToPage).not.toHaveBeenCalled();
+    audio.currentTime = 121; // C's tick turns the page
+    audio.fire("timeupdate");
+    expect(goToPage).toHaveBeenCalledTimes(1);
+    expect(goToPage).toHaveBeenCalledWith("pgC");
+  });
+
+  it("an error while playing skips to the next segment", async () => {
+    const { s, onMissingSegment } = await setup();
+    s().toggle();
+    audio.currentTime = 100;
+    audio.fire("timeupdate");
+    audio.fire("error");
+    expect(onMissingSegment).toHaveBeenCalledTimes(1);
+    expect(s().positionMs).toBe(300_000);
+    await settle();
+    expect(audio.src).toBe("url:a2");
+    audio.fire("loadedmetadata");
+    expect(audio.play).toHaveBeenCalledTimes(2);
+    expect(s().playing).toBe(true);
+    // An error on the last segment pauses at the end.
+    audio.fire("error");
+    expect(onMissingSegment).toHaveBeenCalledTimes(2);
+    expect(s().playing).toBe(false);
+    expect(s().positionMs).toBe(500_000);
+  });
+
+  it("the playhead never passes a segment's end", async () => {
+    const { s } = await setup();
+    s().toggle();
+    audio.currentTime = 300.2; // durationMs + 200: within the end slack
+    audio.fire("timeupdate");
+    expect(s().positionMs).toBe(300_000);
+  });
+
+  it("the old segment does not keep playing during a cross-segment seek", async () => {
+    const pending = new Map<string, (url: string | null) => void>();
+    const { s } = await setup({ urlOf: (id) => new Promise((res) => pending.set(id, res)) });
+    pending.get("a1")!("url:a1");
+    await settle();
+    audio.fire("loadedmetadata");
+    s().toggle();
+    expect(audio.paused).toBe(false);
+    s().seek(350_000);
+    expect(audio.paused).toBe(true);
+    expect(s().playing).toBe(true);
+    pending.get("a2")!("url:a2");
+    await settle();
+    expect(audio.paused).toBe(true);
+    audio.fire("loadedmetadata");
+    expect(audio.currentTime).toBe(50);
+    expect(audio.paused).toBe(false);
+  });
+
   it("follow and ticks survive a failing tick query", async () => {
     ipc.times.mockRejectedValue(new Error("db"));
     const { s } = await setup();
