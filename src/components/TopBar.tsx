@@ -10,6 +10,7 @@ import { useFocusedEditor } from "../stores/focusedEditor";
 import { useImportStore } from "../stores/importStore";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
+import { RecordingGapBanner, RecordingPill } from "../recording/RecordingPill";
 import AboutDialog from "./AboutDialog";
 import ExportDialog from "./ExportDialog";
 import { useDismiss } from "./useDismiss";
@@ -78,6 +79,7 @@ export default function TopBar() {
   // A page window has no home, sidebar or tabs: closing the window is its only exit.
   const pageWindow = isPageWindow();
   return (
+    <>
     <header className="topbar">
       {!pageWindow && <button className="icon-btn" aria-label={t("nav.home")} title={t("nav.home")} onClick={() => navigate("/")}><House size={18} /></button>}
       {!pageWindow && <button className="icon-btn" aria-label={t("keys.actions.toggleSidebar")} title={withKeys(t("keys.actions.toggleSidebar"), "Ctrl+\\")} onClick={() => useChromeStore.getState().toggleSidebar()}><SidebarSimple size={18} /></button>}
@@ -99,8 +101,12 @@ export default function TopBar() {
           }
         }}
       />
+      <RecordingPill />
       <MoreMenu pageId={pageId} onExport={() => setExporting(true)} />
       {exporting && pageId && <ExportDialog pageId={pageId} onClose={() => setExporting(false)} />}
     </header>
+    {/* Time lost in the background while recording; stays until dismissed. */}
+    <RecordingGapBanner />
+    </>
   );
 }

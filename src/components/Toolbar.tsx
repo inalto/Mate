@@ -40,6 +40,7 @@ import type { TKey } from "../i18n";
 import { pickAndInsertImage } from "../images/insert";
 import { pickAndInsertMedia } from "../media/insert";
 import { DictateButton } from "./DictateButton";
+import RecordButton from "../recording/RecordButton";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
 import type { FingerAction, PenPreset, Settings } from "../model/types";
@@ -792,6 +793,7 @@ export default function Toolbar() {
         <FilmSlate size={18} />
       </button>
       <DictateButton />
+      <RecordButton />
       <button type="button" className="tb-btn" aria-label={t("toolbar.insertTable")} title={t("toolbar.insertTable")} onClick={() => s().addTable()}>
         <Table size={18} />
       </button>

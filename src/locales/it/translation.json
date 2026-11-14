@@ -589,7 +589,8 @@
       "moveTabRight": "Sposta la scheda a destra",
       "openPageWindow": "Apri la pagina in una nuova finestra",
       "palette": "Cerca e azioni",
-      "shortcuts": "Scorciatoie da tastiera"
+      "shortcuts": "Scorciatoie da tastiera",
+      "recordingToggle": "Avvia o interrompi la registrazione"
     }
   },
   "palette": {
@@ -1428,6 +1429,35 @@
     "writeFailed": "La registrazione si è interrotta perché non è stato possibile salvarla. Quanto registrato finora è conservato.",
     "failed": "La registrazione si è interrotta per un problema del microfono. Quanto registrato finora è conservato.",
     "busy": "È già in corso una registrazione.",
-    "dictationActive": "Termina la dettatura prima di registrare."
+    "dictationActive": "Termina la dettatura prima di registrare.",
+    "start": "Registra audio",
+    "stop": "Interrompi registrazione",
+    "pause": "Pausa",
+    "resume": "Riprendi",
+    "pill": "Registrazione {{time}}",
+    "paused": "In pausa {{time}}",
+    "gap": "{{time}} non sono stati registrati mentre Mate era in background.",
+    "menu": "Registrazione",
+    "leave": {
+      "title": "Interrompere la registrazione?",
+      "body": "La registrazione appartiene a questo quaderno. Uscendo la registrazione si ferma e viene salvata.",
+      "stop": "Interrompi ed esci",
+      "stay": "Resta"
+    }
+  },
+  "replay": {
+    "bar": "Riproduzione della registrazione",
+    "play": "Riproduci",
+    "pause": "Pausa",
+    "back": "Indietro di 10 secondi",
+    "forward": "Avanti di 10 secondi",
+    "position": "Posizione",
+    "time": "{{position}} / {{total}}",
+    "speed": "Velocità",
+    "follow": "Segui le pagine",
+    "transcript": "Trascrizione",
+    "close": "Chiudi",
+    "notRecorded": "Questo è stato scritto mentre non si registrava nulla.",
+    "missingSegment": "Manca una parte di questa registrazione."
   }
 }

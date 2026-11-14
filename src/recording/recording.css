@@ -1,0 +1,166 @@
+/* Lecture recording: the toolbar button, the top bar pill and gap banner, and the replay bar. */
+
+.tb-btn.rec-live {
+  color: var(--color-danger, #e5484d);
+}
+
+.rec-elapsed {
+  margin-inline-start: 2px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rec-pill:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.rec-dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-danger, #e5484d);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+
+.rec-pill.paused .rec-dot {
+  animation: none;
+  opacity: 0.5;
+}
+
+.rec-menu {
+  top: calc(100% + 4px);
+}
+
+.rec-gap-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+@keyframes rec-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Replay bar: bottom of its pane (a bottom-docked toolbar sits outside the pane), clamped to it.
+   In a narrow pane the groups wrap onto more rows (each group fits in 360 px). */
+.selection-bar.replay-bar {
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 3;
+  transform: none;
+  max-width: 760px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: var(--space-1);
+  box-sizing: border-box;
+}
+
+.replay-bar .tb-btn {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.replay-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: none;
+}
+
+.replay-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 160px;
+  min-width: 120px;
+  min-height: 40px;
+}
+
+.replay-scrubber {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.replay-tick,
+.replay-gap {
+  position: absolute;
+  top: 50%;
+  pointer-events: none;
+}
+
+.replay-tick {
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  transform: translateY(-50%);
+  background: var(--color-text-muted);
+}
+
+.replay-gap {
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  transform: translateY(-50%);
+  border: 1px solid var(--color-text-muted);
+  background: repeating-linear-gradient(45deg, var(--color-text-muted) 0 1px, transparent 1px 3px);
+}
+
+.replay-time {
+  flex: none;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.replay-rate {
+  min-width: 3ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.replay-label {
+  font-size: 0.8125rem;
+}
+
+.replay-menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 96px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rec-dot {
+    animation: none;
+  }
+}

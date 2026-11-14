@@ -6,13 +6,15 @@ interface Props {
   title: string;
   children: ReactNode;
   confirmLabel: string;
+  /** The cancel button's text (default "Cancel"). */
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
   /** Only the confirm button (a notice the user must acknowledge); Escape still calls `onCancel`. */
   confirmOnly?: boolean;
 }
 
-export default function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCancel, confirmOnly = false }: Props) {
+export default function ConfirmDialog({ title, children, confirmLabel, cancelLabel, onConfirm, onCancel, confirmOnly = false }: Props) {
   useModal();
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
@@ -50,7 +52,7 @@ export default function ConfirmDialog({ title, children, confirmLabel, onConfirm
         <h2>{title}</h2>
         <p>{children}</p>
         <div className="dialog-actions">
-          {!confirmOnly && <button type="button" className="btn" onClick={onCancel}>{t("common.cancel")}</button>}
+          {!confirmOnly && <button type="button" className="btn" onClick={onCancel}>{cancelLabel ?? t("common.cancel")}</button>}
           <button type="button" className="btn btn-primary" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>

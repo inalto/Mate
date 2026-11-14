@@ -83,14 +83,29 @@ function save(tabs: Tab[], activeTabId: string | null): void {
   }
 }
 
+/** The tabs before and after a change the user asked for. */
+export type TabsSnapshot = Pick<TabsState, "tabs" | "activeTabId">;
+/** Takes over a change (returns true) to apply it later, or never; see setTabsGuard. */
+export type TabsGuard = (prev: TabsSnapshot, next: TabsSnapshot, apply: () => void) => boolean;
+let guard: TabsGuard | null = null;
+
+/** Opening a page and closing a tab first ask `g` (the recording's "leave the notebook?" check). */
+export function setTabsGuard(g: TabsGuard | null): void {
+  guard = g;
+}
+
 export const useTabsStore = create<TabsState>((set, get) => {
-  /** Apply a state change and persist it. */
-  const commit = (tabs: Tab[], activeTabId: string | null) => {
-    set({ tabs, activeTabId });
-    save(tabs, activeTabId);
+  /** Apply a state change and persist it; a `guarded` change may be held back by the guard. */
+  const commit = (tabs: Tab[], activeTabId: string | null, guarded = false) => {
+    const apply = () => {
+      set({ tabs, activeTabId });
+      save(tabs, activeTabId);
+    };
+    if (guarded && guard?.({ tabs: get().tabs, activeTabId: get().activeTabId }, { tabs, activeTabId }, apply)) return;
+    apply();
   };
-  const mapTab = (id: string, fn: (t: Tab) => Tab) =>
-    commit(get().tabs.map((t) => (t.id === id ? fn(t) : t)), get().activeTabId);
+  const mapTab = (id: string, fn: (t: Tab) => Tab, guarded = false) =>
+    commit(get().tabs.map((t) => (t.id === id ? fn(t) : t)), get().activeTabId, guarded);
 
   return {
     ...load(),
@@ -105,17 +120,17 @@ export const useTabsStore = create<TabsState>((set, get) => {
       const showing = tabs.find((t) => t.id === activeTabId && shows(t)) ?? tabs.find(shows);
       if (showing) {
         const i = showing.panes.findIndex((p) => p.pageId === pageId) as PaneIndex;
-        commit(tabs.map((t) => (t.id === showing.id ? { ...t, focusedPaneIndex: i } : t)), showing.id);
+        commit(tabs.map((t) => (t.id === showing.id ? { ...t, focusedPaneIndex: i } : t)), showing.id, true);
         return;
       }
       const active = tabs.find((t) => t.id === activeTabId);
       if (wantNewTab || !active) {
         const tab = makeTab(pageId);
-        commit([...tabs, tab], tab.id);
+        commit([...tabs, tab], tab.id, true);
         return;
       }
       const panes = active.panes.map((p, i) => (i === active.focusedPaneIndex ? { pageId } : p)) as Tab["panes"];
-      mapTab(active.id, (t) => withPanes(t, panes, t.focusedPaneIndex));
+      mapTab(active.id, (t) => withPanes(t, panes, t.focusedPaneIndex), true);
     },
 
     closeTab(id) {
@@ -124,7 +139,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       if (i < 0) return;
       const rest = tabs.filter((t) => t.id !== id);
       const next = activeTabId === id ? (rest[Math.min(i, rest.length - 1)]?.id ?? null) : activeTabId;
-      commit(rest, next);
+      commit(rest, next, true);
     },
 
     activateTab(id) {

@@ -28,6 +28,7 @@ import {
 } from "../mindmap/editSession";
 import { parentOf, removeNode } from "../mindmap/tree";
 import i18n from "../i18n";
+import { toggleRecording } from "../recording/controls";
 
 export const ZOOM_STEP = 1.2;
 
@@ -167,6 +168,9 @@ function runChromeShortcut(action: string): boolean {
       return true;
     case "palette.open":
       useChromeStore.getState().openPalette();
+      return true;
+    case "recording.toggle":
+      toggleRecording();
       return true;
   }
   return false;

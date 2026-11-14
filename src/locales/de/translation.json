@@ -592,7 +592,8 @@
       "moveTabRight": "Tab nach rechts verschieben",
       "openPageWindow": "Seite in neuem Fenster öffnen",
       "palette": "Suche und Aktionen",
-      "shortcuts": "Tastenkürzel"
+      "shortcuts": "Tastenkürzel",
+      "recordingToggle": "Start or stop recording"
     }
   },
   "palette": {
@@ -1431,6 +1432,35 @@
     "writeFailed": "The recording stopped because it could not be saved. What was recorded so far is kept.",
     "failed": "The recording stopped because of a microphone problem. What was recorded so far is kept.",
     "busy": "A recording is already running.",
-    "dictationActive": "Finish dictating before you record."
+    "dictationActive": "Finish dictating before you record.",
+    "start": "Record audio",
+    "stop": "Stop recording",
+    "pause": "Pause",
+    "resume": "Resume",
+    "pill": "Recording {{time}}",
+    "paused": "Paused {{time}}",
+    "gap": "{{time}} was not recorded while Mate was in the background.",
+    "menu": "Recording",
+    "leave": {
+      "title": "Stop recording?",
+      "body": "The recording belongs to this notebook. Leaving it stops the recording and saves it.",
+      "stop": "Stop and leave",
+      "stay": "Stay"
+    }
+  },
+  "replay": {
+    "bar": "Recording replay",
+    "play": "Play",
+    "pause": "Pause",
+    "back": "Back 10 seconds",
+    "forward": "Forward 10 seconds",
+    "position": "Position",
+    "time": "{{position}} / {{total}}",
+    "speed": "Speed",
+    "follow": "Follow pages",
+    "transcript": "Transcript",
+    "close": "Close",
+    "notRecorded": "This was written while nothing was being recorded.",
+    "missingSegment": "Part of this recording is missing."
   }
 }

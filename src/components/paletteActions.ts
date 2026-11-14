@@ -129,6 +129,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     },
   },
   plain("window.openPage", "page", ["window", "detach"]),
+  plain("recording.toggle", "page", ["record", "audio", "lecture", "microphone"]),
   plain("help.shortcuts", "global", ["keys", "keyboard", "help"]),
   { id: "go.settings", labelKey: "palette.openSettings", synonyms: ["preferences", "options"], scope: "global", run: (n) => n("/settings") },
   { id: "go.library", labelKey: "palette.openLibrary", synonyms: ["books", "notebooks"], scope: "global", run: (n) => n("/library") },

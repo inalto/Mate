@@ -43,6 +43,7 @@ import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
 import { createPenInkHaptics } from "./haptics";
 import { drawDimmed, replayTapOf } from "../recording/replay";
+import { markerTargetOf } from "../recording/panes";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
@@ -242,6 +243,7 @@ function createEngine(
       drawDimmed(ctx, st().replayDim, el.id, () => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper })),
     getSettings,
     replay: replayTapOf(store),
+    markers: markerTargetOf(store),
   });
 
   const resize = () => {
