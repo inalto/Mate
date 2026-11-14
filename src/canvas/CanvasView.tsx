@@ -42,6 +42,7 @@ import { drawTutorMarkers, drawTutorTip, hitTutorMarker } from "../tutor/overlay
 import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
 import { createPenInkHaptics } from "./haptics";
+import { drawDimmed, replayTapOf } from "../recording/replay";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
@@ -146,7 +147,8 @@ function createEngine(
       const hole = presentHole();
       if (hole) presentBackdrop(ctx, clip, hole, FRAME_RADIUS);
     } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
-      drawElement(asCtx(ctx), el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper });
+      const shown = el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el;
+      drawDimmed(asCtx(ctx), s.replayDim, el.id, () => drawElement(asCtx(ctx), shown, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper }));
     }
   };
 
@@ -236,8 +238,10 @@ function createEngine(
       cache.invalidate();
       requestStatic();
     },
-    renderElement: (ctx, el) => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
+    renderElement: (ctx, el) =>
+      drawDimmed(ctx, st().replayDim, el.id, () => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper })),
     getSettings,
+    replay: replayTapOf(store),
   });
 
   const resize = () => {
@@ -362,6 +366,7 @@ function createEngine(
         }
         const set = getSettings();
         mode = "draw";
+        tools.replayTap.down(p, tool); // a quick tap on a replayed note seeks instead (pen-up)
         penInk.start(info.pointerType);
         builder = createStrokeBuilder({
           pageId,
@@ -394,6 +399,7 @@ function createEngine(
           if (points.length > 0) snap?.move(points[points.length - 1]);
           if (tutorStroke && points.length > 0) tutor.inkMove(worldToScreen(st().camera, points[points.length - 1]));
           if (dismissPress.active() && points.length > 0) dismissPress.move(worldToScreen(st().camera, points[points.length - 1]));
+          if (points.length > 0) tools.replayTap.move(points[points.length - 1]);
           if (!snapShape) setLive(builder.preview(predicted));
         } else if (mode === "tool") tools.move(points);
         else if (mode === "marker" && markerPress && points.length > 0) {
@@ -418,7 +424,8 @@ function createEngine(
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
           if (dismissPress.active()) dismissPress.move(worldToScreen(st().camera, p));
           const dismissed = dismissPress.up();
-          const t = dismissed === "discard" ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
+          const seeked = tools.replayTap.up(p);
+          const t = seeked || dismissed === "discard" ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
           if (stroke && t === "commit") {
             if (shape) {
               const el = snapShapeElement(shape, st().preset, pageId, crypto.randomUUID(), new Date().toISOString());
@@ -443,6 +450,7 @@ function createEngine(
       },
       onCancel() {
         if (mode === "tool") tools.cancel();
+        tools.replayTap.cancel();
         dismissPress.cancel();
         tutor.cancel();
         tutorStroke = false;
@@ -526,6 +534,11 @@ function createEngine(
     if (s.presenting !== prev.presenting) {
       // The backdrop hole moved (or the presentation started / ended): repaint the background.
       if (getSettings().presentBlackBackground) cache.invalidate();
+      requestStatic();
+      requestLive();
+    }
+    if (s.replayDim !== prev.replayDim) {
+      cache.invalidate();
       requestStatic();
       requestLive();
     }

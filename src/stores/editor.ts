@@ -131,6 +131,11 @@ export interface EditorState {
    * selection; only panning and zooming. Not persisted; loading a page ends it.
    */
   presenting: { index: number; fill: boolean } | null;
+  /** Ids drawn at 25 % while a recording replay is open (recording/replay.ts); null otherwise. Not
+   * history, not persisted; loading a page clears it. */
+  replayDim: ReadonlySet<string> | null;
+  /** Set the replay's dimmed ids (no history entry); the canvas re-rasterises its static layer. */
+  setReplayDim(ids: ReadonlySet<string> | null): void;
   /** The page's frames in presentation order (`content.order`, then `createdAt`). */
   orderedFrames(): Element[];
   /** Present the frames from `index` (clamped): cursor tool, selection cleared, camera on the frame. Nothing without frames. */
@@ -587,6 +592,11 @@ export function createEditorStore(): EditorStore {
     limitKind: "page",
     presenting: null,
     mindmapFocus: null,
+    replayDim: null,
+
+    setReplayDim(ids) {
+      if (get().replayDim !== ids) set({ replayDim: ids });
+    },
 
     orderedFrames() {
       return framesInOrder(get().elements.values());
@@ -641,6 +651,7 @@ export function createEditorStore(): EditorStore {
       set({
         presenting: null,
         mindmapFocus: null,
+        replayDim: null,
         canUndo: false,
         canRedo: false,
         tempTool: null,

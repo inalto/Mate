@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
+use serde::Serialize;
 
 use super::recognition::invalidate_in;
 use super::{
@@ -18,6 +19,15 @@ pub(crate) const MAX_POINTS_PER_STROKE: usize = 50_000;
 const ELEMENT_COLS: &str = "id, page_id, type, points, color, width, height, is_highlighter, \
      pen_style, image_url, shape_type, fill_color, box_width, box_height, content, \
      classification, ui_group_id, created_at, updated_at, deleted_at, version, last_write_id";
+
+/// When an element of a unit was created, for the page ticks of a recording replay.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElementTime {
+    pub id: String,
+    pub page_id: String,
+    pub created_at: String,
+}
 
 /// The parts of an element that change what its ink looks like to the tutor, in stored form.
 #[derive(PartialEq)]
@@ -70,6 +80,18 @@ impl Storage {
              WHERE page_id = ?1 AND deleted_at IS NULL ORDER BY created_at, rowid"
         ))?;
         let rows = stmt.query_map([page_id], element_from_row)?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Live elements of the unit's live pages created in [from, to] (RFC 3339), oldest first,
+    /// excluding `media`.
+    pub fn unit_element_times(&self, unit_id: &str, from: &str, to: &str) -> Result<Vec<ElementTime>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT e.id, e.page_id, e.created_at FROM elements e              JOIN pages p ON p.id = e.page_id JOIN sections s ON s.id = p.section_id              WHERE s.unit_id = ?1 AND e.created_at >= ?2 AND e.created_at <= ?3                AND e.type <> 'media' AND e.deleted_at IS NULL AND p.deleted_at IS NULL                AND s.deleted_at IS NULL              ORDER BY e.created_at, e.rowid",
+        )?;
+        let rows = stmt.query_map(params![unit_id, from, to], |r| {
+            Ok(ElementTime { id: r.get(0)?, page_id: r.get(1)?, created_at: r.get(2)? })
+        })?;
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 

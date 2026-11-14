@@ -13,6 +13,7 @@ use rusqlite::{Connection, Row};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+pub use elements::ElementTime;
 pub use notebook::{EntityKind, NotebookTree, TrashItem};
 pub use recognition::{Bounds, LearningEvent, Recognition, RecognitionSource, UpsertOutcome};
 pub use search::{SNIPPET_CLOSE, SNIPPET_OPEN, SearchHit};

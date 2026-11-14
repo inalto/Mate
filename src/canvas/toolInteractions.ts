@@ -9,7 +9,8 @@
 // selected element: a tap opens the auto-complete popover, a release on an element binds to it, a
 // release in empty space adds a free-ended connector and opens the popover there), frame tool (drag
 // a frame, then back to the cursor; a frame is hit only on its border band or title, a double-click
-// on its title opens the rename popover). Geometry is pure; `createToolController` wires it
+// on its title opens the rename popover), tap-to-seek on a note while a recording replay is open.
+// Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
@@ -287,6 +288,8 @@ export function pointerTool(tool: ToolId, panHold: boolean, info: PointerInfo, c
 
 type Gesture =
   | { kind: "idle" }
+  /** A press on a note while a replay is open: a tap seeks; moving or holding replays the press. */
+  | { kind: "replayTap"; press: Vec2; tool: PointerTool; points: Vec2[] }
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
@@ -358,6 +361,62 @@ export interface ToolDeps {
   getSettings(): Settings;
   /** Clock for double-click detection (ms; default performance.now). */
   now?(): number;
+  /** Tap-to-seek of the replay open in this pane (recording/replay.ts `replayTapOf`). */
+  replay?: ReplayTapTarget;
+}
+
+/** The pane's recording replay, as tap-to-seek sees it. */
+export interface ReplayTapTarget {
+  isOpen(): boolean;
+  /** Element `id` of the open page was started during the recording (and is not its marker). */
+  canSeek(id: string): boolean;
+  seekToElement(id: string): boolean;
+}
+/** A tap to seek moves at most this far (screen px) ... */
+export const REPLAY_TAP_PX = 10;
+/** ... and lasts at most this long (ms). */
+export const REPLAY_TAP_MS = 300;
+
+/**
+ * Tap-to-seek while a replay is open: a press (any tool but the eraser) on a note written during the
+ * recording that is released within REPLAY_TAP_MS and REPLAY_TAP_PX seeks the audio there (`up`
+ * returns true: the press is consumed). Anything else behaves as without a replay.
+ */
+export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number) {
+  let press: { id: string; x: number; y: number; t: number } | null = null;
+  const moved = (p: Vec2) => {
+    if (!press) return;
+    const s = worldToScreen(store.getState().camera, p);
+    if (Math.hypot(s.x - press.x, s.y - press.y) > REPLAY_TAP_PX) press = null;
+  };
+  return {
+    /** A press at world `p`: true when it may be a tap to seek. */
+    down(p: Vec2, tool: PointerTool): boolean {
+      press = null;
+      if (!replay?.isOpen() || tool === "eraser" || tool === "pan" || tool === "none") return false;
+      const s = store.getState();
+      const id = hitTest(store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
+      if (!id || !replay.canSeek(id)) return false;
+      const scr = worldToScreen(s.camera, p);
+      press = { id, x: scr.x, y: scr.y, t: now() };
+      return true;
+    },
+    /** The pointer is at `p`: false once the press can no longer be a tap. */
+    move(p: Vec2): boolean {
+      moved(p);
+      return press !== null;
+    },
+    /** Release at `p`: true when it was a tap and the replay seeked. */
+    up(p?: Vec2): boolean {
+      if (p) moved(p);
+      const tap = press;
+      press = null;
+      return !!tap && now() - tap.t <= REPLAY_TAP_MS && !!replay?.seekToElement(tap.id);
+    },
+    cancel() {
+      press = null;
+    },
+  };
 }
 
 /** Modifier keys an auto-complete handle copies from its own pointer events. */
@@ -400,6 +459,7 @@ export function createToolController(deps: ToolDeps) {
   let dupCount = 0;
   let lastTap: Tap | null = null;
   const now = deps.now ?? (() => performance.now());
+  const replayTap = createReplayTap(deps.store, deps.replay, now);
 
   /**
    * Double-click on a boxed element opens its editor, on a connector its label popover (never on a
@@ -652,9 +712,11 @@ export function createToolController(deps: ToolDeps) {
     return sel.some((f) => frameHit(f, p, tol, s.camera.z));
   };
 
-  const down = (p: Vec2, tool: PointerTool) => {
+  const down = (p: Vec2, tool: PointerTool, replayed = false) => {
     const s = st();
-    if (tool === "eraser") {
+    if (!replayed && replayTap.down(p, tool)) {
+      g = { kind: "replayTap", press: p, tool, points: [] };
+    } else if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
     } else if (tool === "insert-space") {
@@ -731,6 +793,16 @@ export function createToolController(deps: ToolDeps) {
   const move = (points: Vec2[]) => {
     const p = points[points.length - 1];
     if (!p) return;
+    if (g.kind === "replayTap") {
+      g.points.push(...points);
+      if (replayTap.move(p)) return;
+      // Dragged: the press behaves as without a replay, from where it started.
+      const { press, tool, points: pts } = g;
+      g = { kind: "idle" };
+      down(press, tool, true);
+      move(pts);
+      return;
+    }
     const z = st().camera.z;
     switch (g.kind) {
       case "erase":
@@ -851,6 +923,18 @@ export function createToolController(deps: ToolDeps) {
   };
 
   const up = () => {
+    if (g.kind === "replayTap") {
+      const { press, tool, points } = g;
+      g = { kind: "idle" };
+      if (replayTap.up()) {
+        lastTap = null;
+        deps.requestLive();
+        return;
+      }
+      // Held too long: the press behaves as without a replay.
+      down(press, tool, true);
+      if (points.length > 0) move(points);
+    }
     const s = st();
     switch (g.kind) {
       case "erase":
@@ -944,6 +1028,7 @@ export function createToolController(deps: ToolDeps) {
   };
 
   const cancel = () => {
+    replayTap.cancel();
     if (g.kind === "erase") st().endEraser();
     // A cancelled Alt+drag takes its copies back.
     if (g.kind === "move" && g.dupKey) st().undo();
@@ -1120,6 +1205,8 @@ export function createToolController(deps: ToolDeps) {
 
   return {
     hidden: hidden as ReadonlySet<string>,
+    /** Tap-to-seek for ink tools, whose presses CanvasView handles itself. */
+    replayTap,
     down,
     move,
     up,

@@ -124,10 +124,12 @@ function draw(ctx: CanvasRenderingContext2D, el: Element, o: RenderOptions): voi
   ctx.strokeStyle = p.stroke;
   trace(ctx, main, closed);
   if (p.fill) {
-    ctx.globalAlpha = p.opacity;
+    // Multiplied and restored: a dimmed replay note stays dimmed.
+    const alpha = ctx.globalAlpha;
+    ctx.globalAlpha = alpha * p.opacity;
     ctx.fillStyle = p.fill;
     ctx.fill();
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = alpha;
   }
   ctx.stroke();
   for (const cap of caps) {

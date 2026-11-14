@@ -49,7 +49,7 @@ export function renderStroke(
   ctx.fillStyle = color;
   ctx.strokeStyle = color;
   if (style === "highlighter") {
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha *= 0.5; // multiplied: a dimmed replay note stays dimmed
     ctx.globalCompositeOperation = isDarkTheme(theme) ? "screen" : "multiply";
   }
 

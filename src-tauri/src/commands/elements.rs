@@ -1,4 +1,5 @@
 use mate_core::model::Element;
+use mate_core::storage::ElementTime;
 use tauri::State;
 
 use crate::state::AppState;
@@ -21,4 +22,15 @@ pub fn upsert_elements(state: State<'_, AppState>, elements: Vec<Element>) -> Re
 pub fn delete_elements(state: State<'_, AppState>, ids: Vec<String>) -> Res<()> {
     let mut storage = state.storage.lock().map_err(|e| e.to_string())?;
     storage.delete_elements(&ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn unit_element_times(
+    state: State<'_, AppState>,
+    unit_id: String,
+    from: String,
+    to: String,
+) -> Res<Vec<ElementTime>> {
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    storage.unit_element_times(&unit_id, &from, &to).map_err(|e| e.to_string())
 }

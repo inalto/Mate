@@ -150,3 +150,73 @@ fn referenced_asset_ids_follow_recording_segments() {
     let want: std::collections::HashSet<String> = ["seg-a", "seg-b"].iter().map(|s| s.to_string()).collect();
     assert_eq!(st.referenced_asset_ids().unwrap(), want);
 }
+
+#[test]
+fn unit_element_times_returns_live_elements_in_range_oldest_first() {
+    use common::{page, section, unit};
+    use mate_core::storage::EntityKind;
+    let mut st = seeded();
+    st.upsert_page(&page("p2", "sec1", None)).unwrap(); // trashed below
+    st.upsert_unit(&unit("u2", Some("s1"))).unwrap();
+    st.upsert_section(&section("sec2", "u2")).unwrap();
+    st.upsert_page(&page("p3", "sec2", None)).unwrap(); // another unit
+    let at = |id: &str, page_id: &str, created: &str| {
+        let mut e = stroke(id, page_id, 2);
+        e.created_at = created.into();
+        e
+    };
+    let mut media = at("media", "p1", "2026-11-14T09:02:00.000Z");
+    media.r#type = ElementType::Media;
+    st.upsert_elements(&[
+        at("late", "p1", "2026-11-14T09:05:00.000Z"),
+        at("early", "p1", "2026-11-14T09:01:00.000Z"),
+        at("before", "p1", "2026-11-14T08:59:59.999Z"),
+        at("after", "p1", "2026-11-14T09:10:00.001Z"),
+        at("edge", "p1", "2026-11-14T09:10:00.000Z"),
+        at("gone", "p1", "2026-11-14T09:03:00.000Z"),
+        at("trashed-page", "p2", "2026-11-14T09:04:00.000Z"),
+        at("other-unit", "p3", "2026-11-14T09:04:00.000Z"),
+        media,
+    ])
+    .unwrap();
+    st.delete_elements(&["gone".to_string()]).unwrap();
+    st.soft_delete(EntityKind::Page, "p2").unwrap();
+
+    let got = st
+        .unit_element_times("u1", "2026-11-14T09:00:00.000Z", "2026-11-14T09:10:00.000Z")
+        .unwrap();
+    let ids: Vec<&str> = got.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["early", "late", "edge"]);
+    assert_eq!(got[0].page_id, "p1");
+    assert_eq!(got[0].created_at, "2026-11-14T09:01:00.000Z");
+}
+
+/// Timing of the range query on a 10 000-element unit (run with `--ignored --nocapture`).
+#[test]
+#[ignore]
+fn unit_element_times_timing_on_10000_elements() {
+    use common::page;
+    let mut st = seeded();
+    for p in ["p2", "p3", "p4"] {
+        st.upsert_page(&page(p, "sec1", None)).unwrap();
+    }
+    let pages = ["p1", "p2", "p3", "p4"];
+    for (n, chunk) in (0..10_000).collect::<Vec<_>>().chunks(2500).enumerate() {
+        let els: Vec<_> = chunk
+            .iter()
+            .map(|i| {
+                let mut e = stroke(&format!("e{i}"), pages[n], 20);
+                e.created_at = format!("2026-11-14T{:02}:{:02}:{:02}.000Z", 8 + i / 3600, (i / 60) % 60, i % 60);
+                e
+            })
+            .collect();
+        st.upsert_elements(&els).unwrap();
+    }
+    let start = std::time::Instant::now();
+    let got = st
+        .unit_element_times("u1", "2026-11-14T09:00:00.000Z", "2026-11-14T10:00:00.000Z")
+        .unwrap();
+    let took = start.elapsed();
+    println!("unit_element_times: {} rows in {took:?}", got.len());
+    assert_eq!(got.len(), 3601);
+}
