@@ -12,6 +12,7 @@ import { getSpeechStatus, listSpeechProviders, tidyDictation, transcribeAudio } 
 import { isMathBox } from "../math/mathBox";
 import { contentOf, type TextBoxContent } from "../model/content";
 import type { Element, Settings } from "../model/types";
+import { isRecordingActive } from "../recording/session";
 import type { EditorStore } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { navigateTo } from "../stores/navigation";
@@ -240,6 +241,11 @@ function recorderFailed(rec: () => Recorder | null, e: RecorderError): void {
 
 async function begin(): Promise<void> {
   if (useDictation.getState().phase !== "idle") return;
+  if (isRecordingActive()) {
+    pending = null;
+    showToast(i18n.t("recording.dictationBusy"));
+    return;
+  }
   const into = pending ?? editedTextBox();
   pending = null;
   // Synchronous, so a second press while the setup is checked or the microphone opens is ignored.
@@ -353,6 +359,11 @@ export async function toggleDictation(): Promise<void> {
   const { phase, askConsent } = useDictation.getState();
   if (phase === "starting" || phase === "transcribing" || askConsent) return;
   if (phase === "recording") return finish();
+  if (isRecordingActive()) {
+    pending = null;
+    showToast(i18n.t("recording.dictationBusy"));
+    return;
+  }
   const consent = useSettingsStore.getState().settings.speechConsent;
   if (consent === false) {
     pending = null;

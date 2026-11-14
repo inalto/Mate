@@ -39,6 +39,11 @@ vi.mock("../../stores/focusedEditor", () => ({ editorForPane: (i: number) => pan
 const showToast = vi.fn();
 vi.mock("../../components/Toast", () => ({ showToast: (...a: unknown[]) => showToast(...a) }));
 let startedResult = true;
+const recording = vi.hoisted(() => ({ active: false }));
+vi.mock("../../recording/session", () => ({
+  isRecordingActive: () => recording.active,
+  stopRecordingBeforeExit: vi.fn(async () => void calls.push("recording")),
+}));
 const win = vi.hoisted(() => ({ page: false }));
 vi.mock("../../ipc/windows", () => ({ isPageWindow: () => win.page }));
 
@@ -61,6 +66,7 @@ beforeEach(() => {
   startedResult = true;
   win.page = false;
   openSession.id = null;
+  recording.active = false;
   showToast.mockClear();
   vi.mocked(ipc.completeCloseAttempt).mockClear();
   localStorage.clear();
@@ -97,6 +103,12 @@ describe("close handler", () => {
     openSession.id = "t2";
     window.dispatchEvent(new Event("beforeunload"));
     expect(calls.slice(0, 2)).toEqual(["commit:t2", "flush"]);
+  });
+
+  it("close_while_recording_saves_the_recording_before_the_flush", async () => {
+    recording.active = true;
+    await w.__mateFlushAndClose!(5);
+    expect(calls).toEqual(["started:5", "recording", "flush", "settings", "complete:5"]);
   });
 
   it("completes_when_queue_flushes", async () => {

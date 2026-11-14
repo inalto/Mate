@@ -1391,5 +1391,16 @@
     "large": "Grande",
     "useForNew": "Usa per le nuove pagine",
     "done": "Fine"
+  },
+  "recording": {
+    "title": "Registrazione {{date}}",
+    "tooShort": "Non è stato registrato nulla.",
+    "recovered": "È stata recuperata una registrazione interrotta.",
+    "dictationBusy": "Interrompi la registrazione per dettare.",
+    "limitSoon": "La registrazione si ferma tra 5 minuti (limite di 4 ore).",
+    "limit": "È stato raggiunto il limite di 4 ore. La registrazione è stata salvata.",
+    "writeFailed": "La registrazione si è interrotta perché non è stato possibile salvarla. Quanto registrato finora è conservato.",
+    "failed": "La registrazione si è interrotta per un problema del microfono. Quanto registrato finora è conservato.",
+    "busy": "È già in corso una registrazione."
   }
 }

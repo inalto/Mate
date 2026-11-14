@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { endAllEdits } from "../overlay/useEditSession";
+import { isRecordingActive, stopRecordingBeforeExit } from "../recording/session";
 import { flushSettings } from "../stores/settings";
 
 declare global {
@@ -16,6 +17,7 @@ export async function flushOnly(token: number): Promise<void> {
   let ok = true;
   try {
     endAllEdits();
+    if (isRecordingActive()) await stopRecordingBeforeExit(); // bounded, so the install is never held past Rust's timeout
     await elementsQueue.flushAll();
     ok = elementsQueue.failed() === 0;
   } catch {

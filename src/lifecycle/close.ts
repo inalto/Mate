@@ -6,6 +6,7 @@ import { elementsQueue } from "../ipc/elementsQueue";
 import { isPageWindow } from "../ipc/windows";
 import * as lifecycle from "../ipc/lifecycle";
 import { endAllEdits } from "../overlay/useEditSession";
+import { isRecordingActive, stopRecordingBeforeExit } from "../recording/session";
 import { flushSettings } from "../stores/settings";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
 
@@ -73,6 +74,8 @@ export function installCloseHandler(): void {
       return;
     }
     current = id;
+    // A running recording is finished first: its marker joins the queue flushed below.
+    if (isRecordingActive()) await stopRecordingBeforeExit();
     await elementsQueue.flushAll();
     if (current !== id) return; // cancelled meanwhile (watchdog); the toast was already shown
     if (elementsQueue.failed() > 0) {
