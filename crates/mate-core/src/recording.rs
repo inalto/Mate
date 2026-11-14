@@ -132,9 +132,14 @@ impl RecordingDir {
                 continue;
             }
             let manifest_path = path.join(MANIFEST);
-            let Ok(raw) = fs::read(&manifest_path) else {
-                let _ = fs::remove_dir_all(&path);
-                continue;
+            let raw = match fs::read(&manifest_path) {
+                Ok(raw) => raw,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    let _ = fs::remove_dir_all(&path);
+                    continue;
+                }
+                // Any other failure may be transient: never delete audio over it.
+                Err(_) => continue,
             };
             // A manifest that does not parse is kept untouched: the audio beside it may still be wanted.
             let Ok(manifest) = serde_json::from_slice(&raw) else {

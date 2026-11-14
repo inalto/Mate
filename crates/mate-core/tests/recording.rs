@@ -149,3 +149,15 @@ fn unfinished_is_empty_when_nothing_was_ever_recorded() {
     let f = fixture("none");
     assert!(f.rec.unfinished().unwrap().is_empty());
 }
+
+#[test]
+fn recover_keeps_a_folder_whose_manifest_cannot_be_read() {
+    let f = fixture("unreadable");
+    let rid = id();
+    let dir = f.root.join("recordings").join(&rid);
+    // A directory where the manifest file should be: reading it fails with something other than NotFound.
+    fs::create_dir_all(dir.join("manifest.json")).unwrap();
+    fs::write(dir.join("0.part"), WEBM).unwrap();
+    assert!(f.rec.unfinished().unwrap().is_empty());
+    assert!(dir.join("0.part").exists());
+}
