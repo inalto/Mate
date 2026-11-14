@@ -8,9 +8,11 @@ interface Props {
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Only the confirm button (a notice the user must acknowledge); Escape still calls `onCancel`. */
+  confirmOnly?: boolean;
 }
 
-export default function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCancel }: Props) {
+export default function ConfirmDialog({ title, children, confirmLabel, onConfirm, onCancel, confirmOnly = false }: Props) {
   useModal();
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
@@ -18,7 +20,8 @@ export default function ConfirmDialog({ title, children, confirmLabel, onConfirm
   useEffect(() => {
     cancel.current = onCancel;
   });
-  // Focus moves in on open (to Cancel, the safe choice), stays inside, and returns to the opener.
+  // Focus moves in on open (to Cancel, the safe choice, if shown), stays inside, and returns to
+  // the opener.
   useEffect(() => {
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     ref.current?.querySelector<HTMLElement>("button")?.focus();
@@ -47,7 +50,7 @@ export default function ConfirmDialog({ title, children, confirmLabel, onConfirm
         <h2>{title}</h2>
         <p>{children}</p>
         <div className="dialog-actions">
-          <button type="button" className="btn" onClick={onCancel}>{t("common.cancel")}</button>
+          {!confirmOnly && <button type="button" className="btn" onClick={onCancel}>{t("common.cancel")}</button>}
           <button type="button" className="btn btn-primary" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>

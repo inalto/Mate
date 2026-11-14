@@ -113,17 +113,29 @@ fn write_backup_file(
     Ok(report)
 }
 
-/// A backup written to disk, with the books it had to leave out.
+/// A backup written to disk, with the books it had to leave out (the UI blocks on these with a
+/// dialog: they are not in the backup) and the books whose recording audio was not found.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupSaved {
     pub path: String,
-    pub skipped: Vec<SkippedBook>,
+    pub skipped_books: Vec<String>,
+    pub missing_audio: Vec<String>,
 }
 
-/// Zips every book (one `.mate` archive each) to a file chosen in a save dialog, streaming it to
-/// disk one book at a time. A book too large for an archive is left out and listed in the
-/// result. `None` if cancelled.
+impl BackupSaved {
+    fn new(path: &Path, report: BackupReport) -> Self {
+        BackupSaved {
+            path: path.to_string_lossy().into_owned(),
+            skipped_books: report.skipped_books(),
+            missing_audio: report.missing_audio,
+        }
+    }
+}
+
+/// Zips every book (one `.mate` archive each, recording audio beside them) to a file chosen in a
+/// save dialog, streaming it to disk one book at a time. A book too large for an archive is left
+/// out and listed in the result. `None` if cancelled.
 #[tauri::command]
 pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String> {
     let Some(path) = ask_save_path(app.clone(), backup_filename()).await? else {
@@ -145,11 +157,11 @@ pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String
     if !report.skipped.is_empty() {
         log::warn!("backup: left out {} book(s) over the archive cap", report.skipped.len());
     }
+    if !report.missing_audio.is_empty() {
+        log::warn!("backup: recording audio missing in {} book(s)", report.missing_audio.len());
+    }
     after_export(&app, &path).await?;
-    Ok(Some(BackupSaved {
-        path: path.to_string_lossy().into_owned(),
-        skipped: report.skipped,
-    }))
+    Ok(Some(BackupSaved::new(&path, report)))
 }
 
 /// Left in the data directory when a reset could not delete everything; the next launch tells
@@ -476,6 +488,24 @@ mod tests {
         };
         run_reset_with(&dir, &st, &se, &wipe_local_data, &probe, &|_| {}, MAX_ARCHIVE_BYTES as u64)
             .unwrap();
+    }
+
+    #[test]
+    fn the_backup_result_names_left_out_books_and_missing_audio() {
+        let report = BackupReport {
+            books: 1,
+            skipped: vec![SkippedBook {
+                unit_id: "u9".into(),
+                title: "Films".into(),
+                reason: mate_core::archive::BOOK_TOO_LARGE.into(),
+            }],
+            missing_audio: vec!["Physics".into()],
+        };
+        let json = serde_json::to_value(BackupSaved::new(Path::new("b.zip"), report)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "path": "b.zip", "skippedBooks": ["Films"], "missingAudio": ["Physics"] })
+        );
     }
 
     #[test]

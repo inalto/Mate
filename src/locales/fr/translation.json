@@ -298,6 +298,13 @@
       "name": "Preset name"
     }
   },
+  "backup": {
+    "skipped": {
+      "title": "Some notebooks were not backed up",
+      "body": "These notebooks are too large to back up and are NOT in this backup: {{titles}}"
+    },
+    "missingAudio": "Audio could not be found for recordings in: {{titles}}"
+  },
   "common": {
     "cancel": "Annuler",
     "save": "Enregistrer",

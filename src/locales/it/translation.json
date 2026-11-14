@@ -295,6 +295,13 @@
       "name": "Nome della preimpostazione"
     }
   },
+  "backup": {
+    "skipped": {
+      "title": "Alcuni quaderni non sono stati salvati nel backup",
+      "body": "Questi quaderni sono troppo grandi per il backup e NON sono in questo backup: {{titles}}"
+    },
+    "missingAudio": "Non è stato trovato l'audio delle registrazioni in: {{titles}}"
+  },
   "common": {
     "cancel": "Annulla",
     "save": "Salva",

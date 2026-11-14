@@ -232,6 +232,53 @@ pub fn save_asset_from_file(dir: &Path, path: &Path, kind: AssetKind) -> Result<
     Ok(AssetInfo { id, path: dest, mime: kind.mime().into(), bytes: meta.len() })
 }
 
+/// Streams `reader` into the store as `<uuid>.<ext>` without holding it whole: the kind is
+/// sniffed from the first [`SVG_SNIFF_BYTES`] and must pass `accept`, and the whole stream must
+/// fit both `max` and the kind's own limit. Nothing is left behind on failure.
+pub fn save_sniffed_from_reader(
+    dir: &Path,
+    mut reader: impl std::io::Read,
+    max: u64,
+    accept: impl Fn(AssetKind) -> bool,
+) -> Result<AssetInfo, StorageError> {
+    use std::io::{Read, Write};
+    let mut head = Vec::with_capacity(SVG_SNIFF_BYTES);
+    (&mut reader).take(SVG_SNIFF_BYTES as u64).read_to_end(&mut head).map_err(io)?;
+    if head.is_empty() {
+        return Err(StorageError::Limit("empty asset".into()));
+    }
+    let kind = sniff(&head)
+        .filter(|k| accept(*k))
+        .ok_or_else(|| StorageError::Limit("unsupported file type".into()))?;
+    let max = max.min(kind.max_bytes() as u64);
+    fs::create_dir_all(dir).map_err(io)?;
+    let id = Uuid::new_v4().to_string();
+    let tmp = dir.join(format!("{id}.tmp"));
+    let path = dir.join(format!("{id}.{}", kind.ext()));
+    let written = (|| {
+        let mut file = fs::File::create(&tmp).map_err(io)?;
+        file.write_all(&head).map_err(io)?;
+        // One byte past the limit is enough to know the stream is too large.
+        let left = (max + 1).saturating_sub(head.len() as u64);
+        let rest = std::io::copy(&mut reader.take(left), &mut file).map_err(io)?;
+        let bytes = head.len() as u64 + rest;
+        if bytes > max {
+            return Err(StorageError::Limit(format!("asset is larger than {max} bytes")));
+        }
+        file.sync_all().map_err(io)?;
+        drop(file);
+        fs::rename(&tmp, &path).map_err(io)?;
+        Ok(bytes)
+    })();
+    match written {
+        Ok(bytes) => Ok(AssetInfo { id, path, mime: kind.mime().into(), bytes }),
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
 /// Sniffs `bytes` and saves them; unknown content is rejected with `StorageError::Limit`.
 pub fn save_sniffed(dir: &Path, bytes: &[u8]) -> Result<AssetInfo, StorageError> {
     let kind = sniff(bytes).ok_or_else(|| StorageError::Limit("unsupported file type".into()))?;

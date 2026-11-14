@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import { errorMessage as message } from "../../../i18n";
-import { exportBackup, resetLocalData, skippedLines } from "../../../ipc/backup";
+import { exportBackup, resetLocalData, type BackupSaved } from "../../../ipc/backup";
 import { isMobile } from "../../../platform";
 import { ButtonRow, SettingsSection } from "../rows";
 
@@ -12,6 +12,8 @@ export default function BackupSection() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // Books left out of the backup just written: the user must acknowledge them.
+  const [leftOut, setLeftOut] = useState<BackupSaved | null>(null);
 
   const download = async () => {
     setBusy(true);
@@ -23,8 +25,10 @@ export default function BackupSection() {
         const { path } = saved;
         // Mobile: the zip went to the share sheet, its app-private path means nothing to the user.
         setStatus(isMobile() ? t("settings.backup.shared") : t("settings.backup.saved", { path }));
-        // Books over the archive cap were left out: name them (the reason comes from Rust).
-        if (saved.skipped.length > 0) setError(skippedLines(saved.skipped));
+        // Books over the archive cap are not in the backup: that blocks until acknowledged.
+        if (saved.skippedBooks.length > 0) setLeftOut(saved);
+        else if (saved.missingAudio.length > 0)
+          setError(t("backup.missingAudio", { titles: saved.missingAudio.join(", ") }));
       }
     } catch (err) {
       setError(message(err));
@@ -70,6 +74,23 @@ export default function BackupSection() {
       <p className="muted" role="status">
         {status}
       </p>
+      {leftOut && (
+        <ConfirmDialog
+          title={t("backup.skipped.title")}
+          confirmLabel={t("common.close")}
+          confirmOnly
+          onConfirm={() => setLeftOut(null)}
+          onCancel={() => setLeftOut(null)}
+        >
+          {t("backup.skipped.body", { titles: leftOut.skippedBooks.join(", ") })}
+          {leftOut.missingAudio.length > 0 && (
+            <>
+              <br />
+              {t("backup.missingAudio", { titles: leftOut.missingAudio.join(", ") })}
+            </>
+          )}
+        </ConfirmDialog>
+      )}
       {confirming && (
         <ConfirmDialog
           title={t("settings.backup.reset.confirmTitle")}

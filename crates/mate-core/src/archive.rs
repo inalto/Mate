@@ -35,6 +35,10 @@ pub const MAX_JSON_ENTRY_BYTES: u64 = 64 * 1024 * 1024;
 const TOO_LARGE: &str = "archive would be larger than 512 MiB";
 /// Why a backup leaves a book out ([`SkippedBook::reason`]).
 pub const BOOK_TOO_LARGE: &str = "left out of the backup: larger than 512 MiB";
+/// Where a backup keeps recording audio: `recordings/<assetId>.<ext>`.
+const RECORDINGS_DIR: &str = "recordings/";
+/// The `format` of a backup's `backup.json`.
+const BACKUP_FORMAT: &str = "mate-backup";
 /// Most `assets/` entries an archive may carry.
 pub const MAX_ARCHIVE_ASSETS: usize = 2000;
 
@@ -103,23 +107,26 @@ fn asset_refs(e: &Element) -> impl Iterator<Item = &str> {
         .as_ref()
         .and_then(|c| c.get("pdfSourceKey"))
         .and_then(|k| k.as_str());
-    let segments = e
-        .content
+    e.image_url.as_deref().into_iter().chain(pdf).chain(recording_segments(e))
+}
+
+/// The `content.recording.segments[].assetId`s of a recording marker.
+fn recording_segments(e: &Element) -> impl Iterator<Item = &str> {
+    e.content
         .as_ref()
         .and_then(|c| c.get("recording"))
         .and_then(|r| r.get("segments"))
         .and_then(|s| s.as_array())
         .into_iter()
         .flatten()
-        .filter_map(|s| s.get("assetId").and_then(|a| a.as_str()));
-    e.image_url.as_deref().into_iter().chain(pdf).chain(segments)
+        .filter_map(|s| s.get("assetId").and_then(|a| a.as_str()))
 }
 
 /// Applies the export's recordings choice to `e`: without recordings a marker keeps its other
 /// content but loses `content.recording` and its `image_url` (the first segment).
 fn apply_recordings(e: &mut Element, recordings: Recordings) {
     match recordings {
-        Recordings::Include => {}
+        Recordings::Include | Recordings::External => {}
         Recordings::Exclude => {
             if let Some(serde_json::Value::Object(c)) = e.content.as_mut()
                 && c.remove("recording").is_some()
@@ -137,6 +144,15 @@ pub enum Recordings {
     Include,
     /// Strip `recording` and `image_url` from the markers and ship no segment assets.
     Exclude,
+    /// Keep each marker's `recording` and `image_url` but ship no segment assets: the caller
+    /// stores them beside the archive (a backup's `recordings/` entries).
+    External,
+}
+
+/// A book's archive, and the recording segments a [`Recordings::External`] export left out of it.
+struct Exported {
+    bytes: Vec<u8>,
+    segments: Vec<String>,
 }
 
 /// Serialises one live unit, its live sections and pages, their live elements and the assets
@@ -149,19 +165,21 @@ pub fn export_unit(
     recordings: Recordings,
 ) -> Result<Vec<u8>> {
     export_unit_capped(storage, unit_id, assets_dir, MAX_ARCHIVE_BYTES as u64, recordings)?
+        .map(|e| e.bytes)
         .ok_or_else(|| limit(TOO_LARGE))
 }
 
 /// [`export_unit`] with the size cap passed in; `Ok(None)` when the archive would be larger than
 /// `cap`. The asset files' sizes are checked before any of them is read, and each one is copied
-/// into the zip from disk rather than loaded whole.
+/// into the zip from disk rather than loaded whole. With [`Recordings::External`] the segment
+/// assets are neither archived nor counted against `cap`; their ids are returned instead.
 fn export_unit_capped(
     storage: &Storage,
     unit_id: &str,
     assets_dir: &Path,
     cap: u64,
     recordings: Recordings,
-) -> Result<Option<Vec<u8>>> {
+) -> Result<Option<Exported>> {
     let tree = storage.list_tree()?;
     let unit = tree
         .units
@@ -198,6 +216,8 @@ fn export_unit_capped(
     )?;
     let mut asset_ids: Vec<String> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
+    let mut segments: Vec<String> = Vec::new();
+    let mut seen_segments: HashSet<String> = HashSet::new();
     for p in &pages {
         let mut elements = storage.load_elements(&p.id)?;
         for e in &mut elements {
@@ -208,12 +228,21 @@ fn export_unit_capped(
                 asset_ids.push(id.to_owned());
             }
         }
+        if recordings == Recordings::External {
+            for id in elements.iter().flat_map(recording_segments) {
+                if seen_segments.insert(id.to_owned()) {
+                    segments.push(id.to_owned());
+                }
+            }
+        }
         put(
             &mut zip,
             &format!("pages/{}.json", p.id),
             serde_json::to_vec(&elements)?,
         )?;
     }
+    // External segments (a marker's `image_url` is its first one) stay out of the book.
+    asset_ids.retain(|id| !seen_segments.contains(id));
     // Images and PDFs are already compressed: store them as-is.
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     let mut files = Vec::with_capacity(asset_ids.len());
@@ -251,7 +280,7 @@ fn export_unit_capped(
         serde_json::to_vec_pretty(&unit_file)?,
     )?;
     let bytes = zip.finish().map_err(zip_err)?.into_inner();
-    Ok((bytes.len() as u64 <= cap).then_some(bytes))
+    Ok((bytes.len() as u64 <= cap).then_some(Exported { bytes, segments }))
 }
 
 /// A book a backup left out, and why.
@@ -271,6 +300,15 @@ pub struct BackupReport {
     pub books: usize,
     /// Books left out because their archive would exceed the per-book cap.
     pub skipped: Vec<SkippedBook>,
+    /// Titles of backed-up books with a recording segment whose audio file was not found.
+    pub missing_audio: Vec<String>,
+}
+
+impl BackupReport {
+    /// Titles of the books left out of the backup (the user must be told: they are not in it).
+    pub fn skipped_books(&self) -> Vec<String> {
+        self.skipped.iter().map(|b| b.title.clone()).collect()
+    }
 }
 
 /// The `books/NN-<slug>.mate` name of a book in a backup.
@@ -294,9 +332,13 @@ fn backup_name(index: usize, title: &str) -> String {
 /// Writes every live book as its own `.mate` archive (`books/NN-<title>.mate`, stored without
 /// further compression) plus a `backup.json` manifest to `out`, so a whole library can be restored
 /// one book at a time. Each book is exported and written before the next one is read, so at most
-/// one book's archive is in memory. A book whose archive would exceed [`MAX_ARCHIVE_BYTES`] is
-/// left out and listed in the report instead of failing the backup. Used by "Download backup" and
-/// the pre-reset recovery file. Returns `out` (finished) with the report.
+/// one book's archive is in memory. Recording audio is not put inside the books: every segment a
+/// marker references is copied from disk, stored as-is, to `recordings/<assetId>.<ext>` beside
+/// them (so it does not count against the per-book cap; [`restore_backup`] re-attaches it), and a
+/// book whose segment file is missing is listed in [`BackupReport::missing_audio`]. A book whose
+/// archive would still exceed [`MAX_ARCHIVE_BYTES`] is left out and listed in the report instead
+/// of failing the backup. Used by "Download backup" and the pre-reset recovery file. Returns `out`
+/// (finished) with the report.
 pub fn write_backup<W: Write + Seek>(
     storage: &Storage,
     assets_dir: &Path,
@@ -316,13 +358,14 @@ pub fn write_backup_capped<W: Write + Seek>(
     let stored = SimpleFileOptions::default().compression_method(CompressionMethod::Stored);
     let mut zip = ZipWriter::new(out);
     let mut report = BackupReport::default();
+    let mut audio_written: HashSet<String> = HashSet::new();
     for (i, unit) in units.iter().enumerate() {
-        let Some(bytes) = export_unit_capped(
+        let Some(book) = export_unit_capped(
             storage,
             &unit.id,
             assets_dir,
             max_book_bytes,
-            Recordings::Exclude,
+            Recordings::External,
         )? else {
             report.skipped.push(SkippedBook {
                 unit_id: unit.id.clone(),
@@ -333,14 +376,35 @@ pub fn write_backup_capped<W: Write + Seek>(
         };
         zip.start_file(backup_name(i, &unit.title), stored)
             .map_err(zip_err)?;
-        zip.write_all(&bytes).map_err(io_err)?;
+        zip.write_all(&book.bytes).map_err(io_err)?;
         report.books += 1;
+        let mut missing = false;
+        for id in &book.segments {
+            if audio_written.contains(id) {
+                continue;
+            }
+            let opened = assets::asset_path(assets_dir, id)
+                .and_then(|path| std::fs::File::open(&path).ok().map(|f| (path, f)));
+            let Some((path, mut file)) = opened else {
+                missing = true;
+                continue;
+            };
+            let ext = path.extension().and_then(|x| x.to_str()).unwrap_or("bin");
+            zip.start_file(format!("{RECORDINGS_DIR}{id}.{ext}"), stored)
+                .map_err(zip_err)?;
+            std::io::copy(&mut file, &mut zip).map_err(io_err)?;
+            audio_written.insert(id.clone());
+        }
+        if missing {
+            report.missing_audio.push(unit.title.clone());
+        }
     }
     let manifest = serde_json::json!({
-        "format": "mate-backup",
+        "format": BACKUP_FORMAT,
         "exportedAt": now_iso(),
         "books": report.books,
         "skipped": report.skipped.iter().map(|b| &b.title).collect::<Vec<_>>(),
+        "missingAudio": report.missing_audio,
     });
     zip.start_file("backup.json", stored).map_err(zip_err)?;
     zip.write_all(&serde_json::to_vec_pretty(&manifest)?)
@@ -352,6 +416,106 @@ pub fn write_backup_capped<W: Write + Seek>(
 pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<(Vec<u8>, BackupReport)> {
     let (out, report) = write_backup(storage, assets_dir, Cursor::new(Vec::new()))?;
     Ok((out.into_inner(), report))
+}
+
+/// What a restore created.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreReport {
+    /// One import report per restored book, in backup order.
+    pub books: Vec<ImportReport>,
+    /// `<entry>: <error>` for each book that could not be imported (the others still are).
+    pub failed: Vec<String>,
+}
+
+/// The old asset id of a `recordings/<assetId>.<ext>` entry; `None` for any other name (paths,
+/// names that are no asset id).
+fn recording_entry_id(name: &str) -> Option<&str> {
+    let (stem, _ext) = name.strip_prefix(RECORDINGS_DIR)?.rsplit_once('.')?;
+    assets::valid_id(stem).then_some(stem)
+}
+
+/// Restores a [`write_backup`] zip read from `backup` (seeked, never loaded whole): each
+/// `recordings/` entry is streamed into `assets_dir` under a new id first, then every
+/// `books/*.mate` is imported as a new book (as [`import_archive`] does) with its markers'
+/// segments re-attached to that audio. A backup without `recordings/` (older ones) restores
+/// exactly as importing each book would. An audio entry that is not stored as-is, not audio or
+/// video, larger than [`assets::MAX_MEDIA_BYTES`] or a repeat of an earlier one is skipped; a
+/// book that cannot be imported is rolled back and listed in [`RestoreReport::failed`]. Audio no
+/// restored book references is removed again.
+pub fn restore_backup<R: Read + Seek>(
+    storage: &mut Storage,
+    backup: R,
+    assets_dir: &Path,
+) -> Result<RestoreReport> {
+    restore_backup_capped(storage, backup, assets_dir, assets::MAX_MEDIA_BYTES as u64)
+}
+
+/// [`restore_backup`] with the per-entry audio limit passed in (tests use a small one).
+pub fn restore_backup_capped<R: Read + Seek>(
+    storage: &mut Storage,
+    backup: R,
+    assets_dir: &Path,
+    max_audio_bytes: u64,
+) -> Result<RestoreReport> {
+    let mut zip =
+        ZipArchive::new(backup).map_err(|_| limit("not a Mate backup (not a zip file)"))?;
+    let manifest = read_entry(&mut zip, "backup.json", MAX_JSON_ENTRY_BYTES)?
+        .ok_or_else(|| limit("not a Mate backup (missing backup.json)"))?;
+    let manifest: serde_json::Value = serde_json::from_slice(&manifest)
+        .map_err(|e| limit(format!("not a Mate backup (bad backup.json: {e})")))?;
+    if manifest.get("format").and_then(|f| f.as_str()) != Some(BACKUP_FORMAT) {
+        return Err(limit("not a Mate backup (unknown format)"));
+    }
+    let names: Vec<String> = zip.file_names().map(str::to_owned).collect();
+
+    // Audio first, so each book's markers can be pointed at it.
+    let mut audio: HashMap<String, String> = HashMap::new();
+    for name in &names {
+        let Some(old) = recording_entry_id(name) else {
+            continue;
+        };
+        if audio.contains_key(old) {
+            continue;
+        }
+        let Ok(entry) = zip.by_name(name) else {
+            continue;
+        };
+        // A backup stores audio as-is, so an entry can never unpack to more than it occupies.
+        if !entry.is_file()
+            || entry.compression() != CompressionMethod::Stored
+            || entry.size() > max_audio_bytes
+        {
+            continue;
+        }
+        if let Ok(info) =
+            assets::save_sniffed_from_reader(assets_dir, entry, max_audio_bytes, assets::AssetKind::is_media)
+        {
+            audio.insert(old.to_owned(), info.id);
+        }
+    }
+
+    let mut books: Vec<&String> = names
+        .iter()
+        .filter(|n| n.starts_with("books/") && n.ends_with(".mate"))
+        .collect();
+    books.sort();
+    let mut report = RestoreReport::default();
+    for name in books {
+        let imported = read_entry(&mut zip, name, MAX_ARCHIVE_BYTES as u64).and_then(|bytes| {
+            let bytes = bytes.ok_or_else(|| limit("missing"))?;
+            import_archive_from(storage, &bytes, assets_dir, ImportLimits::default(), Some(&audio))
+        });
+        match imported {
+            Ok(r) => report.books.push(r),
+            Err(e) => report.failed.push(format!("{name}: {e}")),
+        }
+    }
+    let referenced = storage.referenced_asset_ids()?;
+    for id in audio.values().filter(|id| !referenced.contains(*id)) {
+        assets::delete_asset(assets_dir, id);
+    }
+    Ok(report)
 }
 
 /// Deletes the local database (with its `-wal`/`-shm` sidecars), the asset store,
@@ -379,8 +543,8 @@ pub fn wipe_local_data(data_dir: &Path) -> std::io::Result<()> {
 
 /// Reads one entry of at most `max` bytes ([`MAX_JSON_ENTRY_BYTES`] for JSON, [`MAX_ENTRY_BYTES`]
 /// for assets); `None` if the entry does not exist.
-fn read_entry(
-    zip: &mut ZipArchive<Cursor<&[u8]>>,
+fn read_entry<R: Read + Seek>(
+    zip: &mut ZipArchive<R>,
     name: &str,
     max: u64,
 ) -> Result<Option<Vec<u8>>> {
@@ -425,6 +589,20 @@ pub fn import_archive_with_limits(
     assets_dir: &Path,
     limits: ImportLimits,
 ) -> Result<ImportReport> {
+    import_archive_from(storage, bytes, assets_dir, limits, None)
+}
+
+/// [`import_archive_with_limits`], resolving recording segments through `external` (old -> new
+/// asset id of audio already in the store, from a backup's `recordings/`) before the archive's
+/// own `assets/`. With `external`, a marker none of whose segments resolves loses `recording`
+/// and `image_url`, as in a [`Recordings::Exclude`] archive.
+fn import_archive_from(
+    storage: &mut Storage,
+    bytes: &[u8],
+    assets_dir: &Path,
+    limits: ImportLimits,
+    external: Option<&HashMap<String, String>>,
+) -> Result<ImportReport> {
     if bytes.len() > MAX_ARCHIVE_BYTES {
         return Err(limit("archive is larger than 512 MiB"));
     }
@@ -447,7 +625,7 @@ pub fn import_archive_with_limits(
 
     let order_index = storage.list_tree()?.units.len() as i64;
     let new_unit_id = new_id();
-    let mut imported = AssetImport::new(&zip, assets_dir, limits)?;
+    let mut imported = AssetImport::new(&zip, assets_dir, limits, external)?;
     let result = write_unit(
         storage,
         &mut zip,
@@ -468,6 +646,8 @@ pub fn import_archive_with_limits(
 /// Copies archived assets into the asset store on first reference, remembering old -> new ids.
 struct AssetImport<'a> {
     dir: &'a Path,
+    /// Old asset id -> new id of audio already stored beside the archive (a backup's recordings).
+    external: Option<&'a HashMap<String, String>>,
     /// Old asset id -> its `assets/...` entry name.
     entries: HashMap<String, String>,
     /// Old asset id -> new id (`None`: absent or unusable, the old id is kept).
@@ -497,7 +677,12 @@ impl Want {
 }
 
 impl<'a> AssetImport<'a> {
-    fn new(zip: &ZipArchive<Cursor<&[u8]>>, dir: &'a Path, limits: ImportLimits) -> Result<Self> {
+    fn new(
+        zip: &ZipArchive<Cursor<&[u8]>>,
+        dir: &'a Path,
+        limits: ImportLimits,
+        external: Option<&'a HashMap<String, String>>,
+    ) -> Result<Self> {
         let entries: HashMap<String, String> = zip
             .file_names()
             .filter_map(|name| {
@@ -515,6 +700,7 @@ impl<'a> AssetImport<'a> {
         }
         Ok(AssetImport {
             dir,
+            external,
             entries,
             minted: HashMap::new(),
             limits,
@@ -523,13 +709,19 @@ impl<'a> AssetImport<'a> {
     }
 
     /// New id for old asset `id`, importing it on first use; `None` if it cannot be imported.
-    /// An asset whose content is not of the `want`ed kind counts as missing.
+    /// An asset whose content is not of the `want`ed kind counts as missing. Media is looked up
+    /// in `external` first (it holds only audio and video).
     fn map(
         &mut self,
         zip: &mut ZipArchive<Cursor<&[u8]>>,
         id: &str,
         want: Want,
     ) -> Result<Option<String>> {
+        if want == Want::Media
+            && let Some(new) = self.external.and_then(|m| m.get(id))
+        {
+            return Ok(Some(new.clone()));
+        }
         if let Some(m) = self.minted.get(id) {
             return Ok(m.clone());
         }
@@ -581,7 +773,9 @@ impl<'a> AssetImport<'a> {
     }
 
     /// Points a recording's segments at the imported copies (an audio or video file, like a media
-    /// element's `image_url`) and its `unitId` at the imported unit.
+    /// element's `image_url`) and its `unitId` at the imported unit. A segment that resolves
+    /// nowhere keeps its old id (dangling); with `external` audio, a recording that has segments
+    /// but none that resolves is dropped with `image_url`, as [`Recordings::Exclude`] would.
     fn rewrite_recording(
         &mut self,
         zip: &mut ZipArchive<Cursor<&[u8]>>,
@@ -596,16 +790,22 @@ impl<'a> AssetImport<'a> {
             return Ok(());
         };
         rec.insert("unitId".into(), serde_json::Value::String(new_unit_id.to_owned()));
+        let (mut total, mut resolved) = (0, 0);
         if let Some(serde_json::Value::Array(segments)) = rec.get_mut("segments") {
             for seg in segments {
+                total += 1;
                 let old = seg.get("assetId").and_then(|a| a.as_str()).map(str::to_owned);
                 if let Some(old) = old
                     && let Some(new) = self.map(zip, &old, Want::Media)?
                     && let Some(seg) = seg.as_object_mut()
                 {
                     seg.insert("assetId".into(), serde_json::Value::String(new));
+                    resolved += 1;
                 }
             }
+        }
+        if self.external.is_some() && total > 0 && resolved == 0 {
+            apply_recordings(e, Recordings::Exclude);
         }
         Ok(())
     }
