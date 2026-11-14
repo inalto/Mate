@@ -1,13 +1,16 @@
 // "Stop recording?" before a tab change leaves no tab showing the notebook being recorded (another
 // notebook in its only tab, its last tab closed). Stay cancels; "Stop and leave" waits for the
 // recording to be saved, then does the change on the tabs as they are by then; a failed save stays.
-// Mounted once by the Shell, so it guards every route (and URL-driven opens on a fresh editor).
-import { useEffect } from "react";
+// Mounted once by the Shell, so it guards every route (and URL-driven opens on a fresh editor); after
+// the answer, a URL left naming a page the active tab does not show returns to the page it shows.
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation, useNavigate } from "react-router";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { showToast } from "../components/Toast";
 import i18n from "../i18n";
-import { setTabsGuard } from "../stores/tabs";
+import { isPageWindow } from "../ipc/windows";
+import { focusedPageId, setTabsGuard, useTabsStore } from "../stores/tabs";
 import { askToLeave, tabsLeaveRecording, useLeavePrompt } from "./leave";
 import { lastStopFailed, useRecording } from "./session";
 
@@ -45,10 +48,31 @@ function LeaveDialog() {
 }
 
 export default function RecordingLeaveGuard() {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // Read when the question is answered (the guard itself is set once).
+  const route = useRef({ pathname, navigate });
   useEffect(() => {
+    route.current = { pathname, navigate };
+  });
+  useEffect(() => {
+    // An open the URL asked for first (Home, Library, Graph, the palette) was held: once answered,
+    // a URL naming a page the active tab does not show goes back to the page it shows.
+    const realign = () => {
+      if (isPageWindow()) return;
+      const named = /^\/edit\/([^/]+)$/.exec(route.current.pathname)?.[1];
+      const s = useTabsStore.getState();
+      const shown = focusedPageId(s);
+      const tab = s.tabs.find((t) => t.id === s.activeTabId);
+      if (named && shown && !tab?.panes.some((p) => p.pageId === decodeURIComponent(named)))
+        route.current.navigate(`/edit/${shown}`, { replace: true });
+    };
     setTabsGuard((prev, next, retry) => {
       if (!tabsLeaveRecording(prev, next)) return false;
-      askToLeave((leave) => leave && retry());
+      askToLeave((leave) => {
+        if (leave) retry();
+        realign();
+      });
       return true;
     });
     return () => {

@@ -198,6 +198,34 @@ describe("leaving the recording's notebook", () => {
     });
     expect(dialog()).toBeTruthy();
     expect(focusedPageId(tabs())).toBe("p1");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Stay" }));
+    });
+    expect(dialog()).toBeNull();
+    expect(router.state.location.pathname).toBe("/edit/p1");
+    expect(screen.getByTestId("canvas")).toBeTruthy();
+    expect(pill()).toBeTruthy();
+  });
+
+  it("stay after opening another notebook from the library returns to the recorded page", async () => {
+    const router = await mount();
+    await act(async () => {
+      await router.navigate("/library");
+    });
+    // A book card in the library navigates to its first page.
+    await act(async () => {
+      await router.navigate("/edit/p2");
+    });
+    expect(dialog()).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Stay" }));
+    });
+    expect(router.state.location.pathname).toBe("/edit/p1");
+    expect(focusedPageId(tabs())).toBe("p1");
+    expect(screen.getByTestId("canvas")).toBeTruthy();
+    expect(pill()).toBeTruthy();
+    expect(stop).not.toHaveBeenCalled();
+    expect(useRecording.getState().phase).toBe("recording");
   });
 
   it("a tab opened while the question was showing survives the answer", async () => {
