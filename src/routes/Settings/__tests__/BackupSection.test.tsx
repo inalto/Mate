@@ -1,12 +1,16 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../../ipc/backup", () => ({
+vi.mock("../../../ipc/backup", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../ipc/backup")>()),
   exportBackup: vi.fn(),
   resetLocalData: vi.fn(),
   pickBackupFile: vi.fn(async () => "C:/backups/mate-backup-2026-11-14.zip"),
   restoreBackupFile: vi.fn(),
 }));
+
+const notebook = vi.hoisted(() => ({ load: vi.fn(async () => {}) }));
+vi.mock("../../../stores/notebook", () => ({ useNotebookStore: { getState: () => notebook } }));
 
 import { pickBackupFile, restoreBackupFile, type RestoreReport } from "../../../ipc/backup";
 import BackupSection from "../sections/BackupSection";
@@ -23,7 +27,8 @@ const report = (over: Partial<RestoreReport> = {}): RestoreReport => ({
 beforeEach(() => vi.clearAllMocks());
 afterEach(cleanup);
 
-const restoreButton = () => screen.getByRole("button", { name: "Restore from backup…" });
+/** The row's button, whatever it currently says. */
+const restoreButton = () => screen.getByRole("button", { name: /^(Restore from backup…|Restoring…)$/ });
 
 /** Click Restore, let the picker resolve, and return the confirmation dialog. */
 const openConfirm = async () => {
@@ -72,7 +77,7 @@ describe("BackupSection restore", () => {
     );
     await confirmAndFinish();
     expect(restoreBackupFile).toHaveBeenCalledWith("C:/backups/mate-backup-2026-11-14.zip");
-    const done = screen.getByRole("alertdialog");
+    const done = screen.getByRole("alertdialog", { name: "Backup restored" });
     expect(done.textContent).toContain("2 notebooks restored.");
     expect(done.textContent).toContain("Could not be restored: Films");
     expect(done.textContent).toContain("3 audio files in the backup were not valid and were skipped.");
@@ -99,19 +104,66 @@ describe("BackupSection restore", () => {
     vi.mocked(restoreBackupFile).mockReturnValue(new Promise((resolve) => (finish = resolve)));
     await confirmAndFinish();
     expect((restoreButton() as HTMLButtonElement).disabled).toBe(true);
+    expect(restoreButton().textContent).toBe("Restoring…");
+    expect(restoreButton().getAttribute("aria-busy")).toBe("true");
     fireEvent.click(restoreButton());
     expect(pickBackupFile).toHaveBeenCalledTimes(1);
     expect(restoreBackupFile).toHaveBeenCalledTimes(1);
     await act(async () => finish(report()));
     expect((restoreButton() as HTMLButtonElement).disabled).toBe(false);
+    expect(restoreButton().textContent).toBe("Restore from backup…");
+    expect(restoreButton().getAttribute("aria-busy")).toBeNull();
     expect(screen.getByRole("alertdialog").textContent).toContain("2 notebooks restored.");
   });
 
   it("an error says nothing was changed", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     vi.mocked(restoreBackupFile).mockRejectedValue("limit exceeded: not a Mate backup (not a zip file)");
     await confirmAndFinish();
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(screen.getByRole("alert").textContent).toBe("The backup could not be restored. Nothing was changed.");
     expect((restoreButton() as HTMLButtonElement).disabled).toBe(false);
+    expect(logged).toHaveBeenCalledWith(expect.anything(), "limit exceeded: not a Mate backup (not a zip file)");
+    expect(notebook.load).not.toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("a restore that stopped unexpectedly does not promise nothing changed", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(restoreBackupFile).mockRejectedValue("restore stopped unexpectedly: task 7 panicked");
+    await confirmAndFinish();
+    expect(screen.getByRole("alert").textContent).toBe(
+      "The restore stopped unexpectedly. Some notebooks may have been restored.",
+    );
+    expect(logged).toHaveBeenCalledWith(expect.anything(), "restore stopped unexpectedly: task 7 panicked");
+    // Some books may be there: show them.
+    expect(notebook.load).toHaveBeenCalledTimes(1);
+    logged.mockRestore();
+  });
+
+  it("reloads the notebook tree after a restore", async () => {
+    vi.mocked(restoreBackupFile).mockResolvedValue(report({ books: [book("a")], failed: [{ name: "Films", error: "x" }] }));
+    await confirmAndFinish();
+    expect(notebook.load).toHaveBeenCalledTimes(1);
+  });
+
+  it("a failed reload does not turn the restore into an error", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    notebook.load.mockRejectedValueOnce(new Error("db busy"));
+    vi.mocked(restoreBackupFile).mockResolvedValue(report());
+    await confirmAndFinish();
+    expect(screen.getByRole("alertdialog", { name: "Backup restored" }).textContent).toContain("2 notebooks restored.");
+    expect(screen.queryByRole("alert")?.textContent ?? "").toBe("");
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+
+  it("says nothing was restored when every notebook failed", async () => {
+    vi.mocked(restoreBackupFile).mockResolvedValue(report({ books: [], failed: [{ name: "Films", error: "x" }] }));
+    await confirmAndFinish();
+    const done = screen.getByRole("alertdialog", { name: "Nothing was restored" });
+    expect(done.textContent).toContain("0 notebooks restored.");
+    expect(done.textContent).toContain("Could not be restored: Films");
+    expect(notebook.load).not.toHaveBeenCalled();
   });
 });

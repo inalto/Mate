@@ -314,7 +314,11 @@
       "failed": "Could not be restored: {{titles}}",
       "lostRecordings": "Recordings in these notebooks came back without their audio: {{titles}}",
       "rejectedAudio_other": "{{count}} audio files in the backup were not valid and were skipped.",
-      "error": "The backup could not be restored. Nothing was changed."
+      "error": "The backup could not be restored. Nothing was changed.",
+      "busy": "Restoring…",
+      "resultTitle": "Backup restored",
+      "resultTitleNone": "Nothing was restored",
+      "errorUnknown": "The restore stopped unexpectedly. Some notebooks may have been restored."
     }
   },
   "common": {

@@ -314,7 +314,11 @@
       "lostRecordings": "Le registrazioni di questi quaderni sono tornate senza audio: {{titles}}",
       "rejectedAudio_one": "{{count}} file audio del backup non era valido ed è stato saltato.",
       "rejectedAudio_other": "{{count}} file audio del backup non erano validi e sono stati saltati.",
-      "error": "Non è stato possibile ripristinare il backup. Non è cambiato nulla."
+      "error": "Non è stato possibile ripristinare il backup. Non è cambiato nulla.",
+      "busy": "Ripristino in corso…",
+      "resultTitle": "Backup ripristinato",
+      "resultTitleNone": "Non è stato ripristinato nulla",
+      "errorUnknown": "Il ripristino si è interrotto in modo imprevisto. Alcuni quaderni potrebbero essere stati ripristinati."
     }
   },
   "common": {

@@ -37,6 +37,12 @@ export interface RestoreReport {
   lostRecordings: string[];
 }
 
+/**
+ * How `restoreBackupFile`'s error starts when the restore itself died: unlike every other
+ * error, some notebooks may already have been restored (matches `RESTORE_STOPPED` in Rust).
+ */
+export const RESTORE_STOPPED = "restore stopped unexpectedly";
+
 /** Ask for a backup zip to restore; `null` if cancelled. */
 export const pickBackupFile = async (filterName: string): Promise<string | null> => {
   const picked = await open({ multiple: false, directory: false, filters: [{ name: filterName, extensions: ["zip"] }] });
@@ -45,7 +51,8 @@ export const pickBackupFile = async (filterName: string): Promise<string | null>
 
 /**
  * Add every book of the backup zip at `path` beside the existing ones, with its recording audio.
- * Rejects when the restore could not run at all; then nothing was changed.
+ * Rejects when the restore could not run at all; then nothing was changed, unless the error
+ * starts with {@link RESTORE_STOPPED}.
  */
 export const restoreBackupFile = (path: string): Promise<RestoreReport> => invoke("restore_backup_file", { path });
 

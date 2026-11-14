@@ -176,8 +176,18 @@ fn restore_from_file(
     restore_backup(&mut storage, io::BufReader::new(file), assets_dir).map_err(|e| e.to_string())
 }
 
+/// How [`restore_backup_file`]'s error starts when the restore itself died (a panic): unlike every
+/// other error, some books may already have been restored. The UI tells the two apart by it.
+pub const RESTORE_STOPPED: &str = "restore stopped unexpectedly";
+
+/// The error of a restore whose blocking task did not finish.
+fn restore_stopped(e: impl std::fmt::Display) -> String {
+    format!("{RESTORE_STOPPED}: {e}")
+}
+
 /// Restores a backup zip (picked in the UI) as new books, with their recordings, off the async
-/// runtime and under the storage lock, then tells every window the notebook tree changed.
+/// runtime and under the storage lock, then tells every window the notebook tree changed. Any
+/// error means nothing was changed, except one starting with [`RESTORE_STOPPED`].
 #[tauri::command]
 pub async fn restore_backup_file(window: Window, path: String) -> Result<RestoreReport, String> {
     let handle = window.app_handle().clone();
@@ -188,7 +198,7 @@ pub async fn restore_backup_file(window: Window, path: String) -> Result<Restore
         restore_from_file(&state.storage, &state.data_dir.join("assets"), &local)
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(restore_stopped)??;
     for book in &report.failed {
         log::warn!("restore: {} could not be restored: {}", book.name, book.error);
     }
@@ -642,6 +652,18 @@ mod tests {
         let json = serde_json::to_value(&report).unwrap();
         assert_eq!(json["rejectedAudio"], 0);
         assert_eq!(json["lostRecordings"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_restore_that_died_says_so() {
+        let err = restore_stopped("task panicked");
+        assert!(err.starts_with(RESTORE_STOPPED), "{err}");
+        assert!(err.ends_with("task panicked"), "{err}");
+        // An ordinary failure never looks like one.
+        let dir = tmp("restore-stopped");
+        let st = Mutex::new(Storage::open_in_memory().unwrap());
+        let ordinary = restore_from_file(&st, &dir.join("assets"), &dir.join("gone.zip")).unwrap_err();
+        assert!(!ordinary.starts_with(RESTORE_STOPPED), "{ordinary}");
     }
 
     #[test]

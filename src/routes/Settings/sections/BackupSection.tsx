@@ -7,10 +7,12 @@ import {
   pickBackupFile,
   resetLocalData,
   restoreBackupFile,
+  RESTORE_STOPPED,
   type BackupSaved,
   type RestoreReport,
 } from "../../../ipc/backup";
 import { isMobile } from "../../../platform";
+import { useNotebookStore } from "../../../stores/notebook";
 import { ButtonRow, SettingsSection } from "../rows";
 
 export default function BackupSection() {
@@ -24,6 +26,7 @@ export default function BackupSection() {
   // The backup zip picked for restoring, waiting for confirmation; then what the restore added.
   const [toRestore, setToRestore] = useState<string | null>(null);
   const [restored, setRestored] = useState<RestoreReport | null>(null);
+  const [restoringNow, setRestoringNow] = useState(false);
   // Set synchronously, so a second click before the re-render cannot start a second restore.
   const restoring = useRef(false);
 
@@ -52,15 +55,31 @@ export default function BackupSection() {
     setBusy(false);
   };
 
+  // The `notebook://changed` broadcast skips the window that sent it: reload this one's tree.
+  const reloadTree = async () => {
+    try {
+      await useNotebookStore.getState().load();
+    } catch (err) {
+      console.error("restore: could not reload the notebook tree", err);
+    }
+  };
+
   const restore = async (path: string) => {
     setToRestore(null);
+    setRestoringNow(true);
     try {
-      setRestored(await restoreBackupFile(path));
-    } catch {
-      // `restore_backup_file` fails only before the first notebook is added.
-      setError(t("backup.restore.error"));
+      const report = await restoreBackupFile(path);
+      if (report.books.length > 0) await reloadTree();
+      setRestored(report);
+    } catch (err) {
+      console.error("restore failed", err);
+      // Every error comes before the first notebook is added, except a restore that died.
+      const stopped = message(err).startsWith(RESTORE_STOPPED);
+      setError(t(stopped ? "backup.restore.errorUnknown" : "backup.restore.error"));
+      if (stopped) await reloadTree();
     } finally {
       restoring.current = false;
+      setRestoringNow(false);
       setBusy(false);
     }
   };
@@ -123,9 +142,10 @@ export default function BackupSection() {
         id="backup-restore"
         label={t("backup.restore.label")}
         hint={t("backup.restore.hint")}
-        buttonLabel={t("backup.restore.label")}
+        buttonLabel={restoringNow ? t("backup.restore.busy") : t("backup.restore.label")}
         onClick={() => void pickRestore()}
         disabled={busy}
+        busy={restoringNow}
       />
       <ButtonRow
         id="backup-reset"
@@ -171,7 +191,11 @@ export default function BackupSection() {
       )}
       {restored && (
         <ConfirmDialog
-          title={t("backup.restore.label")}
+          title={
+            restored.books.length === 0 && restored.failed.length > 0
+              ? t("backup.restore.resultTitleNone")
+              : t("backup.restore.resultTitle")
+          }
           confirmLabel={t("common.close")}
           confirmOnly
           onConfirm={() => setRestored(null)}
