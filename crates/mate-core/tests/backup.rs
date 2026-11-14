@@ -401,7 +401,8 @@ fn restore_ignores_hostile_recording_entries() {
     let seg = |id: &str, ext: &str| format!("recordings/{id}.{ext}");
 
     // Both segments' entries are unusable (each in its own way): the marker loses its recording.
-    let cases: Vec<(&str, Vec<(String, Vec<u8>, bool)>)> = vec![
+    type Entry = (String, Vec<u8>, bool);
+    let cases: Vec<(&str, Vec<Entry>)> = vec![
         ("an image dressed as audio", vec![(seg(&a.id, "webm"), PNG.to_vec(), false), (seg(&b.id, "png"), PNG.to_vec(), false)]),
         ("audio over the per-entry limit", vec![(seg(&a.id, "webm"), big.clone(), false), (seg(&b.id, "webm"), big.clone(), false)]),
         // A backup stores audio as-is; a compressed entry could unpack to far more than it holds.
