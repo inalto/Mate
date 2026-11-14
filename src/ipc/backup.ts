@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
 
 /**
  * A backup written to disk. `skippedBooks`: titles of books too large to back up, which are NOT
@@ -13,6 +14,40 @@ export interface BackupSaved {
 
 /** Zip every book to a file chosen in a save dialog. Resolves to what was saved, or `null` if cancelled. */
 export const exportBackup = (): Promise<BackupSaved | null> => invoke("export_backup");
+
+/** What one restored book created (the same report as importing its `.mate`). */
+export interface RestoredBook {
+  unitId: string;
+  pages: number;
+  elements: number;
+  skipped: number;
+}
+
+/** A book in the backup that could not be restored: its title (or file name) and why. */
+export interface FailedBook {
+  name: string;
+  error: string;
+}
+
+/** What a restore added. `lostRecordings`: titles of books whose recordings came back without (some of) their audio. */
+export interface RestoreReport {
+  books: RestoredBook[];
+  failed: FailedBook[];
+  rejectedAudio: number;
+  lostRecordings: string[];
+}
+
+/** Ask for a backup zip to restore; `null` if cancelled. */
+export const pickBackupFile = async (filterName: string): Promise<string | null> => {
+  const picked = await open({ multiple: false, directory: false, filters: [{ name: filterName, extensions: ["zip"] }] });
+  return typeof picked === "string" ? picked : null;
+};
+
+/**
+ * Add every book of the backup zip at `path` beside the existing ones, with its recording audio.
+ * Rejects when the restore could not run at all; then nothing was changed.
+ */
+export const restoreBackupFile = (path: string): Promise<RestoreReport> => invoke("restore_backup_file", { path });
 
 /**
  * Write a recovery zip next to the database, delete all books, pages, assets and settings, and

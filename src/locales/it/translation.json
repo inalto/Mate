@@ -254,7 +254,7 @@
     "backup": {
       "download": {
         "label": "Scarica il backup",
-        "hint": "Uno zip con un file .mate per ogni quaderno. Per ripristinare, decomprimilo e importa ogni file .mate."
+        "hint": "Un file zip con un file .mate per quaderno e l'audio delle registrazioni accanto. Ripristinalo con Ripristina da backup; un singolo .mate preso da un backup estratto si può ancora importare, ma senza l'audio delle registrazioni."
       },
       "saved": "Backup salvato in {{path}}",
       "shared": "Backup condiviso",
@@ -300,7 +300,22 @@
       "title": "Alcuni quaderni non sono stati salvati nel backup",
       "body": "Questi quaderni sono troppo grandi per il backup e NON sono in questo backup: {{titles}}"
     },
-    "missingAudio": "Non è stato trovato l'audio delle registrazioni in: {{titles}}"
+    "missingAudio": "Non è stato trovato l'audio delle registrazioni in: {{titles}}",
+    "restore": {
+      "label": "Ripristina da backup…",
+      "hint": "Aggiunge i quaderni di un backup zip di Mate, con le loro registrazioni, accanto a quelli che hai",
+      "filter": "Backup di Mate",
+      "title": "Ripristinare questo backup?",
+      "body": "I quaderni del backup vengono aggiunti accanto a quelli che hai già. Nulla viene sostituito o eliminato.",
+      "confirm": "Ripristina",
+      "done_one": "{{count}} quaderno ripristinato.",
+      "done_other": "{{count}} quaderni ripristinati.",
+      "failed": "Non è stato possibile ripristinare: {{titles}}",
+      "lostRecordings": "Le registrazioni di questi quaderni sono tornate senza audio: {{titles}}",
+      "rejectedAudio_one": "{{count}} file audio del backup non era valido ed è stato saltato.",
+      "rejectedAudio_other": "{{count}} file audio del backup non erano validi e sono stati saltati.",
+      "error": "Non è stato possibile ripristinare il backup. Non è cambiato nulla."
+    }
   },
   "common": {
     "cancel": "Annulla",

@@ -452,6 +452,44 @@ fn restore_ignores_hostile_recording_entries() {
 }
 
 #[test]
+fn a_book_that_cannot_be_restored_is_named_and_the_rest_still_restore() {
+    let dir = tmp("rec-failed-book");
+    let assets_dir = dir.join("assets");
+    let st = two_books();
+    let good = export_unit(&st, "u1", &assets_dir, Recordings::Exclude).unwrap();
+    // A book whose unit.json is readable but whose page is not: named by its title.
+    let mut broken = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let opts = zip::write::SimpleFileOptions::default();
+    let mut src = zip::ZipArchive::new(Cursor::new(export_unit(&st, "u2", &assets_dir, Recordings::Exclude).unwrap())).unwrap();
+    for i in 0..src.len() {
+        let mut f = src.by_index(i).unwrap();
+        let name = f.name().to_owned();
+        let mut data = Vec::new();
+        f.read_to_end(&mut data).unwrap();
+        broken.start_file(name.as_str(), opts).unwrap();
+        broken.write_all(if name.starts_with("pages/") { b"not json" } else { &data }).unwrap();
+    }
+    let broken = broken.finish().unwrap().into_inner();
+    let entries = vec![
+        ("books/01-unit-u1.mate".to_string(), good, false),
+        ("books/02-unit-u2.mate".to_string(), broken, false),
+        // Not even a zip: named by its file name.
+        ("books/03-garbage.mate".to_string(), b"garbage".to_vec(), false),
+    ];
+    let restored_dir = dir.join("restored");
+    let mut dest = Storage::open_in_memory().unwrap();
+    let report = restore_backup(&mut dest, Cursor::new(zip_of(&entries)), &restored_dir).unwrap();
+    assert_eq!(report.books.len(), 1);
+    let names: Vec<&str> = report.failed.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Unit u2", "03-garbage.mate"]);
+    assert!(report.failed.iter().all(|f| !f.error.is_empty()));
+    assert_eq!(dest.list_tree().unwrap().units.len(), 1, "the broken book was rolled back");
+    let json = serde_json::to_value(&report).unwrap();
+    assert_eq!(json["failed"][0]["name"], "Unit u2");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn restore_refuses_a_zip_that_is_no_backup() {
     let dir = tmp("rec-nobackup");
     let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));

@@ -165,6 +165,7 @@ pub fn run() {
       archive::export_unit_archive,
       archive::import_unit_archive,
       archive::export_backup,
+      archive::restore_backup_file,
       archive::reset_local_data,
       archive::take_reset_incomplete,
       commands::share::detect_sync_folders,

@@ -1,8 +1,15 @@
-import { useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 import { errorMessage as message } from "../../../i18n";
-import { exportBackup, resetLocalData, type BackupSaved } from "../../../ipc/backup";
+import {
+  exportBackup,
+  pickBackupFile,
+  resetLocalData,
+  restoreBackupFile,
+  type BackupSaved,
+  type RestoreReport,
+} from "../../../ipc/backup";
 import { isMobile } from "../../../platform";
 import { ButtonRow, SettingsSection } from "../rows";
 
@@ -14,6 +21,59 @@ export default function BackupSection() {
   const [confirming, setConfirming] = useState(false);
   // Books left out of the backup just written: the user must acknowledge them.
   const [leftOut, setLeftOut] = useState<BackupSaved | null>(null);
+  // The backup zip picked for restoring, waiting for confirmation; then what the restore added.
+  const [toRestore, setToRestore] = useState<string | null>(null);
+  const [restored, setRestored] = useState<RestoreReport | null>(null);
+  // Set synchronously, so a second click before the re-render cannot start a second restore.
+  const restoring = useRef(false);
+
+  const pickRestore = async () => {
+    if (restoring.current) return;
+    restoring.current = true;
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const path = await pickBackupFile(t("backup.restore.filter"));
+      if (path) {
+        setToRestore(path);
+        return; // still busy until confirmed or cancelled
+      }
+    } catch (err) {
+      setError(message(err));
+    }
+    restoring.current = false;
+    setBusy(false);
+  };
+
+  const cancelRestore = () => {
+    setToRestore(null);
+    restoring.current = false;
+    setBusy(false);
+  };
+
+  const restore = async (path: string) => {
+    setToRestore(null);
+    try {
+      setRestored(await restoreBackupFile(path));
+    } catch {
+      // `restore_backup_file` fails only before the first notebook is added.
+      setError(t("backup.restore.error"));
+    } finally {
+      restoring.current = false;
+      setBusy(false);
+    }
+  };
+
+  /** The lines of the restore result; each optional one only when it has something to say. */
+  const restoredLines = (r: RestoreReport): string[] => [
+    t("backup.restore.done", { count: r.books.length }),
+    ...(r.failed.length > 0 ? [t("backup.restore.failed", { titles: r.failed.map((f) => f.name).join(", ") })] : []),
+    ...(r.lostRecordings.length > 0
+      ? [t("backup.restore.lostRecordings", { titles: r.lostRecordings.join(", ") })]
+      : []),
+    ...(r.rejectedAudio > 0 ? [t("backup.restore.rejectedAudio", { count: r.rejectedAudio })] : []),
+  ];
 
   const download = async () => {
     setBusy(true);
@@ -60,6 +120,14 @@ export default function BackupSection() {
         disabled={busy}
       />
       <ButtonRow
+        id="backup-restore"
+        label={t("backup.restore.label")}
+        hint={t("backup.restore.hint")}
+        buttonLabel={t("backup.restore.label")}
+        onClick={() => void pickRestore()}
+        disabled={busy}
+      />
+      <ButtonRow
         id="backup-reset"
         label={t("settings.backup.reset.label")}
         hint={t("settings.backup.reset.hint")}
@@ -89,6 +157,32 @@ export default function BackupSection() {
               {t("backup.missingAudio", { titles: leftOut.missingAudio.join(", ") })}
             </>
           )}
+        </ConfirmDialog>
+      )}
+      {toRestore && (
+        <ConfirmDialog
+          title={t("backup.restore.title")}
+          confirmLabel={t("backup.restore.confirm")}
+          onConfirm={() => void restore(toRestore)}
+          onCancel={cancelRestore}
+        >
+          {t("backup.restore.body")}
+        </ConfirmDialog>
+      )}
+      {restored && (
+        <ConfirmDialog
+          title={t("backup.restore.label")}
+          confirmLabel={t("common.close")}
+          confirmOnly
+          onConfirm={() => setRestored(null)}
+          onCancel={() => setRestored(null)}
+        >
+          {restoredLines(restored).map((line, i) => (
+            <Fragment key={i}>
+              {i > 0 && <br />}
+              {line}
+            </Fragment>
+          ))}
         </ConfirmDialog>
       )}
       {confirming && (

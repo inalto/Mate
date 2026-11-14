@@ -303,7 +303,22 @@
       "title": "Some notebooks were not backed up",
       "body": "These notebooks are too large to back up and are NOT in this backup: {{titles}}"
     },
-    "missingAudio": "Audio could not be found for recordings in: {{titles}}"
+    "missingAudio": "Audio could not be found for recordings in: {{titles}}",
+    "restore": {
+      "label": "Restore from backup…",
+      "hint": "Adds the notebooks of a Mate backup zip, with their recordings, beside the ones you have",
+      "filter": "Mate backup",
+      "title": "Restore this backup?",
+      "body": "Notebooks from the backup are added beside the ones you already have. Nothing is replaced or deleted.",
+      "confirm": "Restore",
+      "done_one": "{{count}} notebook restored.",
+      "done_other": "{{count}} notebooks restored.",
+      "failed": "Could not be restored: {{titles}}",
+      "lostRecordings": "Recordings in these notebooks came back without their audio: {{titles}}",
+      "rejectedAudio_one": "{{count}} audio file in the backup was not valid and was skipped.",
+      "rejectedAudio_other": "{{count}} audio files in the backup were not valid and were skipped.",
+      "error": "The backup could not be restored. Nothing was changed."
+    }
   },
   "common": {
     "cancel": "Cancelar",

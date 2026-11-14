@@ -4,14 +4,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use mate_core::archive::{
-    BackupReport, ImportReport, MAX_ARCHIVE_BYTES, Recordings, SkippedBook, export_unit,
-    import_archive,
-    wipe_local_data, write_backup_capped,
+    BackupReport, ImportReport, MAX_ARCHIVE_BYTES, Recordings, RestoreReport, SkippedBook,
+    export_unit, import_archive, restore_backup, wipe_local_data, write_backup_capped,
 };
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_dialog::DialogExt;
 
 use super::export::{
@@ -162,6 +161,44 @@ pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String
     }
     after_export(&app, &path).await?;
     Ok(Some(BackupSaved::new(&path, report)))
+}
+
+/// Restores the backup zip at `path` into `storage` (books added beside the existing ones, their
+/// recording audio into `assets_dir`), streaming it from disk; see
+/// [`mate_core::archive::restore_backup`]. An error means nothing was changed.
+fn restore_from_file(
+    storage: &Mutex<Storage>,
+    assets_dir: &Path,
+    path: &Path,
+) -> Result<RestoreReport, String> {
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut storage = storage.lock().map_err(|e| e.to_string())?;
+    restore_backup(&mut storage, io::BufReader::new(file), assets_dir).map_err(|e| e.to_string())
+}
+
+/// Restores a backup zip (picked in the UI) as new books, with their recordings, off the async
+/// runtime and under the storage lock, then tells every window the notebook tree changed.
+#[tauri::command]
+pub async fn restore_backup_file(window: Window, path: String) -> Result<RestoreReport, String> {
+    let handle = window.app_handle().clone();
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        // Android hands back a `content://` URI; it is copied into `incoming/` first.
+        let local = materialize(&handle, &state.data_dir, &path)?;
+        restore_from_file(&state.storage, &state.data_dir.join("assets"), &local)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    for book in &report.failed {
+        log::warn!("restore: {} could not be restored: {}", book.name, book.error);
+    }
+    if !report.books.is_empty() {
+        let _ = window.emit(
+            super::notebook::NOTEBOOK_CHANGED,
+            super::notebook::NotebookChange::tree(window.label()),
+        );
+    }
+    Ok(report)
 }
 
 /// Left in the data directory when a reset could not delete everything; the next launch tells
@@ -490,64 +527,70 @@ mod tests {
             .unwrap();
     }
 
+    /// Adds section `s1` / page `p1` to book `u1` with a recording marker over `segments`.
+    fn add_recording(st: &Mutex<Storage>, segments: &[&str]) {
+        use mate_core::model::{BackgroundConfig, Element, Page, PageMode, Section};
+        let now = mate_core::model::now_iso();
+        let mut st = st.lock().unwrap();
+        st.upsert_section(&Section {
+            id: "s1".into(),
+            unit_id: "u1".into(),
+            title: "S".into(),
+            color: "#000000".into(),
+            icon: None,
+            order_index: 0,
+            is_expanded: false,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+            deleted_at: None,
+            version: 0,
+        })
+        .unwrap();
+        st.upsert_page(&Page {
+            id: "p1".into(),
+            section_id: "s1".into(),
+            parent_id: None,
+            title: "P".into(),
+            is_expanded: false,
+            is_favourite: false,
+            depth: 0,
+            mode: PageMode::Canvas,
+            background_config: BackgroundConfig::default(),
+            page_width: None,
+            page_height: None,
+            thumbnail_version: 0,
+            icon: None,
+            order_index: 0,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+            deleted_at: None,
+            version: 0,
+            import_metadata: None,
+        })
+        .unwrap();
+        let segs: Vec<serde_json::Value> = segments
+            .iter()
+            .map(|id| serde_json::json!({ "assetId": id, "durationMs": 300000, "mime": "video/webm" }))
+            .collect();
+        let marker: Element = serde_json::from_value(serde_json::json!({
+            "id": "rec", "pageId": "p1", "type": "media", "points": [], "color": "#000000",
+            "width": 1.0, "isHighlighter": false, "imageUrl": segments[0],
+            "content": { "kind": "audio", "recording": { "unitId": "u1", "spans": [], "segments": segs } },
+            "createdAt": now, "updatedAt": now, "version": 0
+        }))
+        .unwrap();
+        st.upsert_elements(&[marker]).unwrap();
+    }
+
     #[test]
     fn an_unreadable_recording_refuses_the_reset() {
-        use mate_core::model::{BackgroundConfig, Element, Page, PageMode, Section};
         let dir = tmp("unreadable-audio");
         let (st, se) = fixture(&dir);
-        let now = mate_core::model::now_iso();
         // The segment is in the store but cannot be read as a file (a directory under its name,
         // as a locked file would fail): the recovery zip cannot hold it, so nothing is deleted.
         let seg = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
         fs::create_dir_all(dir.join("assets").join(format!("{seg}.webm"))).unwrap();
-        {
-            let mut st = st.lock().unwrap();
-            st.upsert_section(&Section {
-                id: "s1".into(),
-                unit_id: "u1".into(),
-                title: "S".into(),
-                color: "#000000".into(),
-                icon: None,
-                order_index: 0,
-                is_expanded: false,
-                created_at: now.clone(),
-                updated_at: now.clone(),
-                deleted_at: None,
-                version: 0,
-            })
-            .unwrap();
-            st.upsert_page(&Page {
-                id: "p1".into(),
-                section_id: "s1".into(),
-                parent_id: None,
-                title: "P".into(),
-                is_expanded: false,
-                is_favourite: false,
-                depth: 0,
-                mode: PageMode::Canvas,
-                background_config: BackgroundConfig::default(),
-                page_width: None,
-                page_height: None,
-                thumbnail_version: 0,
-                icon: None,
-                order_index: 0,
-                created_at: now.clone(),
-                updated_at: now.clone(),
-                deleted_at: None,
-                version: 0,
-                import_metadata: None,
-            })
-            .unwrap();
-            let marker: Element = serde_json::from_value(serde_json::json!({
-                "id": "rec", "pageId": "p1", "type": "media", "points": [], "color": "#000000",
-                "width": 1.0, "isHighlighter": false, "imageUrl": seg,
-                "content": { "kind": "audio", "recording": { "unitId": "u1", "spans": [],
-                    "segments": [{ "assetId": seg, "durationMs": 300000, "mime": "video/webm" }] } },
-                "createdAt": now, "updatedAt": now, "version": 0
-            }))
-            .unwrap();
-            st.upsert_elements(&[marker]).unwrap();
-        }
+        add_recording(&st, &[seg]);
         let wiped = Mutex::new(false);
         let wipe = |_: &Path| -> io::Result<()> {
             *wiped.lock().unwrap() = true;
@@ -559,6 +602,59 @@ mod tests {
         assert!(dir.join("mate.db").exists());
         assert_eq!(st.lock().unwrap().list_tree().unwrap().units.len(), 1, "database untouched");
         assert_eq!(se.lock().unwrap().theme, "dark");
+    }
+
+    #[test]
+    fn restore_backup_file_restores_books_and_audio() {
+        let dir = tmp("restore-ok");
+        let (st, _) = fixture(&dir);
+        let assets_dir = dir.join("assets");
+        let mut webm = vec![0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81];
+        webm.resize(4096, 3);
+        let a = mate_core::assets::save_sniffed(&assets_dir, &webm).unwrap();
+        webm.push(9);
+        let b = mate_core::assets::save_sniffed(&assets_dir, &webm).unwrap();
+        add_recording(&st, &[&a.id, &b.id]);
+        let zip_path = dir.join("backup.zip");
+        let mut file = fs::File::create(&zip_path).unwrap();
+        write_backup_file(&st.lock().unwrap(), &assets_dir, &mut file, MAX_ARCHIVE_BYTES as u64).unwrap();
+        drop(file);
+
+        let restored = Mutex::new(Storage::open_in_memory().unwrap());
+        let restored_assets = dir.join("restored-assets");
+        let report = restore_from_file(&restored, &restored_assets, &zip_path).unwrap();
+        assert_eq!(report.books.len(), 1);
+        assert!(report.failed.is_empty());
+        assert_eq!(report.rejected_audio, 0);
+        assert!(report.lost_recordings.is_empty());
+        let st = restored.lock().unwrap();
+        let tree = st.list_tree().unwrap();
+        assert_eq!(tree.units.len(), 1);
+        assert_eq!(tree.units[0].title, "Maths");
+        let marker = st.load_elements(&tree.pages[0].id).unwrap().into_iter().next().unwrap();
+        let segments = marker.content.as_ref().unwrap()["recording"]["segments"].as_array().unwrap().clone();
+        assert_eq!(segments.len(), 2);
+        for seg in &segments {
+            let id = seg["assetId"].as_str().unwrap();
+            assert!(id != a.id && id != b.id, "new ids");
+            assert!(mate_core::assets::asset_info(&restored_assets, id).is_some(), "segment {id} stored");
+        }
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["rejectedAudio"], 0);
+        assert_eq!(json["lostRecordings"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn restore_backup_file_rejects_a_non_zip() {
+        let dir = tmp("restore-bad");
+        let path = dir.join("notes.zip");
+        fs::write(&path, b"this is not a zip").unwrap();
+        let st = Mutex::new(Storage::open_in_memory().unwrap());
+        let err = restore_from_file(&st, &dir.join("assets"), &path).unwrap_err();
+        assert!(err.contains("not a Mate backup"), "{err}");
+        assert!(st.lock().unwrap().list_tree().unwrap().units.is_empty());
+        let missing = restore_from_file(&st, &dir.join("assets"), &dir.join("gone.zip"));
+        assert!(missing.is_err());
     }
 
     #[test]

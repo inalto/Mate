@@ -28,7 +28,7 @@ pub struct NotebookChange {
 }
 
 impl NotebookChange {
-    fn tree(source: &str) -> Self {
+    pub(crate) fn tree(source: &str) -> Self {
         NotebookChange { kind: "tree", page_id: None, title: None, source: source.into() }
     }
     fn page_updated(source: &str, page: &Page) -> Self {

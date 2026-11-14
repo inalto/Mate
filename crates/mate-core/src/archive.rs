@@ -449,14 +449,30 @@ pub fn export_backup(storage: &Storage, assets_dir: &Path) -> Result<(Vec<u8>, B
 pub struct RestoreReport {
     /// One import report per restored book, in backup order.
     pub books: Vec<ImportReport>,
-    /// `<entry>: <error>` for each book that could not be imported (the others still are).
-    pub failed: Vec<String>,
+    /// Each book that could not be imported (rolled back; the others still are).
+    pub failed: Vec<FailedBook>,
     /// `recordings/` entries skipped as invalid (bad name, repeated id, not stored as-is, not
     /// audio or video, oversized or unreadable).
     pub rejected_audio: usize,
     /// Titles of restored books in which a recording lost (some of) its audio: stripped, or left
     /// with segments that point nowhere.
     pub lost_recordings: Vec<String>,
+}
+
+/// A book a restore could not import.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FailedBook {
+    /// The book's title, or its file name in the backup when even that cannot be read.
+    pub name: String,
+    pub error: String,
+}
+
+/// The title in a `.mate` archive's `unit.json`, if it can be read.
+fn archive_title(bytes: &[u8]) -> Option<String> {
+    let mut zip = ZipArchive::new(Cursor::new(bytes)).ok()?;
+    let raw = read_entry(&mut zip, "unit.json", MAX_JSON_ENTRY_BYTES).ok()??;
+    Some(serde_json::from_slice::<UnitFile>(&raw).ok()?.unit.title)
 }
 
 /// The old asset id of a `recordings/<assetId>.<ext>` entry; `None` for any other name (paths,
@@ -476,6 +492,9 @@ fn recording_entry_id(name: &str) -> Option<&str> {
 /// the restore (nothing is restored). A book that cannot be imported is rolled back and listed in
 /// [`RestoreReport::failed`]; one whose recordings lost audio is named in
 /// [`RestoreReport::lost_recordings`]. Audio no restored book references is removed again.
+///
+/// An `Err` means nothing was changed: every error is raised before the first book is imported
+/// (audio saved so far is removed again); after that, failures are per book and reported.
 pub fn restore_backup<R: Read + Seek>(
     storage: &mut Storage,
     backup: R,
@@ -550,23 +569,34 @@ pub fn restore_backup_capped<R: Read + Seek>(
         .collect();
     books.sort();
     for name in books {
-        let imported = read_entry(&mut zip, name, MAX_ARCHIVE_BYTES as u64).and_then(|bytes| {
-            let bytes = bytes.ok_or_else(|| limit("missing"))?;
-            import_archive_from(storage, &bytes, assets_dir, ImportLimits::default(), Some(&audio))
-        });
-        match imported {
+        let file_name = name.strip_prefix("books/").unwrap_or(name);
+        let bytes = match read_entry(&mut zip, name, MAX_ARCHIVE_BYTES as u64) {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => continue,
+            Err(e) => {
+                report.failed.push(FailedBook { name: file_name.to_owned(), error: e.to_string() });
+                continue;
+            }
+        };
+        match import_archive_from(storage, &bytes, assets_dir, ImportLimits::default(), Some(&audio)) {
             Ok(book) => {
                 if book.lost_audio {
                     report.lost_recordings.push(book.title);
                 }
                 report.books.push(book.report);
             }
-            Err(e) => report.failed.push(format!("{name}: {e}")),
+            Err(e) => report.failed.push(FailedBook {
+                name: archive_title(&bytes).unwrap_or_else(|| file_name.to_owned()),
+                error: e.to_string(),
+            }),
         }
     }
-    let referenced = storage.referenced_asset_ids()?;
-    for id in audio.values().filter(|id| !referenced.contains(*id)) {
-        assets::delete_asset(assets_dir, id);
+    // Best effort: books are already restored, so a failed lookup only leaves unused audio for
+    // the asset collector instead of failing the restore.
+    if let Ok(referenced) = storage.referenced_asset_ids() {
+        for id in audio.values().filter(|id| !referenced.contains(*id)) {
+            assets::delete_asset(assets_dir, id);
+        }
     }
     Ok(report)
 }
