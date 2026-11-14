@@ -34,3 +34,11 @@ pub fn unit_element_times(
     let storage = state.storage.lock().map_err(|e| e.to_string())?;
     storage.unit_element_times(&unit_id, &from, &to).map_err(|e| e.to_string())
 }
+
+/// Whether the unit has a live recording (decides if the export and share dialogs offer to
+/// include recordings).
+#[tauri::command]
+pub fn unit_has_recordings(state: State<'_, AppState>, unit_id: String) -> Res<bool> {
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    storage.unit_has_recordings(&unit_id).map_err(|e| e.to_string())
+}

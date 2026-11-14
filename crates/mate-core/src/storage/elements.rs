@@ -100,6 +100,23 @@ impl Storage {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Whether a live `media` element on a live page of the unit carries a `recording` block.
+    pub fn unit_has_recordings(&self, unit_id: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(
+            "SELECT e.content FROM elements e              JOIN pages p ON p.id = e.page_id JOIN sections s ON s.id = p.section_id              WHERE s.unit_id = ?1 AND e.type = 'media' AND e.deleted_at IS NULL                AND p.deleted_at IS NULL AND s.deleted_at IS NULL                AND e.content LIKE '%\"recording\"%'",
+        )?;
+        let rows = stmt.query_map(params![unit_id], |r| r.get::<_, Option<String>>(0))?;
+        for row in rows {
+            let Some(content) = row?.and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok()) else {
+                continue;
+            };
+            if content.get("recording").is_some_and(|r| r.is_object()) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Number of live elements on a page.
     pub fn count_elements(&self, page_id: &str) -> Result<i64> {
         count_in(&self.conn, page_id)

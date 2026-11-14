@@ -847,6 +847,10 @@
     "searchable": "Durchsuchbarer Text",
     "latexHint": "Speichert eine .tex-Datei; Bilder werden zu Platzhaltern.",
     "mateHint": "Exportiert das gesamte Notizbuch, zu dem diese Seite gehört.",
+    "recordings": {
+      "label": "Include recordings",
+      "hint": "Recordings can contain other people's voices."
+    },
     "shareHint": "Um dieses Notizbuch an jemanden zu senden, nutze Teilen… im Notizbuchmenü.",
     "shareInstead": "Stattdessen teilen…",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",

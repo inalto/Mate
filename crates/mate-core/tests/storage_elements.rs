@@ -220,3 +220,47 @@ fn unit_element_times_timing_on_10000_elements() {
     println!("unit_element_times: {} rows in {took:?}", got.len());
     assert_eq!(got.len(), 3601);
 }
+
+#[test]
+fn unit_has_recordings_sees_only_live_recordings() {
+    use common::{page, section, unit};
+    use mate_core::storage::EntityKind;
+    let mut st = seeded();
+    assert!(!st.unit_has_recordings("u1").unwrap(), "empty unit");
+
+    let media = |id: &str, page_id: &str, content: serde_json::Value| {
+        let mut e = stroke(id, page_id, 0);
+        e.r#type = ElementType::Media;
+        e.content = Some(content);
+        e
+    };
+    let recording = || serde_json::json!({
+        "kind": "audio",
+        "recording": { "unitId": "u1", "spans": [], "segments": [] }
+    });
+
+    // A plain audio element and a text box that mentions the word do not count.
+    let mut text = stroke("text", "p1", 0);
+    text.r#type = ElementType::TextBox;
+    text.content = Some(serde_json::json!({ "html": "<p>\"recording\"</p>" }));
+    st.upsert_elements(&[media("plain", "p1", serde_json::json!({ "kind": "audio" })), text]).unwrap();
+    assert!(!st.unit_has_recordings("u1").unwrap(), "plain audio and text");
+
+    // Another unit's recording.
+    st.upsert_unit(&unit("u2", Some("s1"))).unwrap();
+    st.upsert_section(&section("sec2", "u2")).unwrap();
+    st.upsert_page(&page("p3", "sec2", None)).unwrap();
+    st.upsert_elements(&[media("other", "p3", recording())]).unwrap();
+    assert!(!st.unit_has_recordings("u1").unwrap(), "another unit");
+    assert!(st.unit_has_recordings("u2").unwrap());
+
+    // Deleted element, and one on a trashed page.
+    st.upsert_page(&page("p2", "sec1", None)).unwrap();
+    st.upsert_elements(&[media("gone", "p1", recording()), media("on-trash", "p2", recording())]).unwrap();
+    st.delete_elements(&["gone".to_string()]).unwrap();
+    st.soft_delete(EntityKind::Page, "p2").unwrap();
+    assert!(!st.unit_has_recordings("u1").unwrap(), "deleted and trashed");
+
+    st.upsert_elements(&[media("live", "p1", recording())]).unwrap();
+    assert!(st.unit_has_recordings("u1").unwrap());
+}

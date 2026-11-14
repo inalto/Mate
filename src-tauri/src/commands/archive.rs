@@ -20,6 +20,16 @@ use super::export::{
 use super::incoming::materialize;
 use crate::state::AppState;
 
+/// Recordings carry other people's voices: left out unless the caller asked, and a missing
+/// argument means no.
+pub fn recordings_choice(include: Option<bool>) -> Recordings {
+    if include == Some(true) {
+        Recordings::Include
+    } else {
+        Recordings::Exclude
+    }
+}
+
 /// Exports a unit (book) and the assets its elements reference to a `.mate` file chosen in a
 /// save dialog (mobile: written to `exports/` and shared). `None` if cancelled.
 #[tauri::command]
@@ -27,6 +37,7 @@ pub async fn export_unit_archive(
     app: AppHandle,
     state: State<'_, AppState>,
     unit_id: String,
+    include_recordings: Option<bool>,
 ) -> Result<Option<String>, String> {
     let (bytes, title) = {
         let storage = state.storage.lock().map_err(|e| e.to_string())?;
@@ -43,7 +54,7 @@ pub async fn export_unit_archive(
                 &storage,
                 &unit_id,
                 &state.data_dir.join("assets"),
-                Recordings::Exclude,
+                recordings_choice(include_recordings),
             )
                 .map_err(|e| e.to_string())?,
             title,

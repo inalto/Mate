@@ -847,6 +847,10 @@
     "searchable": "Texto pesquisável",
     "latexHint": "Salva um arquivo .tex; as imagens viram marcadores.",
     "mateHint": "Exporta o caderno inteiro ao qual esta página pertence.",
+    "recordings": {
+      "label": "Include recordings",
+      "hint": "Recordings can contain other people's voices."
+    },
     "shareHint": "Para enviar este caderno a alguém, use Compartilhar… no menu do caderno.",
     "shareInstead": "Partilhar em vez disso…",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",

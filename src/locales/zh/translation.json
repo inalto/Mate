@@ -844,6 +844,10 @@
     "searchable": "可搜索文本",
     "latexHint": "保存为 .tex 文件；图片将转换为占位符。",
     "mateHint": "导出此页面所属的整个笔记本。",
+    "recordings": {
+      "label": "Include recordings",
+      "hint": "Recordings can contain other people's voices."
+    },
     "shareHint": "如需将此笔记本发送给他人，请使用笔记本菜单中的“分享…”。",
     "shareInstead": "改为分享…",
     "boxRender": "无法为导出渲染框 {{id}} 的内容。",

@@ -109,6 +109,7 @@ pub fn run() {
       elements::upsert_elements,
       elements::delete_elements,
       elements::unit_element_times,
+      elements::unit_has_recordings,
       recognition::get_recognitions,
       recognition::upsert_recognition,
       recognition::set_user_override,

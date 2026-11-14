@@ -17,6 +17,7 @@ import {
 import type { Unit } from "../model/types";
 import { isMobile } from "../platform";
 import { navigateTo } from "../stores/navigation";
+import RecordingsOption from "./RecordingsOption";
 import { AiIcon } from "./ai/AiField";
 import "./ai/ai.css";
 import { useModal } from "./useModal";
@@ -37,6 +38,7 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
   const [expiry, setExpiry] = useState("30");
   const [link, setLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [recordings, setRecordings] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,19 +64,19 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
 
   const saveTo = (dir: string) =>
     run(async () => {
-      setSaved(await saveArchiveTo(unit.id, dir));
+      setSaved(await saveArchiveTo(unit.id, dir, recordings));
     });
 
   const chooseFolder = () =>
     run(async () => {
       const dir = await pickFolder();
-      if (dir) setSaved(await saveArchiveTo(unit.id, dir));
+      if (dir) setSaved(await saveArchiveTo(unit.id, dir, recordings));
     });
 
   const upload = () =>
     run(async () => {
       setCopied(false);
-      const res = await nextcloudShare(unit.id, expiry === "never" ? null : Number(expiry));
+      const res = await nextcloudShare(unit.id, expiry === "never" ? null : Number(expiry), recordings);
       setLink(res.url);
     });
 
@@ -92,6 +94,8 @@ export default function ShareDialog({ unit, onClose }: { unit: Unit; onClose(): 
     <div className="backdrop">
       <div className="card dialog share-dialog" role="dialog" aria-modal="true" aria-label={t("share.title", { title: unit.title })}>
         <h2>{t("share.title", { title: unit.title })}</h2>
+
+        <RecordingsOption unitId={unit.id} checked={recordings} onChange={setRecordings} disabled={busy} />
 
         {!mobile && (
           <section className="share-section" aria-label={t("share.folderTitle")}>

@@ -847,6 +847,10 @@
     "searchable": "Texte recherchable",
     "latexHint": "Enregistre un fichier .tex ; les images deviennent des espaces réservés.",
     "mateHint": "Exporte tout le cahier auquel appartient cette page.",
+    "recordings": {
+      "label": "Include recordings",
+      "hint": "Recordings can contain other people's voices."
+    },
     "shareHint": "Pour envoyer ce cahier à quelqu'un, utilise Partager… depuis le menu du cahier.",
     "shareInstead": "Partager plutôt…",
     "boxRender": "Impossible de générer le contenu de la zone {{id}} pour l'export.",

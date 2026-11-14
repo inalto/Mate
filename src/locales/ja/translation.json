@@ -844,6 +844,10 @@
     "searchable": "検索可能なテキスト",
     "latexHint": ".tex ファイルを保存します。画像はプレースホルダーになります。",
     "mateHint": "このページが属するノート全体を書き出します。",
+    "recordings": {
+      "label": "Include recordings",
+      "hint": "Recordings can contain other people's voices."
+    },
     "shareHint": "このノートを相手に送るには、ノートのメニューから「共有…」を使ってください。",
     "shareInstead": "代わりに共有…",
     "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",

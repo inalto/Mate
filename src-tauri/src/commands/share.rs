@@ -140,6 +140,7 @@ fn export_book(
     storage: &Mutex<Storage>,
     assets_dir: &Path,
     unit_id: &str,
+    recordings: Recordings,
 ) -> Result<(String, Vec<u8>), String> {
     let storage = storage.lock().map_err(|e| e.to_string())?;
     let title = storage
@@ -150,7 +151,7 @@ fn export_book(
         .find(|u| u.id == unit_id && u.deleted_at.is_none())
         .map(|u| u.title)
         .ok_or_else(|| "That book no longer exists.".to_string())?;
-    let bytes = export_unit(&storage, unit_id, assets_dir, Recordings::Exclude).map_err(|e| e.to_string())?;
+    let bytes = export_unit(&storage, unit_id, assets_dir, recordings).map_err(|e| e.to_string())?;
     Ok((title, bytes))
 }
 
@@ -160,11 +161,12 @@ pub fn save_archive(
     assets_dir: &Path,
     unit_id: &str,
     dir: &Path,
+    recordings: Recordings,
 ) -> Result<PathBuf, String> {
     if !dir.is_absolute() || !dir.is_dir() {
         return Err("That folder is not available.".into());
     }
-    let (title, bytes) = export_book(storage, assets_dir, unit_id)?;
+    let (title, bytes) = export_book(storage, assets_dir, unit_id, recordings)?;
     let folder = dir.join("Mate");
     fs::create_dir_all(&folder)
         .map_err(|_| "Could not create the Mate folder there.".to_string())?;
@@ -222,6 +224,7 @@ pub async fn save_archive_to(
     app: AppHandle,
     unit_id: String,
     dir: String,
+    include_recordings: Option<bool>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state: State<'_, AppState> = tauri::Manager::state(&app);
@@ -230,6 +233,7 @@ pub async fn save_archive_to(
             &state.data_dir.join("assets"),
             &unit_id,
             Path::new(&dir),
+            super::archive::recordings_choice(include_recordings),
         )
         .map(|p| p.to_string_lossy().into_owned())
     })
@@ -341,6 +345,7 @@ pub async fn nextcloud_share(
     app: AppHandle,
     unit_id: String,
     expire_days: Option<u32>,
+    include_recordings: Option<bool>,
 ) -> Result<ShareLink, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state: State<'_, AppState> = tauri::Manager::state(&app);
@@ -351,7 +356,12 @@ pub async fn nextcloud_share(
             time::OffsetDateTime::now_utc(),
         );
         let expire = expiry_date(expire_days, today)?;
-        let (title, bytes) = export_book(&state.storage, &state.data_dir.join("assets"), &unit_id)?;
+        let (title, bytes) = export_book(
+            &state.storage,
+            &state.data_dir.join("assets"),
+            &unit_id,
+            super::archive::recordings_choice(include_recordings),
+        )?;
         let client = NextcloudClient::new()?;
         let path = client.upload(&creds, &nextcloud_file_name(&title, &unit_id), bytes)?;
         let url = client.create_public_link(&creds, &path, expire)?;
@@ -399,10 +409,10 @@ mod tests {
     fn saves_into_a_mate_subfolder_with_numbered_names() {
         let d = temp("save");
         let st = library("Maths: term 1");
-        let first = save_archive(&st, &d.join("assets"), "u1", &d).unwrap();
+        let first = save_archive(&st, &d.join("assets"), "u1", &d, Recordings::Exclude).unwrap();
         assert_eq!(first, d.join("Mate").join("Maths term 1.mate"));
         assert!(fs::read(&first).unwrap().starts_with(b"PK"));
-        let second = save_archive(&st, &d.join("assets"), "u1", &d).unwrap();
+        let second = save_archive(&st, &d.join("assets"), "u1", &d, Recordings::Exclude).unwrap();
         assert_eq!(second, d.join("Mate").join("Maths term 1 (2).mate"));
         // The archive imports back as a book.
         let mut other = Storage::open_in_memory().unwrap();
@@ -421,15 +431,15 @@ mod tests {
         let d = temp("refuse");
         let st = library("Maths");
         assert_eq!(
-            save_archive(&st, &d, "u1", &d.join("gone")).unwrap_err(),
+            save_archive(&st, &d, "u1", &d.join("gone"), Recordings::Exclude).unwrap_err(),
             "That folder is not available."
         );
         assert_eq!(
-            save_archive(&st, &d, "u1", Path::new("relative")).unwrap_err(),
+            save_archive(&st, &d, "u1", Path::new("relative"), Recordings::Exclude).unwrap_err(),
             "That folder is not available."
         );
         assert_eq!(
-            save_archive(&st, &d, "nope", &d).unwrap_err(),
+            save_archive(&st, &d, "nope", &d, Recordings::Exclude).unwrap_err(),
             "That book no longer exists."
         );
         let _ = fs::remove_dir_all(&d);
@@ -480,6 +490,14 @@ mod tests {
         let ny = datetime!(2026-10-25 00:30 UTC).to_offset(time::macros::offset!(-4));
         assert_eq!(local_today(Some(ny), utc), time::macros::date!(2026 - 10 - 24));
         assert_eq!(local_today(None, utc), time::macros::date!(2026 - 10 - 24));
+    }
+
+    #[test]
+    fn recordings_are_left_out_unless_asked_for() {
+        use super::super::archive::recordings_choice;
+        assert!(matches!(recordings_choice(None), Recordings::Exclude));
+        assert!(matches!(recordings_choice(Some(false)), Recordings::Exclude));
+        assert!(matches!(recordings_choice(Some(true)), Recordings::Include));
     }
 
     #[test]

@@ -847,6 +847,10 @@
     "searchable": "Texto que se puede buscar",
     "latexHint": "Guarda un archivo .tex; las imágenes se convierten en marcadores.",
     "mateHint": "Exporta todo el cuaderno al que pertenece esta página.",
+    "recordings": {
+      "label": "Include recordings",
+      "hint": "Recordings can contain other people's voices."
+    },
     "shareHint": "Para enviar este cuaderno a alguien, usa Compartir… desde el menú del cuaderno.",
     "shareInstead": "Compartir en su lugar…",
     "boxRender": "No se pudo generar el contenido del cuadro {{id}} para exportar.",

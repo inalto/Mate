@@ -22,9 +22,9 @@ export interface NextcloudShare {
 /** Cloud-sync folders found on this computer. */
 export const detectSyncFolders = (): Promise<SyncFolder[]> => invoke("detect_sync_folders");
 
-/** Write the book as a `.mate` file under `<dir>/Mate/`. Resolves to the written path. */
-export const saveArchiveTo = (unitId: string, dir: string): Promise<string> =>
-  invoke("save_archive_to", { unitId, dir });
+/** Write the book as a `.mate` file under `<dir>/Mate/`, without recordings unless asked. Resolves to the written path. */
+export const saveArchiveTo = (unitId: string, dir: string, includeRecordings = false): Promise<string> =>
+  invoke("save_archive_to", { unitId, dir, includeRecordings });
 
 /** Folder picker. `null` if cancelled. */
 export const pickFolder = (): Promise<string | null> => invoke("pick_folder");
@@ -38,6 +38,9 @@ export const nextcloudLoginPoll = (): Promise<{ done: boolean }> => invoke("next
 
 export const nextcloudLogout = (): Promise<void> => invoke("nextcloud_logout");
 
-/** Upload the book and create a public link. `expireDays` null means the link never expires. */
-export const nextcloudShare = (unitId: string, expireDays: number | null): Promise<NextcloudShare> =>
-  invoke("nextcloud_share", { unitId, expireDays });
+/**
+ * Upload the book and create a public link. `expireDays` null means the link never expires.
+ * Recordings are left out unless `includeRecordings` is true.
+ */
+export const nextcloudShare = (unitId: string, expireDays: number | null, includeRecordings = false): Promise<NextcloudShare> =>
+  invoke("nextcloud_share", { unitId, expireDays, includeRecordings });

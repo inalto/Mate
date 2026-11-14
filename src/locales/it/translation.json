@@ -844,6 +844,10 @@
     "searchable": "Testo ricercabile",
     "latexHint": "Salva un file .tex; le immagini diventano segnaposto.",
     "mateHint": "Esporta l'intero quaderno a cui appartiene questa pagina.",
+    "recordings": {
+      "label": "Includi le registrazioni",
+      "hint": "Le registrazioni possono contenere la voce di altre persone."
+    },
     "shareHint": "Per inviare questo quaderno a qualcuno, usa Condividi… dal menu del quaderno.",
     "shareInstead": "Condividi invece…",
     "boxRender": "Impossibile renderizzare il contenuto della casella {{id}} per l'esportazione.",
