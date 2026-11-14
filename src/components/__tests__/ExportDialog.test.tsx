@@ -209,13 +209,45 @@ describe("ExportDialog", () => {
     });
 
     it("is only offered for the .mate format", async () => {
-      vi.mocked(unitHasRecordings).mockResolvedValue(true);
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
       render(<ExportDialog pageId="p1" onClose={onClose} />);
       await Promise.resolve();
       expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Mate archive" }));
       expect(await screen.findByRole("checkbox", { name: "Include recordings" })).toBeTruthy();
-      vi.mocked(unitHasRecordings).mockResolvedValue(false);
+    });
+
+    it("a ticked box does not survive a format switch", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      openMate();
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Include recordings" }));
+      fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+      fireEvent.click(screen.getByRole("button", { name: "Mate archive" }));
+      const box = (await screen.findByRole("checkbox", { name: "Include recordings" })) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u1", false);
+    });
+
+    it("nothing is sent as true while the lookup is pending", async () => {
+      vi.mocked(unitHasRecordings).mockReturnValueOnce(new Promise(() => {}));
+      openMate();
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u1", false);
+    });
+
+    it("describes the checkbox by the voices hint once ticked", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      openMate();
+      const box = await screen.findByRole("checkbox", { name: "Include recordings" });
+      expect(box.getAttribute("aria-describedby")).toBeNull();
+      fireEvent.click(box);
+      const hint = screen.getByText("Recordings can contain other people's voices.");
+      expect(box.getAttribute("aria-describedby")).toBe(hint.id);
+      expect(hint.id).not.toBe("");
     });
 
     it("treats a failed lookup as no recordings", async () => {

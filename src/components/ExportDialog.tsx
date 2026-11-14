@@ -10,6 +10,7 @@ import { useFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 import RecordingsOption from "./RecordingsOption";
+import { useHasRecordings } from "./useHasRecordings";
 import ShareDialog from "./ShareDialog";
 import { showToast } from "./Toast";
 
@@ -44,6 +45,7 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
   const canSelect = editor((s) => s.loadedPageId === pageId && s.selection.size > 0);
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [recordings, setRecordings] = useState(false);
+  const hasRecordings = useHasRecordings(unitId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +57,7 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
       const region = selectionOnly && canSelect ? (paddedSelectionRegion(editor) ?? undefined) : undefined;
       if (format === "mate") {
         if (!unitId) throw new Error(t("export.notInBook"));
-        saved = await exportUnitArchive(unitId, recordings);
+        saved = await exportUnitArchive(unitId, recordings && hasRecordings);
       } else if (format === "latex") {
         saved = await exportPage(pageId, "latex", {});
       } else if (format === "pdf") {
@@ -93,7 +95,11 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
           t("export.format"),
           FORMATS.map((f): [Format, string] => [f, f === "mate" ? t("settings.general.exportFormat.mate") : f === "latex" ? "LaTeX" : f.toUpperCase()]),
           format,
-          setFormat,
+          (f) => {
+            setFormat(f);
+            // A ticked box never outlives the .mate format.
+            if (f !== "mate") setRecordings(false);
+          },
         )}
         {format !== "mate" && format !== "latex" && (
           <>
@@ -129,8 +135,8 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
         )}
         {format === "latex" && <p className="field-hint">{t("export.latexHint")}</p>}
         {format === "mate" && <p className="field-hint">{t("export.mateHint")}</p>}
-        {format === "mate" && unitId && (
-          <RecordingsOption unitId={unitId} checked={recordings} onChange={setRecordings} disabled={busy} />
+        {format === "mate" && hasRecordings && (
+          <RecordingsOption checked={recordings} onChange={setRecordings} disabled={busy} />
         )}
         {format === "mate" && (
           <p className="field-hint">

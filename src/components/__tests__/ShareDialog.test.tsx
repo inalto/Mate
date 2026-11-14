@@ -180,6 +180,19 @@ describe("ShareDialog", () => {
       await waitFor(() => expect(nextcloudShare).toHaveBeenLastCalledWith("u1", 30, false));
     });
 
+    it("locks the box once a link exists, showing what the link was made with", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      vi.mocked(nextcloudStatus).mockResolvedValue(signedIn);
+      vi.mocked(nextcloudShare).mockResolvedValue({ url: "https://cloud.example.com/s/abc", path: "/Mate/a.mate" });
+      render(<ShareDialog unit={unit} onClose={onClose} />);
+      const box = (await screen.findByRole("checkbox", { name: "Include recordings" })) as HTMLInputElement;
+      fireEvent.click(box);
+      fireEvent.click(await screen.findByRole("button", { name: "Upload and get link" }));
+      await screen.findByLabelText("Share link");
+      await waitFor(() => expect(box.disabled).toBe(true));
+      expect(box.checked).toBe(true);
+    });
+
     it("treats a failed lookup as no recordings", async () => {
       vi.mocked(unitHasRecordings).mockRejectedValueOnce(new Error("db"));
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
