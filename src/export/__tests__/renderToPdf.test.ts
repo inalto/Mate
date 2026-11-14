@@ -118,6 +118,27 @@ describe("renderToPdf", () => {
     expect(rasterize).toHaveBeenCalledTimes(1);
   });
 
+  it("turns a recording marker's duration label with its rotation", async () => {
+    const marker = (rotation: number): Element => {
+      const el = recordingElement(
+        "p1",
+        "rec",
+        STAMP,
+        { x: 100, y: 100 },
+        { unitId: "u", spans: [{ wallStart: STAMP, audioStartMs: 0, durationMs: 900_000 }], segments: [{ assetId: "a0", durationMs: 900_000, mime: "audio/webm" }] },
+        "Recording",
+      );
+      return { ...el, content: { ...(el.content as object), rotation } };
+    };
+    const pdfText = async (rotation: number) => text(await renderToPdf([marker(rotation)], page(), { ...OPTS, compress: false }, deps()));
+    const matrix = /(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) Tm\s/;
+    expect(await pdfText(0)).toMatch(/ Td\s/); // upright: a plain text position
+    const turned = (await pdfText(Math.PI / 2)).match(matrix);
+    expect(turned).toBeTruthy();
+    const [a1, b1, c1, d1] = turned!.slice(1, 5).map(Number);
+    expect([Math.abs(a1), Math.abs(b1), Math.abs(c1), Math.abs(d1)].map((v) => Math.round(v))).toEqual([0, 1, 1, 0]); // quarter turn
+  });
+
   it("paints line caps", async () => {
     const ln = (content: unknown): Element => ({
       ...stroke("ln", [{ x: 10, y: 10, pressure: 0.5, timestamp: 0 }, { x: 200, y: 120, pressure: 0.5, timestamp: 1 }]),

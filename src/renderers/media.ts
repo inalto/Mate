@@ -110,7 +110,10 @@ export function markerLayout(r: Rect): MarkerLayout {
 }
 
 /** The duration shown under a recording marker's microphone. */
-export const markerDuration = (el: Element): string => formatElapsed(totalMs(recordingOf(el)!));
+export const markerDuration = (el: Element): string => {
+  const rec = recordingOf(el);
+  return rec ? formatElapsed(totalMs(rec)) : "0:00";
+};
 
 function drawMarker(ctx: CanvasRenderingContext2D, el: Element, r: Rect, theme: ThemeName, zoomBucket: number): void {
   const L = markerLayout(r);

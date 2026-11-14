@@ -669,38 +669,45 @@ function paintPlaceholder(p: Painter, el: Element): void {
   p.pdf.stroke();
 }
 
-/** A recording marker: the round icon (circle, microphone) and its duration, as vectors. Rotation is ignored. */
+/** A recording marker: the round icon (circle, microphone) and its duration, as vectors, turned about the box centre. */
 function paintRecordingMarker(p: Painter, el: Element, theme: ThemeName): void {
   const r = boxRect(el);
   if (r.width <= 0 || r.height <= 0) return;
   const L = markerLayout(r);
   const ink = mediaInk(theme);
+  const rot = contentMeta(el).rotation ?? 0;
+  const at = boxLocal(el);
+  // World point -> world point after the turn (boxLocal takes box-local coordinates).
+  const turn = (x: number, y: number): Pt => p.pt(...at(x - r.x, y - r.y));
   const [cx, cy] = p.pt(L.cx, L.cy);
   p.colour(mediaFill(theme), "fill");
   p.colour(PLACEHOLDER_COLOR, "draw");
   p.pdf.setLineWidth(0.75);
   p.pdf.circle(cx, cy, L.radius * p.k, "FD");
-  p.colour(ink, "fill");
   p.colour(ink, "draw");
-  const c = L.capsule;
-  const [x, y] = p.pt(c.x, c.y);
-  p.pdf.roundedRect(x, y, c.width * p.k, c.height * p.k, c.radius * p.k, c.radius * p.k, "F");
-  p.pdf.setLineWidth(L.arc.width * p.k);
   p.pdf.setLineCap("round");
+  // The capsule is a round-capped stroke along its centre line.
+  const c = L.capsule;
+  p.pdf.setLineWidth(c.width * p.k);
+  const [x1, y1] = turn(L.cx, c.y + c.radius);
+  const [x2, y2] = turn(L.cx, c.y + c.height - c.radius);
+  p.pdf.line(x1, y1, x2, y2);
+  p.pdf.setLineWidth(L.arc.width * p.k);
   const arc = Array.from({ length: 13 }, (_, i) => {
     const a = (Math.PI * i) / 12;
-    return { x: L.arc.cx + Math.cos(a) * L.arc.radius, y: L.arc.cy + Math.sin(a) * L.arc.radius };
+    const [x, y] = at(L.arc.cx + Math.cos(a) * L.arc.radius - r.x, L.arc.cy + Math.sin(a) * L.arc.radius - r.y);
+    return { x, y };
   });
   p.polyline(arc, false);
   p.pdf.stroke();
-  p.moveTo(L.stem.x, L.stem.y1);
-  p.lineTo(L.stem.x, L.stem.y2);
+  p.moveTo(...at(L.stem.x - r.x, L.stem.y1 - r.y));
+  p.lineTo(...at(L.stem.x - r.x, L.stem.y2 - r.y));
   p.pdf.stroke();
   p.colour(ink, "text");
   p.pdf.setFont("helvetica", "normal");
   p.pdf.setFontSize(L.label.size * p.k);
-  const [tx, ty] = p.pt(L.label.x, L.label.y);
-  p.pdf.text(markerDuration(el), tx, ty, { align: "center" });
+  const [tx, ty] = turn(L.label.x, L.label.y);
+  p.pdf.text(markerDuration(el), tx, ty, { align: "center", angle: (-rot * 180) / Math.PI });
 }
 
 /** Latin-1 only: the standard PDF fonts cannot encode anything else. */
