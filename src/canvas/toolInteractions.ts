@@ -13,7 +13,7 @@
 // (a polygon's corners, a circle's or ellipse's four axis ends, a curve's ends and middle; its bounds
 // corners then scale it keeping its form), and shape editing straight from the drawing tools (the
 // shape tool, or ink with perfect shapes on: a tap on a shape selects it, its handles then work
-// without the cursor tool). Geometry is pure; `createToolController` wires it
+// without the cursor tool), tap-to-seek on a note while a recording replay is open. Geometry is pure; `createToolController` wires it
 // to the editor store and draws on the interaction (live) layer.
 import type { Element, Settings } from "../model/types";
 import type { EditorStore, TempTool, ToolId } from "../stores/editor";
@@ -307,6 +307,8 @@ export function pointerTool(tool: ToolId, panHold: boolean, info: PointerInfo, c
 
 type Gesture =
   | { kind: "idle" }
+  /** A press on a note while a replay is open: a tap seeks; moving or holding replays the press. */
+  | { kind: "replayTap"; press: Vec2; tool: PointerTool; points: Vec2[] }
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
@@ -396,6 +398,101 @@ export interface ToolDeps {
   getSettings(): Settings;
   /** Clock for double-click detection (ms; default performance.now). */
   now?(): number;
+  /** Tap-to-seek of the replay open in this pane (recording/replay.ts `replayTapOf`). */
+  replay?: ReplayTapTarget;
+  /** Recording markers of this pane, and opening one in its replay (recording/panes.ts `markerTargetOf`). */
+  markers?: MarkerTarget;
+}
+
+/** The pane's recording markers, as a press on the canvas sees them. */
+export interface MarkerTarget {
+  isMarker(id: string): boolean;
+  /** Open the replay of marker `id` (switching from another one). */
+  open(id: string): void;
+}
+
+/** The pane's recording replay, as tap-to-seek sees it. */
+export interface ReplayTapTarget {
+  isOpen(): boolean;
+  /** Element `id` of the open page was started during the recording (and is not its marker). */
+  canSeek(id: string): boolean;
+  seekToElement(id: string): boolean;
+}
+/** A tap to seek moves at most this far (screen px) ... */
+export const REPLAY_TAP_PX = 10;
+/** ... and lasts at most this long (ms). */
+export const REPLAY_TAP_MS = 300;
+
+/**
+ * Tap-to-seek while a replay is open: a press (any tool but the eraser) on a note written during the
+ * recording that is released within REPLAY_TAP_MS and REPLAY_TAP_PX seeks the audio there (`up`
+ * returns the tap: the press is consumed). With a non-ink tool, a second tap on the same note within
+ * the double-tap window is not consumed (a double-click still opens editors). Anything else behaves as without a replay.
+ * The same tap on a recording marker with an ink, text or other creating tool (not the cursor, lasso
+ * or eraser) opens its replay instead, open or not.
+ */
+export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number, markers?: MarkerTarget) {
+  let press: Tap | null = null;
+  /** The press is on a recording marker (a tap opens it). */
+  let onMarker = false;
+  /** The last tap that seeked (its second tap falls through). */
+  let seeked: Tap | null = null;
+  const moved = (p: Vec2) => {
+    if (!press) return;
+    const s = worldToScreen(store.getState().camera, p);
+    if (Math.hypot(s.x - press.x, s.y - press.y) > REPLAY_TAP_PX) press = null;
+  };
+  return {
+    /** A press at world `p`: true when it may be a tap to seek. */
+    down(p: Vec2, tool: PointerTool): boolean {
+      press = null;
+      onMarker = false;
+      if (tool === "eraser" || tool === "pan" || tool === "none") return false;
+      const marking = !!markers && tool !== "cursor" && tool !== "lasso";
+      if (!marking && !replay?.isOpen()) return false;
+      const s = store.getState();
+      const id = hitTest(store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
+      if (!id) return false;
+      const scr = worldToScreen(s.camera, p);
+      const tap: Tap = { id, x: scr.x, y: scr.y, t: now() };
+      if (marking && markers.isMarker(id)) {
+        press = tap;
+        onMarker = true;
+        return true;
+      }
+      if (!replay?.isOpen() || !replay.canSeek(id)) return false;
+      // Double-click opens editors on the tool path; ink never opens one, so its second tap seeks too.
+      if (!isInkTool(tool) && isDoubleTap(seeked, tap)) {
+        seeked = null;
+        return false;
+      }
+      press = tap;
+      return true;
+    },
+    /** The pointer is at `p`: false once the press can no longer be a tap. */
+    move(p: Vec2): boolean {
+      moved(p);
+      return press !== null;
+    },
+    /** Release at `p`: the tap when it was one and the replay seeked, else null. */
+    up(p?: Vec2): Tap | null {
+      if (p) moved(p);
+      const tap = press && now() - press.t <= REPLAY_TAP_MS ? press : null;
+      press = null;
+      if (onMarker) {
+        onMarker = false;
+        seeked = null;
+        if (tap) markers?.open(tap.id);
+        return tap;
+      }
+      seeked = tap && replay?.seekToElement(tap.id) ? tap : null;
+      return seeked;
+    },
+    cancel() {
+      press = null;
+      onMarker = false;
+    },
+  };
 }
 
 /** Modifier keys an auto-complete handle copies from its own pointer events. */
@@ -438,15 +535,27 @@ export function createToolController(deps: ToolDeps) {
   let dupCount = 0;
   let lastTap: Tap | null = null;
   const now = deps.now ?? (() => performance.now());
+  const replayTap = createReplayTap(deps.store, deps.replay, now, deps.markers);
+  /** A cursor press on the already selected recording marker: its quick release without a drag opens it. */
+  let markerClick: Tap | null = null;
 
   /**
    * Double-click on a boxed element opens its editor, on a connector its label popover (never on a
    * locked one); returns true when it did.
    */
-  const tapEdit = (p: Vec2): boolean => {
+  const tapEdit = (p: Vec2, tool: PointerTool): boolean => {
     const s = st();
     const id = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
     const el = id ? s.elements.get(id) : undefined;
+    // With the cursor, a double-click on a recording marker opens its replay.
+    if (id && tool === "cursor" && deps.markers?.isMarker(id)) {
+      const scr = worldToScreen(s.camera, p);
+      const tap: Tap = { id, t: now(), x: scr.x, y: scr.y };
+      const double = isDoubleTap(lastTap, tap);
+      lastTap = double ? null : tap;
+      if (double) deps.markers.open(id);
+      return double;
+    }
     // A frame opens on its title only (its border band just selects and moves it).
     const frameTitle = !!el && isFrame(el) && hitFrameTitle(el, p, s.camera.z);
     if (!id || !el || (isFrame(el) && !frameTitle) || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle"))) || isLocked(el)) {
@@ -830,9 +939,11 @@ export function createToolController(deps: ToolDeps) {
     return sel.some((f) => frameHit(f, p, tol, s.camera.z));
   };
 
-  const down = (p: Vec2, tool: PointerTool) => {
+  const down = (p: Vec2, tool: PointerTool, replayed = false) => {
     const s = st();
-    if (tool === "eraser") {
+    if (!replayed && replayTap.down(p, tool)) {
+      g = { kind: "replayTap", press: p, tool, points: [] };
+    } else if (tool === "eraser") {
       g = { kind: "erase", last: p };
       s.eraser(p);
     } else if (tool === "insert-space") {
@@ -875,11 +986,14 @@ export function createToolController(deps: ToolDeps) {
       // A lone line's or arrow's end handle: that end follows the pointer.
     } else if ((tool === "cursor" || tool === "lasso") && startReshape(p)) {
       // A lone shape's corner or axis handle, a snapped curve's end or middle: it follows the pointer.
-    } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p)) {
+    } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p, tool)) {
       g = { kind: "idle" };
     } else if ((tool === "cursor" || tool === "lasso") && startLabel(p)) {
       // A lone connector's label pill: slide it along the route.
     } else if (tool === "cursor" || tool === "lasso") {
+      const under = tool === "cursor" && deps.markers ? hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z) : null;
+      const scr = worldToScreen(s.camera, p);
+      markerClick = under && s.selection.has(under) && deps.markers?.isMarker(under) ? { id: under, x: scr.x, y: scr.y, t: now() } : null;
       const b = selectionBounds(s.elements, s.selection);
       // A lone connector has no bounds box: no corner or rotate handles, and only its route moves it.
       const lone = loneConnector(s.elements, s.selection);
@@ -925,6 +1039,20 @@ export function createToolController(deps: ToolDeps) {
   const move = (points: Vec2[]) => {
     const p = points[points.length - 1];
     if (!p) return;
+    if (markerClick) {
+      const scr = worldToScreen(st().camera, p);
+      if (Math.hypot(scr.x - markerClick.x, scr.y - markerClick.y) > REPLAY_TAP_PX) markerClick = null;
+    }
+    if (g.kind === "replayTap") {
+      g.points.push(...points);
+      if (replayTap.move(p)) return;
+      // Dragged: the press behaves as without a replay, from where it started.
+      const { press, tool, points: pts } = g;
+      g = { kind: "idle" };
+      down(press, tool, true);
+      move(pts);
+      return;
+    }
     const z = st().camera.z;
     switch (g.kind) {
       case "erase":
@@ -1072,8 +1200,30 @@ export function createToolController(deps: ToolDeps) {
     deps.requestLive();
   };
 
-  const up = () => {
+  const up = (at?: Vec2) => {
+    if (g.kind === "replayTap") {
+      const { press, tool, points } = g;
+      g = { kind: "idle" };
+      const tap = replayTap.up(at);
+      if (tap) {
+        // As a first click for double-click detection: a second one opens the editor (tapEdit).
+        lastTap = tap;
+        deps.requestLive();
+        return;
+      }
+      // Held too long or released away: the press behaves as without a replay.
+      down(press, tool, true);
+      const pts = at ? [...points, at] : points;
+      if (pts.length > 0) move(pts);
+    }
     const s = st();
+    if (markerClick) {
+      const scr = at ? worldToScreen(s.camera, at) : markerClick;
+      const tap = Math.hypot(scr.x - markerClick.x, scr.y - markerClick.y) <= REPLAY_TAP_PX && now() - markerClick.t <= REPLAY_TAP_MS;
+      const id = tap ? markerClick.id : null;
+      markerClick = null;
+      if (id) deps.markers?.open(id);
+    }
     switch (g.kind) {
       case "erase":
         s.endEraser();
@@ -1185,6 +1335,8 @@ export function createToolController(deps: ToolDeps) {
   };
 
   const cancel = () => {
+    replayTap.cancel();
+    markerClick = null;
     if (g.kind === "erase") st().endEraser();
     // A cancelled Alt+drag takes its copies back.
     if (g.kind === "move" && g.dupKey) st().undo();
@@ -1374,6 +1526,8 @@ export function createToolController(deps: ToolDeps) {
 
   return {
     hidden: hidden as ReadonlySet<string>,
+    /** Tap-to-seek for ink tools, whose presses CanvasView handles itself. */
+    replayTap,
     down,
     move,
     up,

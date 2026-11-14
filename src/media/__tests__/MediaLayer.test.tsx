@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
+import { recordingElement } from "../../recording/marker";
 import { el } from "../../tools/__tests__/fixtures";
 
 const queue = vi.hoisted(() => ({
@@ -57,6 +58,24 @@ describe("MediaLayer", () => {
 
     act(() => store.setState({ camera: { x: 0, y: 0, z: 1 } }));
     expect(a.style.left).toBe("100px");
+  });
+
+  it("renders no <audio> for a recording marker while a plain audio element keeps its player", async () => {
+    const rec = recordingElement(
+      "pg",
+      "rec",
+      "",
+      { x: 5, y: 5 },
+      { unitId: "u", spans: [{ wallStart: "2026-11-14T09:00:00.000Z", audioStartMs: 0, durationMs: 1000 }], segments: [{ assetId: "r0", durationMs: 1000, mime: "video/webm" }] },
+      "Rec",
+    );
+    loaded.els = [audio, rec];
+    await s().loadPage("pg2");
+    const { container } = render(<MediaLayer store={store} />);
+    await act(async () => {});
+    expect(container.querySelector('[data-media-id="rec"]')).toBeNull();
+    expect(container.querySelectorAll("audio, video")).toHaveLength(1);
+    expect(container.querySelector('[data-media-id="au"] audio')).not.toBeNull();
   });
 
   it("players take pointer events only with the cursor tool", async () => {

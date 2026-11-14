@@ -58,6 +58,7 @@ export type ShortcutAction =
   | "sidebar.toggle"
   | "window.openPage"
   | "palette.open"
+  | "recording.toggle"
   | "help.shortcuts";
 
 export type ActionGroup = "tools" | "edit" | "selection" | "arrange" | "view" | "pages" | "tabs" | "general";
@@ -132,6 +133,7 @@ export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
   "tab.move.right": { labelKey: "keys.actions.moveTabRight", group: "tabs", defaultKeys: ["Alt+Shift+ArrowRight"] },
   "window.openPage": { labelKey: "keys.actions.openPageWindow", group: "tabs", defaultKeys: ["Ctrl+Shift+N"] },
   "palette.open": { labelKey: "keys.actions.palette", group: "general", defaultKeys: ["Ctrl+K"] },
+  "recording.toggle": { labelKey: "keys.actions.recordingToggle", group: "general", defaultKeys: [] },
   "help.shortcuts": { labelKey: "keys.actions.shortcuts", group: "general", defaultKeys: ["?"] },
 };
 

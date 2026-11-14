@@ -39,6 +39,7 @@ import { frameBorder, frameFill, frameTitleColour } from "../renderers/frame";
 import { lineY, mindmapScene, nodeRadius } from "../renderers/mindmap";
 import { FRAME_RADIUS, frameTitle, frameTitleHidden, frameTitleRect, isNestedFrame } from "../frames/contain";
 import "../renderers/builtins";
+import { drawsAsMarker, markerLayout, mediaFill, mediaInk, markerDuration } from "../renderers/media";
 import { drawElement } from "../renderers/registry";
 import { fillOpacityOf, hasFill, isClosedShape, isFilledCap, shapeElementOutline, shapeRectOf } from "../shapes/geometry";
 import { LABEL_LINE_HEIGHT, labelLines, labelMeasure, shapeInnerRect, shapeLabelOf } from "../shapes/label";
@@ -672,6 +673,49 @@ function paintPlaceholder(p: Painter, el: Element): void {
   p.pdf.stroke();
 }
 
+/** A recording marker: the round icon (circle, microphone) and its duration, as vectors, turned about the box centre. */
+function paintRecordingMarker(p: Painter, el: Element, theme: ThemeName): void {
+  const r = boxRect(el);
+  if (r.width <= 0 || r.height <= 0) return;
+  const L = markerLayout(r);
+  const ink = mediaInk(theme);
+  const rot = contentMeta(el).rotation ?? 0;
+  const at = boxLocal(el);
+  // World point -> world point after the turn (boxLocal takes box-local coordinates).
+  const turn = (x: number, y: number): Pt => p.pt(...at(x - r.x, y - r.y));
+  const [cx, cy] = p.pt(L.cx, L.cy);
+  p.colour(mediaFill(theme), "fill");
+  p.colour(PLACEHOLDER_COLOR, "draw");
+  p.pdf.setLineWidth(0.75);
+  p.pdf.circle(cx, cy, L.radius * p.k, "FD");
+  p.colour(ink, "draw");
+  p.pdf.setLineCap("round");
+  // The capsule is a round-capped stroke along its centre line.
+  const c = L.capsule;
+  p.pdf.setLineWidth(c.width * p.k);
+  const [x1, y1] = turn(L.cx, c.y + c.radius);
+  const [x2, y2] = turn(L.cx, c.y + c.height - c.radius);
+  p.pdf.line(x1, y1, x2, y2);
+  p.pdf.setLineWidth(L.arc.width * p.k);
+  const arc = Array.from({ length: 13 }, (_, i) => {
+    const a = (Math.PI * i) / 12;
+    const [x, y] = at(L.arc.cx + Math.cos(a) * L.arc.radius - r.x, L.arc.cy + Math.sin(a) * L.arc.radius - r.y);
+    return { x, y };
+  });
+  p.polyline(arc, false);
+  p.pdf.stroke();
+  p.moveTo(...at(L.stem.x - r.x, L.stem.y1 - r.y));
+  p.lineTo(...at(L.stem.x - r.x, L.stem.y2 - r.y));
+  p.pdf.stroke();
+  p.colour(ink, "text");
+  p.pdf.setFont("helvetica", "normal");
+  p.pdf.setFontSize(L.label.size * p.k);
+  const duration = markerDuration(el);
+  if (duration === null) return; // a marker exported without its recording
+  const [tx, ty] = turn(L.label.x, L.label.y);
+  p.pdf.text(duration, tx, ty, { align: "center", angle: (-rot * 180) / Math.PI });
+}
+
 /** Latin-1 only: the standard PDF fonts cannot encode anything else. */
 const latin1 = (s: string): string => s.replace(/[^\x20-\x7e\xa0-\xff]/g, " ");
 
@@ -710,6 +754,11 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): boolean {
   if (!backing && ctx.opts.background === "plain") paintBackground(p, ctx.page, sheet, theme);
   const onSheet = ctx.list.filter((el) => el.id !== backing?.elementId && rectsOverlap(elementBounds(el), rect));
   for (const el of renderOrder(onSheet)) {
+    if (el.type === "media" && drawsAsMarker(el)) {
+      paintRecordingMarker(p, el, theme);
+      p.setOpacity(1);
+      continue;
+    }
     switch (el.type) {
       case "stroke":
         paintStroke(p, el, theme);

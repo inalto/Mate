@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Element, Page, Section, Unit } from "../../model/types";
 
 vi.mock("../../export/exportPage", () => ({ exportPage: vi.fn(async () => "C:/out.png") }));
 vi.mock("../../ipc/archive", () => ({ exportUnitArchive: vi.fn(async () => "C:/book.mate") }));
+vi.mock("../../ipc/elements", () => ({ unitHasRecordings: vi.fn(async () => false) }));
 vi.mock("../ShareDialog", () => ({
   default: ({ unit, onClose }: { unit: Unit; onClose(): void }) => (
     <div role="dialog" aria-label={`Share ${unit.title}`}>
@@ -17,6 +18,7 @@ vi.mock("../ShareDialog", () => ({
 
 import { exportPage } from "../../export/exportPage";
 import { exportUnitArchive } from "../../ipc/archive";
+import { unitHasRecordings } from "../../ipc/elements";
 import { setPlatformForTests } from "../../platform";
 import { editorForPane } from "../../stores/focusedEditor";
 import { useNotebookStore } from "../../stores/notebook";
@@ -122,7 +124,7 @@ describe("ExportDialog", () => {
     expect(screen.queryByRole("group", { name: "Paper" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(exportUnitArchive).toHaveBeenCalledWith("u1");
+    expect(exportUnitArchive).toHaveBeenCalledWith("u1", false);
     expect(exportPage).not.toHaveBeenCalled();
   });
 
@@ -172,6 +174,123 @@ describe("ExportDialog", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByRole("alert").textContent).toContain("disk full");
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  describe("include recordings", () => {
+    const openMate = () => {
+      useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, defaultExportFormat: "mate" } });
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+    };
+
+    it("is not offered when the book has no recording", async () => {
+      openMate();
+      await waitFor(() => expect(unitHasRecordings).toHaveBeenCalledWith("u1"));
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+    });
+
+    it("is offered unchecked when the book has a recording, and exports without by default", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      openMate();
+      const box = (await screen.findByRole("checkbox", { name: "Include recordings" })) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      expect(screen.queryByText("Recordings can contain other people's voices.")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u1", false);
+    });
+
+    it("exports with recordings when ticked, and shows the voices hint", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      openMate();
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Include recordings" }));
+      expect(screen.getByText("Recordings can contain other people's voices.")).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u1", true);
+    });
+
+    it("is only offered for the .mate format", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      await Promise.resolve();
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Mate archive" }));
+      expect(await screen.findByRole("checkbox", { name: "Include recordings" })).toBeTruthy();
+    });
+
+    it("a ticked box does not survive a format switch", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      openMate();
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Include recordings" }));
+      fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+      fireEvent.click(screen.getByRole("button", { name: "Mate archive" }));
+      const box = (await screen.findByRole("checkbox", { name: "Include recordings" })) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u1", false);
+    });
+
+    it("nothing is sent as true while the lookup is pending", async () => {
+      vi.mocked(unitHasRecordings).mockReturnValueOnce(new Promise(() => {}));
+      openMate();
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u1", false);
+    });
+
+    it("describes the checkbox by the voices hint once ticked", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      openMate();
+      const box = await screen.findByRole("checkbox", { name: "Include recordings" });
+      expect(box.getAttribute("aria-describedby")).toBeNull();
+      fireEvent.click(box);
+      const hint = screen.getByText("Recordings can contain other people's voices.");
+      expect(box.getAttribute("aria-describedby")).toBe(hint.id);
+      expect(hint.id).not.toBe("");
+    });
+
+    it("treats a failed lookup as no recordings", async () => {
+      vi.mocked(unitHasRecordings).mockRejectedValueOnce(new Error("db"));
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      openMate();
+      await waitFor(() => expect(warn).toHaveBeenCalled());
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+      warn.mockRestore();
+    });
+
+    it("a different notebook starts unticked and hidden until its lookup resolves", async () => {
+      const section2: Section = { ...section, id: "s2", unitId: "u2" };
+      const page2: Page = { ...page, id: "p2", sectionId: "s2" };
+      useNotebookStore.setState({ tree: { bookshelves: [], units: [], sections: [section, section2], pages: [page, page2] }, loaded: true });
+      useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, defaultExportFormat: "mate" } });
+      let resolve!: (v: boolean) => void;
+      vi.mocked(unitHasRecordings)
+        .mockResolvedValueOnce(true)
+        .mockReturnValueOnce(new Promise((r) => (resolve = r)));
+      const view = render(<ExportDialog pageId="p1" onClose={onClose} />);
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Include recordings" }));
+      view.rerender(<ExportDialog pageId="p2" onClose={onClose} />);
+      await waitFor(() => expect(unitHasRecordings).toHaveBeenLastCalledWith("u2"));
+      expect(screen.queryByRole("checkbox", { name: "Include recordings" })).toBeNull();
+      await act(async () => resolve(true));
+      const box = (await screen.findByRole("checkbox", { name: "Include recordings" })) as HTMLInputElement;
+      expect(box.checked).toBe(false);
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportUnitArchive).toHaveBeenCalledWith("u2", false);
+    });
+
+    it("shows the archive size error from the export", async () => {
+      vi.mocked(unitHasRecordings).mockResolvedValueOnce(true);
+      vi.mocked(exportUnitArchive).mockRejectedValueOnce("This book is too large to export.");
+      openMate();
+      fireEvent.click(await screen.findByRole("checkbox", { name: "Include recordings" }));
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      expect((await screen.findByRole("alert")).textContent).toContain("too large");
+      expect(onClose).not.toHaveBeenCalled();
+    });
   });
 });
 

@@ -33,6 +33,8 @@ import { sanitizeHtml, stripInlineStyle } from "../text/sanitize";
 import { fitImage } from "../images/fit";
 import { imageElement } from "../images/element";
 import { MEDIA_DEFAULT_SIZE, mediaElement, type MediaKind } from "../media/element";
+import { freeMarkerSpot, recordingElement } from "../recording/marker";
+import { isRecording, recordingOf, type RecordingContent, type Transcript } from "../recording/types";
 import { defaultGraphData, graphElement, inferGraphKind, presetFor } from "../graph/data";
 import { lastGraphKind } from "../graph/presets";
 import { clampRows, codespaceElement, MAX_TABLE_CELLS, tableCells, tableElement, tableRowsOf } from "../text/tableCode";
@@ -135,6 +137,11 @@ export interface EditorState {
    * selection; only panning and zooming. Not persisted; loading a page ends it.
    */
   presenting: { index: number; fill: boolean } | null;
+  /** Ids drawn at 25 % while a recording replay is open (recording/replay.ts); null otherwise. Not
+   * history, not persisted; loading a page clears it. */
+  replayDim: ReadonlySet<string> | null;
+  /** Set the replay's dimmed ids (no history entry); the canvas re-rasterises its static layer. */
+  setReplayDim(ids: ReadonlySet<string> | null): void;
   /** The page's frames in presentation order (`content.order`, then `createdAt`). */
   orderedFrames(): Element[];
   /** Present the frames from `index` (clamped): cursor tool, selection cleared, camera on the frame. Nothing without frames. */
@@ -284,6 +291,17 @@ export interface EditorState {
    * `size` or the kind's default box, fitted like an image; one history entry "Media". Its id, or null.
    */
   addMedia(assetId: string, kind: MediaKind, size?: { width: number; height: number }, at?: Vec2, title?: string): string | null;
+  /**
+   * Place a recording's marker with its top-left at `at` (moved right past markers it would cover);
+   * one history entry "Recording". Tool and selection are left alone. `id` defaults to a new one.
+   * Its id, or null without a page or past LIMITS.MAX_MARKERS_PER_PAGE.
+   */
+  addRecording(rec: RecordingContent, at: Vec2, title: string, id?: string): string | null;
+  /**
+   * Store `transcript` on recording marker `markerId` (replacing any earlier one); one history
+   * entry "Transcript", also while presenting. False when the marker is gone or is not a recording.
+   */
+  setRecordingTranscript(markerId: string, transcript: Transcript): boolean;
   /**
    * End of a text edit session: persist `after` (HTML sanitised, plain text derived) as one history
    * entry; nothing when unchanged. A new box's creation and first session are one entry; a box
@@ -628,6 +646,11 @@ export function createEditorStore(): EditorStore {
     limitKind: "page",
     presenting: null,
     mindmapFocus: null,
+    replayDim: null,
+
+    setReplayDim(ids) {
+      if (get().replayDim !== ids) set({ replayDim: ids });
+    },
 
     orderedFrames() {
       return framesInOrder(get().elements.values());
@@ -682,6 +705,7 @@ export function createEditorStore(): EditorStore {
       set({
         presenting: null,
         mindmapFocus: null,
+        replayDim: null,
         canUndo: false,
         canRedo: false,
         tempTool: null,
@@ -1156,6 +1180,26 @@ export function createEditorStore(): EditorStore {
       if (!record("Media", [{ type: "add", el }])) return null;
       set({ tool: "cursor", selection: new Set([el.id]), editingId: null });
       return el.id;
+    },
+
+    addRecording(rec, at, title, id) {
+      closeEdit();
+      const s = get();
+      if (!s.pageId) return null;
+      const spot = freeMarkerSpot(at, s.elements.values());
+      const top = topZ(s.elements.values());
+      const marker = recordingElement(s.pageId, id ?? crypto.randomUUID(), new Date().toISOString(), spot, rec, title);
+      const el = top > 0 ? withMeta(marker, { zIndex: top }) : marker;
+      return record("Recording", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    setRecordingTranscript(markerId, transcript) {
+      const cur = get().elements.get(markerId);
+      const rec = cur && !cur.deletedAt ? recordingOf(cur) : null;
+      if (!cur || !rec) return false;
+      const after: Element = { ...cur, content: { ...contentOf<Record<string, unknown>>(cur), recording: { ...rec, transcript } } };
+      // Allowed while presenting, as a frame reorder is: a transcription ending then must not lose its result.
+      return commitEntry("Transcript", [{ type: "update", before: cur, after: stamp(after) }]);
     },
 
     commitTextEdit(after) {
@@ -1861,10 +1905,23 @@ export function createEditorStore(): EditorStore {
     return n;
   }
 
-  /** True when applying `actions` would grow the page past the backend element limit. */
+  /**
+   * True when applying `actions` would grow the page past the backend element limit. A recording
+   * marker is exempt (as in the backend): refusing it would leave the lecture unreachable. Markers
+   * have their own cap instead (LIMITS.MAX_MARKERS_PER_PAGE, as the backend's).
+   */
   function exceedsLimit(actions: Action[]): boolean {
-    const n = countAfter(actions);
-    return n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size;
+    const marker = (a: Action) => isRecording(a.type === "update" ? a.after : a.el);
+    const n = countAfter(actions.filter((a) => !marker(a)));
+    if (n > LIMITS.MAX_ELEMENTS_PER_PAGE && n > S().elements.size) return true;
+    const touched = actions.filter(marker);
+    if (touched.length === 0) return false;
+    const live = new Map<string, boolean>();
+    for (const el of S().elements.values()) if (!el.deletedAt && isRecording(el)) live.set(el.id, true);
+    const before = live.size;
+    for (const a of touched) live.set(a.type === "update" ? a.after.id : a.el.id, a.type !== "delete");
+    const m = [...live.values()].filter(Boolean).length;
+    return m > LIMITS.MAX_MARKERS_PER_PAGE && m > before;
   }
 
   /**

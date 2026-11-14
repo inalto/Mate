@@ -1,6 +1,7 @@
 // Dictation commands. Keys go into the keychain through Rust and never come back; the recording is
 // sent as the raw request body and Rust reads the settings and key itself.
 import { invoke } from "@tauri-apps/api/core";
+import type { TimedSentence } from "../recording/types";
 
 /** One speech-to-text service of the Rust catalog (`mate_core::ai::speech`). */
 export interface SpeechProviderInfo {
@@ -43,6 +44,14 @@ export const transcribeAudio = (bytes: Uint8Array, mime: string, language?: stri
   invoke<string>("transcribe_audio", bytes, {
     headers: { "x-speech-mime": mime, ...(language ? { "x-speech-language": language } : {}) },
   });
+
+/**
+ * Transcribes one stored segment of a lecture recording into timed sentences (ms from the
+ * segment's start; none for silence). Rust reads the file itself, so no audio crosses IPC; rejects
+ * like `transcribeAudio`.
+ */
+export const transcribeAsset = (assetId: string, durationMs: number, language?: string): Promise<TimedSentence[]> =>
+  invoke<TimedSentence[]>("transcribe_asset", { assetId, durationMs: Math.round(durationMs), language: language ?? null });
 
 /**
  * Sends half a second of silence to the configured service (with the same consent, key and

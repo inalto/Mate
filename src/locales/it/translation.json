@@ -265,7 +265,7 @@
     "backup": {
       "download": {
         "label": "Scarica il backup",
-        "hint": "Uno zip con un file .mate per ogni quaderno. Per ripristinare, decomprimilo e importa ogni file .mate."
+        "hint": "Un file zip con un file .mate per quaderno e l'audio delle registrazioni accanto. Ripristinalo con Ripristina da backup; un singolo .mate preso da un backup estratto si può ancora importare, ma senza l'audio delle registrazioni."
       },
       "saved": "Backup salvato in {{path}}",
       "shared": "Backup condiviso",
@@ -304,6 +304,35 @@
       "rename": "Rinomina",
       "delete": "Elimina",
       "name": "Nome della preimpostazione"
+    }
+  },
+  "backup": {
+    "skipped": {
+      "title": "Alcuni quaderni non sono stati salvati nel backup",
+      "body": "Questi quaderni sono troppo grandi per il backup e NON sono in questo backup: {{titles}}"
+    },
+    "missingAudio": "Non è stato trovato l'audio delle registrazioni in: {{titles}}",
+    "restore": {
+      "label": "Ripristina da backup…",
+      "hint": "Aggiunge i quaderni di un backup zip di Mate, con le loro registrazioni, accanto a quelli che hai",
+      "filter": "Backup di Mate",
+      "title": "Ripristinare questo backup?",
+      "body": "I quaderni del backup vengono aggiunti accanto a quelli che hai già. Nulla viene sostituito o eliminato.",
+      "confirm": "Ripristina",
+      "done_one": "{{count}} quaderno ripristinato.",
+      "done_other": "{{count}} quaderni ripristinati.",
+      "failed": "Non è stato possibile ripristinare: {{titles}}",
+      "lostRecordings": "Le registrazioni di questi quaderni sono tornate senza audio: {{titles}}",
+      "rejectedAudio_one": "{{count}} file audio del backup non era valido ed è stato saltato.",
+      "rejectedAudio_other": "{{count}} file audio del backup non erano validi e sono stati saltati.",
+      "error": "Non è stato possibile ripristinare il backup. Non è cambiato nulla.",
+      "busy": "Ripristino in corso…",
+      "resultTitle": "Backup ripristinato",
+      "resultTitleNone": "Non è stato ripristinato nulla",
+      "errorUnknown": "Il ripristino si è interrotto in modo imprevisto. Alcuni quaderni potrebbero essere stati ripristinati."
+    },
+    "reset": {
+      "recordingOpen": "Una registrazione è ancora in fase di salvataggio. Interrompila, oppure riavvia Mate per recuperarla, poi riprova."
     }
   },
   "common": {
@@ -576,7 +605,8 @@
       "moveTabRight": "Sposta la scheda a destra",
       "openPageWindow": "Apri la pagina in una nuova finestra",
       "palette": "Cerca e azioni",
-      "shortcuts": "Scorciatoie da tastiera"
+      "shortcuts": "Scorciatoie da tastiera",
+      "recordingToggle": "Avvia o interrompi la registrazione"
     }
   },
   "palette": {
@@ -832,6 +862,10 @@
     "searchable": "Testo ricercabile",
     "latexHint": "Salva un file .tex; le immagini diventano segnaposto.",
     "mateHint": "Esporta l'intero quaderno a cui appartiene questa pagina.",
+    "recordings": {
+      "label": "Includi le registrazioni",
+      "hint": "Le registrazioni possono contenere la voce di altre persone."
+    },
     "shareHint": "Per inviare questo quaderno a qualcuno, usa Condividi… dal menu del quaderno.",
     "shareInstead": "Condividi invece…",
     "annotations": "Annotazioni",
@@ -1433,5 +1467,71 @@
     "large": "Grande",
     "useForNew": "Usa per le nuove pagine",
     "done": "Fine"
+  },
+  "recording": {
+    "title": "Registrazione {{date}}",
+    "tooShort": "Non è stato registrato nulla.",
+    "recovered": "È stata recuperata una registrazione interrotta.",
+    "dictationBusy": "Interrompi la registrazione per dettare.",
+    "limitSoon": "La registrazione si ferma tra 5 minuti (limite di 4 ore).",
+    "limit": "È stato raggiunto il limite di 4 ore. La registrazione è stata salvata.",
+    "writeFailed": "La registrazione si è interrotta perché non è stato possibile salvarla. Quanto registrato finora è conservato.",
+    "failed": "La registrazione si è interrotta per un problema del microfono. Quanto registrato finora è conservato.",
+    "busy": "È già in corso una registrazione.",
+    "dictationActive": "Termina la dettatura prima di registrare.",
+    "start": "Registra audio",
+    "stop": "Interrompi la registrazione",
+    "pause": "Pausa",
+    "resume": "Riprendi",
+    "pill": "Registrazione {{time}}",
+    "paused": "In pausa {{time}}",
+    "interrupted": "Registrazione sospesa {{time}}",
+    "gap": "Per {{time}} non è stato registrato nulla mentre Mate era in background.",
+    "menu": "Registrazione",
+    "keptForLater": "Non è stato possibile aggiungere la registrazione alla pagina. È conservata e verrà aggiunta al prossimo avvio di Mate.",
+    "leave": {
+      "title": "Interrompere la registrazione?",
+      "body": "Se esci, la registrazione si ferma e viene salvata.",
+      "stop": "Interrompi ed esci",
+      "stay": "Resta"
+    }
+  },
+  "replay": {
+    "bar": "Riproduzione della registrazione",
+    "play": "Riproduci",
+    "pause": "Pausa",
+    "back": "Indietro di 10 secondi",
+    "forward": "Avanti di 10 secondi",
+    "position": "Posizione",
+    "time": "{{position}} / {{total}}",
+    "speed": "Velocità",
+    "follow": "Segui le pagine",
+    "transcript": "Trascrizione",
+    "close": "Chiudi",
+    "notRecorded": "Questo è stato scritto mentre non si registrava nulla.",
+    "missingSegment": "Manca una parte di questa registrazione."
+  },
+  "transcript": {
+    "title": "Trascrizione",
+    "start": "Trascrivi",
+    "progress": "Trascrizione della parte {{done}} di {{total}}",
+    "cancel": "Annulla",
+    "failedPart": "Questa parte non è stata trascritta.",
+    "retry": "Riprova",
+    "lostMarker": "La registrazione è stata rimossa, quindi la trascrizione non è stata salvata.",
+    "busyOther": "È in corso la trascrizione di un'altra registrazione.",
+    "retryAt": "Riprova la parte a {{time}}",
+    "copy": "Copia",
+    "insert": "Inserisci come casella di testo",
+    "empty": "Non è stato riconosciuto alcun parlato.",
+    "close": "Chiudi la trascrizione",
+    "replace": {
+      "title": "Trascrivere di nuovo?",
+      "body": "La trascrizione attuale verrà sostituita."
+    },
+    "copied": "Trascrizione copiata.",
+    "inserted": "Trascrizione aggiunta alla pagina.",
+    "partial_one": "{{count}} parte non è stata trascritta.",
+    "partial_other": "{{count}} parti non sono state trascritte."
   }
 }

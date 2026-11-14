@@ -2,16 +2,18 @@
 //! keychain (account `speech:<id>`) and never comes back over IPC; a recording is sent only with
 //! `settings.speechConsent == Some(true)`.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use mate_core::ai::catalog::is_local_host;
+use mate_core::assets::asset_info;
 use mate_core::ai::keystore::KeyStore;
 use mate_core::ai::openai::extract_json_object;
 use mate_core::ai::prompts::TIDY_DICTATION_SYSTEM;
 use mate_core::ai::provider::{AiError, Provider, TextRequest};
 use mate_core::ai::speech::{
-    MAX_AUDIO_BYTES, NO_TEXT, SpeechSpec, catalog, effective_base_url, effective_model, key_account, silent_wav, spec,
-    spec_or_default, transcribe, language_code,
+    MAX_AUDIO_BYTES, NO_TEXT, SpeechSpec, TimedText, catalog, effective_base_url, effective_model, key_account, silent_wav,
+    spec, spec_or_default, transcribe, transcribe_timed, language_code,
 };
 use mate_core::settings::Settings;
 use serde::{Deserialize, Serialize};
@@ -124,14 +126,14 @@ pub fn status(store: &dyn KeyStore, settings: &Settings) -> Result<SpeechStatus,
 
 /// The checks before anything is sent, then the call through `send` (the real one is
 /// [`transcribe`]). Order: consent, size, key, address.
-pub fn run(
+pub fn run<T>(
     store: &dyn KeyStore,
     settings: &Settings,
     bytes: Vec<u8>,
     mime: &str,
     language: Option<&str>,
-    send: impl FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>, bool) -> Result<String, AiError>,
-) -> Result<String, AiSetupError> {
+    send: impl FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>, bool) -> Result<T, AiError>,
+) -> Result<T, AiSetupError> {
     if settings.speech_consent != Some(true) {
         return Err(setup_error("disabled", "Dictation is off. Turn it on in Settings, Dictation."));
     }
@@ -151,6 +153,38 @@ pub fn run(
         return Err(setup_error("noAddress", "Enter the service address first."));
     }
     Ok(send(s, &key, &settings.speech_model, &settings.speech_base_url, bytes, mime, language, settings.dictation_math)?)
+}
+
+/// One segment of a lecture recording, read from the asset folder `dir` here (its audio never
+/// crosses IPC), through the same checks as a dictation, then `send` (the real one is
+/// [`transcribe_timed`]) with the segment's length. A file over [`MAX_AUDIO_BYTES`] is refused
+/// before it is read; a segment with nothing recognised (silence) has no sentences.
+#[allow(clippy::too_many_arguments)]
+pub fn run_asset(
+    store: &dyn KeyStore,
+    settings: &Settings,
+    dir: &Path,
+    asset_id: &str,
+    duration_ms: u64,
+    language: Option<&str>,
+    send: impl FnOnce(&SpeechSpec, &str, &str, &str, Vec<u8>, &str, Option<&str>, bool, u64) -> Result<Vec<TimedText>, AiError>,
+) -> Result<Vec<TimedText>, AiSetupError> {
+    let missing = || AiError::Rejected("the recording's audio is missing".into());
+    let info = asset_info(dir, asset_id).ok_or_else(missing)?;
+    if info.bytes > MAX_AUDIO_BYTES as u64 {
+        return Err(AiError::Rejected("the recording is larger than 25 MB".into()).into());
+    }
+    let bytes = std::fs::read(&info.path).map_err(|_| missing())?;
+    // Only a recording's audio (or video) is sent, never another stored file named by its id.
+    if !mate_core::assets::sniff(&bytes).is_some_and(|k| k.is_media()) {
+        return Err(AiError::Rejected("the asset is not audio or video".into()).into());
+    }
+    run(store, settings, bytes, &info.mime, language, |s, key, model, base, bytes, mime, lang, math| {
+        match send(s, key, model, base, bytes, mime, lang, math, duration_ms) {
+            Err(AiError::InvalidResponse(m)) if m == NO_TEXT => Ok(Vec::new()),
+            other => other,
+        }
+    })
 }
 
 /// The settings' test: half a second of silence through the same checks and call as a dictation.
@@ -213,6 +247,25 @@ pub async fn transcribe_audio(state: State<'_, AppState>, request: Request<'_>) 
     let store: Arc<dyn KeyStore> = state.keys.clone();
     tauri::async_runtime::spawn_blocking(move || {
         run(store.as_ref(), &settings, bytes, &mime, language.as_deref(), transcribe)
+    })
+    .await
+    .map_err(|e| AiSetupError::from(e.to_string()))?
+}
+
+/// Transcribes one stored segment of a lecture recording into timed sentences (milliseconds from
+/// the segment's start). Only the asset id crosses IPC; the file, settings and key are read here.
+#[tauri::command]
+pub async fn transcribe_asset(
+    state: State<'_, AppState>,
+    asset_id: String,
+    duration_ms: u64,
+    language: Option<String>,
+) -> Result<Vec<TimedText>, AiSetupError> {
+    let settings = state.settings.lock().map_err(|e| e.to_string())?.clone();
+    let store: Arc<dyn KeyStore> = state.keys.clone();
+    let dir = state.data_dir.join("assets");
+    tauri::async_runtime::spawn_blocking(move || {
+        run_asset(store.as_ref(), &settings, &dir, &asset_id, duration_ms, language.as_deref(), transcribe_timed)
     })
     .await
     .map_err(|e| AiSetupError::from(e.to_string()))?
@@ -426,7 +479,7 @@ mod tests {
         let store = MemoryStore::default();
         store.set("speech:groq", "gk").unwrap();
         let settings = Settings { speech_provider: "groq".into(), speech_consent: Some(true), ..Settings::default() };
-        let text = run(&store, &settings, vec![9], "audio/mp4", Some("it"), |s, key, model, base, bytes, mime, lang, math| {
+        let text: String = run(&store, &settings, vec![9], "audio/mp4", Some("it"), |s, key, model, base, bytes, mime, lang, math| {
             assert_eq!((s.id, key, model, base, mime, lang), ("groq", "gk", "", "", "audio/mp4", Some("it")));
             assert!(math, "dictation_math defaults on and is passed through");
             assert_eq!(bytes, [9]);
@@ -434,7 +487,7 @@ mod tests {
         })
         .unwrap();
         assert_eq!(text, "ciao");
-        let err = run(&store, &settings, vec![9], "audio/mp4", None, |_, _, _, _, _, _, _, _| Err(AiError::Auth)).unwrap_err();
+        let err = run(&store, &settings, vec![9], "audio/mp4", None, |_, _, _, _, _, _, _, _| Err::<String, _>(AiError::Auth)).unwrap_err();
         assert_eq!(err.kind, "auth");
     }
 
@@ -506,6 +559,109 @@ connection: close
         let request = server.join().unwrap();
         assert!(request.starts_with("POST /v1/audio/transcriptions"), "{request}");
         assert!(request.contains(r#"filename="audio.wav""#), "{request}");
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn never_timed(
+        _: &SpeechSpec,
+        _: &str,
+        _: &str,
+        _: &str,
+        _: Vec<u8>,
+        _: &str,
+        _: Option<&str>,
+        _: bool,
+        _: u64,
+    ) -> Result<Vec<TimedText>, AiError> {
+        panic!("nothing may be sent")
+    }
+
+    /// A temporary asset folder holding one WebM segment; returns the folder and the asset id.
+    fn webm_asset(name: &str) -> (std::path::PathBuf, String) {
+        let dir = std::env::temp_dir().join(format!("mate-speech-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut webm = vec![0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81];
+        webm.resize(4096, 3);
+        let info = mate_core::assets::save_sniffed(&dir, &webm).unwrap();
+        (dir, info.id)
+    }
+
+    #[test]
+    fn nothing_of_an_asset_is_sent_without_consent_key_or_address() {
+        let (dir, id) = webm_asset("gates");
+        let store = MemoryStore::default();
+        let mut settings = Settings::default();
+        let go = |s: &Settings| run_asset(&store, s, &dir, &id, 1000, None, never_timed).unwrap_err().kind;
+        assert_eq!(go(&settings), "disabled");
+        settings.speech_consent = Some(false);
+        assert_eq!(go(&settings), "disabled");
+        settings.speech_consent = Some(true);
+        assert_eq!(go(&settings), "noKey");
+        settings.speech_provider = "custom".into();
+        assert_eq!(go(&settings), "noAddress");
+        settings.speech_base_url = "http://example.com".into();
+        assert_eq!(go(&settings), "badAddress");
+    }
+
+    #[test]
+    fn an_asset_is_read_in_rust_and_sent_with_its_type_and_length() {
+        let (dir, id) = webm_asset("send");
+        let store = MemoryStore::default();
+        store.set("speech:groq", "gk").unwrap();
+        let settings = Settings { speech_provider: "groq".into(), speech_consent: Some(true), ..Settings::default() };
+        let out = run_asset(&store, &settings, &dir, &id, 300_000, Some("it"), |s, key, _, _, bytes, mime, lang, _, dur| {
+            assert_eq!((s.id, key, mime, lang, dur), ("groq", "gk", "video/webm", Some("it"), 300_000));
+            assert_eq!(bytes.len(), 4096);
+            Ok(vec![TimedText { start_ms: 0, end_ms: 900, text: "ciao".into() }])
+        })
+        .unwrap();
+        assert_eq!(out, [TimedText { start_ms: 0, end_ms: 900, text: "ciao".into() }]);
+        let json = serde_json::to_value(&out[0]).unwrap();
+        assert_eq!(json, serde_json::json!({"startMs": 0, "endMs": 900, "text": "ciao"}));
+        let err = run_asset(&store, &settings, &dir, &id, 1, None, |_, _, _, _, _, _, _, _, _| Err(AiError::Auth)).unwrap_err();
+        assert_eq!(err.kind, "auth");
+        assert!(!err.message.contains("gk"), "{}", err.message);
+    }
+
+    #[test]
+    fn silence_in_an_asset_is_no_sentences() {
+        let (dir, id) = webm_asset("silence");
+        let settings = Settings { speech_provider: "local".into(), speech_consent: Some(true), ..Settings::default() };
+        let out = run_asset(&MemoryStore::default(), &settings, &dir, &id, 1000, None, |_, _, _, _, _, _, _, _, _| {
+            Err(AiError::InvalidResponse(NO_TEXT.into()))
+        })
+        .unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn an_asset_that_is_not_audio_or_video_is_refused_before_sending() {
+        let (dir, _) = webm_asset("notmedia");
+        let store = MemoryStore::default();
+        store.set("speech:groq", "gk").unwrap();
+        let settings = Settings { speech_provider: "groq".into(), speech_consent: Some(true), ..Settings::default() };
+        let png = mate_core::assets::save_sniffed(&dir, &[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0]).unwrap();
+        let pdf = mate_core::assets::save_sniffed(&dir, b"%PDF-1.7\n%stub\n").unwrap();
+        for id in [png.id, pdf.id] {
+            let err = run_asset(&store, &settings, &dir, &id, 1, None, never_timed).unwrap_err();
+            assert_eq!(err.kind, "rejected", "{id}");
+        }
+    }
+
+    #[test]
+    fn a_missing_or_oversized_asset_is_refused_before_sending() {
+        let (dir, _) = webm_asset("refused");
+        let settings = Settings { speech_provider: "local".into(), speech_consent: Some(true), ..Settings::default() };
+        let store = MemoryStore::default();
+        let missing = "00000000-0000-4000-8000-000000000000";
+        assert_eq!(run_asset(&store, &settings, &dir, missing, 1, None, never_timed).unwrap_err().kind, "rejected");
+        assert_eq!(run_asset(&store, &settings, &dir, "../etc/passwd", 1, None, never_timed).unwrap_err().kind, "rejected");
+        let mut big = vec![0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81];
+        big.resize(MAX_AUDIO_BYTES + 1, 0);
+        let id = mate_core::assets::save_sniffed(&dir, &big).unwrap().id;
+        let err = run_asset(&store, &settings, &dir, &id, 1, None, never_timed).unwrap_err();
+        assert_eq!(err.kind, "rejected");
+        assert!(err.message.contains("25 MB"), "{}", err.message);
     }
 
     #[test]

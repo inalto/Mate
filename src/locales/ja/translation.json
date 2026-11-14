@@ -308,6 +308,33 @@
       "name": "Preset name"
     }
   },
+  "backup": {
+    "skipped": {
+      "title": "一部のノートはバックアップされませんでした",
+      "body": "次のノートは大きすぎるためバックアップできず、このバックアップには含まれていません: {{titles}}"
+    },
+    "missingAudio": "次のノートの録音の音声が見つかりませんでした: {{titles}}",
+    "restore": {
+      "label": "バックアップから復元…",
+      "hint": "Mate のバックアップ zip にあるノートを、録音も含めて、今あるノートに追加します",
+      "filter": "Mate バックアップ",
+      "title": "このバックアップを復元しますか？",
+      "body": "バックアップのノートは、すでにあるノートに追加されます。置き換えや削除は行われません。",
+      "confirm": "復元",
+      "done_other": "{{count}} 件のノートを復元しました。",
+      "failed": "復元できませんでした: {{titles}}",
+      "lostRecordings": "次のノートの録音は、音声なしで復元されました: {{titles}}",
+      "rejectedAudio_other": "バックアップ内の {{count}} 件の音声ファイルは無効だったためスキップしました。",
+      "error": "バックアップを復元できませんでした。何も変更されていません。",
+      "busy": "復元中…",
+      "resultTitle": "バックアップを復元しました",
+      "resultTitleNone": "何も復元されませんでした",
+      "errorUnknown": "復元が予期せず停止しました。一部のノートは復元されている可能性があります。"
+    },
+    "reset": {
+      "recordingOpen": "録音の保存がまだ終わっていません。録音を停止するか、Mate を再起動して復旧してから、もう一度お試しください。"
+    }
+  },
   "common": {
     "cancel": "キャンセル",
     "save": "保存",
@@ -578,7 +605,8 @@
       "moveTabRight": "タブを右へ移動",
       "openPageWindow": "ページを新しいウィンドウで開く",
       "palette": "検索とアクション",
-      "shortcuts": "キーボードショートカット"
+      "shortcuts": "キーボードショートカット",
+      "recordingToggle": "録音を開始または停止"
     }
   },
   "palette": {
@@ -834,6 +862,10 @@
     "searchable": "検索可能なテキスト",
     "latexHint": ".tex ファイルを保存します。画像はプレースホルダーになります。",
     "mateHint": "このページが属するノート全体を書き出します。",
+    "recordings": {
+      "label": "録音を含める",
+      "hint": "録音には他の人の声が含まれている場合があります。"
+    },
     "shareHint": "このノートを相手に送るには、ノートのメニューから「共有…」を使ってください。",
     "shareInstead": "代わりに共有…",
     "annotations": "注釈",
@@ -1422,5 +1454,70 @@
     "large": "Large",
     "useForNew": "Use for new pages",
     "done": "Done"
+  },
+  "recording": {
+    "title": "録音 {{date}}",
+    "tooShort": "何も録音されませんでした。",
+    "recovered": "中断された録音を復旧しました。",
+    "dictationBusy": "音声入力するには録音を停止してください。",
+    "limitSoon": "録音は 5 分後に停止します（上限 4 時間）。",
+    "limit": "4 時間の上限に達しました。録音は保存されました。",
+    "writeFailed": "保存できなかったため録音を停止しました。ここまでの録音は残っています。",
+    "failed": "マイクの問題により録音を停止しました。ここまでの録音は残っています。",
+    "busy": "すでに録音中です。",
+    "dictationActive": "録音する前に音声入力を終了してください。",
+    "start": "音声を録音",
+    "stop": "録音を停止",
+    "pause": "一時停止",
+    "resume": "再開",
+    "pill": "録音 {{time}}",
+    "paused": "一時停止中 {{time}}",
+    "interrupted": "録音していません {{time}}",
+    "gap": "Mate がバックグラウンドにあった {{time}} は録音されていません。",
+    "menu": "録音",
+    "keptForLater": "録音をページに追加できませんでした。録音は保持され、次回 Mate の起動時に追加されます。",
+    "leave": {
+      "title": "録音を停止しますか？",
+      "body": "この録音はこのノートに属しています。ノートを離れると録音は停止し、保存されます。",
+      "stop": "停止して移動",
+      "stay": "このまま続ける"
+    }
+  },
+  "replay": {
+    "bar": "録音の再生",
+    "play": "再生",
+    "pause": "一時停止",
+    "back": "10 秒戻る",
+    "forward": "10 秒進む",
+    "position": "位置",
+    "time": "{{position}} / {{total}}",
+    "speed": "速度",
+    "follow": "ページに追従",
+    "transcript": "文字起こし",
+    "close": "閉じる",
+    "notRecorded": "これは録音していない間に書かれました。",
+    "missingSegment": "この録音の一部が見つかりません。"
+  },
+  "transcript": {
+    "title": "文字起こし",
+    "start": "文字起こしする",
+    "progress": "{{total}} 区間中 {{done}} 区間目を文字起こし中",
+    "cancel": "キャンセル",
+    "failedPart": "この区間は文字起こしできませんでした。",
+    "retry": "再試行",
+    "lostMarker": "録音が削除されたため、文字起こしは保存されませんでした。",
+    "busyOther": "別の録音を文字起こし中です。",
+    "retryAt": "{{time}} の区間を再試行",
+    "copy": "コピー",
+    "insert": "テキストボックスとして挿入",
+    "empty": "音声が認識されませんでした。",
+    "close": "文字起こしを閉じる",
+    "replace": {
+      "title": "もう一度文字起こししますか？",
+      "body": "現在の文字起こしが置き換えられます。"
+    },
+    "copied": "文字起こしをコピーしました。",
+    "inserted": "文字起こしをページに追加しました。",
+    "partial_other": "{{count}} 区間を文字起こしできませんでした。"
   }
 }

@@ -5,7 +5,7 @@ mod state;
 mod windows;
 
 use commands::{
-  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, platform, practice, recognition, recognize,
+  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, platform, practice, recognition, recognize, recording,
   settings, semantics, thumbnails, updater,
 };
 use state::AppState;
@@ -108,6 +108,8 @@ pub fn run() {
       elements::load_elements,
       elements::upsert_elements,
       elements::delete_elements,
+      elements::unit_element_times,
+      elements::unit_has_recordings,
       recognition::get_recognitions,
       recognition::upsert_recognition,
       recognition::set_user_override,
@@ -133,6 +135,7 @@ pub fn run() {
       commands::speech::set_speech_key,
       commands::speech::clear_speech_key,
       commands::speech::transcribe_audio,
+      commands::speech::transcribe_asset,
       commands::speech::test_speech_key,
       commands::speech::tidy_dictation,
       math::set_wolfram_appid,
@@ -148,6 +151,12 @@ pub fn run() {
       assets::delete_asset,
       assets::read_asset,
       assets::gc_assets,
+      recording::recording_begin,
+      recording::recording_save_manifest,
+      recording::recording_append,
+      recording::recording_finish_segment,
+      recording::recording_close,
+      recording::recording_unfinished,
       pdf::read_shared_pdf,
       pdf::take_pending_open_file,
       open_files::take_pending_import_files,
@@ -158,6 +167,7 @@ pub fn run() {
       archive::export_unit_archive,
       archive::import_unit_archive,
       archive::export_backup,
+      archive::restore_backup_file,
       archive::reset_local_data,
       archive::take_reset_incomplete,
       commands::share::detect_sync_folders,

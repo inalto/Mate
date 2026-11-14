@@ -568,7 +568,7 @@ fn import_metadata_survives_an_archive_round_trip() {
         .into_iter()
         .map(|p| p.import_metadata.unwrap())
         .collect();
-    let bytes = mate_core::archive::export_unit(&st, &report.unit_id, &assets).unwrap();
+    let bytes = mate_core::archive::export_unit(&st, &report.unit_id, &assets, mate_core::archive::Recordings::Exclude).unwrap();
 
     let mut other = Storage::open_in_memory().unwrap();
     let imported = mate_core::archive::import_archive(&mut other, &bytes, &assets).unwrap();

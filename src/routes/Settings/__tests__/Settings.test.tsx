@@ -22,7 +22,7 @@ vi.mock("../../../ipc/speech", () => ({
 }));
 vi.mock("../../../ipc/backup", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../ipc/backup")>()),
-  exportBackup: vi.fn(async () => ({ path: "C:/tmp/mate-backup-2026-10-23.zip", skipped: [] })),
+  exportBackup: vi.fn(async () => ({ path: "C:/tmp/mate-backup-2026-10-23.zip", skippedBooks: [], missingAudio: [] })),
   resetLocalData: vi.fn(async () => {}),
 }));
 vi.mock("../../../ipc/share", () => ({
@@ -339,15 +339,37 @@ describe("about and backup", () => {
     expect(exportBackup).toHaveBeenCalledTimes(1);
   });
 
-  it("download_backup_names_the_books_it_left_out", async () => {
+  it("download_backup_blocks_with_a_dialog_naming_the_books_it_left_out", async () => {
     vi.mocked(exportBackup).mockResolvedValueOnce({
       path: "C:/tmp/mate-backup-2026-10-24.zip",
-      skipped: [{ unitId: "u9", title: "Films", reason: "left out of the backup: larger than 512 MiB" }],
+      skippedBooks: ["Films", "Scans"],
+      missingAudio: ["Physics"],
     });
     renderPane();
     fireEvent.click(screen.getByRole("button", { name: "Download backup" }));
-    expect(await screen.findByText(/mate-backup-2026-10-24\.zip/)).toBeTruthy();
-    expect(screen.getByText("Films: left out of the backup: larger than 512 MiB")).toBeTruthy();
+    const dialog = await screen.findByRole("alertdialog", { name: "Some notebooks were not backed up" });
+    expect(dialog.textContent).toContain(
+      "These notebooks are too large to back up and are NOT in this backup: Films, Scans",
+    );
+    expect(dialog.textContent).toContain("Audio could not be found for recordings in: Physics");
+    const buttons = within(dialog).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["Close"]);
+    fireEvent.click(buttons[0]);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByText(/mate-backup-2026-10-24\.zip/)).toBeTruthy();
+  });
+
+  it("download_backup_names_books_whose_audio_is_missing_without_blocking", async () => {
+    vi.mocked(exportBackup).mockResolvedValueOnce({
+      path: "C:/tmp/mate-backup-2026-10-25.zip",
+      skippedBooks: [],
+      missingAudio: ["Physics", "Chemistry"],
+    });
+    renderPane();
+    fireEvent.click(screen.getByRole("button", { name: "Download backup" }));
+    expect(await screen.findByText(/mate-backup-2026-10-25\.zip/)).toBeTruthy();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByText("Audio could not be found for recordings in: Physics, Chemistry")).toBeTruthy();
   });
 
   it("reset_local_data_requires_confirmation", async () => {

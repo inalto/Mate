@@ -83,6 +83,22 @@ function save(tabs: Tab[], activeTabId: string | null): void {
   }
 }
 
+/** The tabs before and after a change the user asked for. */
+export type TabsSnapshot = Pick<TabsState, "tabs" | "activeTabId">;
+/**
+ * Takes over a change (returns true) to have it done later, or never; see setTabsGuard. `retry`
+ * runs the requested operation again on the tabs as they are then, without asking.
+ */
+export type TabsGuard = (prev: TabsSnapshot, next: TabsSnapshot, retry: () => void) => boolean;
+let guard: TabsGuard | null = null;
+/** A guard's retry is running: it is not asked again. */
+let retrying = false;
+
+/** Opening a page and closing a tab first ask `g` (the recording's "leave the notebook?" check). */
+export function setTabsGuard(g: TabsGuard | null): void {
+  guard = g;
+}
+
 export const useTabsStore = create<TabsState>((set, get) => {
   /** Apply a state change and persist it. */
   const commit = (tabs: Tab[], activeTabId: string | null) => {
@@ -91,6 +107,17 @@ export const useTabsStore = create<TabsState>((set, get) => {
   };
   const mapTab = (id: string, fn: (t: Tab) => Tab) =>
     commit(get().tabs.map((t) => (t.id === id ? fn(t) : t)), get().activeTabId);
+  /** The guard holds back the change from the current tabs to `next`; `op` is the operation to retry. */
+  const held = (next: TabsSnapshot, op: () => void): boolean =>
+    !retrying &&
+    !!guard?.({ tabs: get().tabs, activeTabId: get().activeTabId }, next, () => {
+      retrying = true;
+      try {
+        op();
+      } finally {
+        retrying = false;
+      }
+    });
 
   return {
     ...load(),
@@ -99,23 +126,25 @@ export const useTabsStore = create<TabsState>((set, get) => {
     openPage(pageId, opts) {
       const { tabs, activeTabId } = get();
       const wantNewTab = !!opts?.newTab || get().pendingNewTab;
-      if (get().pendingNewTab) set({ pendingNewTab: false });
       const shows = (t: Tab) => t.panes.some((p) => p.pageId === pageId);
       // Prefer the active tab so focusing a pane never jumps to another tab showing the same page.
       const showing = tabs.find((t) => t.id === activeTabId && shows(t)) ?? tabs.find(shows);
+      const active = tabs.find((t) => t.id === activeTabId);
+      let next: TabsSnapshot;
       if (showing) {
         const i = showing.panes.findIndex((p) => p.pageId === pageId) as PaneIndex;
-        commit(tabs.map((t) => (t.id === showing.id ? { ...t, focusedPaneIndex: i } : t)), showing.id);
-        return;
-      }
-      const active = tabs.find((t) => t.id === activeTabId);
-      if (wantNewTab || !active) {
+        next = { tabs: tabs.map((t) => (t.id === showing.id ? { ...t, focusedPaneIndex: i } : t)), activeTabId: showing.id };
+      } else if (wantNewTab || !active) {
         const tab = makeTab(pageId);
-        commit([...tabs, tab], tab.id);
-        return;
+        next = { tabs: [...tabs, tab], activeTabId: tab.id };
+      } else {
+        const panes = active.panes.map((p, i) => (i === active.focusedPaneIndex ? { pageId } : p)) as Tab["panes"];
+        next = { tabs: tabs.map((t) => (t.id === active.id ? withPanes(t, panes, t.focusedPaneIndex) : t)), activeTabId };
       }
-      const panes = active.panes.map((p, i) => (i === active.focusedPaneIndex ? { pageId } : p)) as Tab["panes"];
-      mapTab(active.id, (t) => withPanes(t, panes, t.focusedPaneIndex));
+      // Held back: the "new tab" request stays for when (if) the page opens.
+      if (held(next, () => get().openPage(pageId, opts))) return;
+      if (get().pendingNewTab) set({ pendingNewTab: false });
+      commit(next.tabs, next.activeTabId);
     },
 
     closeTab(id) {
@@ -124,6 +153,7 @@ export const useTabsStore = create<TabsState>((set, get) => {
       if (i < 0) return;
       const rest = tabs.filter((t) => t.id !== id);
       const next = activeTabId === id ? (rest[Math.min(i, rest.length - 1)]?.id ?? null) : activeTabId;
+      if (held({ tabs: rest, activeTabId: next }, () => get().closeTab(id))) return;
       commit(rest, next);
     },
 

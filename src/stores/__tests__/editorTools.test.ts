@@ -3,6 +3,7 @@ import type { Element } from "../../model/types";
 import { LIMITS } from "../../model/constants";
 import { el } from "../../tools/__tests__/fixtures";
 import { shapeFromDrag } from "../../shapes/geometry";
+import { recordingElement } from "../../recording/marker";
 
 const queue = vi.hoisted(() => ({
   enqueueUpsert: vi.fn(),
@@ -118,6 +119,20 @@ describe("editor store tools", () => {
     expect(s().elements.has("a")).toBe(false);
     expect(s().elements.size).toBe(LIMITS.MAX_ELEMENTS_PER_PAGE - 1);
     expect(queue.enqueueUpsert).not.toHaveBeenCalled();
+  });
+
+  it("a marker beyond the per-page marker cap is refused", async () => {
+    const cap = LIMITS.MAX_MARKERS_PER_PAGE;
+    const rec = { unitId: "u", spans: [], segments: [] };
+    const markers = Array.from({ length: cap - 1 }, (_, i) => recordingElement("pg", `m${i}`, "2026-11-14T09:00:00.000Z", { x: 0, y: 0 }, rec, "L"));
+    await load([a, ...markers]);
+    const s = () => useEditorStore.getState();
+    // The last place is still free; a stroke is never affected by the marker cap.
+    expect(s().addRecording(rec, { x: 0, y: 0 }, "L", "last")).toBe("last");
+    expect(s().addRecording(rec, { x: 0, y: 0 }, "L", "one-more")).toBeNull();
+    expect(s().elements.has("one-more")).toBe(false);
+    expect(s().elements.size).toBe(cap + 1);
+    expect(s().beginStroke()).toBe(true);
   });
 
   it("limit_toast_shown_when_page_full", async () => {

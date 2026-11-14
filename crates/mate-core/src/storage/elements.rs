@@ -3,12 +3,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{Connection, OptionalExtension, Row, params};
+use serde::Serialize;
 
 use super::recognition::invalidate_in;
 use super::{
     Result, Storage, StorageError, enum_col, enum_to_sql, json_col, opt_enum_col, opt_json_col,
 };
-use crate::model::{Element, now_iso};
+use crate::import::MAX_MARKERS_PER_PAGE;
+use crate::model::{Element, ElementType, now_iso};
 
 /// Maximum live elements on one page.
 pub(crate) const MAX_ELEMENTS_PER_PAGE: i64 = 5000;
@@ -18,6 +20,15 @@ pub(crate) const MAX_POINTS_PER_STROKE: usize = 50_000;
 const ELEMENT_COLS: &str = "id, page_id, type, points, color, width, height, is_highlighter, \
      pen_style, image_url, shape_type, fill_color, box_width, box_height, content, \
      classification, ui_group_id, created_at, updated_at, deleted_at, version, last_write_id";
+
+/// When an element of a unit was created, for the page ticks of a recording replay.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ElementTime {
+    pub id: String,
+    pub page_id: String,
+    pub created_at: String,
+}
 
 /// The parts of an element that change what its ink looks like to the tutor, in stored form.
 #[derive(PartialEq)]
@@ -73,6 +84,40 @@ impl Storage {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
+    /// Live elements of the unit's live pages created in [from, to] (RFC 3339), oldest first,
+    /// excluding `media`.
+    pub fn unit_element_times(&self, unit_id: &str, from: &str, to: &str) -> Result<Vec<ElementTime>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT e.id, e.page_id, e.created_at FROM elements e \
+             JOIN pages p ON p.id = e.page_id JOIN sections s ON s.id = p.section_id \
+             WHERE s.unit_id = ?1 AND e.created_at >= ?2 AND e.created_at <= ?3 \
+               AND e.type <> 'media' AND e.deleted_at IS NULL AND p.deleted_at IS NULL \
+               AND s.deleted_at IS NULL \
+             ORDER BY e.created_at, e.rowid",
+        )?;
+        let rows = stmt.query_map(params![unit_id, from, to], |r| {
+            Ok(ElementTime { id: r.get(0)?, page_id: r.get(1)?, created_at: r.get(2)? })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
+    /// Whether a live `media` element on a live page of the unit carries a `recording` block.
+    pub fn unit_has_recordings(&self, unit_id: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(
+            "SELECT e.content FROM elements e              JOIN pages p ON p.id = e.page_id JOIN sections s ON s.id = p.section_id              WHERE s.unit_id = ?1 AND e.type = 'media' AND e.deleted_at IS NULL                AND p.deleted_at IS NULL AND s.deleted_at IS NULL                AND e.content LIKE '%\"recording\"%'",
+        )?;
+        let rows = stmt.query_map(params![unit_id], |r| r.get::<_, Option<String>>(0))?;
+        for row in rows {
+            let Some(content) = row?.and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok()) else {
+                continue;
+            };
+            if content.get("recording").is_some_and(|r| r.is_object()) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Number of live elements on a page.
     pub fn count_elements(&self, page_id: &str) -> Result<i64> {
         count_in(&self.conn, page_id)
@@ -94,23 +139,31 @@ impl Storage {
         Ok(())
     }
 
-    /// Every asset id referenced by any element row (`image_url` and `content.pdfSourceKey`),
-    /// including soft-deleted rows: the trash can be restored. Purged rows are gone.
+    /// Every asset id referenced by any element row (`image_url`, `content.pdfSourceKey` and a
+    /// recording's `content.recording.segments[].assetId`), including soft-deleted rows: the trash
+    /// can be restored. Purged rows are gone.
     pub fn referenced_asset_ids(&self) -> Result<std::collections::HashSet<String>> {
         let mut stmt = self.conn.prepare(
-            "SELECT image_url, content FROM elements              WHERE image_url IS NOT NULL OR (content IS NOT NULL AND content LIKE '%pdfSourceKey%')",
+            "SELECT image_url, content FROM elements \
+             WHERE image_url IS NOT NULL OR (content IS NOT NULL \
+               AND (content LIKE '%pdfSourceKey%' OR content LIKE '%\"recording\"%'))",
         )?;
         let rows = stmt.query_map([], |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)))?;
         let mut ids = std::collections::HashSet::new();
         for row in rows {
             let (url, content) = row?;
             ids.extend(url);
-            if let Some(key) = content
-                .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-                .and_then(|v| v.get("pdfSourceKey").and_then(|k| k.as_str()).map(str::to_owned))
-            {
-                ids.insert(key);
-            }
+            let Some(content) = content.and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok()) else {
+                continue;
+            };
+            ids.extend(content.get("pdfSourceKey").and_then(|k| k.as_str()).map(str::to_owned));
+            let segments = content
+                .get("recording")
+                .and_then(|r| r.get("segments"))
+                .and_then(|s| s.as_array())
+                .into_iter()
+                .flatten();
+            ids.extend(segments.filter_map(|s| s.get("assetId").and_then(|a| a.as_str()).map(str::to_owned)));
         }
         Ok(ids)
     }
@@ -242,8 +295,19 @@ fn count_in(conn: &Connection, page_id: &str) -> Result<i64> {
     )?)
 }
 
+/// A stored row that is a recording marker: a `media` element whose content has a `recording` object.
+const MARKER_ROW: &str = "(type = 'media' AND content IS NOT NULL AND json_valid(content) \
+                          AND json_type(content, '$.recording') = 'object')";
+
+/// A recording marker: a `media` element whose content has a `recording` object.
+pub(crate) fn is_recording_marker(e: &Element) -> bool {
+    e.r#type == ElementType::Media
+        && e.content.as_ref().and_then(|c| c.get("recording")).is_some_and(serde_json::Value::is_object)
+}
+
 /// `Limit` if any element has too many points, or if a page would end up with more than
-/// [`MAX_ELEMENTS_PER_PAGE`] live elements after the batch.
+/// [`MAX_ELEMENTS_PER_PAGE`] live elements after the batch. Recording markers do not count there;
+/// a batch adding markers past [`MAX_MARKERS_PER_PAGE`] on a page is refused.
 fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
     if let Some(e) = elements
         .iter()
@@ -256,14 +320,16 @@ fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
         )));
     }
 
-    // Ids that would become live on each page.
+    // Ids that would become live on each page. A recording marker is exempt: refusing it would leave
+    // the lecture unreachable.
     let mut incoming: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for e in elements.iter().filter(|e| e.deleted_at.is_none()) {
+    for e in elements.iter().filter(|e| e.deleted_at.is_none() && !is_recording_marker(e)) {
         incoming.entry(&e.page_id).or_default().insert(&e.id);
     }
-    let mut is_live = conn.prepare(
-        "SELECT 1 FROM elements WHERE id = ?1 AND page_id = ?2 AND deleted_at IS NULL",
-    )?;
+    // A live row that is a marker now stays outside the count (it is not counted below either).
+    let mut is_live = conn.prepare(&format!(
+        "SELECT 1 FROM elements WHERE id = ?1 AND page_id = ?2 AND deleted_at IS NULL AND NOT {MARKER_ROW}"
+    ))?;
     for (page_id, ids) in incoming {
         let mut added = 0i64;
         for id in ids {
@@ -275,10 +341,51 @@ fn check_limits(conn: &Connection, elements: &[Element]) -> Result<()> {
                 added += 1;
             }
         }
-        let total = count_in(conn, page_id)? + added;
+        let counted: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM elements WHERE page_id = ?1 AND deleted_at IS NULL AND NOT {MARKER_ROW}"),
+            [page_id],
+            |r| r.get(0),
+        )?;
+        let total = counted + added;
         if total > MAX_ELEMENTS_PER_PAGE {
             return Err(StorageError::Limit(format!(
                 "page {page_id} would have {total} elements (max {MAX_ELEMENTS_PER_PAGE})"
+            )));
+        }
+    }
+
+    // Markers have their own small cap, so they stay bounded too. Changing a marker already there
+    // (a transcript saved) is never refused.
+    let mut markers: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for e in elements.iter().filter(|e| e.deleted_at.is_none() && is_recording_marker(e)) {
+        markers.entry(&e.page_id).or_default().insert(&e.id);
+    }
+    let mut is_live_marker = conn.prepare(&format!(
+        "SELECT 1 FROM elements WHERE id = ?1 AND page_id = ?2 AND deleted_at IS NULL AND {MARKER_ROW}"
+    ))?;
+    for (page_id, ids) in markers {
+        let mut added = 0i64;
+        for id in ids {
+            if is_live_marker
+                .query_row(params![id, page_id], |_| Ok(()))
+                .optional()?
+                .is_none()
+            {
+                added += 1;
+            }
+        }
+        if added == 0 {
+            continue;
+        }
+        let stored: i64 = conn.query_row(
+            &format!("SELECT COUNT(*) FROM elements WHERE page_id = ?1 AND deleted_at IS NULL AND {MARKER_ROW}"),
+            [page_id],
+            |r| r.get(0),
+        )?;
+        let total = stored + added;
+        if total > MAX_MARKERS_PER_PAGE as i64 {
+            return Err(StorageError::Limit(format!(
+                "page {page_id} would have {total} recordings (max {MAX_MARKERS_PER_PAGE})"
             )));
         }
     }

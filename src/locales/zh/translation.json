@@ -308,6 +308,33 @@
       "name": "Preset name"
     }
   },
+  "backup": {
+    "skipped": {
+      "title": "部分笔记本未备份",
+      "body": "以下笔记本过大，无法备份，未包含在此备份中：{{titles}}"
+    },
+    "missingAudio": "找不到以下笔记本中录音的音频：{{titles}}",
+    "restore": {
+      "label": "从备份还原…",
+      "hint": "将 Mate 备份 zip 中的笔记本及其录音添加到你现有的笔记本中",
+      "filter": "Mate 备份",
+      "title": "还原此备份？",
+      "body": "备份中的笔记本将添加到你现有的笔记本中，不会替换或删除任何内容。",
+      "confirm": "还原",
+      "done_other": "已还原 {{count}} 个笔记本。",
+      "failed": "无法还原：{{titles}}",
+      "lostRecordings": "以下笔记本中的录音已还原，但没有音频：{{titles}}",
+      "rejectedAudio_other": "备份中有 {{count}} 个音频文件无效，已跳过。",
+      "error": "无法还原备份。未做任何更改。",
+      "busy": "正在还原…",
+      "resultTitle": "备份已还原",
+      "resultTitleNone": "未还原任何内容",
+      "errorUnknown": "还原意外中断。部分笔记本可能已还原。"
+    },
+    "reset": {
+      "recordingOpen": "仍有录音正在保存。请先停止录音，或重新启动 Mate 以便恢复录音，然后重试。"
+    }
+  },
   "common": {
     "cancel": "取消",
     "save": "保存",
@@ -578,7 +605,8 @@
       "moveTabRight": "标签页右移",
       "openPageWindow": "在新窗口中打开页面",
       "palette": "搜索与操作",
-      "shortcuts": "键盘快捷键"
+      "shortcuts": "键盘快捷键",
+      "recordingToggle": "开始或停止录音"
     }
   },
   "palette": {
@@ -834,6 +862,10 @@
     "searchable": "可搜索文本",
     "latexHint": "保存为 .tex 文件；图片将转换为占位符。",
     "mateHint": "导出此页面所属的整个笔记本。",
+    "recordings": {
+      "label": "包含录音",
+      "hint": "录音可能包含他人的声音。"
+    },
     "shareHint": "如需将此笔记本发送给他人，请使用笔记本菜单中的“分享…”。",
     "shareInstead": "改为分享…",
     "annotations": "批注",
@@ -1422,5 +1454,70 @@
     "large": "Large",
     "useForNew": "Use for new pages",
     "done": "Done"
+  },
+  "recording": {
+    "title": "录音 {{date}}",
+    "tooShort": "未录到任何内容。",
+    "recovered": "已恢复一段被中断的录音。",
+    "dictationBusy": "请先停止录音再听写。",
+    "limitSoon": "录音将在 5 分钟后停止（上限 4 小时）。",
+    "limit": "已达到 4 小时上限。录音已保存。",
+    "writeFailed": "录音因无法保存而停止。已录内容已保留。",
+    "failed": "录音因麦克风问题而停止。已录内容已保留。",
+    "busy": "已有录音正在进行。",
+    "dictationActive": "请先结束听写再录音。",
+    "start": "录制音频",
+    "stop": "停止录音",
+    "pause": "暂停",
+    "resume": "继续",
+    "pill": "录音 {{time}}",
+    "paused": "已暂停 {{time}}",
+    "interrupted": "未在录音 {{time}}",
+    "gap": "Mate 在后台期间有 {{time}} 未录音。",
+    "menu": "录音",
+    "keptForLater": "无法将录音添加到页面。录音已保留，将在下次启动 Mate 时添加。",
+    "leave": {
+      "title": "停止录音？",
+      "body": "录音属于此笔记本。离开将停止录音并保存。",
+      "stop": "停止并离开",
+      "stay": "留在此处"
+    }
+  },
+  "replay": {
+    "bar": "录音回放",
+    "play": "播放",
+    "pause": "暂停",
+    "back": "后退 10 秒",
+    "forward": "前进 10 秒",
+    "position": "位置",
+    "time": "{{position}} / {{total}}",
+    "speed": "速度",
+    "follow": "跟随页面",
+    "transcript": "转写文本",
+    "close": "关闭",
+    "notRecorded": "这是在没有录音时写下的。",
+    "missingSegment": "此录音缺少一部分。"
+  },
+  "transcript": {
+    "title": "转写文本",
+    "start": "转写",
+    "progress": "正在转写第 {{done}} 段，共 {{total}} 段",
+    "cancel": "取消",
+    "failedPart": "这一段无法转写。",
+    "retry": "重试",
+    "lostMarker": "录音已被移除，因此转写文本未保存。",
+    "busyOther": "正在转写另一段录音。",
+    "retryAt": "重试 {{time}} 处的这一段",
+    "copy": "复制",
+    "insert": "作为文本框插入",
+    "empty": "未识别到语音。",
+    "close": "关闭转写文本",
+    "replace": {
+      "title": "重新转写？",
+      "body": "这将替换当前的转写文本。"
+    },
+    "copied": "已复制转写文本。",
+    "inserted": "已将转写文本添加到页面。",
+    "partial_other": "有 {{count}} 段无法转写。"
   }
 }

@@ -265,7 +265,7 @@
     "backup": {
       "download": {
         "label": "Download backup",
-        "hint": "One zip holding a .mate file per book. To restore, unzip it and import each .mate file."
+        "hint": "One zip holding a .mate file per book, with recording audio beside them. Restore it with Restore from backup; a single .mate taken from an unzipped backup can still be imported, but without its recording audio."
       },
       "saved": "Backup saved to {{path}}",
       "shared": "Backup shared",
@@ -304,6 +304,35 @@
       "rename": "Rename",
       "delete": "Delete",
       "name": "Preset name"
+    }
+  },
+  "backup": {
+    "skipped": {
+      "title": "Some notebooks were not backed up",
+      "body": "These notebooks are too large to back up and are NOT in this backup: {{titles}}"
+    },
+    "missingAudio": "Audio could not be found for recordings in: {{titles}}",
+    "restore": {
+      "label": "Restore from backup…",
+      "hint": "Adds the notebooks of a Mate backup zip, with their recordings, beside the ones you have",
+      "filter": "Mate backup",
+      "title": "Restore this backup?",
+      "body": "Notebooks from the backup are added beside the ones you already have. Nothing is replaced or deleted.",
+      "confirm": "Restore",
+      "done_one": "{{count}} notebook restored.",
+      "done_other": "{{count}} notebooks restored.",
+      "failed": "Could not be restored: {{titles}}",
+      "lostRecordings": "Recordings in these notebooks came back without their audio: {{titles}}",
+      "rejectedAudio_one": "{{count}} audio file in the backup was not valid and was skipped.",
+      "rejectedAudio_other": "{{count}} audio files in the backup were not valid and were skipped.",
+      "error": "The backup could not be restored. Nothing was changed.",
+      "busy": "Restoring…",
+      "resultTitle": "Backup restored",
+      "resultTitleNone": "Nothing was restored",
+      "errorUnknown": "The restore stopped unexpectedly. Some notebooks may have been restored."
+    },
+    "reset": {
+      "recordingOpen": "A recording is still being saved. Stop it, or restart Mate so it can be recovered, then try again."
     }
   },
   "common": {
@@ -576,7 +605,8 @@
       "moveTabRight": "Move tab right",
       "openPageWindow": "Open page in new window",
       "palette": "Search and actions",
-      "shortcuts": "Keyboard shortcuts"
+      "shortcuts": "Keyboard shortcuts",
+      "recordingToggle": "Start or stop recording"
     }
   },
   "palette": {
@@ -832,6 +862,10 @@
     "searchable": "Searchable text",
     "latexHint": "Saves a .tex file; pictures become image placeholders.",
     "mateHint": "Exports the whole book this page belongs to.",
+    "recordings": {
+      "label": "Include recordings",
+      "hint": "Recordings can contain other people's voices."
+    },
     "shareHint": "To send this book to someone, use Share… from the book menu.",
     "shareInstead": "Share instead…",
     "annotations": "Annotations",
@@ -1433,5 +1467,71 @@
     "large": "Large",
     "useForNew": "Use for new pages",
     "done": "Done"
+  },
+  "recording": {
+    "title": "Recording {{date}}",
+    "tooShort": "Nothing was recorded.",
+    "recovered": "A recording that was interrupted was recovered.",
+    "dictationBusy": "Stop the recording to dictate.",
+    "limitSoon": "Recording stops in 5 minutes (4-hour limit).",
+    "limit": "The 4-hour limit was reached. The recording was saved.",
+    "writeFailed": "The recording stopped because it could not be saved. What was recorded so far is kept.",
+    "failed": "The recording stopped because of a microphone problem. What was recorded so far is kept.",
+    "busy": "A recording is already running.",
+    "dictationActive": "Finish dictating before you record.",
+    "start": "Record audio",
+    "stop": "Stop recording",
+    "pause": "Pause",
+    "resume": "Resume",
+    "pill": "Recording {{time}}",
+    "paused": "Paused {{time}}",
+    "interrupted": "Not recording {{time}}",
+    "gap": "{{time}} was not recorded while Mate was in the background.",
+    "menu": "Recording",
+    "keptForLater": "The recording could not be added to the page. It is kept and will be added the next time Mate starts.",
+    "leave": {
+      "title": "Stop recording?",
+      "body": "The recording belongs to this notebook. Leaving it stops the recording and saves it.",
+      "stop": "Stop and leave",
+      "stay": "Stay"
+    }
+  },
+  "replay": {
+    "bar": "Recording replay",
+    "play": "Play",
+    "pause": "Pause",
+    "back": "Back 10 seconds",
+    "forward": "Forward 10 seconds",
+    "position": "Position",
+    "time": "{{position}} / {{total}}",
+    "speed": "Speed",
+    "follow": "Follow pages",
+    "transcript": "Transcript",
+    "close": "Close",
+    "notRecorded": "This was written while nothing was being recorded.",
+    "missingSegment": "Part of this recording is missing."
+  },
+  "transcript": {
+    "title": "Transcript",
+    "start": "Transcribe",
+    "progress": "Transcribing part {{done}} of {{total}}",
+    "cancel": "Cancel",
+    "failedPart": "This part could not be transcribed.",
+    "retry": "Retry",
+    "lostMarker": "The recording was removed, so the transcript was not saved.",
+    "busyOther": "Another recording is being transcribed.",
+    "retryAt": "Retry part at {{time}}",
+    "copy": "Copy",
+    "insert": "Insert as text box",
+    "empty": "No speech was recognised.",
+    "close": "Close transcript",
+    "replace": {
+      "title": "Transcribe again?",
+      "body": "This replaces the current transcript."
+    },
+    "copied": "Transcript copied.",
+    "inserted": "Transcript added to the page.",
+    "partial_one": "{{count}} part could not be transcribed.",
+    "partial_other": "{{count}} parts could not be transcribed."
   }
 }

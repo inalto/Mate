@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use mate_core::assets::{self, AssetInfo, MAX_ASSET_BYTES};
+use mate_core::recording::RecordingDir;
+use mate_core::storage::Storage;
 use tauri::{AppHandle, Manager, State};
 use tauri::ipc::{Request, Response};
 
@@ -75,13 +77,16 @@ pub fn read_asset(state: State<'_, AppState>, id: String) -> Result<Response, St
 /// Removes every asset no element (live or in the trash) references; returns how many.
 #[tauri::command]
 pub fn gc_assets(state: State<'_, AppState>) -> Result<usize, String> {
-    let referenced = state
-        .storage
-        .lock()
-        .map_err(|e| e.to_string())?
-        .referenced_asset_ids()
-        .map_err(|e| e.to_string())?;
-    Ok(assets::gc_unreferenced(&assets_dir(&state), &referenced, GC_GRACE))
+    let storage = state.storage.lock().map_err(|e| e.to_string())?;
+    collect_garbage(&storage, &state.recordings, &assets_dir(&state), GC_GRACE)
+}
+
+/// Removes the assets neither an element nor an unfinished recording's manifest names. A manifest that
+/// cannot be read skips the whole collection: its segments cannot be told apart from garbage.
+fn collect_garbage(storage: &Storage, recordings: &RecordingDir, dir: &Path, grace: Duration) -> Result<usize, String> {
+    let mut referenced = storage.referenced_asset_ids().map_err(|e| e.to_string())?;
+    referenced.extend(recordings.referenced_asset_ids().map_err(|e| e.to_string())?);
+    Ok(assets::gc_unreferenced(dir, &referenced, grace))
 }
 
 #[cfg(test)]
@@ -101,6 +106,60 @@ mod tests {
         assert_eq!(info.mime, "image/png");
         assert!(save_from_path(&dir, &txt).is_err());
         assert!(save_from_path(&dir, &root).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A minimal WebM (EBML) header.
+    const WEBM: &[u8] = b"\x1A\x45\xDF\xA3\x9F\x42\x86\x81";
+
+    fn gc_root(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("mate-gc-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    /// Makes `path` look older than the GC grace.
+    fn age(path: &Path) {
+        let old = std::time::SystemTime::now() - Duration::from_secs(2 * 3600);
+        fs::File::options().write(true).open(path).unwrap().set_modified(old).unwrap();
+    }
+
+    #[test]
+    fn gc_keeps_segments_named_by_an_unfinished_recording() {
+        let root = gc_root("manifest");
+        let dir = root.join("assets");
+        let recordings = RecordingDir::new(root.join("recordings"));
+        let storage = Storage::open_in_memory().unwrap();
+        let rec_id = mate_core::model::new_id();
+        recordings.begin(&rec_id, &serde_json::json!({"recId": rec_id, "segments": []})).unwrap();
+        recordings.append(&rec_id, 0, WEBM).unwrap();
+        let seg = recordings.finish_segment(&rec_id, 0, &dir).unwrap().unwrap();
+        recordings
+            .save_manifest(&rec_id, &serde_json::json!({"recId": rec_id, "segments": [{"assetId": seg.id, "durationMs": 1000}]}))
+            .unwrap();
+        age(&seg.path);
+        assert_eq!(collect_garbage(&storage, &recordings, &dir, GC_GRACE).unwrap(), 0);
+        assert!(assets::asset_path(&dir, &seg.id).is_some(), "a segment named by a manifest is kept");
+        recordings.close(&rec_id).unwrap();
+        assert_eq!(collect_garbage(&storage, &recordings, &dir, GC_GRACE).unwrap(), 1);
+        assert!(assets::asset_path(&dir, &seg.id).is_none());
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn gc_is_skipped_when_a_manifest_cannot_be_read() {
+        let root = gc_root("unreadable");
+        let dir = root.join("assets");
+        let recordings = RecordingDir::new(root.join("recordings"));
+        let storage = Storage::open_in_memory().unwrap();
+        let orphan = assets::save_sniffed(&dir, WEBM).unwrap();
+        age(&orphan.path);
+        let broken = root.join("recordings").join(mate_core::model::new_id());
+        fs::create_dir_all(&broken).unwrap();
+        fs::write(broken.join("manifest.json"), b"{ not json").unwrap();
+        assert!(collect_garbage(&storage, &recordings, &dir, GC_GRACE).is_err());
+        assert!(assets::asset_path(&dir, &orphan.id).is_some(), "nothing is collected");
         let _ = fs::remove_dir_all(&root);
     }
 }

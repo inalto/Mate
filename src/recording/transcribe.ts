@@ -1,0 +1,200 @@
+// The timed transcript of a finished recording: its segments sent one at a time to the configured
+// speech service (Rust reads each file; consent, key and address are checked there and by the
+// caller first), each one's sentences offset by the segment's start, and the result stored on the
+// marker when the run ends: as one history entry while the marker's page is loaded in either pane,
+// else straight into storage (the replay's Follow pages may have turned the pane away). The job
+// works from the recording as captured when it started. A part that fails is listed in `failed`, so the
+// panel can offer to retry just that part; silence is no failure, only no sentences.
+import { showToast } from "../components/Toast";
+import i18n from "../i18n";
+import { loadElements, upsertElements } from "../ipc/elements";
+import { elementsQueue } from "../ipc/elementsQueue";
+import { isRecognizeError } from "../ipc/recognize";
+import { getSpeechStatus, transcribeAsset } from "../ipc/speech";
+import { languageHint } from "../speech/dictate";
+import { speechErrorText } from "../speech/errors";
+import type { EditorStore } from "../stores/editor";
+import { editorForPane } from "../stores/focusedEditor";
+import { segmentAt } from "./timeline";
+import { contentOf } from "../model/content";
+import type { Element } from "../model/types";
+import { recordingOf, type RecordingContent, type Segment, type TimedSentence, type Transcript } from "./types";
+
+export interface TranscribeProgress {
+  done: number;
+  total: number;
+  failed: number[];
+}
+
+export interface TranscribeOptions {
+  /** Only these segment indexes (a retry); their earlier sentences are replaced, the rest kept. */
+  only?: number[];
+  onProgress?(p: TranscribeProgress): void;
+  /** Stops the run: the parts not done are marked failed (the part in flight is not waited for). */
+  signal?: AbortSignal;
+  /**
+   * The marker's page and recording as the caller sees it (needed when the marker's page is not the
+   * one loaded in the pane); default: the marker in the pane's loaded page.
+   */
+  source?: { pageId: string; rec: RecordingContent };
+  /** Called with the transcript once it is saved. */
+  onSaved?(t: Transcript): void;
+  /** Called with the transcript when it could not be written (the marker still there). */
+  onUnsaved?(t: Transcript): void;
+}
+
+/** Errors that will fail every following part too: the run stops at the first. */
+const FATAL = new Set(["disabled", "noKey", "noAddress", "badAddress", "auth", "billing"]);
+
+const ABORTED = Symbol("aborted");
+
+/** `p`, or a rejection with ABORTED as soon as `signal` aborts. */
+function abortable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(ABORTED);
+    if (signal.aborted) return onAbort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+/** `el` with `transcript` on its recording (and a fresh `updatedAt`, as the store stamps edits). */
+function withTranscript(el: Element, rec: RecordingContent, transcript: Transcript): Element {
+  return { ...el, updatedAt: new Date().toISOString(), content: { ...contentOf<Record<string, unknown>>(el), recording: { ...rec, transcript } } };
+}
+
+/** How saving a transcript ended: stored, the marker gone, or not written (an error). */
+type Saved = "saved" | "gone" | "failed";
+
+/** Through `s`, which has the marker's page loaded: gone when the marker is not on it. */
+function saveIn(s: EditorStore, markerId: string, transcript: Transcript): Saved {
+  const el = s.getState().elements.get(markerId);
+  if (!el || el.deletedAt || !recordingOf(el)) return "gone";
+  return s.getState().setRecordingTranscript(markerId, transcript) ? "saved" : "failed";
+}
+
+/**
+ * Stores `transcript` on marker `markerId` of page `pageId`: through the store (one history entry)
+ * of this pane or the other one while that page is loaded there (presenting or not), else in
+ * storage.
+ */
+async function saveTranscript(store: EditorStore, markerId: string, pageId: string, transcript: Transcript): Promise<Saved> {
+  const showing = () => [store, editorForPane(0), editorForPane(1)].find((s) => s?.getState().loadedPageId === pageId);
+  const now = showing();
+  if (now) return saveIn(now, markerId, transcript);
+  try {
+    await elementsQueue.flushAll(); // edits of that page still queued land first
+    const el = (await loadElements(pageId)).find((e) => e.id === markerId && !e.deletedAt);
+    // The page was opened meanwhile: its copy in that pane is the one to change.
+    const opened = showing();
+    if (opened) return saveIn(opened, markerId, transcript);
+    const rec = el ? recordingOf(el) : null;
+    if (!el || !rec) return "gone";
+    await upsertElements([withTranscript(el, rec, transcript)]);
+    return "saved";
+  } catch (err) {
+    console.error("saving the transcript failed", err);
+    return "failed";
+  }
+}
+
+/** Audio ms at which each segment starts. */
+const startsOf = (segments: Segment[]): number[] => {
+  let at = 0;
+  return segments.map((s) => {
+    const start = at;
+    at += s.durationMs;
+    return start;
+  });
+};
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+/**
+ * The service's sentences of one segment on the recording's timeline: offset by `startMs`, kept
+ * inside the segment (a start never reaches its end, so it stays this segment's), text trimmed.
+ */
+function placed(out: unknown, startMs: number, durationMs: number): TimedSentence[] {
+  if (!Array.isArray(out)) return [];
+  const res: TimedSentence[] = [];
+  for (const s of out as Partial<TimedSentence>[]) {
+    const text = typeof s?.text === "string" ? s.text.trim() : "";
+    if (!text) continue;
+    const from = clamp(Number(s.startMs) || 0, 0, Math.max(0, durationMs - 1));
+    const to = clamp(Number(s.endMs) || 0, from, durationMs);
+    res.push({ startMs: startMs + from, endMs: startMs + to, text });
+  }
+  return res;
+}
+
+/** Sends segments one at a time, offsets each by its start, stores the result on the marker. Resolves to the indexes that failed. */
+export async function transcribeRecording(store: EditorStore, markerId: string, opts: TranscribeOptions = {}): Promise<number[]> {
+  const own = store.getState().elements.get(markerId);
+  const source = opts.source ?? (own && !own.deletedAt && recordingOf(own) ? { pageId: own.pageId, rec: recordingOf(own)! } : null);
+  if (!source) return [];
+  const rec = source.rec;
+  const n = rec.segments.length;
+  const todo = [...new Set(opts.only ?? rec.segments.map((_, i) => i))].filter((i) => Number.isInteger(i) && i >= 0 && i < n).sort((a, b) => a - b);
+  if (todo.length === 0) return [];
+  const { provider, model } = await getSpeechStatus();
+  const language = languageHint();
+  const starts = startsOf(rec.segments);
+  const got: TimedSentence[] = [];
+  const failed: number[] = [];
+  /** The first error, and the parts left undone because the user cancelled (not failures to report). */
+  let error: { e: unknown } | null = null;
+  let cancelled = 0;
+  let stop = false;
+  const report = (done: number) => opts.onProgress?.({ done, total: todo.length, failed: [...failed] });
+  for (let k = 0; k < todo.length; k++) {
+    const i = todo[k];
+    if (stop || opts.signal?.aborted) {
+      failed.push(i);
+      if (!stop) cancelled++;
+      continue;
+    }
+    report(k);
+    const seg = rec.segments[i];
+    try {
+      const out = await abortable(transcribeAsset(seg.assetId, seg.durationMs, language), opts.signal);
+      got.push(...placed(out, starts[i], seg.durationMs));
+    } catch (e) {
+      failed.push(i);
+      if (e === ABORTED) {
+        cancelled++;
+        continue;
+      }
+      error ??= { e };
+      // A missing key or consent fails every later part too: they are marked failed unsent.
+      if (isRecognizeError(e) && FATAL.has(e.kind)) stop = true;
+    }
+  }
+  report(todo.length);
+  const count = failed.length - cancelled;
+  if (error !== null && count > 0) {
+    const why = speechErrorText(error.e);
+    showToast(todo.length === 1 ? why : `${i18n.t("transcript.partial", { count })} ${why}`);
+  }
+  const redone = new Set(todo);
+  const prev = opts.only ? rec.transcript : undefined;
+  const keep = (prev?.segments ?? []).filter((x) => !redone.has(segmentAt(rec.segments, x.startMs).index));
+  const stillFailed = [...new Set([...(prev?.failed ?? []).filter((i) => !redone.has(i)), ...failed])].sort((a, b) => a - b);
+  const transcript: Transcript = {
+    provider,
+    model,
+    ...(language ? { language } : {}),
+    segments: [...keep, ...got].sort((a, b) => a.startMs - b.startMs),
+    ...(stillFailed.length > 0 ? { failed: stillFailed } : {}),
+  };
+  // The marker may have been deleted meanwhile: the result is dropped, and the user told. One that
+  // could not be written is handed back unsaved, so the panel keeps it for another try.
+  const saved = await saveTranscript(store, markerId, source.pageId, transcript);
+  if (saved === "saved") opts.onSaved?.(transcript);
+  else if (saved === "gone") showToast(i18n.t("transcript.lostMarker"));
+  else {
+    showToast(i18n.t("errors.generic"));
+    opts.onUnsaved?.(transcript);
+  }
+  return failed;
+}

@@ -12,6 +12,7 @@ import { getSpeechStatus, listSpeechProviders, tidyDictation, transcribeAudio } 
 import { isMathBox } from "../math/mathBox";
 import { contentOf, type TextBoxContent } from "../model/content";
 import type { Element, Settings } from "../model/types";
+import { isRecordingActive } from "../recording/session";
 import type { EditorStore } from "../stores/editor";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { navigateTo } from "../stores/navigation";
@@ -21,6 +22,7 @@ import { sanitizeHtml } from "../text/sanitize";
 import { defaultTextAttributes, textAttrsOf, textBoxElement } from "../text/textBox";
 import { withMeta } from "../tools/spatialIndex";
 import { topZ } from "../tools/zorder";
+import { formatElapsed } from "./elapsed";
 import { speechErrorText } from "./errors";
 import { checkLatex, insertMathBox, latexForPlain } from "./mathInsert";
 import { RecorderError, startRecording, type Recorder } from "./recorder";
@@ -40,11 +42,7 @@ interface DictationState {
   askConsent: { provider: string } | null;
 }
 
-/** `ms` as m:ss (the recording's elapsed time on the button). */
-export const formatElapsed = (ms: number): string => {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-};
+export { formatElapsed };
 
 export const useDictation = create<DictationState>(() => ({ phase: "idle", startedAt: null, askConsent: null }));
 
@@ -58,7 +56,8 @@ let origin: { store: EditorStore; pageId: string } | null = null;
 /** Bumped by `cancelDictation`: a start or transcription still in flight then drops its result. */
 let session = 0;
 
-const settingsAction = () => ({ label: i18n.t("speech.openSettings"), onClick: () => navigateTo("/settings#dictation") });
+/** The toast action that opens Settings, Dictation. */
+export const settingsAction = () => ({ label: i18n.t("speech.openSettings"), onClick: () => navigateTo("/settings#dictation") });
 
 /** The text box (not an equation) the focused pane is editing, if any. */
 function editedTextBox(store: EditorStore = getFocusedEditor()): { store: EditorStore; id: string } | null {
@@ -144,7 +143,7 @@ export function insertDictation(
 }
 
 /** The language hint for the service: the interface language, unless it follows the system. */
-function languageHint(): string | undefined {
+export function languageHint(): string | undefined {
   if (useSettingsStore.getState().settings.language === "system") return undefined;
   return uiLanguage();
 }
@@ -240,6 +239,11 @@ function recorderFailed(rec: () => Recorder | null, e: RecorderError): void {
 
 async function begin(): Promise<void> {
   if (useDictation.getState().phase !== "idle") return;
+  if (isRecordingActive()) {
+    pending = null;
+    showToast(i18n.t("recording.dictationBusy"));
+    return;
+  }
   const into = pending ?? editedTextBox();
   pending = null;
   // Synchronous, so a second press while the setup is checked or the microphone opens is ignored.
@@ -339,7 +343,7 @@ async function finish(): Promise<void> {
 }
 
 /** The label of the configured speech service, for the consent question. */
-async function providerLabel(): Promise<string> {
+export async function providerLabel(): Promise<string> {
   const id = useSettingsStore.getState().settings.speechProvider;
   try {
     return (await listSpeechProviders()).find((p) => p.id === id)?.label ?? id;
@@ -353,6 +357,11 @@ export async function toggleDictation(): Promise<void> {
   const { phase, askConsent } = useDictation.getState();
   if (phase === "starting" || phase === "transcribing" || askConsent) return;
   if (phase === "recording") return finish();
+  if (isRecordingActive()) {
+    pending = null;
+    showToast(i18n.t("recording.dictationBusy"));
+    return;
+  }
   const consent = useSettingsStore.getState().settings.speechConsent;
   if (consent === false) {
     pending = null;

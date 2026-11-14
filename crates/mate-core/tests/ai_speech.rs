@@ -6,7 +6,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use mate_core::ai::provider::AiError;
-use mate_core::ai::speech::{MAX_AUDIO_BYTES, effective_base_url, spec, transcribe};
+use mate_core::ai::speech::{
+    MAX_AUDIO_BYTES, NO_TEXT, TimedText, effective_base_url, spec, timed_reply, transcribe, transcribe_timed,
+};
 
 #[derive(Debug, Clone, Default)]
 struct Seen {
@@ -208,6 +210,85 @@ fn a_second_failure_is_reported() {
     let r = transcribe(spec("custom").unwrap(), "", "", &base, vec![0], "audio/webm", None, false);
     assert!(matches!(r, Err(AiError::Network(_))), "{r:?}");
     assert_eq!(seen.lock().unwrap().len(), 2, "only one retry");
+}
+
+fn timed(start_ms: u64, end_ms: u64, text: &str) -> TimedText {
+    TimedText { start_ms, end_ms, text: text.into() }
+}
+
+#[test]
+fn timed_reply_reads_segments() {
+    let body = r#"{"text":"a b","segments":[{"start":0.0,"end":1.5,"text":" a"},{"start":1.5,"end":3.25,"text":" b"},{"start":3.25,"end":4.0,"text":"  "}]}"#;
+    assert_eq!(timed_reply(200, body, 10_000).unwrap(), [timed(0, 1500, "a"), timed(1500, 3250, "b")]);
+}
+
+#[test]
+fn timed_reply_clamps_into_the_segment() {
+    let body = r#"{"text":"a b","segments":[{"start":-0.2,"end":0.4,"text":"a"},{"start":2.9996,"end":3.6,"text":"b"}]}"#;
+    assert_eq!(timed_reply(200, body, 3_000).unwrap(), [timed(0, 400, "a"), timed(3000, 3000, "b")]);
+}
+
+#[test]
+fn timed_reply_without_segments_is_one_sentence() {
+    assert_eq!(timed_reply(200, r#"{"text":" hello there "}"#, 4_000).unwrap(), [timed(0, 4000, "hello there")]);
+    assert_eq!(timed_reply(200, r#"{"text":"hello","segments":[]}"#, 4_000).unwrap(), [timed(0, 4000, "hello")]);
+}
+
+#[test]
+fn timed_reply_with_no_text_is_no_text_error() {
+    for body in [r#"{"text":""}"#, r#"{"text":"  ","segments":[{"start":0,"end":1,"text":" "}]}"#] {
+        let r = timed_reply(200, body, 1_000);
+        assert!(matches!(&r, Err(AiError::InvalidResponse(m)) if m == NO_TEXT), "{r:?}");
+    }
+    assert!(matches!(timed_reply(401, "{}", 1_000), Err(AiError::Auth)));
+}
+
+#[test]
+fn the_request_asks_for_verbose_json() {
+    let (base, seen) = stub(200, r#"{"text":"a","segments":[{"start":0.5,"end":1.0,"text":"a"}]}"#);
+    let r = transcribe_timed(spec("custom").unwrap(), "sk-t", "", &base, b"WEBM".to_vec(), "video/webm", Some("it"), false, 5_000);
+    assert_eq!(r.unwrap(), [timed(500, 1000, "a")]);
+    let seen = seen.lock().unwrap()[0].clone();
+    assert_eq!(seen.path, "/audio/transcriptions");
+    assert_eq!(seen.header("authorization"), Some("Bearer sk-t"));
+    let body = seen.body_text();
+    assert!(body.contains("name=\"response_format\"\r\n\r\nverbose_json\r\n"), "{body}");
+    assert!(body.contains("name=\"timestamp_granularities[]\"\r\n\r\nsegment\r\n"), "{body}");
+    assert!(body.contains("name=\"language\"\r\n\r\nit\r\n"), "{body}");
+    // WebM audio sniffs as video: it is sent as audio.
+    assert!(body.contains(r#"filename="audio.webm""#) && body.contains("Content-Type: audio/webm\r\n"), "{body}");
+}
+
+#[test]
+fn an_mp4_recording_is_sent_as_m4a_audio() {
+    let (base, seen) = stub(200, r#"{"text":"a"}"#);
+    transcribe_timed(spec("custom").unwrap(), "", "", &base, vec![1], "video/mp4", None, false, 1_000).unwrap();
+    let body = seen.lock().unwrap()[0].body_text();
+    assert!(body.contains(r#"filename="audio.m4a""#) && body.contains("Content-Type: audio/mp4\r\n"), "{body}");
+}
+
+#[test]
+fn refused_timestamps_fall_back_to_plain_json() {
+    let (base, seen) = stub_seq(vec![
+        (400, r#"{"error":{"message":"timestamp_granularities[] is not supported"}}"#),
+        (200, r#"{"text":" whole part "}"#),
+    ]);
+    let r = transcribe_timed(spec("custom").unwrap(), "k", "", &base, b"AUDIO".to_vec(), "video/webm", None, false, 7_000);
+    assert_eq!(r.unwrap(), [timed(0, 7000, "whole part")]);
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 2);
+    let second = seen[1].body_text();
+    assert!(second.contains("name=\"response_format\"\r\n\r\njson\r\n"), "{second}");
+    assert!(!second.contains("timestamp_granularities"), "{second}");
+    assert!(second.contains("AUDIO"));
+}
+
+#[test]
+fn other_rejections_are_not_retried_without_timestamps() {
+    let (base, seen) = stub_seq(vec![(400, r#"{"error":{"message":"bad audio"}}"#), (200, r#"{"text":"x"}"#)]);
+    let r = transcribe_timed(spec("custom").unwrap(), "", "", &base, vec![1], "video/webm", None, false, 1_000);
+    assert!(matches!(r, Err(AiError::Rejected(_))), "{r:?}");
+    assert_eq!(seen.lock().unwrap().len(), 1);
 }
 
 #[test]

@@ -53,6 +53,9 @@ pub const MAX_ELEMENTS_PER_DOCUMENT: u64 = 2_000_000;
 /// [`ImportSkipped::other`] and never built.
 pub const MAX_ELEMENTS_PER_PAGE: usize = 5000;
 const _: () = assert!(MAX_ELEMENTS_PER_PAGE as i64 == crate::storage::elements::MAX_ELEMENTS_PER_PAGE);
+/// Most recording markers one page holds. Markers are outside [`MAX_ELEMENTS_PER_PAGE`] (a
+/// lecture can always be placed); this keeps them bounded too. A page normally has a handful.
+pub const MAX_MARKERS_PER_PAGE: usize = 200;
 /// Parsers check the deadline once per this many elements (admitted or skipped).
 const ELEMENTS_PER_DEADLINE_CHECK: u64 = 1024;
 

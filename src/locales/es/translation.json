@@ -309,6 +309,35 @@
       "name": "Preset name"
     }
   },
+  "backup": {
+    "skipped": {
+      "title": "Algunos cuadernos no se incluyeron en la copia de seguridad",
+      "body": "Estos cuadernos son demasiado grandes para la copia de seguridad y NO están en ella: {{titles}}"
+    },
+    "missingAudio": "No se encontró el audio de las grabaciones en: {{titles}}",
+    "restore": {
+      "label": "Restaurar desde copia de seguridad…",
+      "hint": "Añade los cuadernos de una copia de seguridad zip de Mate, con sus grabaciones, junto a los que ya tienes",
+      "filter": "Copia de seguridad de Mate",
+      "title": "¿Restaurar esta copia de seguridad?",
+      "body": "Los cuadernos de la copia de seguridad se añaden junto a los que ya tienes. No se reemplaza ni se elimina nada.",
+      "confirm": "Restaurar",
+      "done_one": "{{count}} cuaderno restaurado.",
+      "done_other": "{{count}} cuadernos restaurados.",
+      "failed": "No se pudo restaurar: {{titles}}",
+      "lostRecordings": "Las grabaciones de estos cuadernos se restauraron sin su audio: {{titles}}",
+      "rejectedAudio_one": "{{count}} archivo de audio de la copia de seguridad no era válido y se omitió.",
+      "rejectedAudio_other": "{{count}} archivos de audio de la copia de seguridad no eran válidos y se omitieron.",
+      "error": "No se pudo restaurar la copia de seguridad. No se cambió nada.",
+      "busy": "Restaurando…",
+      "resultTitle": "Copia de seguridad restaurada",
+      "resultTitleNone": "No se restauró nada",
+      "errorUnknown": "La restauración se detuvo de forma inesperada. Es posible que se hayan restaurado algunos cuadernos."
+    },
+    "reset": {
+      "recordingOpen": "Todavía se está guardando una grabación. Detenla o reinicia Mate para que pueda recuperarse, y vuelve a intentarlo."
+    }
+  },
   "common": {
     "cancel": "Cancelar",
     "save": "Guardar",
@@ -579,7 +608,8 @@
       "moveTabRight": "Mover pestaña a la derecha",
       "openPageWindow": "Abrir página en una ventana nueva",
       "palette": "Buscar y acciones",
-      "shortcuts": "Atajos de teclado"
+      "shortcuts": "Atajos de teclado",
+      "recordingToggle": "Iniciar o detener la grabación"
     }
   },
   "palette": {
@@ -835,6 +865,10 @@
     "searchable": "Texto que se puede buscar",
     "latexHint": "Guarda un archivo .tex; las imágenes se convierten en marcadores.",
     "mateHint": "Exporta todo el cuaderno al que pertenece esta página.",
+    "recordings": {
+      "label": "Incluir grabaciones",
+      "hint": "Las grabaciones pueden contener voces de otras personas."
+    },
     "shareHint": "Para enviar este cuaderno a alguien, usa Compartir… desde el menú del cuaderno.",
     "shareInstead": "Compartir en su lugar…",
     "annotations": "Anotaciones",
@@ -1436,5 +1470,71 @@
     "large": "Large",
     "useForNew": "Use for new pages",
     "done": "Done"
+  },
+  "recording": {
+    "title": "Grabación {{date}}",
+    "tooShort": "No se grabó nada.",
+    "recovered": "Se recuperó una grabación que se había interrumpido.",
+    "dictationBusy": "Detén la grabación para dictar.",
+    "limitSoon": "La grabación se detendrá en 5 minutos (límite de 4 horas).",
+    "limit": "Se alcanzó el límite de 4 horas. La grabación se guardó.",
+    "writeFailed": "La grabación se detuvo porque no se pudo guardar. Se conserva lo grabado hasta ahora.",
+    "failed": "La grabación se detuvo por un problema con el micrófono. Se conserva lo grabado hasta ahora.",
+    "busy": "Ya hay una grabación en curso.",
+    "dictationActive": "Termina de dictar antes de grabar.",
+    "start": "Grabar audio",
+    "stop": "Detener la grabación",
+    "pause": "Pausa",
+    "resume": "Reanudar",
+    "pill": "Grabación {{time}}",
+    "paused": "En pausa {{time}}",
+    "interrupted": "Sin grabar {{time}}",
+    "gap": "No se grabaron {{time}} mientras Mate estaba en segundo plano.",
+    "menu": "Grabación",
+    "keptForLater": "No se pudo añadir la grabación a la página. Se conserva y se añadirá la próxima vez que se inicie Mate.",
+    "leave": {
+      "title": "¿Detener la grabación?",
+      "body": "La grabación pertenece a este cuaderno. Al salir, se detiene y se guarda.",
+      "stop": "Detener y salir",
+      "stay": "Quedarse"
+    }
+  },
+  "replay": {
+    "bar": "Reproducción de la grabación",
+    "play": "Reproducir",
+    "pause": "Pausa",
+    "back": "Retroceder 10 segundos",
+    "forward": "Avanzar 10 segundos",
+    "position": "Posición",
+    "time": "{{position}} / {{total}}",
+    "speed": "Velocidad",
+    "follow": "Seguir las páginas",
+    "transcript": "Transcripción",
+    "close": "Cerrar",
+    "notRecorded": "Esto se escribió mientras no se grababa nada.",
+    "missingSegment": "Falta una parte de esta grabación."
+  },
+  "transcript": {
+    "title": "Transcripción",
+    "start": "Transcribir",
+    "progress": "Transcribiendo la parte {{done}} de {{total}}",
+    "cancel": "Cancelar",
+    "failedPart": "No se pudo transcribir esta parte.",
+    "retry": "Reintentar",
+    "lostMarker": "Se eliminó la grabación, por lo que no se guardó la transcripción.",
+    "busyOther": "Se está transcribiendo otra grabación.",
+    "retryAt": "Reintentar la parte en {{time}}",
+    "copy": "Copiar",
+    "insert": "Insertar como cuadro de texto",
+    "empty": "No se reconoció ninguna voz.",
+    "close": "Cerrar transcripción",
+    "replace": {
+      "title": "¿Transcribir de nuevo?",
+      "body": "Esto reemplaza la transcripción actual."
+    },
+    "copied": "Transcripción copiada.",
+    "inserted": "Transcripción añadida a la página.",
+    "partial_one": "No se pudo transcribir {{count}} parte.",
+    "partial_other": "No se pudieron transcribir {{count}} partes."
   }
 }

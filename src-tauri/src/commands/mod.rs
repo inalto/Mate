@@ -17,6 +17,7 @@ pub mod platform;
 pub mod recognition;
 pub mod recognize;
 pub mod practice;
+pub mod recording;
 pub mod semantics;
 pub mod settings;
 pub mod share;

@@ -9,9 +9,12 @@ export interface ImportReport {
   skipped: number;
 }
 
-/** Export a book to a `.mate` file (save dialog). Resolves to the path, or `null` if cancelled. */
-export const exportUnitArchive = (unitId: string): Promise<string | null> =>
-  invoke("export_unit_archive", { unitId });
+/**
+ * Export a book to a `.mate` file (save dialog). Resolves to the path, or `null` if cancelled.
+ * Recordings (other people's voices) are left out unless `includeRecordings` is true.
+ */
+export const exportUnitArchive = (unitId: string, includeRecordings = false): Promise<string | null> =>
+  invoke("export_unit_archive", { unitId, includeRecordings });
 
 /** Import a `.mate` file (open dialog) as a new book. `null` if cancelled. */
 export const importUnitArchive = (): Promise<ImportReport | null> => invoke("import_unit_archive");

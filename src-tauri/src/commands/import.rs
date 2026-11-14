@@ -767,7 +767,13 @@ mod tests {
         let target = PlaceTarget::NewUnit { title: Some("Maths".into()) };
         let placed = import_one(&OneBlankPage, &job, &gn.to_string_lossy(), target, &|_| {}).unwrap();
         let bytes =
-            mate_core::archive::export_unit(&source.lock().unwrap(), &placed.unit_id, &d.join("assets")).unwrap();
+            mate_core::archive::export_unit(
+                &source.lock().unwrap(),
+                &placed.unit_id,
+                &d.join("assets"),
+                mate_core::archive::Recordings::Exclude,
+            )
+            .unwrap();
         let file = d.join("Maths.mate");
         fs::write(&file, &bytes).unwrap();
         let path = file.to_string_lossy().into_owned();

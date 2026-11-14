@@ -11,6 +11,8 @@ import { initRecovery, installCloseHandler, installFlushOnHide } from "./lifecyc
 import { watchSaveFailures } from "./lifecycle/saveStatus";
 import { installZoomGuard } from "./lifecycle/zoomGuard";
 import { loadPlatform } from "./platform";
+import { recoverRecordings } from "./recording/session";
+import { useNotebookStore } from "./stores/notebook";
 
 await loadPlatform();
 initRecovery();
@@ -18,6 +20,12 @@ installCloseHandler();
 installFlushOnHide();
 watchSaveFailures();
 installZoomGuard();
+// Recordings a crash left behind are salvaged once, when the tree (the pages their markers go on) is loaded.
+const offTree = useNotebookStore.subscribe((s) => {
+  if (!s.loaded) return;
+  offTree();
+  void recoverRecordings();
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

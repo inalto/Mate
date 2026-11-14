@@ -13,6 +13,7 @@ use rusqlite::{Connection, Row};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
+pub use elements::ElementTime;
 pub use notebook::{EntityKind, NotebookTree, TrashItem};
 pub use recognition::{Bounds, LearningEvent, Recognition, RecognitionSource, UpsertOutcome};
 pub use search::{SNIPPET_CLOSE, SNIPPET_OPEN, SearchHit};
@@ -35,6 +36,9 @@ pub enum StorageError {
     Limit(String),
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
+    /// Writing to local storage failed (disk full, permission denied, ...): not the input's fault.
+    #[error("i/o error: {0}")]
+    Io(std::io::Error),
     /// A folder (bookshelf) would end up inside itself or one of its own subfolders.
     #[error("Cannot move a folder into itself")]
     FolderCycle,

@@ -1,6 +1,7 @@
 import { degrees, PDFDocument } from "pdf-lib";
 import { describe, expect, it, vi } from "vitest";
 import { PAGE_GAP } from "../../model/constants";
+import { recordingElement } from "../../recording/marker";
 import type { Element, Page, PenStyle, Point } from "../../model/types";
 import { MAX_PDF_PAGE_PT, overlayPlacement, PT_PER_UNIT, renderToPdf, type PdfDeps, type PdfExportOptions } from "../renderToPdf";
 import { pdfText } from "./pdfText";
@@ -96,6 +97,64 @@ describe("renderToPdf", () => {
     // Canvas mode: one page sized to the content region (+40 padding each side).
     expect(width).toBeGreaterThan(300 * PT_PER_UNIT);
     expect(height).toBeGreaterThan(250 * PT_PER_UNIT);
+  });
+
+  it("draws a recording marker as a circle with its duration, not a bitmap", async () => {
+    const rec = recordingElement(
+      "p1",
+      "rec",
+      STAMP,
+      { x: 100, y: 100 },
+      { unitId: "u", spans: [{ wallStart: STAMP, audioStartMs: 0, durationMs: 900_000 }], segments: [{ assetId: "a0", durationMs: 900_000, mime: "video/webm" }] },
+      "Recording",
+    );
+    const rasterize = vi.fn(() => null);
+    const withMarker = text(await renderToPdf([rec], page(), { ...OPTS, compress: false }, deps({ rasterize })));
+    expect(rasterize).not.toHaveBeenCalled();
+    expect(withMarker).toContain("(15:00) Tj");
+    expect(withMarker).toMatch(/ c$/m); // circle: Bezier curves
+    // A plain audio element still goes through the raster path.
+    const plain = { ...rec, content: { kind: "audio", title: "T" } };
+    await renderToPdf([plain], page(), OPTS, deps({ rasterize }));
+    expect(rasterize).toHaveBeenCalledTimes(1);
+  });
+
+  it("draws a marker exported without its recording as the round icon without a duration", async () => {
+    const rec = recordingElement(
+      "p1",
+      "rec",
+      STAMP,
+      { x: 100, y: 100 },
+      { unitId: "u", spans: [{ wallStart: STAMP, audioStartMs: 0, durationMs: 900_000 }], segments: [{ assetId: "a0", durationMs: 900_000, mime: "video/webm" }] },
+      "Recording",
+    );
+    const stripped: Element = { ...rec, content: { kind: "audio", title: "Recording" }, imageUrl: undefined };
+    const rasterize = vi.fn(() => null);
+    const out = text(await renderToPdf([stripped], page(), { ...OPTS, compress: false }, deps({ rasterize })));
+    expect(rasterize).not.toHaveBeenCalled();
+    expect(out).toMatch(/ c$/m); // circle: Bezier curves
+    expect(out).not.toContain(" Tj");
+  });
+
+  it("turns a recording marker's duration label with its rotation", async () => {
+    const marker = (rotation: number): Element => {
+      const el = recordingElement(
+        "p1",
+        "rec",
+        STAMP,
+        { x: 100, y: 100 },
+        { unitId: "u", spans: [{ wallStart: STAMP, audioStartMs: 0, durationMs: 900_000 }], segments: [{ assetId: "a0", durationMs: 900_000, mime: "audio/webm" }] },
+        "Recording",
+      );
+      return { ...el, content: { ...(el.content as object), rotation } };
+    };
+    const pdfText = async (rotation: number) => text(await renderToPdf([marker(rotation)], page(), { ...OPTS, compress: false }, deps()));
+    const matrix = /(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) Tm\s/;
+    expect(await pdfText(0)).toMatch(/ Td\s/); // upright: a plain text position
+    const turned = (await pdfText(Math.PI / 2)).match(matrix);
+    expect(turned).toBeTruthy();
+    const [a1, b1, c1, d1] = turned!.slice(1, 5).map(Number);
+    expect([Math.abs(a1), Math.abs(b1), Math.abs(c1), Math.abs(d1)].map((v) => Math.round(v))).toEqual([0, 1, 1, 0]); // quarter turn
   });
 
   it("paints line caps", async () => {

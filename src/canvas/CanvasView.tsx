@@ -45,6 +45,8 @@ import { useTutorViews } from "../tutor/useTutor";
 import { attachDropPaste } from "./dropPaste";
 import { createPenInkHaptics } from "./haptics";
 import { platformOs } from "../platform";
+import { drawDimmed, replayTapOf } from "../recording/replay";
+import { markerTargetOf } from "../recording/panes";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
@@ -166,7 +168,8 @@ function createEngine(
       const hole = presentHole();
       if (hole) presentBackdrop(ctx, clip, hole, FRAME_RADIUS);
     } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
-      drawElement(asCtx(ctx), el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper });
+      const shown = el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el;
+      drawDimmed(asCtx(ctx), s.replayDim, el.id, () => drawElement(asCtx(ctx), shown, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper }));
     }
   };
 
@@ -256,8 +259,11 @@ function createEngine(
       cache.invalidate();
       requestStatic();
     },
-    renderElement: (ctx, el) => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
+    renderElement: (ctx, el) =>
+      drawDimmed(ctx, st().replayDim, el.id, () => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper })),
     getSettings,
+    replay: replayTapOf(store),
+    markers: markerTargetOf(store),
   });
 
   const resize = () => {
@@ -400,6 +406,7 @@ function createEngine(
         }
         const set = getSettings();
         mode = "draw";
+        tools.replayTap.down(p, tool); // a quick tap on a replayed note seeks instead (pen-up)
         penInk.start(info.pointerType);
         strokeSheet = sheet ?? undefined;
         drawPointer = info.pointerType;
@@ -446,6 +453,7 @@ function createEngine(
           }
           if (tutorStroke && points.length > 0) tutor.inkMove(worldToScreen(st().camera, points[points.length - 1]));
           if (dismissPress.active() && points.length > 0) dismissPress.move(worldToScreen(st().camera, points[points.length - 1]));
+          if (points.length > 0) tools.replayTap.move(points[points.length - 1]);
           if (!snapShape) setLive(builder.preview(predicted));
         } else if (mode === "tool") tools.move(points);
         else if (mode === "marker" && markerPress && points.length > 0) {
@@ -470,9 +478,11 @@ function createEngine(
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
           if (dismissPress.active()) dismissPress.move(worldToScreen(st().camera, p));
           const dismissed = dismissPress.up();
+          // A replay tap on a note seeks the audio; it neither selects a shape nor leaves a dot.
+          const seeked = tools.replayTap.up(p) !== null;
           // Perfect shapes: a tap on a shape's outline selects it (its handles show) instead of leaving a dot.
           let picked = false;
-          if (st().autoShapes && !shape && dismissed !== "discard" && raw.length > 0 && p.timestamp - raw[0].timestamp <= TAP_MS) {
+          if (!seeked && st().autoShapes && !shape && dismissed !== "discard" && raw.length > 0 && p.timestamp - raw[0].timestamp <= TAP_MS) {
             const cam = st().camera;
             const first = worldToScreen(cam, raw[0]);
             const still = raw.every((q) => {
@@ -481,7 +491,7 @@ function createEngine(
             });
             picked = still && tools.tapSelect(raw[0]);
           }
-          const t = dismissed === "discard" || picked ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
+          const t = seeked || dismissed === "discard" || picked ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
           // A finger that draws: two quick taps zoom in instead of leaving two dots (the first dot is
           // taken back).
           let tap: FingerTap | null = null;
@@ -513,7 +523,7 @@ function createEngine(
               if (added && (el.shapeType === "line" || el.shapeType === "arrow") && getSettings().lineCapsPopover) openLineCaps(store, el.id);
             } else if (!scribbleErased(raw)) commit(stroke);
           }
-        } else if (mode === "tool") tools.up();
+        } else if (mode === "tool") tools.up(p);
         else if (mode === "marker") tutor.selectUp();
         markerPress = null;
         if (tutorStroke) tutor.cancel(); // a snapped shape or an aborted stroke: clear any hold
@@ -526,6 +536,7 @@ function createEngine(
       },
       onCancel() {
         if (mode === "tool") tools.cancel();
+        tools.replayTap.cancel();
         dismissPress.cancel();
         tutor.cancel();
         tutorStroke = false;
@@ -674,6 +685,11 @@ function createEngine(
     if (s.presenting !== prev.presenting) {
       // The backdrop hole moved (or the presentation started / ended): repaint the background.
       if (getSettings().presentBlackBackground) cache.invalidate();
+      requestStatic();
+      requestLive();
+    }
+    if (s.replayDim !== prev.replayDim) {
+      cache.invalidate();
       requestStatic();
       requestLive();
     }

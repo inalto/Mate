@@ -4,13 +4,14 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use mate_core::archive::{
-    BackupReport, ImportReport, MAX_ARCHIVE_BYTES, SkippedBook, export_unit, import_archive,
-    wipe_local_data, write_backup_capped,
+    BackupReport, ImportReport, MAX_ARCHIVE_BYTES, Recordings, RestoreReport, SkippedBook,
+    export_unit, import_archive, restore_backup, wipe_local_data, write_backup_capped,
 };
+use mate_core::recording::RecordingDir;
 use mate_core::settings::Settings;
 use mate_core::storage::Storage;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tauri_plugin_dialog::DialogExt;
 
 use super::export::{
@@ -20,6 +21,16 @@ use super::export::{
 use super::incoming::materialize;
 use crate::state::AppState;
 
+/// Recordings carry other people's voices: left out unless the caller asked, and a missing
+/// argument means no.
+pub fn recordings_choice(include: Option<bool>) -> Recordings {
+    if include == Some(true) {
+        Recordings::Include
+    } else {
+        Recordings::Exclude
+    }
+}
+
 /// Exports a unit (book) and the assets its elements reference to a `.mate` file chosen in a
 /// save dialog (mobile: written to `exports/` and shared). `None` if cancelled.
 #[tauri::command]
@@ -27,6 +38,7 @@ pub async fn export_unit_archive(
     app: AppHandle,
     state: State<'_, AppState>,
     unit_id: String,
+    include_recordings: Option<bool>,
 ) -> Result<Option<String>, String> {
     let (bytes, title) = {
         let storage = state.storage.lock().map_err(|e| e.to_string())?;
@@ -39,7 +51,12 @@ pub async fn export_unit_archive(
             .map(|u| u.title)
             .unwrap_or_default();
         (
-            export_unit(&storage, &unit_id, &state.data_dir.join("assets"))
+            export_unit(
+                &storage,
+                &unit_id,
+                &state.data_dir.join("assets"),
+                recordings_choice(include_recordings),
+            )
                 .map_err(|e| e.to_string())?,
             title,
         )
@@ -107,17 +124,29 @@ fn write_backup_file(
     Ok(report)
 }
 
-/// A backup written to disk, with the books it had to leave out.
+/// A backup written to disk, with the books it had to leave out (the UI blocks on these with a
+/// dialog: they are not in the backup) and the books whose recording audio was not found.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupSaved {
     pub path: String,
-    pub skipped: Vec<SkippedBook>,
+    pub skipped_books: Vec<String>,
+    pub missing_audio: Vec<String>,
 }
 
-/// Zips every book (one `.mate` archive each) to a file chosen in a save dialog, streaming it to
-/// disk one book at a time. A book too large for an archive is left out and listed in the
-/// result. `None` if cancelled.
+impl BackupSaved {
+    fn new(path: &Path, report: BackupReport) -> Self {
+        BackupSaved {
+            path: path.to_string_lossy().into_owned(),
+            skipped_books: report.skipped_books(),
+            missing_audio: report.missing_audio,
+        }
+    }
+}
+
+/// Zips every book (one `.mate` archive each, recording audio beside them) to a file chosen in a
+/// save dialog, streaming it to disk one book at a time. A book too large for an archive is left
+/// out and listed in the result. `None` if cancelled.
 #[tauri::command]
 pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String> {
     let Some(path) = ask_save_path(app.clone(), backup_filename()).await? else {
@@ -139,11 +168,62 @@ pub async fn export_backup(app: AppHandle) -> Result<Option<BackupSaved>, String
     if !report.skipped.is_empty() {
         log::warn!("backup: left out {} book(s) over the archive cap", report.skipped.len());
     }
+    if !report.missing_audio.is_empty() {
+        log::warn!("backup: recording audio missing in {} book(s)", report.missing_audio.len());
+    }
     after_export(&app, &path).await?;
-    Ok(Some(BackupSaved {
-        path: path.to_string_lossy().into_owned(),
-        skipped: report.skipped,
-    }))
+    Ok(Some(BackupSaved::new(&path, report)))
+}
+
+/// Restores the backup zip at `path` into `storage` (books added beside the existing ones, their
+/// recording audio into `assets_dir`), streaming it from disk; see
+/// [`mate_core::archive::restore_backup`]. An error means nothing was changed.
+fn restore_from_file(
+    storage: &Mutex<Storage>,
+    assets_dir: &Path,
+    path: &Path,
+) -> Result<RestoreReport, String> {
+    let file = fs::File::open(path).map_err(|e| e.to_string())?;
+    let mut storage = storage.lock().map_err(|e| e.to_string())?;
+    restore_backup(&mut storage, io::BufReader::new(file), assets_dir).map_err(|e| e.to_string())
+}
+
+/// How [`restore_backup_file`]'s error starts when the restore itself died (a panic): unlike every
+/// other error, some books may already have been restored. The UI tells the two apart by it.
+pub const RESTORE_STOPPED: &str = "restore stopped unexpectedly";
+
+/// Starts the error of a reset refused because a recording is not saved yet (matched in the UI).
+pub const RESET_RECORDING_OPEN: &str = "reset refused: a recording is still being saved";
+
+/// The error of a restore whose blocking task did not finish.
+fn restore_stopped(e: impl std::fmt::Display) -> String {
+    format!("{RESTORE_STOPPED}: {e}")
+}
+
+/// Restores a backup zip (picked in the UI) as new books, with their recordings, off the async
+/// runtime and under the storage lock, then tells every window the notebook tree changed. Any
+/// error means nothing was changed, except one starting with [`RESTORE_STOPPED`].
+#[tauri::command]
+pub async fn restore_backup_file(window: Window, path: String) -> Result<RestoreReport, String> {
+    let handle = window.app_handle().clone();
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        // Android hands back a `content://` URI; it is copied into `incoming/` first.
+        let local = materialize(&handle, &state.data_dir, &path)?;
+        restore_from_file(&state.storage, &state.data_dir.join("assets"), &local)
+    })
+    .await
+    .map_err(restore_stopped)??;
+    for book in &report.failed {
+        log::warn!("restore: {} could not be restored: {}", book.name, book.error);
+    }
+    if !report.books.is_empty() {
+        let _ = window.emit(
+            super::notebook::NOTEBOOK_CHANGED,
+            super::notebook::NotebookChange::tree(window.label()),
+        );
+    }
+    Ok(report)
 }
 
 /// Left in the data directory when a reset could not delete everything; the next launch tells
@@ -214,6 +294,16 @@ fn run_reset_with(
     before_wipe: &dyn Fn(&Path),
     max_book_bytes: u64,
 ) -> Result<ResetOutcome, String> {
+    // A recording not saved yet (running, or waiting for recovery) has its audio only in its work
+    // folder: refuse before anything is written. A folder that cannot be read counts as one.
+    let recordings = RecordingDir::new(data_dir.join("recordings"));
+    let open = recordings.unfinished().map(|u| !u.is_empty()).unwrap_or(true)
+        || recordings.referenced_asset_ids().is_err();
+    if open {
+        return Err(format!(
+            "{RESET_RECORDING_OPEN}. Stop it, or restart Mate so it can be recovered, then try again."
+        ));
+    }
     // The storage lock is held from the snapshot through the swap, so no write can land after the
     // snapshot and then be deleted without being in the recovery zip. A book that cannot go into
     // the zip (too large) refuses the whole reset: nothing is deleted and the zip is removed.
@@ -431,6 +521,53 @@ mod tests {
     }
 
     #[test]
+    fn reset_is_refused_while_a_recording_is_unfinished() {
+        let dir = tmp("recording-open");
+        let (st, se) = fixture(&dir);
+        let wiped = Mutex::new(false);
+        let wipe = |_: &Path| -> io::Result<()> {
+            *wiped.lock().unwrap() = true;
+            Ok(())
+        };
+        let recordings = mate_core::recording::RecordingDir::new(dir.join("recordings"));
+        let rec_id = mate_core::model::new_id();
+        recordings.begin(&rec_id, &serde_json::json!({ "recId": rec_id, "segments": [] })).unwrap();
+        let err = run_reset(&dir, &st, &se, &wipe).unwrap_err();
+        assert!(err.starts_with(RESET_RECORDING_OPEN), "{err}");
+        assert!(!*wiped.lock().unwrap(), "nothing wiped");
+        assert!(dir.join("mate.db").exists());
+        let written: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with("mate-recovery-"))
+            .collect();
+        assert!(written.is_empty(), "nothing written: {written:?}");
+        assert_eq!(st.lock().unwrap().list_tree().unwrap().units.len(), 1, "database untouched");
+
+        // A manifest that cannot be read is an unfinished recording too.
+        recordings.close(&rec_id).unwrap();
+        let broken = dir.join("recordings").join(mate_core::model::new_id());
+        fs::create_dir_all(&broken).unwrap();
+        fs::write(broken.join("manifest.json"), b"{ not json").unwrap();
+        let err = run_reset(&dir, &st, &se, &wipe).unwrap_err();
+        assert!(err.starts_with(RESET_RECORDING_OPEN), "{err}");
+        assert!(!*wiped.lock().unwrap(), "nothing wiped");
+    }
+
+    #[test]
+    fn reset_wipes_the_recordings_directory() {
+        let dir = tmp("recordings-wiped");
+        let (st, se) = fixture(&dir);
+        // Left by a recording that finished: a foreign file, nothing to recover.
+        fs::create_dir_all(dir.join("recordings")).unwrap();
+        fs::write(dir.join("recordings").join("stray.part"), b"audio").unwrap();
+        let out = run_reset(&dir, &st, &se, &wipe_local_data).unwrap();
+        assert_eq!(out.wipe_error, None);
+        assert!(!dir.join("recordings").exists());
+    }
+
+    #[test]
     fn the_recovery_zip_is_a_readable_backup() {
         let dir = tmp("zip");
         let (st, se) = fixture(&dir);
@@ -470,6 +607,166 @@ mod tests {
         };
         run_reset_with(&dir, &st, &se, &wipe_local_data, &probe, &|_| {}, MAX_ARCHIVE_BYTES as u64)
             .unwrap();
+    }
+
+    /// Adds section `s1` / page `p1` to book `u1` with a recording marker over `segments`.
+    fn add_recording(st: &Mutex<Storage>, segments: &[&str]) {
+        use mate_core::model::{BackgroundConfig, Element, Page, PageMode, Section};
+        let now = mate_core::model::now_iso();
+        let mut st = st.lock().unwrap();
+        st.upsert_section(&Section {
+            id: "s1".into(),
+            unit_id: "u1".into(),
+            title: "S".into(),
+            color: "#000000".into(),
+            icon: None,
+            order_index: 0,
+            is_expanded: false,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+            deleted_at: None,
+            version: 0,
+        })
+        .unwrap();
+        st.upsert_page(&Page {
+            id: "p1".into(),
+            section_id: "s1".into(),
+            parent_id: None,
+            title: "P".into(),
+            is_expanded: false,
+            is_favourite: false,
+            depth: 0,
+            mode: PageMode::Canvas,
+            background_config: BackgroundConfig::default(),
+            page_width: None,
+            page_height: None,
+            thumbnail_version: 0,
+            icon: None,
+            order_index: 0,
+            created_at: now.clone(),
+            updated_at: now.clone(),
+            deleted_at: None,
+            version: 0,
+            import_metadata: None,
+        })
+        .unwrap();
+        let segs: Vec<serde_json::Value> = segments
+            .iter()
+            .map(|id| serde_json::json!({ "assetId": id, "durationMs": 300000, "mime": "video/webm" }))
+            .collect();
+        let marker: Element = serde_json::from_value(serde_json::json!({
+            "id": "rec", "pageId": "p1", "type": "media", "points": [], "color": "#000000",
+            "width": 1.0, "isHighlighter": false, "imageUrl": segments[0],
+            "content": { "kind": "audio", "recording": { "unitId": "u1", "spans": [], "segments": segs } },
+            "createdAt": now, "updatedAt": now, "version": 0
+        }))
+        .unwrap();
+        st.upsert_elements(&[marker]).unwrap();
+    }
+
+    #[test]
+    fn an_unreadable_recording_refuses_the_reset() {
+        let dir = tmp("unreadable-audio");
+        let (st, se) = fixture(&dir);
+        // The segment is in the store but cannot be read as a file (a directory under its name,
+        // as a locked file would fail): the recovery zip cannot hold it, so nothing is deleted.
+        let seg = "6f9619ff-8b86-d011-b42d-00c04fc964ff";
+        fs::create_dir_all(dir.join("assets").join(format!("{seg}.webm"))).unwrap();
+        add_recording(&st, &[seg]);
+        let wiped = Mutex::new(false);
+        let wipe = |_: &Path| -> io::Result<()> {
+            *wiped.lock().unwrap() = true;
+            Ok(())
+        };
+        let err = run_reset(&dir, &st, &se, &wipe).unwrap_err();
+        assert!(err.contains(seg), "{err}");
+        assert!(!*wiped.lock().unwrap(), "nothing wiped");
+        assert!(dir.join("mate.db").exists());
+        assert_eq!(st.lock().unwrap().list_tree().unwrap().units.len(), 1, "database untouched");
+        assert_eq!(se.lock().unwrap().theme, "dark");
+    }
+
+    #[test]
+    fn restore_backup_file_restores_books_and_audio() {
+        let dir = tmp("restore-ok");
+        let (st, _) = fixture(&dir);
+        let assets_dir = dir.join("assets");
+        let mut webm = vec![0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81];
+        webm.resize(4096, 3);
+        let a = mate_core::assets::save_sniffed(&assets_dir, &webm).unwrap();
+        webm.push(9);
+        let b = mate_core::assets::save_sniffed(&assets_dir, &webm).unwrap();
+        add_recording(&st, &[&a.id, &b.id]);
+        let zip_path = dir.join("backup.zip");
+        let mut file = fs::File::create(&zip_path).unwrap();
+        write_backup_file(&st.lock().unwrap(), &assets_dir, &mut file, MAX_ARCHIVE_BYTES as u64).unwrap();
+        drop(file);
+
+        let restored = Mutex::new(Storage::open_in_memory().unwrap());
+        let restored_assets = dir.join("restored-assets");
+        let report = restore_from_file(&restored, &restored_assets, &zip_path).unwrap();
+        assert_eq!(report.books.len(), 1);
+        assert!(report.failed.is_empty());
+        assert_eq!(report.rejected_audio, 0);
+        assert!(report.lost_recordings.is_empty());
+        let st = restored.lock().unwrap();
+        let tree = st.list_tree().unwrap();
+        assert_eq!(tree.units.len(), 1);
+        assert_eq!(tree.units[0].title, "Maths");
+        let marker = st.load_elements(&tree.pages[0].id).unwrap().into_iter().next().unwrap();
+        let segments = marker.content.as_ref().unwrap()["recording"]["segments"].as_array().unwrap().clone();
+        assert_eq!(segments.len(), 2);
+        for seg in &segments {
+            let id = seg["assetId"].as_str().unwrap();
+            assert!(id != a.id && id != b.id, "new ids");
+            assert!(mate_core::assets::asset_info(&restored_assets, id).is_some(), "segment {id} stored");
+        }
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["rejectedAudio"], 0);
+        assert_eq!(json["lostRecordings"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn a_restore_that_died_says_so() {
+        let err = restore_stopped("task panicked");
+        assert!(err.starts_with(RESTORE_STOPPED), "{err}");
+        assert!(err.ends_with("task panicked"), "{err}");
+        // An ordinary failure never looks like one.
+        let dir = tmp("restore-stopped");
+        let st = Mutex::new(Storage::open_in_memory().unwrap());
+        let ordinary = restore_from_file(&st, &dir.join("assets"), &dir.join("gone.zip")).unwrap_err();
+        assert!(!ordinary.starts_with(RESTORE_STOPPED), "{ordinary}");
+    }
+
+    #[test]
+    fn restore_backup_file_rejects_a_non_zip() {
+        let dir = tmp("restore-bad");
+        let path = dir.join("notes.zip");
+        fs::write(&path, b"this is not a zip").unwrap();
+        let st = Mutex::new(Storage::open_in_memory().unwrap());
+        let err = restore_from_file(&st, &dir.join("assets"), &path).unwrap_err();
+        assert!(err.contains("not a Mate backup"), "{err}");
+        assert!(st.lock().unwrap().list_tree().unwrap().units.is_empty());
+        let missing = restore_from_file(&st, &dir.join("assets"), &dir.join("gone.zip"));
+        assert!(missing.is_err());
+    }
+
+    #[test]
+    fn the_backup_result_names_left_out_books_and_missing_audio() {
+        let report = BackupReport {
+            books: 1,
+            skipped: vec![SkippedBook {
+                unit_id: "u9".into(),
+                title: "Films".into(),
+                reason: mate_core::archive::BOOK_TOO_LARGE.into(),
+            }],
+            missing_audio: vec!["Physics".into()],
+        };
+        let json = serde_json::to_value(BackupSaved::new(Path::new("b.zip"), report)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "path": "b.zip", "skippedBooks": ["Films"], "missingAudio": ["Physics"] })
+        );
     }
 
     #[test]

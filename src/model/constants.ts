@@ -21,6 +21,8 @@ export const ASPECT_PRESET_HEIGHTS: Record<AspectPreset, number> = {
 export const LIMITS = {
   MAX_ELEMENTS_PER_PAGE: 5000,
   MAX_POINTS_PER_STROKE: 50000,
+  /** Recording markers one page holds (outside MAX_ELEMENTS_PER_PAGE); as `mate-core`. */
+  MAX_MARKERS_PER_PAGE: 200,
 } as const;
 
 export const DEFAULT_SETTINGS: Settings = {

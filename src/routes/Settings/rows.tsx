@@ -211,6 +211,7 @@ export function ButtonRow({
   onClick,
   disabled,
   danger,
+  busy,
 }: {
   id: string;
   label: string;
@@ -219,10 +220,18 @@ export function ButtonRow({
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
+  /** Work started by this button is running (announced as `aria-busy`). */
+  busy?: boolean;
 }) {
   return (
     <Row id={id} label={label} hint={hint}>
-      <button type="button" className={danger ? "btn btn-danger" : "btn"} disabled={disabled} onClick={onClick}>
+      <button
+        type="button"
+        className={danger ? "btn btn-danger" : "btn"}
+        disabled={disabled}
+        aria-busy={busy || undefined}
+        onClick={onClick}
+      >
         {buttonLabel}
       </button>
     </Row>

@@ -27,6 +27,8 @@ import { focusedPageId, useTabsStore, type PaneIndex } from "../stores/tabs";
 import { watchThumbnails } from "../thumbnails";
 import TutorController from "../tutor/TutorController";
 import { disposeAll, disposeClosedPages } from "../code/runtime";
+import { replayForPane, watchPaneReplays } from "../recording/panes";
+import ReplayBar from "../recording/ReplayBar";
 
 const closePaperPicker = () => useChromeStore.getState().setPaperPickerOpen(false);
 
@@ -119,6 +121,8 @@ export default function Editor() {
       disposeAll();
     };
   }, []);
+  // One recording replay per pane: following its pages, closed when the pane or the editor goes.
+  useEffect(() => watchPaneReplays(), []);
   // Box editors are separate chunks: fetch them once the editor is up, ahead of the first edit.
   useEffect(() => preloadBoxEditors(), []);
   // "This page is full" toast when the pen is refused at the element limit (each pane's store).
@@ -152,6 +156,7 @@ export default function Editor() {
                 <TutorController store={editorForPane(i as PaneIndex)} pane={i as PaneIndex} />
                 <PaneOverlay store={editorForPane(i as PaneIndex)} />
                 <PresentationBar store={editorForPane(i as PaneIndex)} />
+                <ReplayBar store={editorForPane(i as PaneIndex)} replay={replayForPane(i as PaneIndex)} />
               </div>
             ))}
           </div>

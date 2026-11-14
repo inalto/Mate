@@ -309,6 +309,35 @@
       "name": "Preset name"
     }
   },
+  "backup": {
+    "skipped": {
+      "title": "Einige Notizbücher wurden nicht gesichert",
+      "body": "Diese Notizbücher sind zu groß für die Sicherung und sind NICHT in dieser Sicherung enthalten: {{titles}}"
+    },
+    "missingAudio": "Für Aufnahmen in diesen Notizbüchern wurde kein Audio gefunden: {{titles}}",
+    "restore": {
+      "label": "Aus Sicherung wiederherstellen…",
+      "hint": "Fügt die Notizbücher einer Mate-Sicherung (ZIP) samt Aufnahmen zu den vorhandenen hinzu",
+      "filter": "Mate-Sicherung",
+      "title": "Diese Sicherung wiederherstellen?",
+      "body": "Die Notizbücher aus der Sicherung werden zu deinen vorhandenen hinzugefügt. Es wird nichts ersetzt oder gelöscht.",
+      "confirm": "Wiederherstellen",
+      "done_one": "{{count}} Notizbuch wiederhergestellt.",
+      "done_other": "{{count}} Notizbücher wiederhergestellt.",
+      "failed": "Konnte nicht wiederhergestellt werden: {{titles}}",
+      "lostRecordings": "Aufnahmen in diesen Notizbüchern wurden ohne Audio wiederhergestellt: {{titles}}",
+      "rejectedAudio_one": "{{count}} Audiodatei in der Sicherung war ungültig und wurde übersprungen.",
+      "rejectedAudio_other": "{{count}} Audiodateien in der Sicherung waren ungültig und wurden übersprungen.",
+      "error": "Die Sicherung konnte nicht wiederhergestellt werden. Es wurde nichts geändert.",
+      "busy": "Wird wiederhergestellt…",
+      "resultTitle": "Sicherung wiederhergestellt",
+      "resultTitleNone": "Es wurde nichts wiederhergestellt",
+      "errorUnknown": "Die Wiederherstellung wurde unerwartet beendet. Einige Notizbücher wurden möglicherweise wiederhergestellt."
+    },
+    "reset": {
+      "recordingOpen": "Eine Aufnahme wird noch gespeichert. Beende sie oder starte Mate neu, damit sie wiederhergestellt werden kann, und versuche es dann erneut."
+    }
+  },
   "common": {
     "cancel": "Abbrechen",
     "save": "Speichern",
@@ -579,7 +608,8 @@
       "moveTabRight": "Tab nach rechts verschieben",
       "openPageWindow": "Seite in neuem Fenster öffnen",
       "palette": "Suche und Aktionen",
-      "shortcuts": "Tastenkürzel"
+      "shortcuts": "Tastenkürzel",
+      "recordingToggle": "Aufnahme starten oder beenden"
     }
   },
   "palette": {
@@ -835,6 +865,10 @@
     "searchable": "Durchsuchbarer Text",
     "latexHint": "Speichert eine .tex-Datei; Bilder werden zu Platzhaltern.",
     "mateHint": "Exportiert das gesamte Notizbuch, zu dem diese Seite gehört.",
+    "recordings": {
+      "label": "Aufnahmen einschließen",
+      "hint": "Aufnahmen können die Stimmen anderer Personen enthalten."
+    },
     "shareHint": "Um dieses Notizbuch an jemanden zu senden, nutze Teilen… im Notizbuchmenü.",
     "shareInstead": "Stattdessen teilen…",
     "annotations": "Anmerkungen",
@@ -1436,5 +1470,71 @@
     "large": "Large",
     "useForNew": "Use for new pages",
     "done": "Done"
+  },
+  "recording": {
+    "title": "Aufnahme {{date}}",
+    "tooShort": "Es wurde nichts aufgenommen.",
+    "recovered": "Eine unterbrochene Aufnahme wurde wiederhergestellt.",
+    "dictationBusy": "Beende die Aufnahme, um zu diktieren.",
+    "limitSoon": "Die Aufnahme endet in 5 Minuten (Limit von 4 Stunden).",
+    "limit": "Das Limit von 4 Stunden wurde erreicht. Die Aufnahme wurde gespeichert.",
+    "writeFailed": "Die Aufnahme wurde beendet, weil sie nicht gespeichert werden konnte. Das bisher Aufgenommene bleibt erhalten.",
+    "failed": "Die Aufnahme wurde wegen eines Mikrofonproblems beendet. Das bisher Aufgenommene bleibt erhalten.",
+    "busy": "Es läuft bereits eine Aufnahme.",
+    "dictationActive": "Beende das Diktieren, bevor du aufnimmst.",
+    "start": "Audio aufnehmen",
+    "stop": "Aufnahme beenden",
+    "pause": "Pause",
+    "resume": "Fortsetzen",
+    "pill": "Aufnahme {{time}}",
+    "paused": "Pausiert {{time}}",
+    "interrupted": "Keine Aufnahme {{time}}",
+    "gap": "Es wurden {{time}} nicht aufgenommen, während Mate im Hintergrund war.",
+    "menu": "Aufnahme",
+    "keptForLater": "Die Aufnahme konnte nicht zur Seite hinzugefügt werden. Sie bleibt erhalten und wird beim nächsten Start von Mate hinzugefügt.",
+    "leave": {
+      "title": "Aufnahme beenden?",
+      "body": "Die Aufnahme gehört zu diesem Notizbuch. Beim Verlassen wird sie beendet und gespeichert.",
+      "stop": "Beenden und verlassen",
+      "stay": "Bleiben"
+    }
+  },
+  "replay": {
+    "bar": "Wiedergabe der Aufnahme",
+    "play": "Abspielen",
+    "pause": "Pause",
+    "back": "10 Sekunden zurück",
+    "forward": "10 Sekunden vor",
+    "position": "Position",
+    "time": "{{position}} / {{total}}",
+    "speed": "Geschwindigkeit",
+    "follow": "Seitenwechsel folgen",
+    "transcript": "Transkript",
+    "close": "Schließen",
+    "notRecorded": "Das wurde geschrieben, während nichts aufgenommen wurde.",
+    "missingSegment": "Ein Teil dieser Aufnahme fehlt."
+  },
+  "transcript": {
+    "title": "Transkript",
+    "start": "Transkribieren",
+    "progress": "Teil {{done}} von {{total}} wird transkribiert",
+    "cancel": "Abbrechen",
+    "failedPart": "Dieser Teil konnte nicht transkribiert werden.",
+    "retry": "Wiederholen",
+    "lostMarker": "Die Aufnahme wurde entfernt, daher wurde das Transkript nicht gespeichert.",
+    "busyOther": "Eine andere Aufnahme wird gerade transkribiert.",
+    "retryAt": "Teil bei {{time}} wiederholen",
+    "copy": "Kopieren",
+    "insert": "Als Textfeld einfügen",
+    "empty": "Es wurde keine Sprache erkannt.",
+    "close": "Transkript schließen",
+    "replace": {
+      "title": "Erneut transkribieren?",
+      "body": "Dadurch wird das aktuelle Transkript ersetzt."
+    },
+    "copied": "Transkript kopiert.",
+    "inserted": "Transkript zur Seite hinzugefügt.",
+    "partial_one": "{{count}} Teil konnte nicht transkribiert werden.",
+    "partial_other": "{{count}} Teile konnten nicht transkribiert werden."
   }
 }
