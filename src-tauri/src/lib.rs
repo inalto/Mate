@@ -5,7 +5,7 @@ mod state;
 mod windows;
 
 use commands::{
-  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, platform, practice, recognition, recognize, recording,
+  ai, archive, ask, assets, elements, export, haptics, import, lifecycle, math, notebook, open_files, pdf, platform, practice, recall, recognition, recognize, recording,
   settings, semantics, thumbnails, updater,
 };
 use state::AppState;
@@ -115,6 +115,10 @@ pub fn run() {
       recognition::set_user_override,
       recognition::search_recognition,
       recognition::record_learning_event,
+      recall::record_recall,
+      recall::recall_page_stats,
+      recall::recall_unit_stats,
+      recall::recall_element_history,
       recognize::recognize_group,
       ask::tutor_ask,
       semantics::summarize_page,

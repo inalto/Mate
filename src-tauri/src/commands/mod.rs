@@ -14,6 +14,7 @@ pub mod notebook;
 pub mod open_files;
 pub mod pdf;
 pub mod platform;
+pub mod recall;
 pub mod recognition;
 pub mod recognize;
 pub mod practice;

@@ -466,3 +466,43 @@ export interface KeybindingOverride {
   action: string;
   keys: string;
 }
+
+/** One answer in a cover study run; stored as a `recall` learning event. */
+export interface RecallAnswer {
+  pageId: string;
+  elementId: string;
+  knew: boolean;
+  runId: string;
+}
+
+export interface RecallRun {
+  runId: string;
+  /** When the run's last answer was given. */
+  at: string;
+  known: number;
+  total: number;
+}
+
+export interface RecallPageStats {
+  pageId: string;
+  covers: number;
+  answers: number;
+  known: number;
+  runs: number;
+  last: RecallRun | null;
+  /** Known rate of the last 8 runs, oldest first. */
+  trend: number[];
+}
+
+export interface RecallRate {
+  answers: number;
+  known: number;
+}
+
+export interface RecallUnitStats {
+  pages: RecallPageStats[];
+  covers: number;
+  all: RecallRate;
+  last7: RecallRate;
+  last30: RecallRate;
+}
