@@ -1,6 +1,7 @@
 // Z-order (pure): PDF page placements first (locked at the bottom), then frames, then everything
-// else; within each band content.zIndex ascending, then createdAt, then id. Arranging moves frames
-// among frames and other elements among other elements only.
+// else, then recall covers on top; within each band content.zIndex ascending, then createdAt, then id. Arranging moves frames
+// among frames, covers among covers and other elements among other elements only.
+import { isCover } from "../covers/cover";
 import { isPdfPlacement } from "../model/content";
 import type { Element } from "../model/types";
 import { contentMeta, withMeta } from "./spatialIndex";
@@ -14,6 +15,8 @@ export function compareZ(a: Element, b: Element): number {
   if (pa !== isPdfPlacement(b)) return pa ? -1 : 1;
   const fa = a.type === "frame";
   if (fa !== (b.type === "frame")) return fa ? -1 : 1;
+  const ca = isCover(a);
+  if (ca !== isCover(b)) return ca ? 1 : -1;
   return zOf(a) - zOf(b) || (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 }
 
@@ -30,10 +33,14 @@ export function topZ(els: Iterable<Element>): number {
 
 /** Apply `op` to the selected ids; returns only the elements whose zIndex changes. PDF page
  * placements are neither moved nor renumbered; frames and other elements are arranged in separate
- * bands (a frame never goes above a non-frame, nor below one). */
+ * bands (a frame never goes above a non-frame, nor below one; a cover never goes below another element). */
 export function reorder(all: Iterable<Element>, ids: ReadonlySet<string>, op: ZOp): Element[] {
   const order = renderOrder(all).filter((e) => !isPdfPlacement(e));
-  return [...reorderBand(order.filter((e) => e.type === "frame"), ids, op), ...reorderBand(order.filter((e) => e.type !== "frame"), ids, op)];
+  return [
+    ...reorderBand(order.filter((e) => e.type === "frame"), ids, op),
+    ...reorderBand(order.filter((e) => e.type !== "frame" && !isCover(e)), ids, op),
+    ...reorderBand(order.filter((e) => e.type !== "frame" && isCover(e)), ids, op),
+  ];
 }
 
 /** `reorder` within one band (`order` already in render order). */

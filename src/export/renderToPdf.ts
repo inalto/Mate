@@ -19,6 +19,7 @@ import { buildBackgroundPattern, type Rect } from "../canvas/background";
 import { CONNECTOR_LABEL_SIZE, connectorCapOutlines, connectorRoute, labelPill } from "../connectors/geometry";
 import { sheetSize } from "../canvas/camera";
 import { graphScene } from "../renderers/graph";
+import { coverOutlineColor } from "../covers/cover";
 import { capsuleRuns } from "../ink/capsuleRuns";
 import { traceSmoothPolygon } from "../ink/render";
 import { simplifyEpsForZoom } from "../ink/resample";
@@ -339,7 +340,15 @@ function paintStroke(p: Painter, el: Element, theme: ThemeName): void {
     );
     if (poly.length > 0) {
       traceSmoothPolygon(p.smoothSink(), poly);
-      p.pdf.fill();
+      if (style === "cover") {
+        // The hairline that keeps a cover visible on paper of its own colour.
+        p.colour(coverOutlineColor(color, theme), "draw", alpha);
+        p.pdf.setLineWidth(0.5);
+        p.pdf.setLineJoin("round");
+        p.pdf.fillStroke();
+      } else {
+        p.pdf.fill();
+      }
     }
     return;
   }

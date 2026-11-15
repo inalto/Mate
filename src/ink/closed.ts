@@ -5,9 +5,9 @@ import type { Element } from "./types";
 /** Closed when the end is within this fraction of the path length from the start. */
 const CLOSED_GAP = 0.15;
 
-/** A pen (not highlighter) stroke of at least three points that ends near where it began. */
+/** A pen (not highlighter, not cover) stroke of at least three points that ends near where it began. */
 export function isClosedStroke(el: Element | undefined): el is Element {
-  if (!el || el.type !== "stroke" || el.isHighlighter || el.points.length < 3) return false;
+  if (!el || el.type !== "stroke" || el.isHighlighter || el.penStyle === "cover" || el.points.length < 3) return false;
   let length = 0;
   for (let i = 1; i < el.points.length; i++) length += Math.hypot(el.points[i].x - el.points[i - 1].x, el.points[i].y - el.points[i - 1].y);
   const a = el.points[0];

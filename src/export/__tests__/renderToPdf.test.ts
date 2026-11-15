@@ -99,6 +99,15 @@ describe("renderToPdf", () => {
     expect(height).toBeGreaterThan(250 * PT_PER_UNIT);
   });
 
+  it("draws a cover stroke opaque while a highlighter stays at half opacity", async () => {
+    // A blank page: the ruled background draws its own half-opacity lines.
+    const blank = page({ backgroundConfig: { type: "blank", spacing: 40, dotRadius: 1.5 } });
+    const cover = await pdfText(await renderToPdf([stroke("c", line(0, 0, 300, 0), "cover")], blank, OPTS, deps()));
+    const marker = await pdfText(await renderToPdf([stroke("h", line(0, 0, 300, 0), "highlighter")], blank, OPTS, deps()));
+    expect(/\/ca 0\.5/.test(marker), "highlighter").toBe(true);
+    expect(/\/ca 0\.5/.test(cover), "cover").toBe(false);
+  });
+
   it("draws a recording marker as a circle with its duration, not a bitmap", async () => {
     const rec = recordingElement(
       "p1",
