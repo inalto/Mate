@@ -42,6 +42,7 @@ import type { TKey } from "../i18n";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
+import { isCover } from "../covers/cover";
 import { hasFill, isClosedShape } from "../shapes/geometry";
 import { shapeLabelOf, type ShapeLabel } from "../shapes/label";
 import { stepFontSize } from "../text/style";
@@ -725,7 +726,7 @@ export default function SelectionBar() {
   const lineShape =
     selected.length === 1 && selected[0]?.type === "shape" && (selected[0].shapeType === "line" || selected[0].shapeType === "arrow") ? selected[0] : undefined;
   const closedShape =
-    selected.length === 1 && selected[0]?.type === "shape" && isClosedShape(selected[0].shapeType ?? "rectangle") ? selected[0] : undefined;
+    selected.length === 1 && selected[0]?.type === "shape" && isClosedShape(selected[0].shapeType ?? "rectangle") && !isCover(selected[0]) ? selected[0] : undefined;
   const connector = selected.length === 1 && selected[0]?.type === "connector" ? selected[0] : undefined;
   const frame = selected.length === 1 && selected[0]?.type === "frame" ? selected[0] : undefined;
   const mindmap = selected.length === 1 && selected[0]?.type === "mindmap" ? selected[0] : undefined;

@@ -21,6 +21,11 @@ const close = (a: { x: number; y: number }, b: { x: number; y: number }) => {
 };
 
 describe("reshape handles", () => {
+  it("a_cover_box_has_none", () => {
+    const box = shape("rectangle", 10, 20, 100, 50);
+    expect(reshapeHandles({ ...box, content: { cover: true } })).toEqual([]);
+  });
+
   it("a_rectangle_has_a_handle_on_each_corner", () => {
     const hs = reshapeHandles(shape("rectangle", 10, 20, 100, 50));
     expect(hs.map((h) => h.at)).toEqual([

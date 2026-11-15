@@ -200,4 +200,15 @@ describe("SelectionBar align and math", () => {
       setWorkerFactory(null);
     }
   });
+
+  it("a_cover_box_offers_no_text", async () => {
+    useNotebookStore.setState({ loaded: true });
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    const s = () => useEditorStore.getState();
+    const id = s().addCoverBox(shapeFromDrag("rectangle", { x: 100, y: 200 }, { x: 300, y: 300 }, false))!;
+    s().select([id]);
+    render(<SelectionBar />);
+    expect(screen.queryByRole("button", { name: "Add text" })).toBeNull();
+  });
 });

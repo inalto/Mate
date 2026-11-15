@@ -5,6 +5,7 @@
 // to a point. Lines and arrows keep their own end handles (toolInteractions).
 import type { Vec2 } from "../canvas/camera";
 import { contentOf, type ShapeContent } from "../model/content";
+import { isCover } from "../covers/cover";
 import type { Element, Point } from "../model/types";
 import { isPolygonType, shapeElementOutline, shapeRectOf, type ShapeRect } from "./geometry";
 
@@ -170,10 +171,11 @@ function curveHandles(el: Element): ReshapeHandle[] {
   ];
 }
 
-/** The reshape handles of `el` ([] when it has none: lines, arrows, plain ink, boxed elements). */
+/** The reshape handles of `el` ([] when it has none: lines, arrows, plain ink, boxed elements, box covers). */
 export function reshapeHandles(el: Element): ReshapeHandle[] {
   if (isCurveStroke(el)) return curveHandles(el);
-  if (el.type !== "shape" || el.points.length === 0) return [];
+  // A box cover moves and scales by its bounds only: a moved corner would make it free-form.
+  if (el.type !== "shape" || el.points.length === 0 || isCover(el)) return [];
   const type = el.shapeType ?? "rectangle";
   if (type === "circle" || type === "ellipse") return roundHandles(el);
   return isPolygonType(type) ? polygonHandles(el) : [];

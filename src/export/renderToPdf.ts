@@ -19,7 +19,7 @@ import { buildBackgroundPattern, type Rect } from "../canvas/background";
 import { CONNECTOR_LABEL_SIZE, connectorCapOutlines, connectorRoute, labelPill } from "../connectors/geometry";
 import { sheetSize } from "../canvas/camera";
 import { graphScene } from "../renderers/graph";
-import { coverOutlineColor } from "../covers/cover";
+import { coverOutlineColor, isCover } from "../covers/cover";
 import { capsuleRuns } from "../ink/capsuleRuns";
 import { traceSmoothPolygon } from "../ink/render";
 import { simplifyEpsForZoom } from "../ink/resample";
@@ -373,16 +373,18 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
   if (!main || main.length === 0) return;
   const closed = isClosedShape(el.shapeType ?? "rectangle");
   const stroke = mapInkColor(el.color, theme);
-  const opacity = fillOpacityOf(el);
+  const cover = isCover(el);
+  // A box cover is always opaque; its hairline keeps it visible on paper of its own colour.
+  const opacity = cover ? 1 : fillOpacityOf(el);
   p.pdf.setLineCap("round");
   p.pdf.setLineJoin("round");
-  p.pdf.setLineWidth(el.width * p.k);
+  p.pdf.setLineWidth(cover ? 0.5 : el.width * p.k);
   if (closed && hasFill(el.fillColor) && opacity > 0) {
     p.colour(mapInkColor(el.fillColor, theme), "fill", opacity);
     p.polyline(main, true);
     p.pdf.fill();
   }
-  p.colour(stroke, "draw");
+  p.colour(cover ? coverOutlineColor(stroke, theme) : stroke, "draw");
   p.polyline(main, closed);
   p.pdf.stroke();
   // Line caps: arrow heads and dots filled with the stroke colour, bars stroked.
@@ -396,7 +398,7 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
       p.pdf.stroke();
     }
   }
-  if (closed) paintShapeLabel(p, el, theme);
+  if (closed && !cover) paintShapeLabel(p, el, theme);
 }
 
 /**

@@ -15,7 +15,7 @@ import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
 import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
-import { isCover } from "../covers/cover";
+import { coverBoxActive, isCover } from "../covers/cover";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
 import LineCapsPopover from "../components/LineCapsPopover";
@@ -381,6 +381,12 @@ function createEngine(
           }
           mode = tool === "none" ? "none" : "tool";
           if (mode === "tool") tools.down(p, tool);
+          return;
+        }
+        // A box cover is dragged out like a shape (the tool controller owns the gesture).
+        if (tool === "cover" && coverBoxActive(s)) {
+          mode = "tool";
+          tools.down(p, "cover-box");
           return;
         }
         // Perfect shapes: the selected shape is edited by its handles with the pen itself; a press

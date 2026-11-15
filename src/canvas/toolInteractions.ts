@@ -25,6 +25,7 @@ import { openLabelPopover } from "../stores/labelPopover";
 import { openAutoComplete } from "../stores/autoComplete";
 import { FRAME_TITLE_BAND, frameTitleRect, isFrame, isNestedFrame, withFrameChildren } from "../frames/contain";
 import { mindmapHit } from "../mindmap/hit";
+import { coverBoxElement, isCover } from "../covers/cover";
 import { isClosedShape, normalizeShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { snapLineEnd } from "../shapes/lineSnap";
 import { isCurveStroke, reshapeHandles } from "../shapes/reshape";
@@ -42,7 +43,8 @@ import type { PointerInfo } from "./input";
 import { gridSpacingOf, snapDelta, snapPoint } from "./snap";
 
 export type Corner = "nw" | "ne" | "sw" | "se";
-export type PointerTool = ToolId | "pan" | "none";
+/** "cover-box": the cover tool with its box shape, pressed like the shape tool. */
+export type PointerTool = ToolId | "pan" | "none" | "cover-box";
 
 /** Corner handle half-size and hit slop (screen px). */
 export const HANDLE_PX = 5;
@@ -312,7 +314,7 @@ type Gesture =
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
-  | { kind: "shape"; start: Vec2; end: Vec2; rect?: Rect }
+  | { kind: "shape"; start: Vec2; end: Vec2; rect?: Rect; cover?: boolean }
   | { kind: "frame"; start: Vec2; end: Vec2; rect?: Rect }
   | {
       kind: "connector";
@@ -558,7 +560,7 @@ export function createToolController(deps: ToolDeps) {
     }
     // A frame opens on its title only (its border band just selects and moves it).
     const frameTitle = !!el && isFrame(el) && hitFrameTitle(el, p, s.camera.z);
-    if (!id || !el || (isFrame(el) && !frameTitle) || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle"))) || isLocked(el)) {
+    if (!id || !el || (isFrame(el) && !frameTitle) || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle") && !isCover(el))) || isLocked(el)) {
       lastTap = null;
       return false;
     }
@@ -626,7 +628,11 @@ export function createToolController(deps: ToolDeps) {
   const clearGuides = () => st().setGuides([]);
 
   /** The shape being dragged, as an element (for the live preview). */
-  const shapePreview = (start: Vec2, end: Vec2): Element[] => {
+  const shapePreview = (start: Vec2, end: Vec2, cover?: boolean): Element[] => {
+    if (cover) {
+      const drag = shapeFromDrag("rectangle", start, end, shift);
+      return [coverBoxElement(st().preset.color, drag, st().pageId ?? "", "cover-preview", "")];
+    }
     const style = shapeStyleOf(deps.getSettings());
     const drag = shapeFromDrag(style.shapeType, start, end, shift);
     return [shapeElement(style, drag, st().pageId ?? "", "shape-preview", "")];
@@ -951,11 +957,11 @@ export function createToolController(deps: ToolDeps) {
       preview = [];
     } else if (tool === "shape" && editDown(p)) {
       // A handle of the shape selected with this tool: it is edited, nothing new is drawn.
-    } else if (tool === "shape") {
+    } else if (tool === "shape" || tool === "cover-box") {
       if (s.selection.size > 0) s.select([]);
       const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
       const q = rect ? clampToRect(snap(p), rect) : snap(p);
-      g = rect === null ? { kind: "idle" } : { kind: "shape", start: q, end: q, rect };
+      g = rect === null ? { kind: "idle" } : { kind: "shape", start: q, end: q, rect, cover: tool === "cover-box" };
       preview = [];
     } else if (tool === "frame") {
       const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
@@ -1091,7 +1097,7 @@ export function createToolController(deps: ToolDeps) {
       }
       case "shape":
         g.end = g.rect ? clampToRect(snap(p), g.rect) : snap(p);
-        preview = shapePreview(g.start, g.end);
+        preview = shapePreview(g.start, g.end, g.cover);
         break;
       case "frame":
         g.end = g.rect ? clampToRect(snap(p), g.rect) : snap(p);
@@ -1230,6 +1236,12 @@ export function createToolController(deps: ToolDeps) {
         break;
       case "shape": {
         drop();
+        if (g.cover) {
+          // A box cover: too short a drag draws nothing and selects nothing.
+          const drag = shapeFromDrag("rectangle", g.start, g.end, shift);
+          if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addCoverBox(drag);
+          break;
+        }
         const style = shapeStyleOf(deps.getSettings());
         const drag = shapeFromDrag(style.shapeType, g.start, g.end, shift);
         if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addShape(style, drag);
@@ -1478,7 +1490,7 @@ export function createToolController(deps: ToolDeps) {
     if (shift === e.shiftKey) return;
     shift = e.shiftKey;
     if (g.kind === "shape" && preview.length > 0) {
-      preview = shapePreview(g.start, g.end);
+      preview = shapePreview(g.start, g.end, g.cover);
       deps.requestLive();
     }
   };

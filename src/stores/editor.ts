@@ -1,5 +1,6 @@
 // Editor state for the single active page. Element mutations are persisted through elementsQueue.
 import { create, type StoreApi, type UseBoundStore } from "zustand";
+import { coverBoxElement, isCover } from "../covers/cover";
 import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
@@ -161,6 +162,8 @@ export interface EditorState {
   addElement(el: Element): void;
   /** Add a shape drawn with the shape tool (one history entry); its id, or null when refused. */
   addShape(style: ShapeStyle, drag: ShapeDrag): string | null;
+  /** A box cover in the cover pen's colour (the cover tool's box shape). */
+  addCoverBox(drag: ShapeDrag): string | null;
   /**
    * Ink to shape: commit `shape` in place of the uncommitted `stroke` as one history entry "Ink to
    * shape". Undo removes the shape and restores the original stroke; redo swaps them back.
@@ -580,7 +583,8 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
 const hasCard = (el: Element): boolean => cardOf(el) !== null;
 
 /** A closed shape: its text is edited in place (shapes are not boxed). */
-const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle");
+// A cover shows no text, so it takes no label.
+const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle") && !isCover(el);
 
 export function createEditorStore(): EditorStore {
   let loadToken = 0;
@@ -779,6 +783,15 @@ export function createEditorStore(): EditorStore {
       const shape = shapeElement(style, drag, pageId, crypto.randomUUID(), new Date().toISOString());
       const el = top > 0 ? withMeta(shape, { zIndex: top }) : shape;
       return record("Shape", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    addCoverBox(drag) {
+      const pageId = get().pageId;
+      if (!pageId) return null;
+      const top = topZ(get().elements.values());
+      const box = coverBoxElement(get().preset.color, drag, pageId, crypto.randomUUID(), new Date().toISOString());
+      const el = top > 0 ? withMeta(box, { zIndex: top }) : box;
+      return record("Cover", [{ type: "add", el }]) ? el.id : null;
     },
 
     replaceStrokeWithShape(stroke, shape) {

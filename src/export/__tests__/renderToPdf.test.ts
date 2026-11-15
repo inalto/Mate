@@ -108,6 +108,26 @@ describe("renderToPdf", () => {
     expect(/\/ca 0\.5/.test(cover), "cover").toBe(false);
   });
 
+  it("draws a cover box opaque with the 0.5 pt outline, ignoring a stored fill opacity", async () => {
+    const blank = page({ backgroundConfig: { type: "blank", spacing: 40, dotRadius: 1.5 } });
+    const coverBox: Element = {
+      ...stroke("b", [{ x: 10, y: 10, pressure: 0.5, timestamp: 0 }, { x: 200, y: 120, pressure: 0.5, timestamp: 1 }]),
+      type: "shape",
+      shapeType: "rectangle",
+      color: "#FDE047",
+      fillColor: "#FDE047",
+      width: 0,
+      content: { fillOpacity: 0.3, cover: true, label: { text: "hidden", fontSize: 16, color: "#000000", align: "center" } },
+    };
+    const plain = { ...coverBox, id: "p", content: { fillOpacity: 0.3 } };
+    const cover = await pdfText(await renderToPdf([coverBox], blank, { ...OPTS, compress: false }, deps()));
+    const ordinary = await pdfText(await renderToPdf([plain], blank, { ...OPTS, compress: false }, deps()));
+    expect(/\/ca 0\.3/.test(ordinary), "ordinary shape keeps its opacity").toBe(true);
+    expect(/\/ca 0\.3/.test(cover), "cover box").toBe(false);
+    expect(cover).toMatch(/^0\.5 w$/m);
+    expect(cover).not.toContain("hidden");
+  });
+
   it("draws a recording marker as a circle with its duration, not a bitmap", async () => {
     const rec = recordingElement(
       "p1",

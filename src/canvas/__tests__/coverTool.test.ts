@@ -166,4 +166,21 @@ describe("the cover tool on the canvas", () => {
     await frame();
     expect(rasters.flat()).not.toContain("cv");
   });
+
+  it("with the box shape a drag adds a cover box that the next raster draws above the ink under it", async () => {
+    await mount();
+    store.getState().selectInk("cover");
+    store.getState().updatePreset({ ...store.getState().preset, coverShape: "box" });
+    await frame();
+    rasters.length = 0;
+    rasters.push([]);
+    drag({ x: 0, y: 0 }, { x: 150, y: 60 });
+    await frame();
+    const box = [...store.getState().elements.values()].find((e) => e.id !== "under" && e.id !== "cv");
+    expect(box).toMatchObject({ type: "shape", content: { cover: true } });
+    expect(store.getState().elements.size).toBe(3);
+    // A shape goes through the store, not commit(): the whole page is re-rastered, covers last.
+    const last = rasters[rasters.length - 1];
+    expect(last.indexOf(box!.id)).toBeGreaterThan(last.indexOf("under"));
+  });
 });

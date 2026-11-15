@@ -5,6 +5,7 @@ import { elementBounds } from "../../tools/spatialIndex";
 import "../builtins";
 import { drawElement, elementSvg } from "../registry";
 import { SHAPE_LABEL_FONT, withShapeLabel } from "../../shapes/label";
+import { coverOutlineColor } from "../../covers/cover";
 
 type Call = [string, ...unknown[]];
 
@@ -303,5 +304,45 @@ describe("shape labels", () => {
   it("lines_and_arrows_ignore_a_stored_label", () => {
     const ln = { ...rect, shapeType: "line" as const, content: { fillOpacity: 1, label: { text: "x", fontSize: 10, color: "#000", align: "center" } } };
     expect(elementSvg(ln, opts)).not.toContain("<text");
+  });
+
+  describe("cover box", () => {
+    const label = { text: "hidden", fontSize: 16, color: "#000000", align: "center" };
+    const box = shape(
+      "rectangle",
+      [
+        [0, 0],
+        [100, 50],
+      ],
+      { color: "#FFFFFF", fillColor: "#FFFFFF", width: 0, content: { fillOpacity: 0.3, cover: true, label } },
+    );
+
+    it("canvas_is_always_opaque_with_the_contrast_outline_and_no_label", () => {
+      const { ctx, calls } = stubCtx();
+      drawElement(ctx, box, { ...opts, zoomBucket: 2 });
+      expect(calls.filter((c) => c[0] === "fill")).toEqual([["fill", "#FFFFFF", 1]]);
+      // 1 screen px wide, in the colour Task 2's stroke covers use, at the fill's alpha.
+      expect(calls.filter((c) => c[0] === "stroke")).toEqual([["stroke", 0.5, coverOutlineColor("#FFFFFF", "light"), "round", 1]]);
+      expect(calls.filter((c) => c[0] === "fillText")).toEqual([]);
+    });
+
+    it("canvas_outline_follows_the_theme", () => {
+      const { ctx, calls } = stubCtx();
+      drawElement(ctx, { ...box, color: "#000000", fillColor: "#000000" }, { ...opts, theme: "dark" });
+      // The cover colour as displayed (ink colours remap in dark themes), mixed toward the text colour.
+      expect(calls.filter((c) => c[0] === "stroke")[0][2]).toBe(coverOutlineColor("#FFFFFF", "dark"));
+    });
+
+    it("svg_is_opaque_outlined_and_has_no_text", () => {
+      const out = elementSvg(box, { ...opts, zoomBucket: 2 });
+      expect(out).not.toContain("fill-opacity");
+      expect(out).not.toContain("<text");
+      expect(out).toContain(`stroke="${coverOutlineColor("#FFFFFF", "light")}"`);
+      expect(out).toContain('stroke-width="0.5"');
+    });
+
+    it("bounds_are_the_rectangle", () => {
+      expect(elementBounds(box)).toMatchObject({ x: 0, y: 0, width: 100, height: 50 });
+    });
   });
 });
