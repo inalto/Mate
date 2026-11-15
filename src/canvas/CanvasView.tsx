@@ -835,6 +835,9 @@ function createEngine(
       unsubscribeSettings();
       unsubscribeAiStatus();
       unsubscribeRun?.();
+      // The run is the pane's but asks on this canvas: with the canvas gone (editor left, page
+      // closed) it is over, rather than coming back later on a page it no longer matches.
+      run?.getState().end();
       unsubscribeSnapshots();
       ro?.disconnect();
       window.removeEventListener("resize", resize);

@@ -170,4 +170,20 @@ describe("CoversMenu", () => {
     expect(runForPane(0).getState().phase).toBe("asking");
     act(() => runForPane(0).getState().end());
   });
+
+  it("while a test asks or shows a cover, Reveal all, Cover all, Remove all and Test me are disabled", async () => {
+    await load([cover("a"), cover("b")]);
+    render(<CoversMenu />);
+    const items = ["Reveal all", "Cover all", "Remove all covers", "Test me"];
+    const disabled = () => items.map((name) => (screen.getByRole("menuitem", { name }) as HTMLButtonElement).disabled);
+    act(() => void runForPane(0).getState().start());
+    await openMenu();
+    expect(disabled()).toEqual([true, true, true, true]);
+    act(() => runForPane(0).getState().reveal());
+    expect(disabled()).toEqual([true, true, true, true]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Reveal all" }));
+    expect([...ed().revealed]).toEqual([runForPane(0).getState().queue[0]]); // nothing more given away
+    act(() => runForPane(0).getState().end());
+    expect(disabled()).toEqual([false, false, false, false]);
+  });
 });

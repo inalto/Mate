@@ -215,6 +215,24 @@ describe("createRun", () => {
     expect(run.getState().answers).toEqual([{ id: "a", knew: true }]);
   });
 
+  it("reloading the same page mid-run leaves the run idle, not done, and keeps the answers", async () => {
+    const run = createRun(editor, deps());
+    run.getState().start();
+    run.getState().reveal();
+    run.getState().answer(true);
+    run.getState().reveal();
+    const load = editor.getState().loadPage("pg"); // leaving the editor and coming back
+    expect(run.getState().phase).toBe("idle");
+    await load;
+    expect(run.getState().phase).toBe("idle");
+    expect(run.getState().endedAt).toBeNull();
+    expect(run.getState().answers).toEqual([{ id: "a", knew: true }]);
+    expect(record).toHaveBeenCalledTimes(1);
+    // A run can start again on the reloaded page.
+    expect(run.getState().start()).toBe(true);
+    expect(run.getState().phase).toBe("asking");
+  });
+
   it("starting a run closes the replay open on the pane", async () => {
     const rec: RecordingContent = { unitId: "u1", spans: [{ wallStart: "2026-11-14T09:00:00.000Z", audioStartMs: 0, durationMs: 60_000 }], segments: [{ assetId: "a1", durationMs: 60_000, mime: "audio/webm" }] };
     ipc.els = [cover("a", 0, 0), recordingElement("pg", "rec", "2026-11-14T09:00:00.000Z", { x: 0, y: 400 }, rec, "Lecture")];

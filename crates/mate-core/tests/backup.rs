@@ -688,6 +688,26 @@ fn a_broken_recall_file_does_not_fail_the_restore() {
 }
 
 #[test]
+fn restored_recall_rows_with_an_empty_element_or_run_id_are_dropped() {
+    let dir = tmp("recall-empty-ids");
+    let assets_dir = dir.join("assets");
+    let (bytes, _) = backup_of(&books_with_recall(), &assets_dir);
+    let at = "2026-11-01T10:00:00.000Z";
+    let rows = json!([
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "", "knew": true, "runId": "r" }, "createdAt": at },
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "c1", "knew": true, "runId": "" }, "createdAt": at },
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "c1", "knew": false, "runId": "r" }, "createdAt": at }
+    ]);
+    let file = with_recall_file(&bytes, &serde_json::to_vec(&rows).unwrap());
+    let mut dest = Storage::open_in_memory().unwrap();
+    restore_backup(&mut dest, Cursor::new(file), &dir.join("restored")).unwrap();
+    let rows = all_recall_rows(&dest);
+    assert_eq!(rows.len(), 1, "only the row with both ids is restored");
+    assert_eq!((rows[0].payload["runId"].as_str(), rows[0].payload["knew"].as_bool()), (Some("r"), Some(false)));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn recall_rows_beyond_the_cap_are_skipped() {
     let dir = tmp("recall-cap");
     let assets_dir = dir.join("assets");

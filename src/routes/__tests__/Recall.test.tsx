@@ -114,6 +114,18 @@ describe("Recall view", () => {
     expect(takeRun("b")).toBe(true);
   });
 
+  it("Test is disabled on a page listed only for old answers (no live cover left)", async () => {
+    ipc.recallUnitStats.mockResolvedValue(stats([{ ...tested("b", 3, 4), covers: 0 }, tested("c", 1, 4)]));
+    renderView();
+    await screen.findByRole("table");
+    const rows = screen.getAllByRole("row").slice(1);
+    const test = (title: string) => within(rows.find((r) => within(r).queryByText(title))!).getByRole("button", { name: "Test" }) as HTMLButtonElement;
+    expect(test("Genes").disabled).toBe(true);
+    expect(test("Organs").disabled).toBe(false);
+    fireEvent.click(test("Genes")); // at most the row's own click opens the page: no run is asked for
+    expect(takeRun("b")).toBe(false);
+  });
+
   it("draws the trend: a polyline for several runs, a dot for one, nothing for none", async () => {
     ipc.recallUnitStats.mockResolvedValue(stats([tested("a", 1, 4, 8, [0.25, 0.5, 0.75]), tested("b", 3, 4, 4, [0.75]), row("c")]));
     renderView();

@@ -58,7 +58,8 @@ pub struct ImportLimits {
     pub total_asset_bytes: u64,
     /// Most `assets/` entries (default [`MAX_ARCHIVE_ASSETS`]).
     pub max_assets: usize,
-    /// Most recall rows a backup book restores (default [`MAX_RECALL_ROWS`]).
+    /// Most recall rows a backup book restores (default [`MAX_RECALL_ROWS`]). Read only by a
+    /// restore; it counts the entries of `recall.json`, the ones then skipped included.
     pub max_recall_rows: usize,
 }
 
@@ -1004,7 +1005,7 @@ struct ImportedIds {
 /// not imported, a trashed one, is dropped) and its `elementId` through `ids.elements` (kept as it
 /// is when the element was not in the archive: a deleted cover, whose answers still count for the
 /// page). A missing or unreadable file restores no rows rather than failing the book; rows that do
-/// not parse, and rows past `max_rows`, are skipped.
+/// not parse, rows with an empty `elementId` or `runId`, and rows past `max_rows`, are skipped.
 fn import_recall(
     storage: &mut Storage,
     zip: &mut ZipArchive<Cursor<&[u8]>>,
@@ -1031,6 +1032,10 @@ fn import_recall(
             let element = p.get("elementId")?.as_str()?;
             let knew = p.get("knew")?.as_bool()?;
             let run = p.get("runId")?.as_str()?;
+            // The live path never stores a row without a cover or a run: neither does a restore.
+            if element.is_empty() || run.is_empty() {
+                return None;
+            }
             let element = ids.elements.get(element).map_or(element, String::as_str);
             Some(LearningEvent {
                 id: new_id(),

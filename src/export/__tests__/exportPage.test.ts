@@ -208,6 +208,24 @@ describe("exportPage", () => {
       expect(sentPdf()).toEqual(["m-pdf0", "m-st1"]);
     });
 
+    it("LaTeX leaves out the text boxes under a cover and keeps the others", async () => {
+      const tb = (id: string, y: number, words: string): Element => ({
+        ...graph,
+        id,
+        type: "text-box",
+        points: [{ x: 0, y, pressure: 0.5, timestamp: 0 }],
+        boxWidth: 200,
+        boxHeight: 40,
+        content: { contentHtml: `<p>${words}</p>`, rawContent: words },
+      });
+      const over: Element = { ...cover, points: [{ x: 0, y: 20, pressure: 0.5, timestamp: 0 }, { x: 200, y: 20, pressure: 0.5, timestamp: 1 }], width: 28 };
+      vi.mocked(loadElements).mockResolvedValue([tb("t1", 0, "Secret answer"), tb("t2", 500, "Open question"), over]);
+      await exportPage("p1", "latex");
+      const tex = new TextDecoder().decode(vi.mocked(writeExportFile).mock.calls[0][1]);
+      expect(tex).toContain("Open question");
+      expect(tex).not.toContain("Secret answer");
+    });
+
     it("hidden does not touch LaTeX (it never draws covers as ink)", async () => {
       await exportPage("p1", "latex", { covers: "hidden" });
       expect(writeExportFile).toHaveBeenCalledTimes(1);

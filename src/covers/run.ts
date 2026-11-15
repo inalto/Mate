@@ -105,13 +105,17 @@ export function createRun(editor: EditorStore, deps?: RunDeps): StoreApi<RunStat
     } else store.setState({ phase: "done", index: queue.length, endedAt: now() });
   };
 
-  /** While the run lasts: another page ends it, and the cover being asked going away moves on. */
+  /**
+   * While the run lasts: another page ends it, and so does a reload of the same one (leaving the
+   * editor and coming back empties the page before it loads again: no cover is missing, the run is
+   * over). The cover being asked going away moves on.
+   */
   const watch = () => {
     unwatch?.();
     unwatch = editor.subscribe((s, prev) => {
       const r = store.getState();
       if (r.phase === "idle") return;
-      if (s.pageId !== r.pageId) return stop();
+      if (s.pageId !== r.pageId || s.loadedPageId !== r.pageId) return stop();
       if (s.elements !== prev.elements && isActive(r) && !live(current(r))) ask(r.index + 1);
     });
   };

@@ -402,6 +402,26 @@ describe("renderToPdf", () => {
     expect(off).not.toContain("Hello searchable");
   });
 
+  it("typed text under a cover stays out of the searchable text layer; other text is kept", async () => {
+    const attrs = { fontFamily: "sans", fontSize: 18, color: "#000000", align: "left" };
+    const hidden = box("h", "text-box", 50, 50, 300, 80, { contentHtml: "<p>Secret answer</p>", rawContent: "Secret answer", textAttributes: attrs });
+    const shown = box("s", "text-box", 50, 400, 300, 80, { contentHtml: "<p>Open question</p>", rawContent: "Open question", textAttributes: attrs });
+    const coverBox: Element = {
+      ...stroke("cv", [{ x: 40, y: 40, pressure: 0.5, timestamp: 0 }, { x: 200, y: 100, pressure: 0.5, timestamp: 1 }]),
+      type: "shape",
+      shapeType: "rectangle",
+      fillColor: "#334155",
+      width: 0,
+      content: { fillOpacity: 1, cover: true },
+    };
+    const out = text(await renderToPdf([hidden, shown, coverBox], page(), { ...OPTS, searchable: true, compress: false }, deps()));
+    expect(out).toContain("(Open question) Tj");
+    expect(out).not.toContain("Secret answer");
+    // A deleted cover hides nothing.
+    const gone = text(await renderToPdf([hidden, { ...coverBox, deletedAt: STAMP }], page(), { ...OPTS, searchable: true, compress: false }, deps()));
+    expect(gone).toContain("(Secret answer) Tj");
+  });
+
   it("math boxes stay out of the searchable text layer", async () => {
     const math = box("m", "text-box", 50, 50, 300, 80, {
       subtype: "math",

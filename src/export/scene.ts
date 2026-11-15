@@ -3,13 +3,14 @@
 // Elements are drawn by their type's renderer (renderers/registry), in z-order.
 import { paintBackground, type BackgroundPage, type Rect, type SurfaceColors } from "../canvas/background";
 import { sheetSize } from "../canvas/camera";
+import { coversOf } from "../covers/cover";
 import { isDarkTheme } from "../ink/theme";
 import type { ThemeName } from "../ink/types";
 import { PAGE_GAP } from "../model/constants";
 import type { Element, Page } from "../model/types";
 import "../renderers/builtins";
 import { drawElement, type RenderOptions } from "../renderers/registry";
-import { elementBounds } from "../tools/spatialIndex";
+import { elementBounds, rectsOverlap } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 
 export const EXPORT_PADDING = 40;
@@ -35,6 +36,23 @@ export function surfaceFor(theme: ThemeName): SurfaceColors {
 /** Live elements of `page`. */
 export const pageElements = (page: Page, elements: Iterable<Element>): Element[] =>
   [...elements].filter((e) => e.pageId === page.id && !e.deletedAt);
+
+/**
+ * Ids of the text boxes whose bounds meet a live cover among `elements`. Their words stay out of
+ * the text an export carries beside the picture (searchable PDF text, LaTeX): a cover drawn over
+ * them must not be read around.
+ */
+export function textUnderCovers(elements: readonly Element[]): Set<string> {
+  const covers = coversOf(elements).map(elementBounds);
+  const out = new Set<string>();
+  if (covers.length === 0) return out;
+  for (const el of elements) {
+    if (el.type !== "text-box" || el.deletedAt) continue;
+    const b = elementBounds(el);
+    if (covers.some((c) => rectsOverlap(c, b))) out.add(el.id);
+  }
+  return out;
+}
 
 /** Bounds of all elements plus `padding` on each side; `null` when there are none. */
 export function contentRegion(elements: Iterable<Element>, padding: number): Rect | null {

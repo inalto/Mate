@@ -802,8 +802,8 @@ export default function SelectionBar() {
           style={{ background: c }}
           aria-label={t("library.colour", { color: c })}
           disabled={allLocked}
-          // A box cover's fill is its colour: the two change together so they stay equal.
-          onClick={() => s().restyleSelection(loneBoxCover ? { color: c, fillColor: c } : { color: c })}
+          // A box cover's fill follows its colour (the store keeps the two equal).
+          onClick={() => s().restyleSelection({ color: c })}
         />
       ))}
       {fillable && (

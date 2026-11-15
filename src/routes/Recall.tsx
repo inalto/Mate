@@ -136,6 +136,8 @@ export default function Recall() {
                       <button
                         type="button"
                         className="btn"
+                        // A page listed only for its old answers has no cover left to ask.
+                        disabled={r.covers === 0}
                         onClick={(e) => {
                           e.stopPropagation();
                           requestRun(r.pageId);

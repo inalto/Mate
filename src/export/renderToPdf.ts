@@ -52,7 +52,7 @@ import { textContentOf } from "../text/textBox";
 import { boxRect, contentMeta, elementBounds, rectsOverlap, withMeta } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 import { drawInLayer, ensureAnnotationLayer } from "./annotationLayer";
-import { exportRegion, pageElements, surfaceFor } from "./scene";
+import { exportRegion, pageElements, surfaceFor, textUnderCovers } from "./scene";
 
 /** Points per page unit (page units are CSS pixels). */
 export const PT_PER_UNIT = 0.75;
@@ -754,6 +754,8 @@ interface SheetContext {
   pdfTiles: PdfTileSet;
   /** Bitmaps by `id|theme` (an element on two sheets of the same theme is rasterised once). */
   bitmaps: Map<string, HTMLCanvasElement | null>;
+  /** Text boxes under a live cover: kept out of the searchable text. */
+  underCovers: ReadonlySet<string>;
 }
 
 /** Paints `sheet`; false when it holds no element (nothing but, possibly, its background). */
@@ -804,7 +806,10 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): boolean {
     p.setOpacity(1);
   }
   // Math boxes are left out: their raw content is LaTeX source, not the text a reader searches for.
-  if (ctx.opts.searchable) for (const el of onSheet) if (el.type === "text-box" && !isMathBox(el)) paintTextLayer(p, el);
+  // So is text under a cover, which the page draws hidden.
+  if (ctx.opts.searchable) {
+    for (const el of onSheet) if (el.type === "text-box" && !isMathBox(el) && !ctx.underCovers.has(el.id)) paintTextLayer(p, el);
+  }
   return onSheet.length > 0;
 }
 
@@ -918,7 +923,7 @@ export async function renderToPdf(
   const orient = ([w, h]: [number, number]) => (w > h ? "landscape" : "portrait");
   const first = size(sheets[0]);
   const pdf = new jsPDF({ unit: "pt", format: first, orientation: orient(first), compress: opts.compress ?? true });
-  const ctx: SheetContext = { page, list, opts, deps, pdfTiles, bitmaps: new Map() };
+  const ctx: SheetContext = { page, list, opts, deps, pdfTiles, bitmaps: new Map(), underCovers: textUnderCovers(list) };
   for (let i = 0; i < sheets.length; i++) {
     if (i > 0) {
       const sz = size(sheets[i]);

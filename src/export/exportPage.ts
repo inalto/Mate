@@ -19,7 +19,7 @@ import { canvasExportLayout, renderToCanvas } from "./renderToCanvas";
 import { readyGraphs } from "./readyGraphs";
 import { renderToLatex } from "./renderToLatex";
 import { renderToSvg } from "./renderToSvg";
-import type { ExportOptions } from "./scene";
+import { textUnderCovers, type ExportOptions } from "./scene";
 
 export type PageExportFormat = "png" | "svg" | "pdf" | "latex";
 
@@ -119,7 +119,9 @@ export async function exportPage(
   const elements = options.mapElements ? options.mapElements(uncovered) : uncovered;
   const filename = pageExportFilename(page.title, EXTENSIONS[format]);
   if (format === "latex") {
-    const tex = renderToLatex(elements.filter((e) => e.pageId === pageId));
+    // LaTeX never draws covers: text under a live one is left out rather than given away.
+    const hidden = textUnderCovers(elements);
+    const tex = renderToLatex(elements.filter((e) => e.pageId === pageId && !hidden.has(e.id)));
     return writeExportFile(filename, new TextEncoder().encode(tex));
   }
   await readyGraphs(elements);

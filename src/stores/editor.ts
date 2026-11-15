@@ -269,7 +269,10 @@ export interface EditorState {
   setLineCaps(id: string, caps: LineCaps): boolean;
   /** Set (or, for empty text / null, remove) a closed shape's label; one "Shape text" history entry. */
   setShapeLabel(id: string, label: ShapeLabel | null): boolean;
-  /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
+  /**
+   * Scribble to erase: delete these elements as one history entry "Scribble erase". When one is a
+   * covered (not revealed) cover only the covers among them go: what a cover hides is never erased.
+   */
   scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
   /**
@@ -608,6 +611,8 @@ export function createEditorStore(): EditorStore {
   const changeListeners = new Set<(change: ElementsChange) => void>();
   /** Actions of the eraser drag in progress (pushed as one entry by endEraser). */
   let eraseBatch: Action[] = [];
+  /** Covered covers the eraser drag in progress removed: what they hid stays unerasable until it ends. */
+  let eraseShields: Element[] = [];
   /** Text box added by addTextBox whose first edit session is still open. */
   let freshText: string | null = null;
   /** Commit of the open edit session (bindEditSession). */
@@ -729,6 +734,7 @@ export function createEditorStore(): EditorStore {
       index.clear();
       clearBindings();
       eraseBatch = [];
+      eraseShields = [];
       presentFrom = null;
       set({
         presenting: null,
@@ -1090,8 +1096,13 @@ export function createEditorStore(): EditorStore {
     },
 
     scribbleErase(ids) {
-      const cur = get().elements;
-      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!);
+      const { elements: cur, revealed } = get();
+      // A scribble over a covered cover takes the cover away, never what it hides.
+      const covered = ids.some((id) => {
+        const el = cur.get(id);
+        return !!el && !el.deletedAt && isCover(el) && !revealed.has(id);
+      });
+      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!) && (!covered || isCover(cur.get(id)!));
       record("Scribble erase", ids.filter(ok).map((id) => ({ type: "delete", el: cur.get(id)! })));
     },
 
@@ -1398,7 +1409,13 @@ export function createEditorStore(): EditorStore {
       const r = eraseAt(s.elements, index, center, radius, mode, {
         eraseShapes: cfg.eraserEraseShapes,
         eraseImages: cfg.eraserEraseImages,
+        revealed: s.revealed,
+        shields: eraseShields,
       });
+      for (const id of r.removed) {
+        const el = s.elements.get(id)!;
+        if (isCover(el) && !s.revealed.has(id)) eraseShields.push(el);
+      }
       let actions: Action[] = r.removed.map((id) => ({ type: "delete", el: s.elements.get(id)! }));
       for (const { removedId, parts } of r.replaced) {
         actions.push({ type: "delete", el: s.elements.get(removedId)! });
@@ -1418,6 +1435,7 @@ export function createEditorStore(): EditorStore {
     },
 
     endEraser() {
+      eraseShields = [];
       flushEraseBatch();
     },
 
@@ -1546,15 +1564,23 @@ export function createEditorStore(): EditorStore {
       const widthOnly = patch.color === undefined && patch.fillColor === undefined;
       const key = widthOnly ? `width:${[...get().selection].sort().join(",")}` : undefined;
       const sized = (el: Element) => el.type === "stroke" || el.type === "shape" || el.type === "connector";
+      // A cover keeps hiding what is under it: a box cover's fill is always its colour and its edge
+      // has no width, and a width meant for other ink never thins a stroke cover (stroke covers
+      // selected on their own still take one).
+      const coversOnly = selectedElements().every((el) => !sized(el) || isCover(el));
+      const widthFits = (el: Element) => sized(el) && (!isCover(el) || (el.type === "stroke" && coversOnly));
       transformSelection(
         "Style",
         (els) =>
-          els.map((el) => ({
-            ...el,
-            ...(patch.color !== undefined ? { color: patch.color } : {}),
-            ...(patch.width !== undefined && sized(el) ? { width: patch.width } : {}),
-            ...(patch.fillColor !== undefined && (el.type === "shape" || isClosedStroke(el)) ? { fillColor: patch.fillColor } : {}),
-          })),
+          els.map((el) => {
+            if (isCover(el) && el.type === "shape") return patch.color !== undefined ? { ...el, color: patch.color, fillColor: patch.color } : el;
+            return {
+              ...el,
+              ...(patch.color !== undefined ? { color: patch.color } : {}),
+              ...(patch.width !== undefined && widthFits(el) ? { width: patch.width } : {}),
+              ...(patch.fillColor !== undefined && !isCover(el) && (el.type === "shape" || isClosedStroke(el)) ? { fillColor: patch.fillColor } : {}),
+            };
+          }),
         key,
       );
     },

@@ -45,7 +45,8 @@ vi.mock("../../ink/scribble", async (orig) => {
   };
 });
 
-import { createEditorStore, type EditorStore } from "../../stores/editor";
+import { runOf } from "../../covers/panes";
+import { createEditorStore, useEditorStore, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { el } from "../../tools/__tests__/fixtures";
 import { worldToScreen } from "../camera";
@@ -68,9 +69,9 @@ const cover = el("cv", [[100, 100], [220, 100]], { width: 28, penStyle: "cover",
 let store: EditorStore;
 let host: HTMLElement;
 
-async function mount() {
+async function mount(on: EditorStore = createEditorStore()) {
   useNotebookStore.setState({ loaded: true });
-  store = createEditorStore();
+  store = on;
   const view = render(createElement(CanvasView, { pageId: "pg", store }));
   host = view.container.querySelector(".canvas-live")!;
   await act(async () => {
@@ -182,5 +183,14 @@ describe("the cover tool on the canvas", () => {
     // A shape goes through the store, not commit(): the whole page is re-rastered, covers last.
     const last = rasters[rasters.length - 1];
     expect(last.indexOf(box!.id)).toBeGreaterThan(last.indexOf("under"));
+  });
+
+  it("closing the canvas ends the pane's study run", async () => {
+    await mount(useEditorStore);
+    const run = runOf(useEditorStore)!;
+    expect(run.getState().start()).toBe(true);
+    expect(run.getState().phase).toBe("asking");
+    cleanup();
+    expect(run.getState().phase).toBe("idle");
   });
 });
