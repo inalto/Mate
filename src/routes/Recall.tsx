@@ -8,22 +8,10 @@ import { showToast } from "../components/Toast";
 import { requestRun } from "../covers/pendingRun";
 import i18n, { errorMessage } from "../i18n";
 import { recallUnitStats } from "../ipc/recall";
-import type { RecallPageStats, RecallRate, RecallUnitStats } from "../model/types";
+import type { RecallUnitStats } from "../model/types";
 import { useNotebookStore } from "../stores/notebook";
+import { percent, sortRows } from "./recallRows";
 import "../covers/covers.css";
-
-const lastRate = (r: RecallPageStats): number => (r.last && r.last.total > 0 ? r.last.known / r.last.total : 0);
-
-/**
- * Pages that were tested first, the weakest last score first (ties: more answers first); pages
- * never tested keep the order they came in (the notebook's).
- */
-export function sortRows(rows: RecallPageStats[]): RecallPageStats[] {
-  const tested = rows.filter((r) => r.last !== null).sort((a, b) => lastRate(a) - lastRate(b) || b.answers - a.answers);
-  return [...tested, ...rows.filter((r) => r.last === null)];
-}
-
-const percent = (r: RecallRate): string => (r.answers > 0 ? `${Math.round((r.known / r.answers) * 100)} %` : "—");
 
 const TREND_W = 60;
 const TREND_H = 20;
@@ -118,7 +106,15 @@ export default function Recall() {
                 {rows.map((r) => (
                   <tr key={r.pageId} className="recall-row" onClick={() => open(r.pageId)}>
                     <td>
-                      <button type="button" className="recall-page" onClick={() => open(r.pageId)}>
+                      <button
+                        type="button"
+                        className="recall-page"
+                        onClick={(e) => {
+                          // The row opens the page too; one click is one navigation.
+                          e.stopPropagation();
+                          open(r.pageId);
+                        }}
+                      >
                         {titleOf(r.pageId)}
                       </button>
                     </td>

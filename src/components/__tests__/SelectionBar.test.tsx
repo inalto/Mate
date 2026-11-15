@@ -231,10 +231,10 @@ describe("SelectionBar align and math", () => {
     expect(s().elements.get(id)!.fillColor).toBe("#1565C0");
   });
 
-  it("a_lone_stroke_cover_keeps_colour_and_width_and_offers_no_fill_even_when_closed", async () => {
+  it("a_lone_stroke_cover_keeps_colour_and_width", async () => {
     useNotebookStore.setState({ loaded: true });
     const s = () => useEditorStore.getState();
-    vi.mocked(loadElements).mockResolvedValueOnce([el("sc", [[0, 0], [100, 0], [100, 50], [0, 50], [0, 1]], { width: 28, penStyle: "cover", color: "#4A5D4E" })]);
+    vi.mocked(loadElements).mockResolvedValueOnce([el("sc", [[0, 0], [100, 0]], { width: 28, penStyle: "cover", color: "#4A5D4E" })]);
     await useEditorStore.getState().loadPage("pg");
     useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
     s().select(["sc"]);

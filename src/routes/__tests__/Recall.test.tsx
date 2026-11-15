@@ -12,7 +12,8 @@ vi.mock("react-router", async (orig) => ({ ...(await orig<typeof import("react-r
 import { takeRun } from "../../covers/pendingRun";
 import { useNotebookStore } from "../../stores/notebook";
 import { useToastStore } from "../../components/Toast";
-import Recall, { sortRows } from "../Recall";
+import Recall from "../Recall";
+import { sortRows } from "../recallRows";
 
 const stamp = "2026-01-01T00:00:00Z";
 const unit: Unit = { id: "u1", title: "Biology", isFavourite: false, isExpanded: true, orderIndex: 0, createdAt: stamp, updatedAt: stamp, version: 0 };
@@ -91,13 +92,15 @@ describe("Recall view", () => {
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows.map((r) => within(r).getAllByRole("cell")[0].textContent)).toEqual(["Organs", "Genes", "Cells"]);
     expect(within(rows[0]).getByText(/1\/4/)).toBeTruthy();
+    expect(within(rows[0]).getByText(new Intl.DateTimeFormat("en", { day: "numeric", month: "short" }).format(new Date("2026-11-10T12:00:00Z")))).toBeTruthy();
     expect(within(rows[2]).getByText("Not tested")).toBeTruthy();
   });
 
   it("opens the page when a row is clicked", async () => {
     ipc.recallUnitStats.mockResolvedValue(stats([tested("b", 3, 4)]));
     renderView();
-    fireEvent.click(await screen.findByText("Genes"));
+    fireEvent.click(await screen.findByRole("button", { name: "Genes" }));
+    expect(navigate).toHaveBeenCalledTimes(1);
     expect(navigate).toHaveBeenCalledWith("/edit/b");
     expect(takeRun("b")).toBe(false);
   });

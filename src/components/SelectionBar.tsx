@@ -716,9 +716,11 @@ export default function SelectionBar() {
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
   // What the fill menu applies to: a shape, or ink that closes on itself.
-  // A lone cover (stroke or box) ignores opacity and fill, and a box's outline derives from its colour.
+  // A lone cover ignores opacity and fill; a box cover's outline derives from its colour (a stroke
+  // cover is never "closed ink", so only the box needs the fill menu hidden).
   const loneCover = selected.length === 1 && selected[0] && isCover(selected[0]) ? selected[0] : undefined;
-  const fillable = loneCover ? undefined : (firstShape ?? selected.find((e) => isClosedStroke(e)));
+  const loneBoxCover = loneCover?.type === "shape" ? loneCover : undefined;
+  const fillable = loneBoxCover ? undefined : (firstShape ?? selected.find((e) => isClosedStroke(e)));
   const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
   const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
   const cardBoxes = selected.filter((e): e is Element => !!e && e.type === "text-box" && !isMathBox(e) && !isLocked(e));
@@ -801,7 +803,7 @@ export default function SelectionBar() {
           aria-label={t("library.colour", { color: c })}
           disabled={allLocked}
           // A box cover's fill is its colour: the two change together so they stay equal.
-          onClick={() => s().restyleSelection(loneCover?.type === "shape" ? { color: c, fillColor: c } : { color: c })}
+          onClick={() => s().restyleSelection(loneBoxCover ? { color: c, fillColor: c } : { color: c })}
         />
       ))}
       {fillable && (
@@ -811,7 +813,7 @@ export default function SelectionBar() {
         </>
       )}
       {loneCover && <CoverHistory id={loneCover.id} />}
-      {first && !(loneCover?.type === "shape") && (
+      {first && !loneBoxCover && (
         <>
           <span className="tb-sep" />
           <label className="tb-width" title={t("selection.widthPx")}>
