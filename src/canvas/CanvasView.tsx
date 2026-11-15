@@ -17,6 +17,8 @@ import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } 
 import { renderOrder } from "../tools/zorder";
 import { coverBoxActive, isCover } from "../covers/cover";
 import { coverTargetOf, dimOf } from "../covers/tap";
+import { runOf } from "../covers/panes";
+import { current, isActive } from "../covers/run";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
 import LineCapsPopover from "../components/LineCapsPopover";
@@ -52,6 +54,12 @@ import { markerTargetOf } from "../recording/panes";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
+
+/** Width of the outline around the cover a study run is asking (screen px). */
+const ASKED_OUTLINE_PX = 2;
+
+/** The accent colour of the interface (the study run's outline). */
+const accentColor = (): string => getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim() || SNAP_FLASH_COLOR;
 
 /** Quiet period after the last camera change before the snapshot is re-rasterised. */
 const RASTER_DEBOUNCE_MS = 150;
@@ -101,6 +109,7 @@ function createEngine(
   const theme = (): ThemeName => getSettings().theme;
   let dpr = window.devicePixelRatio || 1;
   let colors = surfaceColors();
+  let accent = accentColor();
   let staticQueued = false;
   let liveQueued = false;
   let rasterTimer: ReturnType<typeof setTimeout> | null = null;
@@ -231,12 +240,27 @@ function createEngine(
     }
     if (flash && performance.now() < flash.until) drawSnapFlash(lctx, flash.shape, c, dpr, SNAP_FLASH_COLOR);
     const antsMove = tools.draw(lctx, c, dpr); // marching ants animate while selected
+    drawAsked(c);
     // Tutor markers sit above the ink and below the DOM overlay; the ring turns while checking.
     const tutorMarkersNow = markersNow();
     const ringTurns = drawTutorMarkers(lctx, tutorMarkersNow, c, dpr, theme(), performance.now());
     const hovered = hoverGroup ? tutorMarkersNow.find((m) => m.groupId === hoverGroup) : undefined;
     if (hovered) drawTutorTip(lctx, hovered, c, dpr);
     if (antsMove || ringTurns) requestLive();
+  };
+  const run = runOf(store);
+  /** The study run's current cover, outlined just outside its bounds. */
+  const drawAsked = (c: Camera) => {
+    const r = run?.getState();
+    const id = r && isActive(r) ? current(r) : undefined;
+    const el = id === undefined || !ready() ? undefined : st().elements.get(id);
+    if (!lctx || !el || el.deletedAt) return;
+    const b = elementBounds(el);
+    const half = ASKED_OUTLINE_PX / 2;
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    lctx.strokeStyle = accent;
+    lctx.lineWidth = ASKED_OUTLINE_PX;
+    lctx.strokeRect(b.x * c.z + c.x - half, b.y * c.z + c.y - half, b.width * c.z + ASKED_OUTLINE_PX, b.height * c.z + ASKED_OUTLINE_PX);
   };
   const requestLive = () => {
     if (liveQueued) return;
@@ -743,6 +767,10 @@ function createEngine(
     }
   });
   const unsubscribeAiStatus = useAiStatus.subscribe(() => requestLive());
+  // The study run moved to another cover (or ended): the outline follows.
+  const unsubscribeRun = run?.subscribe((s, prev) => {
+    if (s.phase !== prev.phase || s.index !== prev.index || s.queue !== prev.queue) requestLive();
+  });
   const unsubscribeSnapshots = boxSnapshots.subscribe(() => {
     cache.invalidate();
     requestStatic();
@@ -789,6 +817,7 @@ function createEngine(
     /** Theme or token change: re-read colours and re-rasterise. */
     restyle() {
       colors = surfaceColors();
+      accent = accentColor();
       cache.invalidate();
       requestStatic();
       requestLive();
@@ -805,6 +834,7 @@ function createEngine(
       unsubscribeTutor();
       unsubscribeSettings();
       unsubscribeAiStatus();
+      unsubscribeRun?.();
       unsubscribeSnapshots();
       ro?.disconnect();
       window.removeEventListener("resize", resize);

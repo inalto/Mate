@@ -1,10 +1,13 @@
 import type { MarkerTarget } from "../canvas/toolInteractions";
 import type { EditorState, EditorStore } from "../stores/editor";
 import { isCover } from "./cover";
+import { runOf } from "./panes";
+import { current, isActive } from "./run";
 
 /**
  * The page's recall covers as a tap sees them (`createReplayTap`): a live cover is a target, and
- * "opening" one peeks under it or covers it again.
+ * "opening" one peeks under it or covers it again. During the pane's study run a tap only reveals
+ * the cover being asked; peeking at any other would give its answer away.
  */
 export function coverTargetOf(editor: EditorStore): MarkerTarget {
   return {
@@ -13,7 +16,9 @@ export function coverTargetOf(editor: EditorStore): MarkerTarget {
       return !!el && !el.deletedAt && isCover(el);
     },
     open(id) {
-      editor.getState().toggleReveal(id);
+      const run = runOf(editor)?.getState();
+      if (!run || !isActive(run)) return editor.getState().toggleReveal(id);
+      if (run.phase === "asking" && current(run) === id) run.reveal();
     },
   };
 }

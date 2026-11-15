@@ -1553,6 +1553,16 @@
     "lastTest": "Ultima prova: {{known}} su {{total}}, {{date}}",
     "notTested": "Non ancora provata",
     "removeLockedStay_one": "{{count}} copertura bloccata resta.",
-    "removeLockedStay_other": "{{count}} coperture bloccate restano."
+    "removeLockedStay_other": "{{count}} coperture bloccate restano.",
+    "run": {
+      "progress": "{{n}} di {{total}}",
+      "reveal": "Scopri",
+      "knew": "La sapevo",
+      "missed": "Sbagliata",
+      "score": "Ne sapevi {{known}} su {{total}} in {{time}}.",
+      "repeatMissed": "Ripeti le sbagliate",
+      "done": "Fine",
+      "end": "Termina la prova"
+    }
   }
 }

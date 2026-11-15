@@ -12,10 +12,11 @@ import type { RecallRun } from "../model/types";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { isLocked } from "../model/content";
 import { coversOf } from "./cover";
+import { runOf } from "./panes";
 import "./covers.css";
 
 interface Props {
-  /** Starts a test run on the page's covers. */
+  /** Starts a test run on the page's covers (default: the focused pane's run). */
   onTest?: () => void;
 }
 
@@ -101,7 +102,7 @@ export default function CoversMenu({ onTest }: Props) {
                 {last ? t("covers.lastTest", { known: last.known, total: last.total, date: new Intl.DateTimeFormat(i18n.language, { day: "numeric", month: "short" }).format(new Date(last.at)) }) : t("covers.notTested")}
               </div>
             )}
-            <button type="button" role="menuitem" className="tb-menu-item" onClick={pick(() => onTest?.())}>
+            <button type="button" role="menuitem" className="tb-menu-item" onClick={pick(() => (onTest ? onTest() : runOf(ed)?.getState().start()))}>
               <GraduationCap size={16} aria-hidden="true" /> {t("covers.testMe")}
             </button>
           </div>

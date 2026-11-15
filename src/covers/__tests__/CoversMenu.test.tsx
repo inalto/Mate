@@ -5,7 +5,7 @@ import { el } from "../../tools/__tests__/fixtures";
 
 const queue = vi.hoisted(() => ({ enqueueUpsert: vi.fn(), enqueueDelete: vi.fn(), flushAll: vi.fn(async () => {}), pending: () => 0, failed: () => 0 }));
 const loaded = vi.hoisted(() => ({ els: [] as Element[] }));
-const stats = vi.hoisted(() => ({ recallPageStats: vi.fn() }));
+const stats = vi.hoisted(() => ({ recallPageStats: vi.fn(), recordRecall: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: queue }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.els) }));
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
@@ -14,6 +14,7 @@ vi.mock("../../ipc/recall", () => stats);
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import CoversMenu from "../CoversMenu";
+import { runForPane } from "../panes";
 
 const cover = (id: string) => el(id, [[0, 0], [100, 0]], { width: 28, penStyle: "cover" });
 const ink = el("ink", [[0, 100], [100, 100]]);
@@ -151,5 +152,14 @@ describe("CoversMenu", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Test me" }));
     expect(onTest).toHaveBeenCalledOnce();
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("Test me without onTest starts the focused pane's run", async () => {
+    await load([cover("a"), cover("b")]);
+    render(<CoversMenu />);
+    await openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Test me" }));
+    expect(runForPane(0).getState().phase).toBe("asking");
+    act(() => runForPane(0).getState().end());
   });
 });

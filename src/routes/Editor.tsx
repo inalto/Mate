@@ -29,6 +29,8 @@ import TutorController from "../tutor/TutorController";
 import { disposeAll, disposeClosedPages } from "../code/runtime";
 import { replayForPane, watchPaneReplays } from "../recording/panes";
 import ReplayBar from "../recording/ReplayBar";
+import { runForPane } from "../covers/panes";
+import StudyBar from "../covers/StudyBar";
 
 const closePaperPicker = () => useChromeStore.getState().setPaperPickerOpen(false);
 
@@ -157,6 +159,7 @@ export default function Editor() {
                 <PaneOverlay store={editorForPane(i as PaneIndex)} />
                 <PresentationBar store={editorForPane(i as PaneIndex)} />
                 <ReplayBar store={editorForPane(i as PaneIndex)} replay={replayForPane(i as PaneIndex)} />
+                <StudyBar store={editorForPane(i as PaneIndex)} run={runForPane(i as PaneIndex)} />
               </div>
             ))}
           </div>

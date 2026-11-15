@@ -1538,6 +1538,16 @@
     "testMe": "Test me",
     "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
     "notTested": "Not tested yet",
-    "removeLockedStay_other": "{{count}} locked covers stay."
+    "removeLockedStay_other": "{{count}} locked covers stay.",
+    "run": {
+      "progress": "{{n}} of {{total}}",
+      "reveal": "Reveal",
+      "knew": "Knew it",
+      "missed": "Missed",
+      "score": "You knew {{known}} of {{total}} in {{time}}.",
+      "repeatMissed": "Repeat missed",
+      "done": "Done",
+      "end": "End test"
+    }
   }
 }

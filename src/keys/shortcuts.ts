@@ -68,6 +68,16 @@ export function bindLiveShortcuts(dispatch: ShortcutDispatch, only?: readonly Sh
   };
 }
 
+/** Focus on (or in) one of these keeps its own keys (the replay and study bars leave them alone). */
+const OWN_KEYS = "button, a, input, select, textarea, [contenteditable], [role=slider], [role=separator], [role=tab], [role=treeitem], [role=menuitem], [role=dialog]";
+
+/** The key is aimed at the page itself, `pane` or its canvas, not at a control. */
+export function aimedAtPage(target: EventTarget | null, pane: Element | null): boolean {
+  if (typeof document === "undefined") return false;
+  if (target === document.body || target === document.documentElement) return true;
+  return target instanceof Element && !!pane?.contains(target) && target.closest(OWN_KEYS) === null;
+}
+
 /** Input types that take typed text; sliders, checkboxes, radios, colour pickers and buttons do not. */
 const TEXT_INPUT_TYPES = new Set(["", "text", "search", "email", "url", "tel", "password", "number"]);
 

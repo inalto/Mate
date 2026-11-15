@@ -26,3 +26,23 @@
   font-size: 0.8125rem;
   white-space: nowrap;
 }
+
+/* The study bar of "Test me": the replay bar's look, sized to its few controls. */
+.selection-bar.study-bar {
+  max-width: 520px;
+  column-gap: var(--space-3);
+}
+
+.study-bar .tb-btn.study-primary {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.study-bar .replay-label {
+  padding-inline: var(--space-2);
+}
+
+.study-score {
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
