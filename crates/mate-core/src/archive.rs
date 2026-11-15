@@ -6,6 +6,10 @@
 //! `content.pdfSourceKey` or a recording's `content.recording.segments[].assetId`). Importing re-mints every id, asset ids included, so an archive can
 //! be imported any number of times; a referenced asset missing from the archive leaves the
 //! element's id dangling (the element renders its placeholder).
+//!
+//! A book written into a backup also carries `recall.json`, the cover study answers (a JSON array
+//! of `learning_events` rows). Only the backup writer adds it and only [`restore_backup`] reads
+//! it: an exported or shared book never says how its author scored.
 
 use std::collections::{HashMap, HashSet};
 use std::io::{Cursor, Read, Seek, Write};
@@ -21,7 +25,7 @@ use crate::assets;
 use crate::model::{Element, ElementType, Page, Section, Unit, format_iso, new_id, now_iso};
 use crate::import::MAX_MARKERS_PER_PAGE;
 use crate::storage::elements::{MAX_ELEMENTS_PER_PAGE, MAX_POINTS_PER_STROKE, is_recording_marker};
-use crate::storage::{EntityKind, Result, Storage, StorageError};
+use crate::storage::{EntityKind, LearningEvent, RECALL_KIND, Result, Storage, StorageError};
 
 pub const ARCHIVE_FORMAT: &str = "mate-archive";
 pub const ARCHIVE_SCHEMA_VERSION: u32 = 1;
@@ -42,6 +46,10 @@ const RECORDINGS_DIR: &str = "recordings/";
 const BACKUP_FORMAT: &str = "mate-backup";
 /// Most `assets/` entries an archive may carry.
 pub const MAX_ARCHIVE_ASSETS: usize = 2000;
+/// Most recall rows one book of a backup restores; rows past it are skipped.
+pub const MAX_RECALL_ROWS: usize = 50_000;
+/// A backup book's recall answers.
+const RECALL_FILE: &str = "recall.json";
 
 /// Bounds on what an import may write to the asset store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +58,9 @@ pub struct ImportLimits {
     pub total_asset_bytes: u64,
     /// Most `assets/` entries (default [`MAX_ARCHIVE_ASSETS`]).
     pub max_assets: usize,
+    /// Most recall rows a backup book restores (default [`MAX_RECALL_ROWS`]). Read only by a
+    /// restore; it counts the entries of `recall.json`, the ones then skipped included.
+    pub max_recall_rows: usize,
 }
 
 impl Default for ImportLimits {
@@ -57,6 +68,7 @@ impl Default for ImportLimits {
         ImportLimits {
             total_asset_bytes: MAX_ARCHIVE_BYTES as u64,
             max_assets: MAX_ARCHIVE_ASSETS,
+            max_recall_rows: MAX_RECALL_ROWS,
         }
     }
 }
@@ -165,7 +177,7 @@ pub fn export_unit(
     assets_dir: &Path,
     recordings: Recordings,
 ) -> Result<Vec<u8>> {
-    export_unit_capped(storage, unit_id, assets_dir, MAX_ARCHIVE_BYTES as u64, recordings)?
+    export_unit_capped(storage, unit_id, assets_dir, MAX_ARCHIVE_BYTES as u64, recordings, false)?
         .map(|e| e.bytes)
         .ok_or_else(|| limit(TOO_LARGE))
 }
@@ -174,12 +186,15 @@ pub fn export_unit(
 /// `cap`. The asset files' sizes are checked before any of them is read, and each one is copied
 /// into the zip from disk rather than loaded whole. With [`Recordings::External`] the segment
 /// assets are neither archived nor counted against `cap`; their ids are returned instead.
+/// `private` (the backup writer only) adds the unit's recall rows as `recall.json`, when it has
+/// any; an export or a share must never carry them.
 fn export_unit_capped(
     storage: &Storage,
     unit_id: &str,
     assets_dir: &Path,
     cap: u64,
     recordings: Recordings,
+    private: bool,
 ) -> Result<Option<Exported>> {
     let tree = storage.list_tree()?;
     let unit = tree
@@ -269,6 +284,12 @@ fn export_unit_capped(
         zip.start_file(format!("assets/{id}.{ext}"), stored)
             .map_err(zip_err)?;
         std::io::copy(&mut file, &mut zip).map_err(io_err)?;
+    }
+    if private {
+        let rows = storage.recall_rows(unit_id)?;
+        if !rows.is_empty() {
+            put(&mut zip, RECALL_FILE, serde_json::to_vec(&rows)?)?;
+        }
     }
     let unit_file = UnitFile {
         unit,
@@ -367,6 +388,7 @@ pub fn write_backup_capped<W: Write + Seek>(
             assets_dir,
             max_book_bytes,
             Recordings::External,
+            true,
         )? else {
             report.skipped.push(SkippedBook {
                 unit_id: unit.id.clone(),
@@ -511,6 +533,27 @@ pub fn restore_backup_capped<R: Read + Seek>(
     assets_dir: &Path,
     max_audio_bytes: u64,
 ) -> Result<RestoreReport> {
+    restore_backup_with(storage, backup, assets_dir, max_audio_bytes, ImportLimits::default())
+}
+
+/// [`restore_backup`] with the per-book recall row cap passed in (tests use a small one).
+pub fn restore_backup_recall_capped<R: Read + Seek>(
+    storage: &mut Storage,
+    backup: R,
+    assets_dir: &Path,
+    max_recall_rows: usize,
+) -> Result<RestoreReport> {
+    let limits = ImportLimits { max_recall_rows, ..ImportLimits::default() };
+    restore_backup_with(storage, backup, assets_dir, assets::MAX_MEDIA_BYTES as u64, limits)
+}
+
+fn restore_backup_with<R: Read + Seek>(
+    storage: &mut Storage,
+    backup: R,
+    assets_dir: &Path,
+    max_audio_bytes: u64,
+    limits: ImportLimits,
+) -> Result<RestoreReport> {
     let mut zip =
         ZipArchive::new(backup).map_err(|_| limit("not a Mate backup (not a zip file)"))?;
     let manifest = read_entry(&mut zip, "backup.json", MAX_JSON_ENTRY_BYTES)?
@@ -579,7 +622,7 @@ pub fn restore_backup_capped<R: Read + Seek>(
                 continue;
             }
         };
-        match import_archive_from(storage, &bytes, assets_dir, ImportLimits::default(), Some(&audio)) {
+        match import_archive_from(storage, &bytes, assets_dir, limits, Some(&audio), true) {
             Ok(book) => {
                 if book.lost_audio {
                     report.lost_recordings.push(book.title);
@@ -674,7 +717,7 @@ pub fn import_archive_with_limits(
     assets_dir: &Path,
     limits: ImportLimits,
 ) -> Result<ImportReport> {
-    import_archive_from(storage, bytes, assets_dir, limits, None).map(|book| book.report)
+    import_archive_from(storage, bytes, assets_dir, limits, None, false).map(|book| book.report)
 }
 
 /// What [`import_archive_from`] imported.
@@ -688,13 +731,15 @@ struct ImportedBook {
 /// [`import_archive_with_limits`], resolving recording segments through `external` (old -> new
 /// asset id of audio already in the store, from a backup's `recordings/`) before the archive's
 /// own `assets/`. With `external`, a marker none of whose segments resolves loses `recording`
-/// and `image_url`, as in a [`Recordings::Exclude`] archive.
+/// and `image_url`, as in a [`Recordings::Exclude`] archive. Only `private` (a restore) reads the
+/// book's `recall.json`; a plain import ignores it.
 fn import_archive_from(
     storage: &mut Storage,
     bytes: &[u8],
     assets_dir: &Path,
     limits: ImportLimits,
     external: Option<&HashMap<String, String>>,
+    private: bool,
 ) -> Result<ImportedBook> {
     if bytes.len() > MAX_ARCHIVE_BYTES {
         return Err(limit("archive is larger than 512 MiB"));
@@ -727,7 +772,13 @@ fn import_archive_from(
         unit_file,
         &new_unit_id,
         order_index,
-    );
+    )
+    .and_then(|(report, ids)| {
+        if private {
+            import_recall(storage, &mut zip, &ids, limits.max_recall_rows)?;
+        }
+        Ok(report)
+    });
     if result.is_err() {
         let _ = storage.purge(EntityKind::Unit, &new_unit_id);
         for id in imported.minted.values().flatten() {
@@ -943,6 +994,62 @@ fn keep_created_at(created_at: &str, now: &str) -> String {
         .unwrap_or_else(|_| now.to_owned())
 }
 
+/// Old -> new ids of what [`write_unit`] imported.
+struct ImportedIds {
+    pages: HashMap<String, String>,
+    elements: HashMap<String, String>,
+}
+
+/// Restores a backup book's `recall.json` onto the imported pages and covers. Each row gets a new
+/// id and keeps its `runId` and time; its page goes through `ids.pages` (a row of a page that was
+/// not imported, a trashed one, is dropped) and its `elementId` through `ids.elements` (kept as it
+/// is when the element was not in the archive: a deleted cover, whose answers still count for the
+/// page). A missing or unreadable file restores no rows rather than failing the book; rows that do
+/// not parse, rows with an empty `elementId` or `runId`, and rows past `max_rows`, are skipped.
+fn import_recall(
+    storage: &mut Storage,
+    zip: &mut ZipArchive<Cursor<&[u8]>>,
+    ids: &ImportedIds,
+    max_rows: usize,
+) -> Result<()> {
+    let Ok(Some(raw)) = read_entry(zip, RECALL_FILE, MAX_JSON_ENTRY_BYTES) else {
+        return Ok(());
+    };
+    let Ok(rows) = serde_json::from_slice::<Vec<serde_json::Value>>(&raw) else {
+        return Ok(());
+    };
+    let now = now_iso();
+    let restored: Vec<LearningEvent> = rows
+        .into_iter()
+        .take(max_rows)
+        .filter_map(|row| {
+            let row: LearningEvent = serde_json::from_value(row).ok()?;
+            if row.kind != RECALL_KIND {
+                return None;
+            }
+            let page_id = ids.pages.get(&row.page_id)?;
+            let p = &row.payload;
+            let element = p.get("elementId")?.as_str()?;
+            let knew = p.get("knew")?.as_bool()?;
+            let run = p.get("runId")?.as_str()?;
+            // The live path never stores a row without a cover or a run: neither does a restore.
+            if element.is_empty() || run.is_empty() {
+                return None;
+            }
+            let element = ids.elements.get(element).map_or(element, String::as_str);
+            Some(LearningEvent {
+                id: new_id(),
+                page_id: page_id.clone(),
+                stroke_group_id: None,
+                kind: RECALL_KIND.into(),
+                payload: serde_json::json!({ "elementId": element, "knew": knew, "runId": run }),
+                created_at: keep_created_at(&row.created_at, &now),
+            })
+        })
+        .collect();
+    storage.insert_recall_rows(&restored)
+}
+
 fn write_unit(
     storage: &mut Storage,
     zip: &mut ZipArchive<Cursor<&[u8]>>,
@@ -950,7 +1057,7 @@ fn write_unit(
     file: UnitFile,
     new_unit_id: &str,
     order_index: i64,
-) -> Result<ImportReport> {
+) -> Result<(ImportReport, ImportedIds)> {
     let now = now_iso();
     storage.upsert_unit(&Unit {
         id: new_unit_id.to_string(),
@@ -1030,6 +1137,8 @@ fn write_unit(
     let mut elements_count = 0;
     let mut skipped = 0;
     let mut group_ids: HashMap<String, String> = HashMap::new();
+    // Every page's element ids, for the recall pass after the pages are written.
+    let mut all_element_ids: HashMap<String, String> = HashMap::new();
     for old_page in &order {
         let Some(raw) = read_entry(zip, &format!("pages/{old_page}.json"), MAX_JSON_ENTRY_BYTES)? else {
             continue;
@@ -1087,12 +1196,14 @@ fn write_unit(
         }
         elements_count += batch.len();
         storage.upsert_elements(&batch)?;
+        all_element_ids.extend(element_ids);
     }
 
-    Ok(ImportReport {
+    let report = ImportReport {
         unit_id: new_unit_id.to_string(),
         pages: order.len(),
         elements: elements_count,
         skipped,
-    })
+    };
+    Ok((report, ImportedIds { pages: page_ids, elements: all_element_ids }))
 }

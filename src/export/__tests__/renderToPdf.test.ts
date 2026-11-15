@@ -99,6 +99,35 @@ describe("renderToPdf", () => {
     expect(height).toBeGreaterThan(250 * PT_PER_UNIT);
   });
 
+  it("draws a cover stroke opaque while a highlighter stays at half opacity", async () => {
+    // A blank page: the ruled background draws its own half-opacity lines.
+    const blank = page({ backgroundConfig: { type: "blank", spacing: 40, dotRadius: 1.5 } });
+    const cover = await pdfText(await renderToPdf([stroke("c", line(0, 0, 300, 0), "cover")], blank, OPTS, deps()));
+    const marker = await pdfText(await renderToPdf([stroke("h", line(0, 0, 300, 0), "highlighter")], blank, OPTS, deps()));
+    expect(/\/ca 0\.5/.test(marker), "highlighter").toBe(true);
+    expect(/\/ca 0\.5/.test(cover), "cover").toBe(false);
+  });
+
+  it("draws a cover box opaque with the 0.5 pt outline, ignoring a stored fill opacity", async () => {
+    const blank = page({ backgroundConfig: { type: "blank", spacing: 40, dotRadius: 1.5 } });
+    const coverBox: Element = {
+      ...stroke("b", [{ x: 10, y: 10, pressure: 0.5, timestamp: 0 }, { x: 200, y: 120, pressure: 0.5, timestamp: 1 }]),
+      type: "shape",
+      shapeType: "rectangle",
+      color: "#FDE047",
+      fillColor: "#FDE047",
+      width: 0,
+      content: { fillOpacity: 0.3, cover: true, label: { text: "hidden", fontSize: 16, color: "#000000", align: "center" } },
+    };
+    const plain = { ...coverBox, id: "p", content: { fillOpacity: 0.3 } };
+    const cover = await pdfText(await renderToPdf([coverBox], blank, { ...OPTS, compress: false }, deps()));
+    const ordinary = await pdfText(await renderToPdf([plain], blank, { ...OPTS, compress: false }, deps()));
+    expect(/\/ca 0\.3/.test(ordinary), "ordinary shape keeps its opacity").toBe(true);
+    expect(/\/ca 0\.3/.test(cover), "cover box").toBe(false);
+    expect(cover).toMatch(/^0\.5 w$/m);
+    expect(cover).not.toContain("hidden");
+  });
+
   it("draws a recording marker as a circle with its duration, not a bitmap", async () => {
     const rec = recordingElement(
       "p1",
@@ -371,6 +400,26 @@ describe("renderToPdf", () => {
     expect(on).toMatch(/\b3 Tr\b/);
     const off = text(await renderToPdf([tb], page(), { ...OPTS, compress: false }, deps()));
     expect(off).not.toContain("Hello searchable");
+  });
+
+  it("typed text under a cover stays out of the searchable text layer; other text is kept", async () => {
+    const attrs = { fontFamily: "sans", fontSize: 18, color: "#000000", align: "left" };
+    const hidden = box("h", "text-box", 50, 50, 300, 80, { contentHtml: "<p>Secret answer</p>", rawContent: "Secret answer", textAttributes: attrs });
+    const shown = box("s", "text-box", 50, 400, 300, 80, { contentHtml: "<p>Open question</p>", rawContent: "Open question", textAttributes: attrs });
+    const coverBox: Element = {
+      ...stroke("cv", [{ x: 40, y: 40, pressure: 0.5, timestamp: 0 }, { x: 200, y: 100, pressure: 0.5, timestamp: 1 }]),
+      type: "shape",
+      shapeType: "rectangle",
+      fillColor: "#334155",
+      width: 0,
+      content: { fillOpacity: 1, cover: true },
+    };
+    const out = text(await renderToPdf([hidden, shown, coverBox], page(), { ...OPTS, searchable: true, compress: false }, deps()));
+    expect(out).toContain("(Open question) Tj");
+    expect(out).not.toContain("Secret answer");
+    // A deleted cover hides nothing.
+    const gone = text(await renderToPdf([hidden, { ...coverBox, deletedAt: STAMP }], page(), { ...OPTS, searchable: true, compress: false }, deps()));
+    expect(gone).toContain("(Secret answer) Tj");
   });
 
   it("math boxes stay out of the searchable text layer", async () => {

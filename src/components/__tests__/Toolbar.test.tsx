@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router";
+import { EyeSlash } from "@phosphor-icons/react";
 
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
@@ -91,6 +92,19 @@ describe("Toolbar", () => {
     expect(useSettingsStore.getState().settings.toolbarPresets.map((p) => p.id)).not.toContain("preset-4");
     expect(screen.queryByRole("button", { name: "Highlighter #FDE047" })).toBeNull();
     expect(screen.getByRole("button", { name: "Undo" })).toHaveProperty("disabled", true);
+  });
+
+  it("the add-pen menu lists four inks and a cover preset gets the cover icon", () => {
+    renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Add pen" }));
+    const items = screen.getAllByRole("menuitem").map((i) => i.textContent?.trim());
+    expect(items).toEqual(["Pen", "Fountain pen", "Highlighter", "Cover"]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Cover" }));
+    const slot = screen.getByRole("button", { name: "Cover #334155" });
+    const path = (root: Element) => root.querySelector("svg path")?.getAttribute("d");
+    const ref = render(<EyeSlash size={18} weight="fill" />);
+    expect(path(slot)).toBe(path(ref.container));
+    expect(useEditorStore.getState().tool).toBe("cover");
   });
 
   it("insert_space_button_selects_tool_and_opens_options", () => {

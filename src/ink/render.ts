@@ -1,6 +1,7 @@
 import { getStroke } from "perfect-freehand";
 import { capsuleRuns } from "./capsuleRuns";
 import { simplifyEpsForZoom } from "./resample";
+import { coverOutlineColor } from "../covers/cover";
 import { strokeFill } from "./closed";
 import { detectRealPressure, penParams, strokeDiscs } from "./strokePoints";
 import { isDarkTheme, mapInkColor } from "./theme";
@@ -66,10 +67,22 @@ export function renderStroke(
     ctx.globalCompositeOperation = isDarkTheme(theme) ? "screen" : "multiply";
   }
 
+  // A cover on paper of its own colour would vanish: a hairline in a darker (or lighter) tone
+  // keeps its edge. It uses the fill's alpha, and is 1 screen px wide at any zoom.
+  const outline = (path?: Path2D) => {
+    if (style !== "cover") return;
+    ctx.strokeStyle = coverOutlineColor(color, theme);
+    ctx.lineWidth = 1 / Math.max(zoomBucket, 1e-6);
+    ctx.lineJoin = "round";
+    if (path) ctx.stroke(path);
+    else ctx.stroke();
+  };
+
   if (pts.length === 1) {
     ctx.beginPath();
     ctx.arc(pts[0].x, pts[0].y, Math.max(el.width / 2, 0.4), 0, Math.PI * 2);
     ctx.fill();
+    outline();
     ctx.restore();
     return;
   }
@@ -85,10 +98,12 @@ export function renderStroke(
         const path = new Path2D();
         traceSmoothPolygon(path, poly);
         ctx.fill(path);
+        outline(path);
       } else {
         ctx.beginPath();
         traceSmoothPolygon(ctx, poly);
         ctx.fill();
+        outline();
       }
     }
   } else {

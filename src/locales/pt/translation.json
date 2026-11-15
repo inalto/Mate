@@ -137,6 +137,8 @@
       "penWidth": "Espessura da caneta",
       "highlighterColor": "Cor do marca-texto",
       "highlighterWidth": "Espessura do marca-texto",
+      "coverColor": "Cor da cobertura",
+      "coverWidth": "Largura da cobertura",
       "stabilization": {
         "label": "Estabilização do traço",
         "hint": "Suaviza tremores; quanto maior, mais a caneta atrasa um pouco"
@@ -557,6 +559,7 @@
       "autoShapes": "Alternar formas perfeitas",
       "pen": "Caneta",
       "highlighter": "Marca-texto",
+      "cover": "Ferramenta de cobertura",
       "eraser": "Borracha",
       "cursor": "Selecionar (cursor)",
       "lasso": "Laço",
@@ -642,6 +645,7 @@
     "switchTo": {
       "pen": "Mudar para caneta",
       "highlighter": "Mudar para marca-texto",
+      "cover": "Mudar para a ferramenta de cobertura",
       "eraser": "Mudar para borracha",
       "cursor": "Mudar para selecionar (cursor)",
       "lasso": "Mudar para laço",
@@ -663,7 +667,8 @@
       "editor": "Abra primeiro uma página no editor",
       "selection": "Selecione algo primeiro",
       "page": "Abra primeiro uma página"
-    }
+    },
+    "recall": "Abrir estatísticas de revisão"
   },
   "nav": {
     "home": "Início",
@@ -700,7 +705,8 @@
     "ink": {
       "pen": "Caneta",
       "fountainPen": "Caneta-tinteiro",
-      "highlighter": "Marca-texto"
+      "highlighter": "Marca-texto",
+      "cover": "Cobertura"
     },
     "addPen": "Adicionar caneta",
     "eraser": "Borracha",
@@ -844,7 +850,8 @@
     "openFolder": "Open folder {{title}}",
     "folderActions": "Actions for folder {{title}}",
     "emptyFolder": "This folder is empty",
-    "breadcrumb": "Folder path"
+    "breadcrumb": "Folder path",
+    "recall": "Revisão"
   },
   "export": {
     "failed": "Falha na exportação: {{message}}",
@@ -876,6 +883,10 @@
     "annotationsFlat": "Niveladas",
     "annotationsLayer": "Camada separada",
     "annotationsHint": "Aplica-se às páginas PDF importadas. Uma camada separada pode ser ocultada ou editada em editores de PDF.",
+    "covers": "Coberturas",
+    "coversCovered": "Cobertas",
+    "coversHidden": "Omitidas",
+    "coversHint": "Cobertas mantém oculto o que está sob cada cobertura. Omitidas exporta a página sem coberturas. O texto digitado sob uma cobertura fica fora do texto pesquisável.",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
   },
@@ -919,6 +930,9 @@
     "width": "Largura da seleção"
   },
   "preset": {
+    "coverShape": "Forma",
+    "coverStroke": "Traço",
+    "coverBox": "Caixa",
     "edit": "Editar predefinição",
     "swatches": "As minhas amostras",
     "addSwatch": "Guardar a cor como amostra",
@@ -1536,5 +1550,44 @@
     "inserted": "Transcrição adicionada à página.",
     "partial_one": "{{count}} parte não pôde ser transcrita.",
     "partial_other": "{{count}} partes não puderam ser transcritas."
+  },
+  "covers": {
+    "menu": "Coberturas",
+    "revealAll": "Descobrir todas",
+    "coverAll": "Cobrir todas",
+    "removeAll": "Remover todas as coberturas",
+    "removeConfirmTitle": "Remover todas as coberturas?",
+    "removeConfirmBody_one": "{{count}} cobertura desta página será removida. Suas notas ficam. Você pode desfazer.",
+    "removeConfirmBody_other": "{{count}} coberturas desta página serão removidas. Suas notas ficam. Você pode desfazer.",
+    "testMe": "Teste-me",
+    "lastTest": "Último teste: {{known}} de {{total}}, {{date}}",
+    "notTested": "Ainda não testada",
+    "removeLockedStay_one": "{{count}} cobertura bloqueada fica.",
+    "removeLockedStay_other": "{{count}} coberturas bloqueadas ficam.",
+    "run": {
+      "progress": "{{n}} de {{total}}",
+      "reveal": "Descobrir",
+      "knew": "Eu sabia",
+      "missed": "Errei",
+      "score": "Você sabia {{known}} de {{total}} em {{time}}.",
+      "repeatMissed": "Repetir as erradas",
+      "done": "Concluído",
+      "end": "Terminar o teste"
+    },
+    "history": "Últimas respostas: {{known}} certas, {{missed}} erradas"
+  },
+  "recall": {
+    "title": "Revisão: {{title}}",
+    "covers": "Coberturas",
+    "answers": "Respostas",
+    "last7": "Certas, últimos 7 dias",
+    "last30": "Certas, últimos 30 dias",
+    "page": "Página",
+    "lastScore": "Última pontuação",
+    "runs": "Testes",
+    "trend": "Evolução",
+    "test": "Testar",
+    "empty": "Ainda não há coberturas neste caderno. Esconda parte de uma página com a ferramenta de cobertura e depois teste-se.",
+    "never": "Não testada"
   }
 }

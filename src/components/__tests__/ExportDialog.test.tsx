@@ -89,7 +89,7 @@ describe("ExportDialog", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Searchable text" }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(exportPage).toHaveBeenCalledWith("p1", "pdf", { theme: "light", background: "plain", pages: "current", searchable: false, annotations: "flat" });
+    expect(exportPage).toHaveBeenCalledWith("p1", "pdf", { theme: "light", background: "plain", pages: "current", searchable: false, annotations: "flat", covers: "covered" });
   });
 
   it("offers page range only for page-mode pages", () => {
@@ -114,7 +114,7 @@ describe("ExportDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "3×" }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(exportPage).toHaveBeenCalledWith("p1", "png", { theme: "dark", background: "transparent", scale: 3, annotations: "flat" });
+    expect(exportPage).toHaveBeenCalledWith("p1", "png", { theme: "dark", background: "transparent", scale: 3, annotations: "flat", covers: "covered" });
   });
 
   it("exports the page's book as a .mate archive", async () => {
@@ -330,5 +330,65 @@ describe("ExportDialog annotations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await waitFor(() => expect(exportPage).toHaveBeenCalled());
     expect(vi.mocked(exportPage).mock.calls[0][2]).toMatchObject({ annotations: "none" });
+  });
+});
+
+describe("ExportDialog covers", () => {
+  const cover = { id: "cv", pageId: "p1", type: "stroke", penStyle: "cover", points: [], color: "#000", width: 8, isHighlighter: false, createdAt: STAMP, updatedAt: STAMP, version: 0 } as Element;
+  const store = editorForPane(0);
+  const withCovers = (els: Element[] = [cover]) =>
+    store.setState({ loadedPageId: "p1", pageId: "p1", elements: new Map(els.map((e) => [e.id, e])) });
+  afterEach(() => store.setState({ loadedPageId: null, pageId: null, elements: new Map() }));
+
+  it("is not offered on a page without covers", () => {
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    expect(screen.queryByRole("group", { name: "Covers" })).toBeNull();
+  });
+
+  it("is not offered for a deleted cover", () => {
+    withCovers([{ ...cover, deletedAt: STAMP }]);
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    expect(screen.queryByRole("group", { name: "Covers" })).toBeNull();
+  });
+
+  it("is offered for PDF, PNG and SVG, covered by default, and not for LaTeX or .mate", () => {
+    withCovers();
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    for (const f of ["PDF", "PNG", "SVG"]) {
+      fireEvent.click(screen.getByRole("button", { name: f }));
+      expect(screen.getByRole("group", { name: "Covers" })).toBeTruthy();
+      expect(pressed("Covered")).toBe("true");
+    }
+    fireEvent.click(screen.getByRole("button", { name: "LaTeX" }));
+    expect(screen.queryByRole("group", { name: "Covers" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Mate archive" }));
+    expect(screen.queryByRole("group", { name: "Covers" })).toBeNull();
+  });
+
+  it("passes covers hidden when Left out is chosen, and covered otherwise", async () => {
+    withCovers();
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(exportPage).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(exportPage).mock.calls[0][2]).toMatchObject({ covers: "covered" });
+    cleanup(); // the dialog stays busy after a successful export (the app closes it)
+    render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Left out" }));
+    expect(pressed("Left out")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await waitFor(() => expect(exportPage).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(exportPage).mock.calls[1][2]).toMatchObject({ covers: "hidden" });
+  });
+
+  it("goes back to Covered when the page changes", () => {
+    withCovers();
+    const other: Page = { ...page, id: "p2" };
+    useNotebookStore.setState({ tree: { bookshelves: [], units: [], sections: [section], pages: [page, other] } });
+    const { rerender } = render(<ExportDialog pageId="p1" onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Left out" }));
+    expect(pressed("Left out")).toBe("true");
+    store.setState({ loadedPageId: "p2", pageId: "p2", elements: new Map([["cv", { ...cover, pageId: "p2" }]]) });
+    rerender(<ExportDialog pageId="p2" onClose={onClose} />);
+    expect(pressed("Covered")).toBe("true");
   });
 });

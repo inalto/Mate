@@ -15,6 +15,10 @@ import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
 import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
+import { coverBoxActive, isCover } from "../covers/cover";
+import { coverTargetOf, dimOf } from "../covers/tap";
+import { runOf } from "../covers/panes";
+import { current, isActive } from "../covers/run";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
 import LineCapsPopover from "../components/LineCapsPopover";
@@ -22,7 +26,7 @@ import { ConnectorLabelPopover } from "../components/LabelPopover";
 import { openLineCaps } from "../stores/lineCaps";
 import MediaLayer from "../media/MediaLayer";
 import { paintBackground, PRESENT_BACKDROP, presentBackdrop, type SurfaceColors } from "./background";
-import { boxRect, type Rect } from "../tools/spatialIndex";
+import { boxRect, elementBounds, type Rect } from "../tools/spatialIndex";
 import { FRAME_RADIUS } from "../frames/contain";
 import { clearMindmapCache } from "../mindmap/cache";
 import { animateCamera, screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
@@ -36,7 +40,7 @@ import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeEl
 import { clampToRect, sheetRectAt } from "./pageBounds";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
-import { createDismissPress, createToolController, HOLD_SLOP_PX, pointerTool, TAP_MS } from "./toolInteractions";
+import { createDismissPress, createToolController, HIT_SLOP_PX, hitTest, HOLD_SLOP_PX, pointerTool, TAP_MS } from "./toolInteractions";
 import { createTutorInk } from "./tutorInk";
 import { consumeDismissDown, paneOfStore } from "../stores/tutor";
 import { useAiStatus } from "../tutor/aiStatus";
@@ -50,6 +54,12 @@ import { markerTargetOf } from "../recording/panes";
 
 /** Ink-to-shape flash colour (the tools' overlay accent). */
 const SNAP_FLASH_COLOR = "#4a5d4e";
+
+/** Width of the outline around the cover a study run is asking (screen px). */
+const ASKED_OUTLINE_PX = 2;
+
+/** The accent colour of the interface (the study run's outline). */
+const accentColor = (): string => getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim() || SNAP_FLASH_COLOR;
 
 /** Quiet period after the last camera change before the snapshot is re-rasterised. */
 const RASTER_DEBOUNCE_MS = 150;
@@ -99,6 +109,7 @@ function createEngine(
   const theme = (): ThemeName => getSettings().theme;
   let dpr = window.devicePixelRatio || 1;
   let colors = surfaceColors();
+  let accent = accentColor();
   let staticQueued = false;
   let liveQueued = false;
   let rasterTimer: ReturnType<typeof setTimeout> | null = null;
@@ -169,7 +180,7 @@ function createEngine(
       if (hole) presentBackdrop(ctx, clip, hole, FRAME_RADIUS);
     } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
       const shown = el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el;
-      drawDimmed(asCtx(ctx), s.replayDim, el.id, () => drawElement(asCtx(ctx), shown, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper }));
+      drawDimmed(asCtx(ctx), dimOf(s), el.id, () => drawElement(asCtx(ctx), shown, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper }));
     }
   };
 
@@ -229,12 +240,27 @@ function createEngine(
     }
     if (flash && performance.now() < flash.until) drawSnapFlash(lctx, flash.shape, c, dpr, SNAP_FLASH_COLOR);
     const antsMove = tools.draw(lctx, c, dpr); // marching ants animate while selected
+    drawAsked(c);
     // Tutor markers sit above the ink and below the DOM overlay; the ring turns while checking.
     const tutorMarkersNow = markersNow();
     const ringTurns = drawTutorMarkers(lctx, tutorMarkersNow, c, dpr, theme(), performance.now());
     const hovered = hoverGroup ? tutorMarkersNow.find((m) => m.groupId === hoverGroup) : undefined;
     if (hovered) drawTutorTip(lctx, hovered, c, dpr);
     if (antsMove || ringTurns) requestLive();
+  };
+  const run = runOf(store);
+  /** The study run's current cover, outlined just outside its bounds. */
+  const drawAsked = (c: Camera) => {
+    const r = run?.getState();
+    const id = r && isActive(r) ? current(r) : undefined;
+    const el = id === undefined || !ready() ? undefined : st().elements.get(id);
+    if (!lctx || !el || el.deletedAt) return;
+    const b = elementBounds(el);
+    const half = ASKED_OUTLINE_PX / 2;
+    lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    lctx.strokeStyle = accent;
+    lctx.lineWidth = ASKED_OUTLINE_PX;
+    lctx.strokeRect(b.x * c.z + c.x - half, b.y * c.z + c.y - half, b.width * c.z + ASKED_OUTLINE_PX, b.height * c.z + ASKED_OUTLINE_PX);
   };
   const requestLive = () => {
     if (liveQueued) return;
@@ -251,6 +277,7 @@ function createEngine(
   const pane = paneOfStore(store);
   const { gestures: tutor, markers: markersNow } = createTutorInk({ store, pageId, pane, getSettings });
 
+  const covers = coverTargetOf(store);
   const tools = createToolController({
     store,
     el: liveCanvas,
@@ -260,10 +287,11 @@ function createEngine(
       requestStatic();
     },
     renderElement: (ctx, el) =>
-      drawDimmed(ctx, st().replayDim, el.id, () => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper })),
+      drawDimmed(ctx, dimOf(st()), el.id, () => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper })),
     getSettings,
     replay: replayTapOf(store),
     markers: markerTargetOf(store),
+    covers,
   });
 
   const resize = () => {
@@ -284,11 +312,24 @@ function createEngine(
 
   /** Append `el` to the snapshot and add it through `apply` (default: as a new element). */
   const commit = (el: Element, apply: () => void = () => st().addElement(el)) => {
-    cache.append((ctx) =>
-      el.type === "stroke"
-        ? renderStroke(asCtx(ctx), el, theme(), st().camera.z)
-        : drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
-    );
+    // Covers sort above all other content, but an appended element lands on top of the bitmap: ink
+    // written across a cover needs a full raster (which orders it below the cover) instead.
+    const overCover =
+      !isCover(el) &&
+      store
+        .spatialIndex()
+        .query(elementBounds(el))
+        .some((id) => {
+          const other = st().elements.get(id);
+          return other !== undefined && !other.deletedAt && isCover(other);
+        });
+    if (overCover) cache.invalidate();
+    else
+      cache.append((ctx) =>
+        el.type === "stroke"
+          ? renderStroke(asCtx(ctx), el, theme(), st().camera.z)
+          : drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
+      );
     committing = true;
     try {
       apply();
@@ -316,7 +357,7 @@ function createEngine(
   const scribbleErased = (raw: readonly Point[]): boolean => {
     const s = st();
     const cfg = getSettings();
-    if (!cfg.scribbleToErase || s.preset.type === "highlighter") return false;
+    if (!cfg.scribbleToErase || s.preset.type === "highlighter" || s.preset.type === "cover") return false;
     if (!isScribbleGesture(raw, s.camera.z, cfg.scribbleEraseSensitivity).scribble) return false;
     const hits = scribbleHits(s.elements, store.spatialIndex(), raw, s.camera.z);
     if (hits.length === 0) return false; // over empty paper it is just ink
@@ -369,6 +410,12 @@ function createEngine(
           if (mode === "tool") tools.down(p, tool);
           return;
         }
+        // A box cover is dragged out like a shape (the tool controller owns the gesture).
+        if (tool === "cover" && coverBoxActive(s)) {
+          mode = "tool";
+          tools.down(p, "cover-box");
+          return;
+        }
         // Perfect shapes: the selected shape is edited by its handles with the pen itself; a press
         // anywhere else lets go of it and draws.
         if (s.autoShapes && s.selection.size > 0) {
@@ -386,7 +433,7 @@ function createEngine(
           return;
         }
         // No tutor gestures (double-tap, hold, marker tap) for the press that closed the card.
-        tutorStroke = !dismissing && s.preset.type !== "highlighter";
+        tutorStroke = !dismissing && s.preset.type !== "highlighter" && s.preset.type !== "cover";
         if (dismissing) dismissPress.down(worldToScreen(s.camera, p));
         const abortForAsk = () => {
           // Held still on ink: the stroke becomes "Ask the tutor" (nothing is drawn).
@@ -421,7 +468,8 @@ function createEngine(
           straight,
         });
         // Perfect-shapes mode: every stroke is recognised on pen-up, whatever the ink-to-shape settings.
-        const snapping = s.autoShapes || inkSnapAllowed(s.preset.type, set); // perfect shapes: the highlighter too
+        // Perfect shapes: the highlighter too, but never a cover (a wobbly cover must stay a stroke).
+        const snapping = s.preset.type !== "cover" && (s.autoShapes || inkSnapAllowed(s.preset.type, set));
         snap = !straight && snapping
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
@@ -587,8 +635,18 @@ function createEngine(
           fingerTap = null;
           return;
         }
-        // Two quick taps of a panning finger zoom in about the spot tapped.
         const tap = fingerTapOf(g.samples, end.timeStamp);
+        // A finger's tap on a cover peeks under it (or covers it again); it starts no double-tap zoom.
+        if (tap && s.tool !== "eraser" && s.tool !== "cursor" && s.tool !== "lasso") {
+          const at = screenToWorld(s.camera, tap);
+          const id = hitTest(store.spatialIndex(), s.elements, at, HIT_SLOP_PX / s.camera.z);
+          if (id && covers.isMarker(id)) {
+            covers.open(id);
+            fingerTap = null;
+            return;
+          }
+        }
+        // Two quick taps of a panning finger zoom in about the spot tapped.
         const double = tap !== null && isFingerDoubleTap(fingerTap, tap);
         fingerTap = double ? null : tap;
         if (double && tap && getSettings().doubleTapZoom) {
@@ -688,7 +746,7 @@ function createEngine(
       requestStatic();
       requestLive();
     }
-    if (s.replayDim !== prev.replayDim) {
+    if (s.replayDim !== prev.replayDim || s.revealed !== prev.revealed) {
       cache.invalidate();
       requestStatic();
       requestLive();
@@ -709,6 +767,10 @@ function createEngine(
     }
   });
   const unsubscribeAiStatus = useAiStatus.subscribe(() => requestLive());
+  // The study run moved to another cover (or ended): the outline follows.
+  const unsubscribeRun = run?.subscribe((s, prev) => {
+    if (s.phase !== prev.phase || s.index !== prev.index || s.queue !== prev.queue) requestLive();
+  });
   const unsubscribeSnapshots = boxSnapshots.subscribe(() => {
     cache.invalidate();
     requestStatic();
@@ -755,6 +817,7 @@ function createEngine(
     /** Theme or token change: re-read colours and re-rasterise. */
     restyle() {
       colors = surfaceColors();
+      accent = accentColor();
       cache.invalidate();
       requestStatic();
       requestLive();
@@ -771,6 +834,10 @@ function createEngine(
       unsubscribeTutor();
       unsubscribeSettings();
       unsubscribeAiStatus();
+      unsubscribeRun?.();
+      // The run is the pane's but asks on this canvas: with the canvas gone (editor left, page
+      // closed) it is over, rather than coming back later on a page it no longer matches.
+      run?.getState().end();
       unsubscribeSnapshots();
       ro?.disconnect();
       window.removeEventListener("resize", resize);

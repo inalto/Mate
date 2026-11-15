@@ -134,6 +134,8 @@
       "penWidth": "Spessore della penna",
       "highlighterColor": "Colore dell'evidenziatore",
       "highlighterWidth": "Spessore dell'evidenziatore",
+      "coverColor": "Colore della copertura",
+      "coverWidth": "Larghezza della copertura",
       "stabilization": {
         "label": "Stabilizzazione del tratto",
         "hint": "Attenua le oscillazioni; con valori alti la penna resta un po' indietro"
@@ -554,6 +556,7 @@
       "autoShapes": "Attiva/disattiva forme perfette",
       "pen": "Penna",
       "highlighter": "Evidenziatore",
+      "cover": "Strumento copertura",
       "eraser": "Gomma",
       "cursor": "Seleziona (cursore)",
       "lasso": "Lazo",
@@ -639,6 +642,7 @@
     "switchTo": {
       "pen": "Passa alla penna",
       "highlighter": "Passa all'evidenziatore",
+      "cover": "Passa allo strumento copertura",
       "eraser": "Passa alla gomma",
       "cursor": "Passa alla selezione (cursore)",
       "lasso": "Passa al lazo",
@@ -660,7 +664,8 @@
       "editor": "Apri prima una pagina nell'editor",
       "selection": "Seleziona prima qualcosa",
       "page": "Apri prima una pagina"
-    }
+    },
+    "recall": "Apri le statistiche di ripasso"
   },
   "nav": {
     "home": "Home",
@@ -697,7 +702,8 @@
     "ink": {
       "pen": "Penna",
       "fountainPen": "Stilografica",
-      "highlighter": "Evidenziatore"
+      "highlighter": "Evidenziatore",
+      "cover": "Copertura"
     },
     "addPen": "Aggiungi penna",
     "eraser": "Gomma",
@@ -841,7 +847,8 @@
     "openFolder": "Apri la cartella {{title}}",
     "folderActions": "Azioni per la cartella {{title}}",
     "emptyFolder": "Questa cartella è vuota",
-    "breadcrumb": "Percorso della cartella"
+    "breadcrumb": "Percorso della cartella",
+    "recall": "Ripasso"
   },
   "export": {
     "failed": "Esportazione non riuscita: {{message}}",
@@ -873,6 +880,10 @@
     "annotationsFlat": "Unite alla pagina",
     "annotationsLayer": "Livello separato",
     "annotationsHint": "Vale per le pagine PDF importate. Un livello separato si può nascondere o modificare negli editor PDF.",
+    "covers": "Coperture",
+    "coversCovered": "Coperte",
+    "coversHidden": "Escluse",
+    "coversHint": "Coperte tiene nascosto ciò che sta sotto. Escluse esporta la pagina senza coperture. Il testo digitato sotto una copertura è escluso dal testo ricercabile.",
     "boxRender": "Impossibile renderizzare il contenuto della casella {{id}} per l'esportazione.",
     "boxMissing": "La casella {{id}} non è stata renderizzata per l'esportazione."
   },
@@ -916,6 +927,9 @@
     "width": "Larghezza della selezione"
   },
   "preset": {
+    "coverShape": "Forma",
+    "coverStroke": "Tratto",
+    "coverBox": "Riquadro",
     "edit": "Modifica preimpostazione",
     "swatches": "I miei campioni",
     "addSwatch": "Salva il colore come campione",
@@ -1533,5 +1547,44 @@
     "inserted": "Trascrizione aggiunta alla pagina.",
     "partial_one": "{{count}} parte non è stata trascritta.",
     "partial_other": "{{count}} parti non sono state trascritte."
+  },
+  "covers": {
+    "menu": "Coperture",
+    "revealAll": "Scopri tutte",
+    "coverAll": "Copri tutte",
+    "removeAll": "Rimuovi tutte le coperture",
+    "removeConfirmTitle": "Rimuovere tutte le coperture?",
+    "removeConfirmBody_one": "Verrà rimossa {{count}} copertura da questa pagina. Gli appunti restano. Puoi annullare.",
+    "removeConfirmBody_other": "Verranno rimosse {{count}} coperture da questa pagina. Gli appunti restano. Puoi annullare.",
+    "testMe": "Mettimi alla prova",
+    "lastTest": "Ultima prova: {{known}} su {{total}}, {{date}}",
+    "notTested": "Non ancora provata",
+    "removeLockedStay_one": "{{count}} copertura bloccata resta.",
+    "removeLockedStay_other": "{{count}} coperture bloccate restano.",
+    "run": {
+      "progress": "{{n}} di {{total}}",
+      "reveal": "Scopri",
+      "knew": "La sapevo",
+      "missed": "Sbagliata",
+      "score": "Ne sapevi {{known}} su {{total}} in {{time}}.",
+      "repeatMissed": "Ripeti le sbagliate",
+      "done": "Fine",
+      "end": "Termina la prova"
+    },
+    "history": "Ultime risposte: {{known}} sapute, {{missed}} sbagliate"
+  },
+  "recall": {
+    "title": "Ripasso: {{title}}",
+    "covers": "Coperture",
+    "answers": "Risposte",
+    "last7": "Sapute, ultimi 7 giorni",
+    "last30": "Sapute, ultimi 30 giorni",
+    "page": "Pagina",
+    "lastScore": "Ultimo punteggio",
+    "runs": "Prove",
+    "trend": "Andamento",
+    "test": "Prova",
+    "empty": "Nessuna copertura in questo quaderno. Nascondi parte di una pagina con lo strumento copertura, poi mettiti alla prova.",
+    "never": "Mai provata"
   }
 }

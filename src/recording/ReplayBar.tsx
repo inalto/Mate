@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore, type StoreApi } from "zustand";
 import { useDismiss } from "../components/useDismiss";
-import { isTypingTarget } from "../keys/shortcuts";
+import { aimedAtPage, isTypingTarget } from "../keys/shortcuts";
 import { formatElapsed } from "../speech/elapsed";
 import { useChromeStore } from "../stores/chrome";
 import type { EditorStore } from "../stores/editor";
@@ -22,16 +22,6 @@ import { transcriptStateFor } from "./transcriptState";
 import "./recording.css";
 
 const SKIP_MS = 10_000;
-/** Focus on (or in) one of these keeps its own keys. */
-const OWN_KEYS = "button, a, input, select, textarea, [contenteditable], [role=slider], [role=separator], [role=tab], [role=treeitem], [role=menuitem], [role=dialog]";
-
-/** The key is aimed at the page itself, `pane` or its canvas, not at a control. */
-function aimedAtPage(target: EventTarget | null, pane: Element | null): boolean {
-  if (typeof document === "undefined") return false;
-  if (target === document.body || target === document.documentElement) return true;
-  return target instanceof Element && !!pane?.contains(target) && target.closest(OWN_KEYS) === null;
-}
-
 interface Props {
   store: EditorStore;
   replay: StoreApi<ReplayState>;

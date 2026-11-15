@@ -1,5 +1,6 @@
 // Editor command dispatch for keyboard shortcuts (and toolbar zoom buttons).
 import { zoomBy } from "../canvas/gestures";
+import { isCover } from "../covers/cover";
 import { elementsQueue } from "../ipc/elementsQueue";
 import { isLocked, mindmapOf } from "../model/content";
 import { clampToPage } from "../stores/editor";
@@ -189,7 +190,7 @@ export function startShapeTyping(e: KeyboardEvent): boolean {
   const s = store.getState();
   if (s.editingId !== null || s.selection.size !== 1) return false;
   const el = s.elements.get([...s.selection][0]);
-  if (!el || el.type !== "shape" || !isClosedShape(el.shapeType ?? "rectangle") || isLocked(el)) return false;
+  if (!el || el.type !== "shape" || !isClosedShape(el.shapeType ?? "rectangle") || isCover(el) || isLocked(el)) return false;
   e.preventDefault();
   e.stopImmediatePropagation();
   beginShapeTyping(store, el.id, e.key);
@@ -294,6 +295,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.selectInk(s.preset.type === "fountain-pen" ? "fountain-pen" : "pen");
     case "tool.highlighter":
       return s.selectInk("highlighter");
+    case "tool.cover":
+      return s.selectInk("cover");
     case "tool.eraser":
       return s.setTool("eraser");
     case "tool.cursor":

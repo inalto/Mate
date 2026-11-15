@@ -13,6 +13,7 @@ import {
   ArrowsVertical,
   Eraser,
   DotsSixVertical,
+  EyeSlash,
   Highlighter,
   House,
   ImageSquare,
@@ -42,13 +43,14 @@ import { pickAndInsertImage } from "../images/insert";
 import { pickAndInsertMedia } from "../media/insert";
 import { DictateButton } from "./DictateButton";
 import RecordButton from "../recording/RecordButton";
+import CoversMenu from "../covers/CoversMenu";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
 import type { FingerAction, PenPreset, Settings } from "../model/types";
 import { CONNECTOR_MODES } from "../connectors/route";
 import { screenToWorld } from "../canvas/camera";
 import { FRAME_PRESETS, isFrame, presetFrameRect } from "../frames/contain";
-import { isInkTool, type InkType } from "../stores/editor";
+import { isInkTool } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
@@ -71,10 +73,11 @@ const INK_LABEL = {
   pen: "toolbar.ink.pen",
   "fountain-pen": "toolbar.ink.fountainPen",
   highlighter: "toolbar.ink.highlighter",
-} as const satisfies Record<InkType, TKey>;
+  cover: "toolbar.ink.cover",
+} as const satisfies Record<PenPreset["type"], TKey>;
 
-function InkIcon({ type, color }: { type: InkType; color?: string }) {
-  const Icon = type === "highlighter" ? Highlighter : type === "fountain-pen" ? PenNib : Pen;
+function InkIcon({ type, color }: { type: PenPreset["type"]; color?: string }) {
+  const Icon = type === "highlighter" ? Highlighter : type === "fountain-pen" ? PenNib : type === "cover" ? EyeSlash : Pen;
   return <Icon size={18} color={color} weight={color ? "fill" : "regular"} />;
 }
 
@@ -129,7 +132,7 @@ function AddPenMenu() {
       {open && (
         <DockPopover anchorRef={ref}>
         <div className="tb-popover tb-menu" role="menu">
-          {(["pen", "fountain-pen", "highlighter"] as const).map((ink) => (
+          {(["pen", "fountain-pen", "highlighter", "cover"] as const).map((ink) => (
             <button
               key={ink}
               type="button"
@@ -807,6 +810,7 @@ export default function Toolbar() {
         <PresetSlot key={p.id} preset={p} index={i} count={presets.length} />
       ))}
       <AddPenMenu />
+      <CoversMenu />
       <span className="tb-sep" />
       <EraserButton />
       <ShapeButton />

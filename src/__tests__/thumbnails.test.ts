@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
 vi.mock("../ipc/notebook", () => ({}));
 vi.mock("../ipc/thumbnails", () => ({ saveThumbnail: vi.fn(async () => ({ path: "x", version: 3 })) }));
 
+const paint = vi.hoisted(() => vi.fn());
+vi.mock("../export/scene", async (importOriginal) => ({ ...(await importOriginal<typeof import("../export/scene")>()), paintScene: paint }));
+
 import type { Element, Page } from "../model/types";
+import { editorForPane } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
-import { thumbnailRegion, updateThumbnail } from "../thumbnails";
+import { captureThumbnail, thumbnailRegion, updateThumbnail } from "../thumbnails";
 
 const page = (mode: Page["mode"]): Page => ({
   id: "p", sectionId: "s", title: "t", isExpanded: true, isFavourite: false, depth: 0, mode,
@@ -76,5 +80,24 @@ describe("updateThumbnail", () => {
     expect(pages.find((x) => x.id === "P2")).toBe(other);
     expect(load).not.toHaveBeenCalled();
     vi.restoreAllMocks();
+  });
+});
+
+describe("captureThumbnail covers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    editorForPane(0).setState({ revealed: new Set() });
+  });
+
+  it("paints revealed covers from the stored elements, with no reveal information", async () => {
+    const cover: Element = { ...stroke(10, 10), id: "cv", penStyle: "cover" };
+    editorForPane(0).setState({ revealed: new Set(["cv"]) });
+    const ctx = { fillStyle: "", fillRect: vi.fn(), scale: vi.fn(), translate: vi.fn() };
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(ctx as never);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((cb) => cb(new Blob(["x"])));
+    await captureThumbnail("p", [cover], page("canvas"));
+    const [, , drawn, , , opts] = paint.mock.calls[0];
+    expect(drawn).toEqual([cover]);
+    expect(JSON.stringify(opts)).not.toMatch(/reveal|dim/i);
   });
 });

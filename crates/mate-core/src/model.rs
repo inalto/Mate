@@ -19,6 +19,7 @@ pub enum PenStyle {
     Highlighter,
     FountainPen,
     Pencil,
+    Cover,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

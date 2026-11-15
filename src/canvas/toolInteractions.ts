@@ -25,6 +25,7 @@ import { openLabelPopover } from "../stores/labelPopover";
 import { openAutoComplete } from "../stores/autoComplete";
 import { FRAME_TITLE_BAND, frameTitleRect, isFrame, isNestedFrame, withFrameChildren } from "../frames/contain";
 import { mindmapHit } from "../mindmap/hit";
+import { coverBoxElement, isCover } from "../covers/cover";
 import { isClosedShape, normalizeShape, shapeElement, shapeFromDrag, shapeHit, shapeStyleOf } from "../shapes/geometry";
 import { snapLineEnd } from "../shapes/lineSnap";
 import { isCurveStroke, reshapeHandles } from "../shapes/reshape";
@@ -42,11 +43,12 @@ import type { PointerInfo } from "./input";
 import { gridSpacingOf, snapDelta, snapPoint } from "./snap";
 
 export type Corner = "nw" | "ne" | "sw" | "se";
-export type PointerTool = ToolId | "pan" | "none";
+/** "cover-box": the cover tool with its box shape, pressed like the shape tool. */
+export type PointerTool = ToolId | "pan" | "none" | "cover-box";
 
 /** Corner handle half-size and hit slop (screen px). */
 export const HANDLE_PX = 5;
-const HIT_SLOP_PX = 8;
+export const HIT_SLOP_PX = 8;
 /** Mind maps: how near a node box or an edge (screen px) a press still hits. */
 const MINDMAP_HIT_PX = 4;
 const MIN_SCALE = 0.05;
@@ -312,7 +314,7 @@ type Gesture =
   | { kind: "erase"; last: Vec2 }
   | { kind: "lasso"; points: Vec2[] }
   | { kind: "space"; lineY: number; dy: number; lifted: boolean }
-  | { kind: "shape"; start: Vec2; end: Vec2; rect?: Rect }
+  | { kind: "shape"; start: Vec2; end: Vec2; rect?: Rect; cover?: boolean }
   | { kind: "frame"; start: Vec2; end: Vec2; rect?: Rect }
   | {
       kind: "connector";
@@ -402,6 +404,8 @@ export interface ToolDeps {
   replay?: ReplayTapTarget;
   /** Recording markers of this pane, and opening one in its replay (recording/panes.ts `markerTargetOf`). */
   markers?: MarkerTarget;
+  /** Recall covers of this pane, and peeking under one (covers/tap.ts `coverTargetOf`). */
+  covers?: MarkerTarget;
 }
 
 /** The pane's recording markers, as a press on the canvas sees them. */
@@ -429,12 +433,13 @@ export const REPLAY_TAP_MS = 300;
  * returns the tap: the press is consumed). With a non-ink tool, a second tap on the same note within
  * the double-tap window is not consumed (a double-click still opens editors). Anything else behaves as without a replay.
  * The same tap on a recording marker with an ink, text or other creating tool (not the cursor, lasso
- * or eraser) opens its replay instead, open or not.
+ * or eraser) opens its replay instead, open or not; on a recall cover it reveals or covers it,
+ * before anything else (a cover written during the recording peeks rather than seeks).
  */
-export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number, markers?: MarkerTarget) {
+export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number, markers?: MarkerTarget, covers?: MarkerTarget) {
   let press: Tap | null = null;
-  /** The press is on a recording marker (a tap opens it). */
-  let onMarker = false;
+  /** The press is on a recording marker or a cover: what a tap opens. */
+  let onTarget: MarkerTarget | null = null;
   /** The last tap that seeked (its second tap falls through). */
   let seeked: Tap | null = null;
   const moved = (p: Vec2) => {
@@ -446,18 +451,19 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
     /** A press at world `p`: true when it may be a tap to seek. */
     down(p: Vec2, tool: PointerTool): boolean {
       press = null;
-      onMarker = false;
+      onTarget = null;
       if (tool === "eraser" || tool === "pan" || tool === "none") return false;
-      const marking = !!markers && tool !== "cursor" && tool !== "lasso";
-      if (!marking && !replay?.isOpen()) return false;
+      const creating = tool !== "cursor" && tool !== "lasso";
+      if (!(creating && (markers || covers)) && !replay?.isOpen()) return false;
       const s = store.getState();
       const id = hitTest(store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
       if (!id) return false;
       const scr = worldToScreen(s.camera, p);
       const tap: Tap = { id, x: scr.x, y: scr.y, t: now() };
-      if (marking && markers.isMarker(id)) {
+      const target = !creating ? null : covers?.isMarker(id) ? covers : markers?.isMarker(id) ? markers : null;
+      if (target) {
         press = tap;
-        onMarker = true;
+        onTarget = target;
         return true;
       }
       if (!replay?.isOpen() || !replay.canSeek(id)) return false;
@@ -479,10 +485,11 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
       if (p) moved(p);
       const tap = press && now() - press.t <= REPLAY_TAP_MS ? press : null;
       press = null;
-      if (onMarker) {
-        onMarker = false;
+      if (onTarget) {
+        const target = onTarget;
+        onTarget = null;
         seeked = null;
-        if (tap) markers?.open(tap.id);
+        if (tap) target.open(tap.id);
         return tap;
       }
       seeked = tap && replay?.seekToElement(tap.id) ? tap : null;
@@ -490,7 +497,7 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
     },
     cancel() {
       press = null;
-      onMarker = false;
+      onTarget = null;
     },
   };
 }
@@ -535,7 +542,7 @@ export function createToolController(deps: ToolDeps) {
   let dupCount = 0;
   let lastTap: Tap | null = null;
   const now = deps.now ?? (() => performance.now());
-  const replayTap = createReplayTap(deps.store, deps.replay, now, deps.markers);
+  const replayTap = createReplayTap(deps.store, deps.replay, now, deps.markers, deps.covers);
   /** A cursor press on the already selected recording marker: its quick release without a drag opens it. */
   let markerClick: Tap | null = null;
 
@@ -558,7 +565,7 @@ export function createToolController(deps: ToolDeps) {
     }
     // A frame opens on its title only (its border band just selects and moves it).
     const frameTitle = !!el && isFrame(el) && hitFrameTitle(el, p, s.camera.z);
-    if (!id || !el || (isFrame(el) && !frameTitle) || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle"))) || isLocked(el)) {
+    if (!id || !el || (isFrame(el) && !frameTitle) || !(isBoxed(el) || el.type === "connector" || (el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle") && !isCover(el))) || isLocked(el)) {
       lastTap = null;
       return false;
     }
@@ -626,7 +633,11 @@ export function createToolController(deps: ToolDeps) {
   const clearGuides = () => st().setGuides([]);
 
   /** The shape being dragged, as an element (for the live preview). */
-  const shapePreview = (start: Vec2, end: Vec2): Element[] => {
+  const shapePreview = (start: Vec2, end: Vec2, cover?: boolean): Element[] => {
+    if (cover) {
+      const drag = shapeFromDrag("rectangle", start, end, shift);
+      return [coverBoxElement(st().preset.color, drag, st().pageId ?? "", "cover-preview", "")];
+    }
     const style = shapeStyleOf(deps.getSettings());
     const drag = shapeFromDrag(style.shapeType, start, end, shift);
     return [shapeElement(style, drag, st().pageId ?? "", "shape-preview", "")];
@@ -951,11 +962,11 @@ export function createToolController(deps: ToolDeps) {
       preview = [];
     } else if (tool === "shape" && editDown(p)) {
       // A handle of the shape selected with this tool: it is edited, nothing new is drawn.
-    } else if (tool === "shape") {
+    } else if (tool === "shape" || tool === "cover-box") {
       if (s.selection.size > 0) s.select([]);
       const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
       const q = rect ? clampToRect(snap(p), rect) : snap(p);
-      g = rect === null ? { kind: "idle" } : { kind: "shape", start: q, end: q, rect };
+      g = rect === null ? { kind: "idle" } : { kind: "shape", start: q, end: q, rect, cover: tool === "cover-box" };
       preview = [];
     } else if (tool === "frame") {
       const rect = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
@@ -1091,7 +1102,7 @@ export function createToolController(deps: ToolDeps) {
       }
       case "shape":
         g.end = g.rect ? clampToRect(snap(p), g.rect) : snap(p);
-        preview = shapePreview(g.start, g.end);
+        preview = shapePreview(g.start, g.end, g.cover);
         break;
       case "frame":
         g.end = g.rect ? clampToRect(snap(p), g.rect) : snap(p);
@@ -1230,6 +1241,12 @@ export function createToolController(deps: ToolDeps) {
         break;
       case "shape": {
         drop();
+        if (g.cover) {
+          // A box cover: too short a drag draws nothing and selects nothing.
+          const drag = shapeFromDrag("rectangle", g.start, g.end, shift);
+          if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addCoverBox(drag);
+          break;
+        }
         const style = shapeStyleOf(deps.getSettings());
         const drag = shapeFromDrag(style.shapeType, g.start, g.end, shift);
         if (Math.hypot(drag.boxWidth, drag.boxHeight) * s.camera.z >= MIN_SHAPE_DRAG_PX) s.addShape(style, drag);
@@ -1478,7 +1495,7 @@ export function createToolController(deps: ToolDeps) {
     if (shift === e.shiftKey) return;
     shift = e.shiftKey;
     if (g.kind === "shape" && preview.length > 0) {
-      preview = shapePreview(g.start, g.end);
+      preview = shapePreview(g.start, g.end, g.cover);
       deps.requestLive();
     }
   };

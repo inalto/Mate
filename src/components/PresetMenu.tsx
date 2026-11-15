@@ -3,7 +3,7 @@ import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { PenPreset } from "../model/types";
-import { HIGHLIGHTER_PALETTE, hslToHex, hueOf, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
+import { COVER_PALETTE, HIGHLIGHTER_PALETTE, hslToHex, hueOf, PEN_PALETTE, PX_PER_UNIT, widthPx } from "./inkColors";
 import CustomSwatches from "./CustomSwatches";
 import { useDismiss } from "./useDismiss";
 import type { EditorStore } from "../stores/editor";
@@ -33,7 +33,8 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
   const draftRef = useRef(draft);
   const [hexText, setHexText] = useState(preset.color);
   const recent = useSettingsStore((s) => s.settings.recentColors);
-  const palette = preset.type === "highlighter" ? HIGHLIGHTER_PALETTE : PEN_PALETTE;
+  const isCover = preset.type === "cover";
+  const palette = isCover ? COVER_PALETTE : preset.type === "highlighter" ? HIGHLIGHTER_PALETTE : PEN_PALETTE;
 
   const change = (patch: Partial<PenPreset>) => {
     const next = { ...draft, ...patch };
@@ -46,8 +47,8 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
   useEffect(
     () => () => {
       const d = draftRef.current;
-      if (d.color === preset.color && d.width === preset.width) return;
-      ed.getState().updatePreset({ ...presetById(ed, preset.id), color: d.color, width: d.width });
+      if (d.color === preset.color && d.width === preset.width && d.coverShape === preset.coverShape) return;
+      ed.getState().updatePreset({ ...presetById(ed, preset.id), color: d.color, width: d.width, ...(d.coverShape ? { coverShape: d.coverShape } : {}) });
       const color = d.color.toUpperCase();
       if (color === preset.color.toUpperCase()) return;
       const prev = useSettingsStore.getState().settings.recentColors;
@@ -104,18 +105,50 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
         </div>
       )}
       <CustomSwatches current={draft.color} candidate={draft.color} onPick={(c) => change({ color: c.toUpperCase() })} />
-      <label className="tb-row tb-width" title={t("selection.widthPx")}>
-        <input
-          type="range"
-          min={1}
-          max={60}
-          step={0.5}
-          value={widthPx(draft.width)}
-          aria-label={t("preset.width")}
-          onChange={(e) => change({ width: Number(e.target.value) / PX_PER_UNIT })}
-        />
-        <span>{widthPx(draft.width)}</span>
-      </label>
+      {isCover ? (
+        // A cover is wide, so its slider counts world units (the same scale as the setting).
+        <label className="tb-row tb-width">
+          <input
+            type="range"
+            min={8}
+            max={80}
+            step={1}
+            value={draft.width}
+            aria-label={t("preset.width")}
+            onChange={(e) => change({ width: Number(e.target.value) })}
+          />
+          <span>{Math.round(draft.width)}</span>
+        </label>
+      ) : (
+        <label className="tb-row tb-width" title={t("selection.widthPx")}>
+          <input
+            type="range"
+            min={1}
+            max={60}
+            step={0.5}
+            value={widthPx(draft.width)}
+            aria-label={t("preset.width")}
+            onChange={(e) => change({ width: Number(e.target.value) / PX_PER_UNIT })}
+          />
+          <span>{widthPx(draft.width)}</span>
+        </label>
+      )}
+      {isCover && (
+        <div className="tb-row" role="radiogroup" aria-label={t("preset.coverShape")}>
+          {(["stroke", "box"] as const).map((shape) => (
+            <button
+              key={shape}
+              type="button"
+              role="radio"
+              aria-checked={(draft.coverShape ?? "stroke") === shape}
+              className={(draft.coverShape ?? "stroke") === shape ? "tb-btn active" : "tb-btn"}
+              onClick={() => change({ coverShape: shape })}
+            >
+              {t(shape === "stroke" ? "preset.coverStroke" : "preset.coverBox")}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="tb-row">
         <button
           type="button"

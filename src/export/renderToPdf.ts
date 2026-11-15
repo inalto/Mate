@@ -19,6 +19,7 @@ import { buildBackgroundPattern, type Rect } from "../canvas/background";
 import { CONNECTOR_LABEL_SIZE, connectorCapOutlines, connectorRoute, labelPill } from "../connectors/geometry";
 import { sheetSize } from "../canvas/camera";
 import { graphScene } from "../renderers/graph";
+import { coverOutlineColor, isCover } from "../covers/cover";
 import { capsuleRuns } from "../ink/capsuleRuns";
 import { traceSmoothPolygon } from "../ink/render";
 import { simplifyEpsForZoom } from "../ink/resample";
@@ -51,7 +52,7 @@ import { textContentOf } from "../text/textBox";
 import { boxRect, contentMeta, elementBounds, rectsOverlap, withMeta } from "../tools/spatialIndex";
 import { renderOrder } from "../tools/zorder";
 import { drawInLayer, ensureAnnotationLayer } from "./annotationLayer";
-import { exportRegion, pageElements, surfaceFor } from "./scene";
+import { exportRegion, pageElements, surfaceFor, textUnderCovers } from "./scene";
 
 /** Points per page unit (page units are CSS pixels). */
 export const PT_PER_UNIT = 0.75;
@@ -339,7 +340,15 @@ function paintStroke(p: Painter, el: Element, theme: ThemeName): void {
     );
     if (poly.length > 0) {
       traceSmoothPolygon(p.smoothSink(), poly);
-      p.pdf.fill();
+      if (style === "cover") {
+        // The hairline that keeps a cover visible on paper of its own colour.
+        p.colour(coverOutlineColor(color, theme), "draw", alpha);
+        p.pdf.setLineWidth(0.5);
+        p.pdf.setLineJoin("round");
+        p.pdf.fillStroke();
+      } else {
+        p.pdf.fill();
+      }
     }
     return;
   }
@@ -364,16 +373,18 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
   if (!main || main.length === 0) return;
   const closed = isClosedShape(el.shapeType ?? "rectangle");
   const stroke = mapInkColor(el.color, theme);
-  const opacity = fillOpacityOf(el);
+  const cover = isCover(el);
+  // A box cover is always opaque; its hairline keeps it visible on paper of its own colour.
+  const opacity = cover ? 1 : fillOpacityOf(el);
   p.pdf.setLineCap("round");
   p.pdf.setLineJoin("round");
-  p.pdf.setLineWidth(el.width * p.k);
+  p.pdf.setLineWidth(cover ? 0.5 : el.width * p.k);
   if (closed && hasFill(el.fillColor) && opacity > 0) {
     p.colour(mapInkColor(el.fillColor, theme), "fill", opacity);
     p.polyline(main, true);
     p.pdf.fill();
   }
-  p.colour(stroke, "draw");
+  p.colour(cover ? coverOutlineColor(stroke, theme) : stroke, "draw");
   p.polyline(main, closed);
   p.pdf.stroke();
   // Line caps: arrow heads and dots filled with the stroke colour, bars stroked.
@@ -387,7 +398,7 @@ function paintShape(p: Painter, el: Element, theme: ThemeName): void {
       p.pdf.stroke();
     }
   }
-  if (closed) paintShapeLabel(p, el, theme);
+  if (closed && !cover) paintShapeLabel(p, el, theme);
 }
 
 /**
@@ -743,6 +754,8 @@ interface SheetContext {
   pdfTiles: PdfTileSet;
   /** Bitmaps by `id|theme` (an element on two sheets of the same theme is rasterised once). */
   bitmaps: Map<string, HTMLCanvasElement | null>;
+  /** Text boxes under a live cover: kept out of the searchable text. */
+  underCovers: ReadonlySet<string>;
 }
 
 /** Paints `sheet`; false when it holds no element (nothing but, possibly, its background). */
@@ -793,7 +806,10 @@ function paintSheet(pdf: jsPDF, sheet: Sheet, ctx: SheetContext): boolean {
     p.setOpacity(1);
   }
   // Math boxes are left out: their raw content is LaTeX source, not the text a reader searches for.
-  if (ctx.opts.searchable) for (const el of onSheet) if (el.type === "text-box" && !isMathBox(el)) paintTextLayer(p, el);
+  // So is text under a cover, which the page draws hidden.
+  if (ctx.opts.searchable) {
+    for (const el of onSheet) if (el.type === "text-box" && !isMathBox(el) && !ctx.underCovers.has(el.id)) paintTextLayer(p, el);
+  }
   return onSheet.length > 0;
 }
 
@@ -907,7 +923,7 @@ export async function renderToPdf(
   const orient = ([w, h]: [number, number]) => (w > h ? "landscape" : "portrait");
   const first = size(sheets[0]);
   const pdf = new jsPDF({ unit: "pt", format: first, orientation: orient(first), compress: opts.compress ?? true });
-  const ctx: SheetContext = { page, list, opts, deps, pdfTiles, bitmaps: new Map() };
+  const ctx: SheetContext = { page, list, opts, deps, pdfTiles, bitmaps: new Map(), underCovers: textUnderCovers(list) };
   for (let i = 0; i < sheets.length; i++) {
     if (i > 0) {
       const sz = size(sheets[i]);

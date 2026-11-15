@@ -137,6 +137,8 @@
       "penWidth": "Grosor del lápiz",
       "highlighterColor": "Color del marcador",
       "highlighterWidth": "Grosor del marcador",
+      "coverColor": "Color de la cubierta",
+      "coverWidth": "Grosor de la cubierta",
       "stabilization": {
         "label": "Estabilización del trazo",
         "hint": "Suaviza los temblores; cuanto más alto, más retrasa un poco el lápiz"
@@ -557,6 +559,7 @@
       "autoShapes": "Alternar formas perfectas",
       "pen": "Lápiz",
       "highlighter": "Marcador",
+      "cover": "Herramienta de cubierta",
       "eraser": "Goma",
       "cursor": "Seleccionar (cursor)",
       "lasso": "Lazo",
@@ -642,6 +645,7 @@
     "switchTo": {
       "pen": "Cambiar a lápiz",
       "highlighter": "Cambiar a marcador",
+      "cover": "Cambiar a la herramienta de cubierta",
       "eraser": "Cambiar a goma",
       "cursor": "Cambiar a seleccionar (cursor)",
       "lasso": "Cambiar a lazo",
@@ -663,7 +667,8 @@
       "editor": "Primero abre una página en el editor",
       "selection": "Primero selecciona algo",
       "page": "Primero abre una página"
-    }
+    },
+    "recall": "Abrir estadísticas de repaso"
   },
   "nav": {
     "home": "Inicio",
@@ -700,7 +705,8 @@
     "ink": {
       "pen": "Lápiz",
       "fountainPen": "Pluma estilográfica",
-      "highlighter": "Marcador"
+      "highlighter": "Marcador",
+      "cover": "Cubierta"
     },
     "addPen": "Añadir lápiz",
     "eraser": "Goma",
@@ -844,7 +850,8 @@
     "openFolder": "Open folder {{title}}",
     "folderActions": "Actions for folder {{title}}",
     "emptyFolder": "This folder is empty",
-    "breadcrumb": "Folder path"
+    "breadcrumb": "Folder path",
+    "recall": "Repaso"
   },
   "export": {
     "failed": "La exportación falló: {{message}}",
@@ -876,6 +883,10 @@
     "annotationsFlat": "Aplanadas",
     "annotationsLayer": "Capa separada",
     "annotationsHint": "Se aplica a las páginas PDF importadas. Una capa separada se puede ocultar o editar en editores de PDF.",
+    "covers": "Cubiertas",
+    "coversCovered": "Tapadas",
+    "coversHidden": "Omitidas",
+    "coversHint": "Tapadas mantiene oculto lo que hay bajo cada cubierta. Omitidas exporta la página sin cubiertas. El texto escrito bajo una cubierta queda fuera del texto buscable.",
     "boxRender": "No se pudo generar el contenido del cuadro {{id}} para exportar.",
     "boxMissing": "El cuadro {{id}} no se generó para exportar."
   },
@@ -919,6 +930,9 @@
     "width": "Ancho de la selección"
   },
   "preset": {
+    "coverShape": "Forma",
+    "coverStroke": "Trazo",
+    "coverBox": "Recuadro",
     "edit": "Editar preajuste",
     "swatches": "Mis muestras",
     "addSwatch": "Guardar el color como muestra",
@@ -1536,5 +1550,44 @@
     "inserted": "Transcripción añadida a la página.",
     "partial_one": "No se pudo transcribir {{count}} parte.",
     "partial_other": "No se pudieron transcribir {{count}} partes."
+  },
+  "covers": {
+    "menu": "Cubiertas",
+    "revealAll": "Descubrir todas",
+    "coverAll": "Cubrir todas",
+    "removeAll": "Quitar todas las cubiertas",
+    "removeConfirmTitle": "¿Quitar todas las cubiertas?",
+    "removeConfirmBody_one": "Se quitará {{count}} cubierta de esta página. Tus notas se quedan. Puedes deshacerlo.",
+    "removeConfirmBody_other": "Se quitarán {{count}} cubiertas de esta página. Tus notas se quedan. Puedes deshacerlo.",
+    "testMe": "Ponme a prueba",
+    "lastTest": "Última prueba: {{known}} de {{total}}, {{date}}",
+    "notTested": "Aún sin probar",
+    "removeLockedStay_one": "{{count}} cubierta bloqueada se queda.",
+    "removeLockedStay_other": "{{count}} cubiertas bloqueadas se quedan.",
+    "run": {
+      "progress": "{{n}} de {{total}}",
+      "reveal": "Descubrir",
+      "knew": "La sabía",
+      "missed": "Fallada",
+      "score": "Sabías {{known}} de {{total}} en {{time}}.",
+      "repeatMissed": "Repetir las falladas",
+      "done": "Hecho",
+      "end": "Terminar la prueba"
+    },
+    "history": "Últimas respuestas: {{known}} sabidas, {{missed}} falladas"
+  },
+  "recall": {
+    "title": "Repaso: {{title}}",
+    "covers": "Cubiertas",
+    "answers": "Respuestas",
+    "last7": "Sabidas, últimos 7 días",
+    "last30": "Sabidas, últimos 30 días",
+    "page": "Página",
+    "lastScore": "Última puntuación",
+    "runs": "Pruebas",
+    "trend": "Evolución",
+    "test": "Probar",
+    "empty": "Aún no hay cubiertas en este cuaderno. Oculta parte de una página con la herramienta de cubierta y ponte a prueba.",
+    "never": "Sin probar"
   }
 }

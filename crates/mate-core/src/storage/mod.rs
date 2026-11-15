@@ -2,6 +2,7 @@
 
 pub(crate) mod elements;
 mod notebook;
+mod recall;
 mod recognition;
 mod search;
 mod semantics;
@@ -15,6 +16,7 @@ use serde::de::DeserializeOwned;
 
 pub use elements::ElementTime;
 pub use notebook::{EntityKind, NotebookTree, TrashItem};
+pub use recall::{RECALL_KIND, RecallAnswer, RecallPageStats, RecallRate, RecallRun, RecallUnitStats};
 pub use recognition::{Bounds, LearningEvent, Recognition, RecognitionSource, UpsertOutcome};
 pub use search::{SNIPPET_CLOSE, SNIPPET_OPEN, SearchHit};
 

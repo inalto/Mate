@@ -84,3 +84,15 @@ describe("strokeDiscs", () => {
     expect(strokeDiscs([pt(5, 6)], penParams("pen", 4, false))).toEqual([{ x: 5, y: 6, r: 2 }]);
   });
 });
+
+describe("cover pen", () => {
+  it("a cover stroke has flat ends", () => {
+    const p = penParams("cover", 28, false);
+    expect(p.start?.cap).toBe(false);
+    expect(p.end?.cap).toBe(false);
+    expect(p.thinning).toBe(0);
+    expect(p.size).toBe(28);
+    expect(p.simulatePressure).toBe(false);
+    expect(p.outline).toBe(true);
+  });
+});

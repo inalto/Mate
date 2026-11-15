@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import i18n from "../i18n";
 import { closeThisWindow, isPageWindow, setThisWindowTitle } from "../ipc/windows";
@@ -29,6 +29,9 @@ import TutorController from "../tutor/TutorController";
 import { disposeAll, disposeClosedPages } from "../code/runtime";
 import { replayForPane, watchPaneReplays } from "../recording/panes";
 import ReplayBar from "../recording/ReplayBar";
+import { runForPane, runOf } from "../covers/panes";
+import { takeRun } from "../covers/pendingRun";
+import StudyBar from "../covers/StudyBar";
 
 const closePaperPicker = () => useChromeStore.getState().setPaperPickerOpen(false);
 
@@ -62,6 +65,40 @@ export default function Editor() {
   // The URL names a page: make sure a tab shows it.
   useEffect(() => {
     if (pageId) useTabsStore.getState().openPage(pageId);
+  }, [pageId]);
+
+  // "Test" on the recall view asked for a run here: start it once the page that opened is loaded
+  // (the run needs its covers). The request is kept in a ref so StrictMode's second effect pass
+  // still finds it.
+  const requested = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pageId) return;
+    if (requested.current !== pageId && takeRun(pageId)) requested.current = pageId;
+    if (requested.current !== pageId) return;
+    const tabs = useTabsStore.getState();
+    const active = tabs.tabs.find((t) => t.id === tabs.activeTabId);
+    const focused = active?.panes[active.focusedPaneIndex];
+    const index = focused?.pageId === pageId ? active!.focusedPaneIndex : (active?.panes.findIndex((p) => p.pageId === pageId) ?? -1);
+    if (index < 0) return;
+    const editor = editorForPane(index as PaneIndex);
+    // The pane's store may still hold this page from before (the editor was left and entered again):
+    // that copy is about to be reloaded, so only a load seen after a not-loaded state counts.
+    let reloading = editor.getState().loadedPageId !== pageId;
+    const tryStart = (s: ReturnType<EditorStore["getState"]>) => {
+      if (s.pageId !== pageId || s.loadedPageId !== pageId) {
+        reloading = true;
+        return false;
+      }
+      if (!reloading) return false;
+      requested.current = null;
+      runOf(editor)?.getState().start();
+      return true;
+    };
+    if (tryStart(editor.getState())) return;
+    const unsub = editor.subscribe((s) => {
+      if (tryStart(s)) unsub();
+    });
+    return unsub;
   }, [pageId]);
 
   // The URL follows the focused page of the active tab; closing the last tab leaves the editor.
@@ -157,6 +194,7 @@ export default function Editor() {
                 <PaneOverlay store={editorForPane(i as PaneIndex)} />
                 <PresentationBar store={editorForPane(i as PaneIndex)} />
                 <ReplayBar store={editorForPane(i as PaneIndex)} replay={replayForPane(i as PaneIndex)} />
+                <StudyBar store={editorForPane(i as PaneIndex)} run={runForPane(i as PaneIndex)} />
               </div>
             ))}
           </div>

@@ -137,6 +137,8 @@
       "penWidth": "ペンの太さ",
       "highlighterColor": "蛍光ペンの色",
       "highlighterWidth": "蛍光ペンの太さ",
+      "coverColor": "カバーの色",
+      "coverWidth": "カバーの太さ",
       "stabilization": {
         "label": "線の手ぶれ補正",
         "hint": "震えを抑えます。値を上げるほどペン先がわずかに遅れます"
@@ -554,6 +556,7 @@
       "autoShapes": "図形の自動整形の切り替え",
       "pen": "ペン",
       "highlighter": "蛍光ペン",
+      "cover": "カバーツール",
       "eraser": "消しゴム",
       "cursor": "選択（カーソル）",
       "lasso": "投げ縄選択",
@@ -639,6 +642,7 @@
     "switchTo": {
       "pen": "ペンに切り替え",
       "highlighter": "蛍光ペンに切り替え",
+      "cover": "カバーツールに切り替え",
       "eraser": "消しゴムに切り替え",
       "cursor": "選択（カーソル）に切り替え",
       "lasso": "投げ縄選択に切り替え",
@@ -660,7 +664,8 @@
       "editor": "先にエディターでページを開いてください",
       "selection": "先に何かを選択してください",
       "page": "先にページを開いてください"
-    }
+    },
+    "recall": "想起の統計を開く"
   },
   "nav": {
     "home": "ホーム",
@@ -697,7 +702,8 @@
     "ink": {
       "pen": "ペン",
       "fountainPen": "万年筆",
-      "highlighter": "蛍光ペン"
+      "highlighter": "蛍光ペン",
+      "cover": "カバー"
     },
     "addPen": "ペンを追加",
     "eraser": "消しゴム",
@@ -841,7 +847,8 @@
     "openFolder": "Open folder {{title}}",
     "folderActions": "Actions for folder {{title}}",
     "emptyFolder": "This folder is empty",
-    "breadcrumb": "Folder path"
+    "breadcrumb": "Folder path",
+    "recall": "想起"
   },
   "export": {
     "failed": "書き出しに失敗しました: {{message}}",
@@ -873,6 +880,10 @@
     "annotationsFlat": "フラット化済み",
     "annotationsLayer": "別レイヤー",
     "annotationsHint": "インポートした PDF ページに適用されます。別レイヤーは PDF エディタで非表示や編集ができます。",
+    "covers": "カバー",
+    "coversCovered": "隠す",
+    "coversHidden": "除外",
+    "coversHint": "「隠す」は各カバーの下を隠したままにします。「除外」はカバーなしでページを書き出します。カバーの下に入力したテキストは検索可能なテキストに含まれません。",
     "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",
     "boxMissing": "ボックス {{id}} は書き出し用に描画されませんでした。"
   },
@@ -916,6 +927,9 @@
     "width": "選択範囲の幅"
   },
   "preset": {
+    "coverShape": "図形",
+    "coverStroke": "ストローク",
+    "coverBox": "ボックス",
     "edit": "プリセットを編集",
     "swatches": "マイスウォッチ",
     "addSwatch": "色をスウォッチとして保存",
@@ -1519,5 +1533,42 @@
     "copied": "文字起こしをコピーしました。",
     "inserted": "文字起こしをページに追加しました。",
     "partial_other": "{{count}} 区間を文字起こしできませんでした。"
+  },
+  "covers": {
+    "menu": "カバー",
+    "revealAll": "すべて表示",
+    "coverAll": "すべて隠す",
+    "removeAll": "すべてのカバーを削除",
+    "removeConfirmTitle": "すべてのカバーを削除しますか？",
+    "removeConfirmBody_other": "このページの{{count}}件のカバーを削除します。ノートはそのまま残ります。元に戻せます。",
+    "testMe": "自分をテスト",
+    "lastTest": "前回のテスト：{{total}}件中{{known}}件、{{date}}",
+    "notTested": "未テスト",
+    "removeLockedStay_other": "ロックされた{{count}}件のカバーは残ります。",
+    "run": {
+      "progress": "{{n}} / {{total}}",
+      "reveal": "表示",
+      "knew": "わかった",
+      "missed": "わからなかった",
+      "score": "{{total}}件中{{known}}件がわかりました（{{time}}）。",
+      "repeatMissed": "わからなかった分を再挑戦",
+      "done": "完了",
+      "end": "テストを終了"
+    },
+    "history": "最近の回答：わかった{{known}}件、わからなかった{{missed}}件"
+  },
+  "recall": {
+    "title": "想起：{{title}}",
+    "covers": "カバー",
+    "answers": "回答",
+    "last7": "わかった数（過去7日間）",
+    "last30": "わかった数（過去30日間）",
+    "page": "ページ",
+    "lastScore": "前回の得点",
+    "runs": "テスト",
+    "trend": "推移",
+    "test": "テスト",
+    "empty": "このノートにはまだカバーがありません。カバーツールでページの一部を隠してから、自分をテストしましょう。",
+    "never": "未テスト"
   }
 }

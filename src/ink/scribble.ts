@@ -2,7 +2,8 @@
 // covers instead of being committed. Detection works in screen px (world × zoom) so it behaves the
 // same at every zoom: gates (point count, duration, size, speed, confinement), then the path is
 // resampled every 6 px (≤ 80 samples) and judged by reversals, self-crossings and a sawtooth test.
-import { shapeElementOutline } from "../shapes/geometry";
+import { isCover } from "../covers/cover";
+import { shapeElementOutline, shapeHit } from "../shapes/geometry";
 import type { Vec2 } from "../canvas/camera";
 import type { Element, Point } from "../model/types";
 import { elementBounds, rectsOverlap, type Rect, type SpatialIndex } from "../tools/spatialIndex";
@@ -273,7 +274,7 @@ function touches(scribble: readonly Vec2[], poly: readonly Vec2[], r: number): b
 /**
  * Ids of the strokes and shapes a scribble erases: bounds overlap the gesture and a scribble point
  * comes within half the element's width + 6 screen px of one of its segments. Text boxes, tables,
- * images and other boxed content are never erased by a scribble.
+ * images and other boxed content are never erased by a scribble. A box cover is hit anywhere inside.
  */
 export function scribbleHits(
   elements: ReadonlyMap<string, Element>,
@@ -290,7 +291,12 @@ export function scribbleHits(
     if (!el || (el.type !== "stroke" && el.type !== "shape")) continue;
     if (!rectsOverlap(elementBounds(el), box)) continue;
     const reach = el.width / 2 + slop;
-    const hit = el.type === "stroke" ? touches(points, el.points, reach) : shapeElementOutline(el).some((poly) => touches(points, poly, reach));
+    const hit =
+      el.type === "stroke"
+        ? touches(points, el.points, reach)
+        : shapeElementOutline(el).some((poly) => touches(points, poly, reach)) ||
+          // A box cover is opaque all over: a scribble anywhere inside it reaches the cover.
+          (isCover(el) && points.some((p) => shapeHit(el, p, slop, true)));
     if (hit) out.push(id);
   }
   return out;

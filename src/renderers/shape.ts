@@ -4,6 +4,7 @@
 // stroke colour, bars stroked. Ink colours remap in
 // dark themes like strokes do. A closed shape's label (shapes/label) is wrapped into the inner
 // rect, vertically centred, clipped to the outline on canvas and rotated with the shape.
+import { coverOutlineColor, isCover } from "../covers/cover";
 import { esc, n } from "../export/svgUtil";
 import { mapInkColor } from "../ink/theme";
 import type { Vec2 } from "../canvas/camera";
@@ -18,6 +19,8 @@ import { registerRenderer, type RenderOptions } from "./registry";
 
 interface Paint {
   stroke: string;
+  /** A box cover's hairline (screen px wide) that keeps it visible on paper of its own colour, else null. */
+  edge: string | null;
   /** Fill colour, or null when the shape is not filled. */
   fill: string | null;
   opacity: number;
@@ -25,10 +28,13 @@ interface Paint {
 
 function paintOf(el: Element, o: RenderOptions): Paint {
   const closed = isClosedShape(el.shapeType ?? "rectangle");
-  const opacity = fillOpacityOf(el);
+  // A box cover is always opaque, whatever opacity its content stores.
+  const cover = isCover(el);
+  const opacity = cover ? 1 : fillOpacityOf(el);
   // Stored colours reach SVG/CSS: an unsafe stroke falls back to black, an unsafe fill to none.
   const fill = closed && hasFill(el.fillColor) && isSafeColor(el.fillColor) && opacity > 0 ? mapInkColor(el.fillColor.trim(), o.theme) : null;
-  return { stroke: mapInkColor(safeColor(el.color, FALLBACK_INK), o.theme), fill, opacity };
+  const stroke = mapInkColor(safeColor(el.color, FALLBACK_INK), o.theme);
+  return { stroke, edge: cover ? coverOutlineColor(stroke, o.theme) : null, fill, opacity };
 }
 
 /** Label colour: unsafe values fall back to the (safe) stroke colour; remapped like ink. */
@@ -120,8 +126,8 @@ function draw(ctx: CanvasRenderingContext2D, el: Element, o: RenderOptions): voi
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  ctx.lineWidth = el.width;
-  ctx.strokeStyle = p.stroke;
+  ctx.lineWidth = p.edge ? 1 / Math.max(o.zoomBucket, 1e-6) : el.width;
+  ctx.strokeStyle = p.edge ?? p.stroke;
   trace(ctx, main, closed);
   if (p.fill) {
     // Multiplied and restored: a dimmed replay note stays dimmed.
@@ -142,7 +148,7 @@ function draw(ctx: CanvasRenderingContext2D, el: Element, o: RenderOptions): voi
     ctx.stroke();
   }
   ctx.restore();
-  if (closed) drawLabel(ctx, el, main, o);
+  if (closed && !p.edge) drawLabel(ctx, el, main, o); // a cover never shows text
 }
 
 const pathD = (poly: Vec2[], closed: boolean): string => {
@@ -155,7 +161,9 @@ function svg(el: Element, o: RenderOptions): string {
   if (outline.length === 0 || outline[0].length === 0) return "";
   const p = paintOf(el, o);
   const stroke = esc(p.stroke);
-  const strokeAttrs = `stroke="${stroke}" stroke-width="${n(el.width)}" stroke-linejoin="round" stroke-linecap="round"`;
+  const strokeAttrs = p.edge
+    ? `stroke="${esc(p.edge)}" stroke-width="${n(1 / Math.max(o.zoomBucket, 1e-6))}" stroke-linejoin="round" stroke-linecap="round"`
+    : `stroke="${stroke}" stroke-width="${n(el.width)}" stroke-linejoin="round" stroke-linecap="round"`;
   const fillAttrs = p.fill ? `fill="${esc(p.fill)}"${p.opacity < 1 ? ` fill-opacity="${n(p.opacity)}"` : ""}` : `fill="none"`;
   const type = el.shapeType ?? "rectangle";
   if (type === "circle" || type === "ellipse") {
@@ -164,7 +172,7 @@ function svg(el: Element, o: RenderOptions): string {
     const cy = r.y + r.height / 2;
     const rot = contentMeta(el).rotation ?? 0;
     const transform = rot ? ` transform="rotate(${n((rot * 180) / Math.PI)} ${n(cx)} ${n(cy)})"` : "";
-    return `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(Math.abs(r.width) / 2)}" ry="${n(Math.abs(r.height) / 2)}"${transform} ${fillAttrs} ${strokeAttrs}/>` + labelSvg(el, o);
+    return `<ellipse cx="${n(cx)}" cy="${n(cy)}" rx="${n(Math.abs(r.width) / 2)}" ry="${n(Math.abs(r.height) / 2)}"${transform} ${fillAttrs} ${strokeAttrs}/>` + (p.edge ? "" : labelSvg(el, o));
   }
   if (!isClosedShape(type)) {
     const [[a, b], ...caps] = outline;
@@ -178,7 +186,7 @@ function svg(el: Element, o: RenderOptions): string {
         .join("")
     );
   }
-  return `<path d="${pathD(outline[0], true)}" ${fillAttrs} ${strokeAttrs}/>` + labelSvg(el, o);
+  return `<path d="${pathD(outline[0], true)}" ${fillAttrs} ${strokeAttrs}/>` + (p.edge ? "" : labelSvg(el, o));
 }
 
 registerRenderer("shape", { draw, svg, bounds: shapeBounds });

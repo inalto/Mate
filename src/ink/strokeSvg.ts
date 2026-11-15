@@ -4,6 +4,7 @@ import { getStroke } from "perfect-freehand";
 import { circle, esc, n, PathData } from "../export/svgUtil";
 import { isSafeColor } from "../text/sanitize";
 import { capsuleRuns } from "./capsuleRuns";
+import { coverOutlineColor } from "../covers/cover";
 import { strokeFill } from "./closed";
 import { traceSmoothPolygon } from "./render";
 import { simplifyEpsForZoom } from "./resample";
@@ -34,7 +35,12 @@ export function strokeSvg(el: Element, theme: ThemeName, zoomBucket: number): st
       if (poly.length > 0) {
         const path = new PathData();
         traceSmoothPolygon(path, poly);
-        shapes.push(`<path d="${path.d}" fill="${color}"/>`);
+        // A cover's hairline keeps it visible on paper of its own colour (mirrors render.ts).
+        const edge =
+          style === "cover"
+            ? ` stroke="${esc(coverOutlineColor(mapInkColor(el.color, theme), theme))}" stroke-width="${n(1 / Math.max(zoomBucket, 1e-6))}" stroke-linejoin="round"`
+            : "";
+        shapes.push(`<path d="${path.d}" fill="${color}"${edge}/>`);
       }
     } else {
       for (const run of capsuleRuns(strokeDiscs(pts, params), simplifyEpsForZoom(zoomBucket))) {

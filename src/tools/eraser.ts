@@ -3,8 +3,10 @@
 // when filled); partial mode turns a touched shape outline into stroke fragments. Text boxes,
 // tables, code blocks and graphs are never erased, nor is anything locked. Connectors are erased
 // whole (in both modes) like shapes, hit along their route; mind maps too (with shapes), hit on a
-// node box or an edge, never on the empty space between them.
+// node box or an edge, never on the empty space between them. A recall cover is never split: it goes
+// whole, and while it is covered (not revealed) nothing it hides is erased through it.
 import { connectorRoute } from "../connectors/geometry";
+import { isCover } from "../covers/cover";
 import { mindmapView } from "../mindmap/cache";
 import { isLocked, isPdfPlacement } from "../model/content";
 import type { Element, Point } from "../model/types";
@@ -21,6 +23,10 @@ export interface EraseOptions {
   newId?: () => string;
   /** Timestamp for fragments' updatedAt (default now). */
   now?: string;
+  /** Ids of the revealed covers; every other live cover hides what is under it (default none). */
+  revealed?: ReadonlySet<string>;
+  /** Covered covers erased earlier in the same drag: what they hid stays out of reach until the drag ends. */
+  shields?: readonly Element[];
 }
 
 export interface EraseResult {
@@ -196,6 +202,11 @@ function shapeFragment(el: Element, points: Point[], id: string, now: string): E
   };
 }
 
+/** The eraser circle touches cover `el`: a box cover anywhere inside it, a stroke cover along its ink. */
+function coverTouches(el: Element, c: Vec2, r: number): boolean {
+  return el.type === "shape" ? shapeHit(el, c, r, true) : polylineTouches(el.points, c, r + el.width / 2);
+}
+
 /**
  * Erase at `center` with `radiusUnits` (world units, already zoom-compensated by the caller).
  * A stroke is hit when any segment comes within radius + width/2.
@@ -212,9 +223,19 @@ export function eraseAt(
   const r = radiusUnits;
   const ids = index.query({ x: center.x - r, y: center.y - r, width: 2 * r, height: 2 * r });
   const newId = opts.newId ?? (() => crypto.randomUUID());
+  // A covered cover under the eraser keeps what it hides: then only covers are erased.
+  let shielded = (opts.shields ?? []).some((c) => coverTouches(c, center, r));
   for (const id of ids) {
     const el = elements.get(id);
-    if (!el || el.points.length === 0 || !erasable(el, opts)) continue;
+    if (!el || el.points.length === 0) continue;
+    if (isCover(el) && !el.deletedAt) {
+      if (!coverTouches(el, center, r)) continue;
+      // It shields even when it cannot be erased itself (locked, or shapes left alone).
+      if (!opts.revealed?.has(id)) shielded = true;
+      if (erasable(el, opts)) result.removed.push(id);
+      continue;
+    }
+    if (!erasable(el, opts)) continue;
     if (el.type === "shape") {
       if (mode === "stroke") {
         if (shapeHit(el, center, r, hasFill(el.fillColor))) result.removed.push(id);
@@ -263,5 +284,6 @@ export function eraseAt(
       parts: frags.map((points) => ({ ...el, id: newId(), points, updatedAt: now, version: 0 })),
     });
   }
+  if (shielded) return { removed: result.removed.filter((id) => isCover(elements.get(id)!)), replaced: [] };
   return result;
 }

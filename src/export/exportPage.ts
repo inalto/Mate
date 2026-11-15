@@ -2,6 +2,7 @@
 // dialog. Graphs need the lazily loaded math engine: it is awaited first so no "Loading…" frame is
 // exported.
 import { screenToWorld, sheetSize } from "../canvas/camera";
+import { isCover } from "../covers/cover";
 import { prepareImages } from "../images/load";
 import { loadElements } from "../ipc/elements";
 import { writeExportFile } from "../ipc/export";
@@ -18,12 +19,15 @@ import { canvasExportLayout, renderToCanvas } from "./renderToCanvas";
 import { readyGraphs } from "./readyGraphs";
 import { renderToLatex } from "./renderToLatex";
 import { renderToSvg } from "./renderToSvg";
-import type { ExportOptions } from "./scene";
+import { textUnderCovers, type ExportOptions } from "./scene";
 
 export type PageExportFormat = "png" | "svg" | "pdf" | "latex";
 
 /** Annotations drawn over imported PDF pages: dropped, merged into the page, or a separate PDF layer. */
 export type AnnotationMode = "none" | "flat" | "layer";
+
+/** Covers in an export: kept covered (opaque), or left out so the page shows what is under them. */
+export type CoverMode = "covered" | "hidden";
 
 export interface PageExportOptions extends Partial<ExportOptions> {
   /** PDF: every sheet, or the sheet shown in the editor (page mode). */
@@ -34,6 +38,8 @@ export interface PageExportOptions extends Partial<ExportOptions> {
   mapElements?: (els: Element[]) => Element[];
   /** Imported-PDF pages: keep annotations flattened (default), drop them, or (PDF) add them as a layer. */
   annotations?: AnnotationMode;
+  /** PDF, PNG, SVG: keep covers covered (default) or leave them out. */
+  covers?: CoverMode;
 }
 
 const EXTENSIONS: Record<PageExportFormat, string> = { png: "png", svg: "svg", pdf: "pdf", latex: "tex" };
@@ -109,10 +115,13 @@ export async function exportPage(
   const loaded = await elementsOf(pageId);
   // "none": only the imported PDF pages stay (a page without any keeps everything).
   const kept = options.annotations === "none" && loaded.some(isPdfPlacement) ? loaded.filter(isPdfPlacement) : loaded;
-  const elements = options.mapElements ? options.mapElements(kept) : kept;
+  const uncovered = options.covers === "hidden" ? kept.filter((e) => !isCover(e)) : kept;
+  const elements = options.mapElements ? options.mapElements(uncovered) : uncovered;
   const filename = pageExportFilename(page.title, EXTENSIONS[format]);
   if (format === "latex") {
-    const tex = renderToLatex(elements.filter((e) => e.pageId === pageId));
+    // LaTeX never draws covers: text under a live one is left out rather than given away.
+    const hidden = textUnderCovers(elements);
+    const tex = renderToLatex(elements.filter((e) => e.pageId === pageId && !hidden.has(e.id)));
     return writeExportFile(filename, new TextEncoder().encode(tex));
   }
   await readyGraphs(elements);

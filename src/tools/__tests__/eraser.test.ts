@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Element } from "../../model/types";
+import { coverBoxElement } from "../../covers/cover";
+import { shapeFromDrag } from "../../shapes/geometry";
 import { eraseAt } from "../eraser";
 import { elementBounds, SpatialIndex } from "../spatialIndex";
 import { el, mapOf } from "./fixtures";
@@ -66,5 +68,48 @@ describe("eraser", () => {
     for (const mode of ["stroke", "partial"] as const) {
       expect(eraseAt(elements, index, { x: 50, y: 10 }, 20, mode, opts)).toEqual({ removed: [], replaced: [] });
     }
+  });
+});
+
+describe("eraser over recall covers", () => {
+  const ink = el("ink", [[0, 10], [80, 10]]);
+  const stroke = el("cv", [[0, 10], [80, 10]], { width: 28, penStyle: "cover", color: "#334155" });
+  const box = coverBoxElement("#334155", shapeFromDrag("rectangle", { x: -50, y: -50 }, { x: 200, y: 100 }, false), "pg", "box", "T");
+
+  it("a covered cover shields what it hides: only the cover goes", () => {
+    for (const cover of [stroke, box]) {
+      const { elements, index } = setup([ink, cover]);
+      for (const mode of ["stroke", "partial"] as const) {
+        expect(eraseAt(elements, index, { x: 40, y: 10 }, 5, mode, opts)).toEqual({ removed: [cover.id], replaced: [] });
+      }
+    }
+  });
+
+  it("a revealed cover shields nothing", () => {
+    const { elements, index } = setup([ink, stroke]);
+    const r = eraseAt(elements, index, { x: 40, y: 10 }, 5, "stroke", { ...opts, revealed: new Set(["cv"]) });
+    expect([...r.removed].sort()).toEqual(["cv", "ink"]);
+  });
+
+  it("a cover that cannot be erased still shields what it hides", () => {
+    const { elements, index } = setup([ink, box]);
+    expect(eraseAt(elements, index, { x: 40, y: 10 }, 5, "stroke", { ...opts, eraseShapes: false })).toEqual({ removed: [], replaced: [] });
+  });
+
+  it("a cover erased earlier in the same drag keeps shielding", () => {
+    const { elements, index } = setup([ink]);
+    expect(eraseAt(elements, index, { x: 40, y: 10 }, 5, "stroke", { ...opts, shields: [box] })).toEqual({ removed: [], replaced: [] });
+    expect(eraseAt(elements, index, { x: 40, y: 10 }, 5, "stroke", opts).removed).toEqual(["ink"]);
+  });
+
+  it("the partial eraser never splits a cover: a box cover's edge or a stroke cover goes whole", () => {
+    const edge = setup([box]);
+    expect(eraseAt(edge.elements, edge.index, { x: -50, y: 20 }, 5, "partial", opts)).toEqual({ removed: ["box"], replaced: [] });
+    const long = el("cv", [[0, 10], [100, 10], [200, 10]], { width: 28, penStyle: "cover" });
+    const along = setup([long]);
+    expect(eraseAt(along.elements, along.index, { x: 100, y: 10 }, 5, "partial", { ...opts, revealed: new Set(["cv"]) })).toEqual({
+      removed: ["cv"],
+      replaced: [],
+    });
   });
 });

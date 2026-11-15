@@ -131,6 +131,8 @@ export interface ShapeContent extends ContentMeta {
    * fractions of the (unrotated) box. Absent: the regular outline of the shape type.
    */
   vertices?: { x: number; y: number }[];
+  /** A recall cover: hides what is under it until tapped (see covers/cover). */
+  cover?: boolean;
 }
 
 /** media (`imageUrl` asset id, `width/height` box like images): an audio or video player. */

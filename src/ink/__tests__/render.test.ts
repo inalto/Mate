@@ -112,4 +112,19 @@ describe("renderStroke", () => {
     renderStroke(dark.ctx, el(pts, { penStyle: "highlighter", isHighlighter: true, width: 20 }), "dark", 1);
     expect(dark.calls.find((c) => c[0] === "fill")?.[3]).toBe("screen");
   });
+
+  it("a cover stroke is filled opaque with no blend mode", () => {
+    const { ctx, calls } = stubCtx();
+    const pts = [pt(0, 0), pt(20, 0), pt(40, 5), pt(60, 0)];
+    renderStroke(ctx, el(pts, { penStyle: "cover", width: 28, color: "#FDE047" }), "light", 1);
+    expect(calls.filter((c) => c[0] === "fill")).toEqual([["fill", "#FDE047", 1, "source-over"]]);
+  });
+
+  it("a cover stroke gets a thin outline mixed toward the text colour, at the fill's alpha", () => {
+    const { ctx, calls } = stubCtx();
+    const pts = [pt(0, 0), pt(20, 0), pt(40, 5), pt(60, 0)];
+    renderStroke(ctx, el(pts, { penStyle: "cover", width: 28, color: "#FFFFFF" }), "light", 2);
+    // White toward black by 20 %; 1 screen px at zoom 2 is half a world unit.
+    expect(calls.filter((c) => c[0] === "stroke")).toEqual([["stroke", 0.5, "#cccccc", "butt", "round"]]);
+  });
 });

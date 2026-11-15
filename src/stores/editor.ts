@@ -1,5 +1,6 @@
 // Editor state for the single active page. Element mutations are persisted through elementsQueue.
 import { create, type StoreApi, type UseBoundStore } from "zustand";
+import { coverBoxElement, coversOf, isCover } from "../covers/cover";
 import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
@@ -77,13 +78,11 @@ import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tr
 import type { MindmapLayoutMode } from "../mindmap/layout";
 import type { MindmapStyle } from "../mindmap/styles";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "cover" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
-export type InkType = PenPreset["type"];
-
-export const INK_TYPES: readonly InkType[] = ["pen", "highlighter", "fountain-pen"];
-export const isInkTool = (t: string): t is InkType => (INK_TYPES as readonly string[]).includes(t);
+export const INK_TYPES: readonly PenPreset["type"][] = ["pen", "highlighter", "fountain-pen", "cover"];
+export const isInkTool = (t: string): t is PenPreset["type"] => (INK_TYPES as readonly string[]).includes(t);
 /** Offset applied by duplicate / paste (world units). */
 export const DUPLICATE_OFFSET = 20;
 /** Gap between a duplicated frame (with its contents) and its source, to the right of it (world units). */
@@ -142,6 +141,15 @@ export interface EditorState {
   replayDim: ReadonlySet<string> | null;
   /** Set the replay's dimmed ids (no history entry); the canvas re-rasterises its static layer. */
   setReplayDim(ids: ReadonlySet<string> | null): void;
+  /** Ids of the revealed recall covers of the open page (drawn at 25 %). Not an element change: no
+   * history, no save; empty every time a page is loaded, and a deleted cover leaves it. */
+  revealed: ReadonlySet<string>;
+  /** Reveal a covered cover or cover a revealed one; nothing unless `id` is a live cover. */
+  toggleReveal(id: string): void;
+  /** Reveal every live cover of the page. */
+  revealAll(): void;
+  /** Cover them all again. */
+  coverAll(): void;
   /** The page's frames in presentation order (`content.order`, then `createdAt`). */
   orderedFrames(): Element[];
   /** Present the frames from `index` (clamped): cursor tool, selection cleared, camera on the frame. Nothing without frames. */
@@ -163,6 +171,8 @@ export interface EditorState {
   addElement(el: Element): void;
   /** Add a shape drawn with the shape tool (one history entry); its id, or null when refused. */
   addShape(style: ShapeStyle, drag: ShapeDrag): string | null;
+  /** A box cover in the cover pen's colour (the cover tool's box shape). */
+  addCoverBox(drag: ShapeDrag): string | null;
   /**
    * Ink to shape: commit `shape` in place of the uncommitted `stroke` as one history entry "Ink to
    * shape". Undo removes the shape and restores the original stroke; redo swaps them back.
@@ -259,7 +269,10 @@ export interface EditorState {
   setLineCaps(id: string, caps: LineCaps): boolean;
   /** Set (or, for empty text / null, remove) a closed shape's label; one "Shape text" history entry. */
   setShapeLabel(id: string, label: ShapeLabel | null): boolean;
-  /** Scribble to erase: delete these elements as one history entry "Scribble erase". */
+  /**
+   * Scribble to erase: delete these elements as one history entry "Scribble erase". When one is a
+   * covered (not revealed) cover only the covers among them go: what a cover hides is never erased.
+   */
   scribbleErase(ids: string[]): void;
   updateElements(els: Element[]): void;
   /**
@@ -317,6 +330,8 @@ export interface EditorState {
   restyleTextBox(patch: Partial<TextAttributes>): void;
   /** Delete elements as one undo entry (`label` defaults to "Delete"). */
   removeElements(ids: string[], label?: string): void;
+  /** Delete every live, unlocked cover of the page as one undo entry ("Remove covers"); false when there is none. */
+  removeAllCovers(): boolean;
   /**
    * Add ready-made elements (already carrying this page's id) as ONE history entry `label`;
    * refused (false, `limitReached` set) when the page would pass the element limit.
@@ -401,8 +416,8 @@ export interface EditorState {
   /** Select the preset in toolbar slot `slot` (1-based). */
   selectSlot(slot: number): void;
   /** Switch to an ink tool, keeping the current preset when it has that type. */
-  selectInk(type: InkType): void;
-  addPreset(type: InkType): void;
+  selectInk(type: PenPreset["type"]): void;
+  addPreset(type: PenPreset["type"]): void;
   removePreset(id: string): void;
   movePreset(id: string, dir: -1 | 1): void;
   updatePreset(preset: PenPreset): void;
@@ -582,7 +597,8 @@ export type EditorStore = UseBoundStore<StoreApi<EditorState>> & {
 const hasCard = (el: Element): boolean => cardOf(el) !== null;
 
 /** A closed shape: its text is edited in place (shapes are not boxed). */
-const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle");
+// A cover shows no text, so it takes no label.
+const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle") && !isCover(el);
 
 export function createEditorStore(): EditorStore {
   let loadToken = 0;
@@ -595,6 +611,8 @@ export function createEditorStore(): EditorStore {
   const changeListeners = new Set<(change: ElementsChange) => void>();
   /** Actions of the eraser drag in progress (pushed as one entry by endEraser). */
   let eraseBatch: Action[] = [];
+  /** Covered covers the eraser drag in progress removed: what they hid stays unerasable until it ends. */
+  let eraseShields: Element[] = [];
   /** Text box added by addTextBox whose first edit session is still open. */
   let freshText: string | null = null;
   /** Commit of the open edit session (bindEditSession). */
@@ -647,9 +665,24 @@ export function createEditorStore(): EditorStore {
     presenting: null,
     mindmapFocus: null,
     replayDim: null,
+    revealed: new Set(),
 
     setReplayDim(ids) {
       if (get().replayDim !== ids) set({ replayDim: ids });
+    },
+
+    toggleReveal(id) {
+      const el = get().elements.get(id);
+      if (!el || el.deletedAt || !isCover(el)) return;
+      const revealed = new Set(get().revealed);
+      if (!revealed.delete(id)) revealed.add(id);
+      set({ revealed });
+    },
+    revealAll() {
+      set({ revealed: new Set(coversOf(get().elements.values()).map((el) => el.id)) });
+    },
+    coverAll() {
+      if (get().revealed.size > 0) set({ revealed: new Set() });
     },
 
     orderedFrames() {
@@ -701,11 +734,13 @@ export function createEditorStore(): EditorStore {
       index.clear();
       clearBindings();
       eraseBatch = [];
+      eraseShields = [];
       presentFrom = null;
       set({
         presenting: null,
         mindmapFocus: null,
         replayDim: null,
+        revealed: new Set(),
         canUndo: false,
         canRedo: false,
         tempTool: null,
@@ -781,6 +816,15 @@ export function createEditorStore(): EditorStore {
       const shape = shapeElement(style, drag, pageId, crypto.randomUUID(), new Date().toISOString());
       const el = top > 0 ? withMeta(shape, { zIndex: top }) : shape;
       return record("Shape", [{ type: "add", el }]) ? el.id : null;
+    },
+
+    addCoverBox(drag) {
+      const pageId = get().pageId;
+      if (!pageId) return null;
+      const top = topZ(get().elements.values());
+      const box = coverBoxElement(get().preset.color, drag, pageId, crypto.randomUUID(), new Date().toISOString());
+      const el = top > 0 ? withMeta(box, { zIndex: top }) : box;
+      return record("Cover", [{ type: "add", el }]) ? el.id : null;
     },
 
     replaceStrokeWithShape(stroke, shape) {
@@ -1052,9 +1096,19 @@ export function createEditorStore(): EditorStore {
     },
 
     scribbleErase(ids) {
-      const cur = get().elements;
-      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!);
+      const { elements: cur, revealed } = get();
+      // A scribble over a covered cover takes the cover away, never what it hides.
+      const covered = ids.some((id) => {
+        const el = cur.get(id);
+        return !!el && !el.deletedAt && isCover(el) && !revealed.has(id);
+      });
+      const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!) && (!covered || isCover(cur.get(id)!));
       record("Scribble erase", ids.filter(ok).map((id) => ({ type: "delete", el: cur.get(id)! })));
+    },
+
+    removeAllCovers() {
+      const gone = coversOf(get().elements.values()).filter((el) => !isLocked(el));
+      return record("Remove covers", gone.map((el) => ({ type: "delete", el })));
     },
 
     updateElements(els) {
@@ -1355,7 +1409,13 @@ export function createEditorStore(): EditorStore {
       const r = eraseAt(s.elements, index, center, radius, mode, {
         eraseShapes: cfg.eraserEraseShapes,
         eraseImages: cfg.eraserEraseImages,
+        revealed: s.revealed,
+        shields: eraseShields,
       });
+      for (const id of r.removed) {
+        const el = s.elements.get(id)!;
+        if (isCover(el) && !s.revealed.has(id)) eraseShields.push(el);
+      }
       let actions: Action[] = r.removed.map((id) => ({ type: "delete", el: s.elements.get(id)! }));
       for (const { removedId, parts } of r.replaced) {
         actions.push({ type: "delete", el: s.elements.get(removedId)! });
@@ -1375,6 +1435,7 @@ export function createEditorStore(): EditorStore {
     },
 
     endEraser() {
+      eraseShields = [];
       flushEraseBatch();
     },
 
@@ -1503,15 +1564,23 @@ export function createEditorStore(): EditorStore {
       const widthOnly = patch.color === undefined && patch.fillColor === undefined;
       const key = widthOnly ? `width:${[...get().selection].sort().join(",")}` : undefined;
       const sized = (el: Element) => el.type === "stroke" || el.type === "shape" || el.type === "connector";
+      // A cover keeps hiding what is under it: a box cover's fill is always its colour and its edge
+      // has no width, and a width meant for other ink never thins a stroke cover (stroke covers
+      // selected on their own still take one).
+      const coversOnly = selectedElements().every((el) => !sized(el) || isCover(el));
+      const widthFits = (el: Element) => sized(el) && (!isCover(el) || (el.type === "stroke" && coversOnly));
       transformSelection(
         "Style",
         (els) =>
-          els.map((el) => ({
-            ...el,
-            ...(patch.color !== undefined ? { color: patch.color } : {}),
-            ...(patch.width !== undefined && sized(el) ? { width: patch.width } : {}),
-            ...(patch.fillColor !== undefined && (el.type === "shape" || isClosedStroke(el)) ? { fillColor: patch.fillColor } : {}),
-          })),
+          els.map((el) => {
+            if (isCover(el) && el.type === "shape") return patch.color !== undefined ? { ...el, color: patch.color, fillColor: patch.color } : el;
+            return {
+              ...el,
+              ...(patch.color !== undefined ? { color: patch.color } : {}),
+              ...(patch.width !== undefined && widthFits(el) ? { width: patch.width } : {}),
+              ...(patch.fillColor !== undefined && !isCover(el) && (el.type === "shape" || isClosedStroke(el)) ? { fillColor: patch.fillColor } : {}),
+            };
+          }),
         key,
       );
     },
@@ -1639,11 +1708,13 @@ export function createEditorStore(): EditorStore {
 
   const S = () => store.getState();
 
-  function newPreset(type: InkType): PenPreset {
+  function newPreset(type: PenPreset["type"]): PenPreset {
     const cfg = useSettingsStore.getState().settings;
+    const id = `preset-${crypto.randomUUID()}`;
+    if (type === "cover") return { id, type, color: cfg.defaultCoverColor, width: cfg.defaultCoverWidth, coverShape: "stroke" };
     const hl = type === "highlighter";
     return {
-      id: `preset-${crypto.randomUUID()}`,
+      id,
       type,
       color: hl ? cfg.defaultHighlighterColor : cfg.defaultPenColor,
       width: hl ? cfg.defaultHighlighterWidth : cfg.defaultPenWidth,
@@ -1867,11 +1938,18 @@ export function createEditorStore(): EditorStore {
       if (!visible) mindmapFocus = null;
       else if (visible !== mindmapFocus.nodeId) mindmapFocus = { elementId: mindmapFocus.elementId, nodeId: visible };
     }
+    // A cover that is gone (deleted, undone) is forgotten: brought back, it comes back covered.
+    let revealed = s.revealed;
+    if (revealed.size > 0 && removed.size > 0) {
+      const kept = [...revealed].filter((id) => !removed.has(id));
+      if (kept.length < revealed.size) revealed = new Set(kept);
+    }
     store.setState({
       elements,
       selection,
       editingId,
       mindmapFocus,
+      revealed,
       contentBottom: grewOnly ? bottom : bottomOf(elements.values()),
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });

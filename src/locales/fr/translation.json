@@ -137,6 +137,8 @@
       "penWidth": "Épaisseur du stylo",
       "highlighterColor": "Couleur du surligneur",
       "highlighterWidth": "Épaisseur du surligneur",
+      "coverColor": "Couleur du masque",
+      "coverWidth": "Largeur du masque",
       "stabilization": {
         "label": "Stabilisation du tracé",
         "hint": "Lisse les tremblements ; plus la valeur est haute, plus le stylo a un léger retard"
@@ -557,6 +559,7 @@
       "autoShapes": "Activer/désactiver les formes parfaites",
       "pen": "Stylo",
       "highlighter": "Surligneur",
+      "cover": "Outil masque",
       "eraser": "Gomme",
       "cursor": "Sélectionner (curseur)",
       "lasso": "Lasso",
@@ -642,6 +645,7 @@
     "switchTo": {
       "pen": "Passer au stylo",
       "highlighter": "Passer au surligneur",
+      "cover": "Passer à l'outil masque",
       "eraser": "Passer à la gomme",
       "cursor": "Passer à la sélection (curseur)",
       "lasso": "Passer au lasso",
@@ -663,7 +667,8 @@
       "editor": "Ouvre d'abord une page dans l'éditeur",
       "selection": "Sélectionne d'abord quelque chose",
       "page": "Ouvre d'abord une page"
-    }
+    },
+    "recall": "Ouvrir les statistiques de révision"
   },
   "nav": {
     "home": "Accueil",
@@ -700,7 +705,8 @@
     "ink": {
       "pen": "Stylo",
       "fountainPen": "Stylo plume",
-      "highlighter": "Surligneur"
+      "highlighter": "Surligneur",
+      "cover": "Masque"
     },
     "addPen": "Ajouter un stylo",
     "eraser": "Gomme",
@@ -844,7 +850,8 @@
     "openFolder": "Open folder {{title}}",
     "folderActions": "Actions for folder {{title}}",
     "emptyFolder": "This folder is empty",
-    "breadcrumb": "Folder path"
+    "breadcrumb": "Folder path",
+    "recall": "Révision"
   },
   "export": {
     "failed": "Échec de l'export : {{message}}",
@@ -876,6 +883,10 @@
     "annotationsFlat": "Aplaties",
     "annotationsLayer": "Calque séparé",
     "annotationsHint": "S'applique aux pages PDF importées. Un calque séparé peut être masqué ou modifié dans les éditeurs PDF.",
+    "covers": "Masques",
+    "coversCovered": "Masqués",
+    "coversHidden": "Omis",
+    "coversHint": "Masqués garde caché ce qui se trouve sous chaque masque. Omis exporte la page sans masques. Le texte saisi sous un masque est exclu du texte recherchable.",
     "boxRender": "Impossible de générer le contenu de la zone {{id}} pour l'export.",
     "boxMissing": "La zone {{id}} n'a pas été générée pour l'export."
   },
@@ -919,6 +930,9 @@
     "width": "Largeur de la sélection"
   },
   "preset": {
+    "coverShape": "Forme",
+    "coverStroke": "Trait",
+    "coverBox": "Zone",
     "edit": "Modifier le préréglage",
     "swatches": "Mes nuances",
     "addSwatch": "Enregistrer la couleur comme nuance",
@@ -1536,5 +1550,44 @@
     "inserted": "Transcription ajoutée à la page.",
     "partial_one": "{{count}} partie n'a pas pu être transcrite.",
     "partial_other": "{{count}} parties n'ont pas pu être transcrites."
+  },
+  "covers": {
+    "menu": "Masques",
+    "revealAll": "Tout découvrir",
+    "coverAll": "Tout masquer",
+    "removeAll": "Supprimer tous les masques",
+    "removeConfirmTitle": "Supprimer tous les masques ?",
+    "removeConfirmBody_one": "{{count}} masque de cette page sera supprimé. Tes notes restent. Tu peux annuler.",
+    "removeConfirmBody_other": "{{count}} masques de cette page seront supprimés. Tes notes restent. Tu peux annuler.",
+    "testMe": "Teste-moi",
+    "lastTest": "Dernier test : {{known}} sur {{total}}, {{date}}",
+    "notTested": "Pas encore testé",
+    "removeLockedStay_one": "{{count}} masque verrouillé reste.",
+    "removeLockedStay_other": "{{count}} masques verrouillés restent.",
+    "run": {
+      "progress": "{{n}} sur {{total}}",
+      "reveal": "Découvrir",
+      "knew": "Je savais",
+      "missed": "Raté",
+      "score": "Tu en savais {{known}} sur {{total}} en {{time}}.",
+      "repeatMissed": "Refaire les ratés",
+      "done": "Terminé",
+      "end": "Arrêter le test"
+    },
+    "history": "Dernières réponses : {{known}} sues, {{missed}} ratées"
+  },
+  "recall": {
+    "title": "Révision : {{title}}",
+    "covers": "Masques",
+    "answers": "Réponses",
+    "last7": "Sues, 7 derniers jours",
+    "last30": "Sues, 30 derniers jours",
+    "page": "Page",
+    "lastScore": "Dernier score",
+    "runs": "Tests",
+    "trend": "Tendance",
+    "test": "Tester",
+    "empty": "Aucun masque dans ce cahier pour l'instant. Cache une partie d'une page avec l'outil masque, puis teste-toi.",
+    "never": "Jamais testé"
   }
 }

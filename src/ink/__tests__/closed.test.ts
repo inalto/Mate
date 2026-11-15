@@ -31,3 +31,12 @@ describe("closed ink", () => {
     expect(strokeFill(stroke([[0, 0], [100, 0], [100, 100]], { fillColor: "#FDE047" }))).toBeNull();
   });
 });
+
+describe("closed cover", () => {
+  it("a_closed_cover_stroke_is_not_a_fill_candidate", () => {
+    const loop: [number, number][] = [[0, 0], [100, 0], [100, 100], [0, 100], [2, 4]];
+    const cover = stroke(loop, { penStyle: "cover", fillColor: "#FDE047" });
+    expect(isClosedStroke(cover)).toBe(false);
+    expect(strokeFill(cover)).toBeNull();
+  });
+});

@@ -503,3 +503,221 @@ fn restore_refuses_a_zip_that_is_no_backup() {
     assert!(dest.list_tree().unwrap().units.is_empty());
     let _ = fs::remove_dir_all(&dir);
 }
+
+// --- Recall results: in backups only ---------------------------------------------------------
+
+use mate_core::archive::{MAX_RECALL_ROWS, restore_backup_recall_capped};
+use mate_core::model::PenStyle;
+use mate_core::storage::{EntityKind, LearningEvent, RECALL_KIND};
+
+/// A cover stroke; `n` points tells covers apart after a restore re-mints their ids.
+fn cover(id: &str, page_id: &str, n: usize) -> Element {
+    Element { pen_style: Some(PenStyle::Cover), ..stroke(id, page_id, n) }
+}
+
+fn recall_row(st: &mut Storage, page_id: &str, element: &str, knew: bool, run: &str, at: &str) {
+    st.record_learning_event(&LearningEvent {
+        id: String::new(),
+        page_id: page_id.into(),
+        stroke_group_id: None,
+        kind: RECALL_KIND.into(),
+        payload: json!({ "elementId": element, "knew": knew, "runId": run }),
+        created_at: at.into(),
+    })
+    .unwrap();
+}
+
+/// [`two_books`] with covers `c1` (3 points) and `c2` (4 points) on `p1`, answered in two runs.
+fn books_with_recall() -> Storage {
+    let mut st = two_books();
+    st.upsert_elements(&[cover("c1", "p1", 3), cover("c2", "p1", 4)]).unwrap();
+    recall_row(&mut st, "p1", "c1", true, "r1", "2026-11-01T10:00:00.000Z");
+    recall_row(&mut st, "p1", "c2", false, "r1", "2026-11-01T10:00:01.000Z");
+    recall_row(&mut st, "p1", "c1", false, "r2", "2026-11-02T10:00:00.000Z");
+    recall_row(&mut st, "p1", "c2", true, "r2", "2026-11-02T10:00:01.000Z");
+    st
+}
+
+/// The id of the restored page titled `Page <original>`.
+fn restored_page(dest: &Storage, original: &str) -> String {
+    let title = format!("Page {original}");
+    dest.list_tree().unwrap().pages.into_iter().find(|p| p.title == title).unwrap().id
+}
+
+/// The id of the restored cover with `n` points on `page_id`.
+fn restored_cover(dest: &Storage, page_id: &str, n: usize) -> String {
+    let els = dest.load_elements(page_id).unwrap();
+    els.into_iter().find(|e| e.pen_style == Some(PenStyle::Cover) && e.points.len() == n).unwrap().id
+}
+
+/// Every recall row of the restored library.
+fn all_recall_rows(dest: &Storage) -> Vec<LearningEvent> {
+    let units = dest.list_tree().unwrap().units;
+    units.iter().flat_map(|u| dest.recall_rows(&u.id).unwrap()).collect()
+}
+
+/// `backup` with book `u1`'s `recall.json` replaced by `recall`.
+fn with_recall_file(backup: &[u8], recall: &[u8]) -> Vec<u8> {
+    fn read(f: &mut impl Read) -> Vec<u8> {
+        let mut data = Vec::new();
+        f.read_to_end(&mut data).unwrap();
+        data
+    }
+    let mut src = zip::ZipArchive::new(Cursor::new(backup)).unwrap();
+    let mut entries = Vec::new();
+    for i in 0..src.len() {
+        let mut f = src.by_index(i).unwrap();
+        let name = f.name().to_owned();
+        let mut data = read(&mut f);
+        if name == "backup.json" {
+            continue;
+        }
+        if name == "books/01-unit-u1.mate" {
+            let mut book = zip::ZipArchive::new(Cursor::new(data)).unwrap();
+            let mut out = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            for j in 0..book.len() {
+                let mut e = book.by_index(j).unwrap();
+                let inner = e.name().to_owned();
+                let d = read(&mut e);
+                if inner != "recall.json" {
+                    out.start_file(inner.as_str(), zip::write::SimpleFileOptions::default()).unwrap();
+                    out.write_all(&d).unwrap();
+                }
+            }
+            out.start_file("recall.json", zip::write::SimpleFileOptions::default()).unwrap();
+            out.write_all(recall).unwrap();
+            data = out.finish().unwrap().into_inner();
+        }
+        entries.push((name, data, false));
+    }
+    zip_of(&entries)
+}
+
+#[test]
+fn a_backup_round_trips_recall_results() {
+    let dir = tmp("recall-round-trip");
+    let assets_dir = dir.join("assets");
+    let mut st = books_with_recall();
+    // A trashed page's rows travel in the backup but have no page to come back to.
+    st.upsert_page(&page("p3", "s1", None)).unwrap();
+    recall_row(&mut st, "p3", "x", true, "r1", "2026-11-01T10:00:02.000Z");
+    st.soft_delete(EntityKind::Page, "p3").unwrap();
+    let (bytes, _) = backup_of(&st, &assets_dir);
+    let mut zip = zip::ZipArchive::new(Cursor::new(bytes.clone())).unwrap();
+    let mut book = Vec::new();
+    zip.by_name("books/01-unit-u1.mate").unwrap().read_to_end(&mut book).unwrap();
+    let book = zip::ZipArchive::new(Cursor::new(book)).unwrap();
+    assert!(book.file_names().any(|n| n == "recall.json"), "the backup book carries its answers");
+    let mut other = Vec::new();
+    zip.by_name("books/02-unit-u2.mate").unwrap().read_to_end(&mut other).unwrap();
+    let other = zip::ZipArchive::new(Cursor::new(other)).unwrap();
+    assert!(!other.file_names().any(|n| n == "recall.json"), "no file for a book without answers");
+
+    let mut dest = Storage::open_in_memory().unwrap();
+    let report = restore_backup(&mut dest, Cursor::new(bytes), &dir.join("restored")).unwrap();
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    let page_id = restored_page(&dest, "p1");
+    let mut original = st.recall_page("p1").unwrap();
+    original.page_id = page_id.clone();
+    assert_eq!(dest.recall_page(&page_id).unwrap(), original);
+    assert_eq!(original.answers, 4);
+    for (old, n) in [("c1", 3), ("c2", 4)] {
+        let new = restored_cover(&dest, &page_id, n);
+        assert_ne!(new, old);
+        assert_eq!(dest.recall_element(&new, 5).unwrap(), st.recall_element(old, 5).unwrap(), "{old}");
+        assert!(dest.recall_element(old, 5).unwrap().is_empty(), "{old}: answers follow the new id");
+    }
+    let rows = all_recall_rows(&dest);
+    assert_eq!(rows.len(), 4, "the trashed page's row is dropped");
+    let originals = st.recall_rows("u1").unwrap();
+    assert!(rows.iter().all(|r| originals.iter().all(|o| o.id != r.id)), "row ids are new");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_restored_row_of_a_deleted_cover_still_counts_for_its_page() {
+    let dir = tmp("recall-deleted-cover");
+    let assets_dir = dir.join("assets");
+    let mut st = books_with_recall();
+    st.upsert_elements(&[cover("gone", "p1", 5)]).unwrap();
+    recall_row(&mut st, "p1", "gone", true, "r3", "2026-11-03T10:00:00.000Z");
+    st.delete_elements(&["gone".to_string()]).unwrap();
+    let (bytes, _) = backup_of(&st, &assets_dir);
+
+    let mut dest = Storage::open_in_memory().unwrap();
+    restore_backup(&mut dest, Cursor::new(bytes), &dir.join("restored")).unwrap();
+    let page_id = restored_page(&dest, "p1");
+    let s = dest.recall_page(&page_id).unwrap();
+    assert_eq!((s.covers, s.answers, s.known, s.runs), (2, 5, 3, 3));
+    assert_eq!(s.last.unwrap().run_id, "r3");
+    // The cover is not in the archive, so its id is kept as it was.
+    assert_eq!(dest.recall_element("gone", 5).unwrap(), vec![true]);
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_broken_recall_file_does_not_fail_the_restore() {
+    let dir = tmp("recall-broken");
+    let assets_dir = dir.join("assets");
+    let (bytes, _) = backup_of(&books_with_recall(), &assets_dir);
+
+    let broken = with_recall_file(&bytes, b"not json");
+    let mut dest = Storage::open_in_memory().unwrap();
+    let report = restore_backup(&mut dest, Cursor::new(broken), &dir.join("restored")).unwrap();
+    assert_eq!(report.books.len(), 2);
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    assert_eq!(dest.load_elements(&restored_page(&dest, "p1")).unwrap().len(), 3, "the book is restored");
+    assert!(all_recall_rows(&dest).is_empty());
+
+    // Rows that do not parse are skipped; the others still restore.
+    let at = "2026-11-01T10:00:00.000Z";
+    let mixed = json!([
+        "garbage",
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "c1" }, "createdAt": at },
+        { "pageId": "p1", "kind": "attempt", "payload": { "elementId": "c1", "knew": true, "runId": "a" }, "createdAt": at },
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "c1", "knew": true, "runId": "r" }, "createdAt": at }
+    ]);
+    let mixed = with_recall_file(&bytes, &serde_json::to_vec(&mixed).unwrap());
+    let mut dest = Storage::open_in_memory().unwrap();
+    restore_backup(&mut dest, Cursor::new(mixed), &dir.join("restored2")).unwrap();
+    let rows = all_recall_rows(&dest);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].payload["runId"], "r");
+    assert_eq!(rows[0].created_at, at, "created_at is kept");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn restored_recall_rows_with_an_empty_element_or_run_id_are_dropped() {
+    let dir = tmp("recall-empty-ids");
+    let assets_dir = dir.join("assets");
+    let (bytes, _) = backup_of(&books_with_recall(), &assets_dir);
+    let at = "2026-11-01T10:00:00.000Z";
+    let rows = json!([
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "", "knew": true, "runId": "r" }, "createdAt": at },
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "c1", "knew": true, "runId": "" }, "createdAt": at },
+        { "pageId": "p1", "kind": "recall", "payload": { "elementId": "c1", "knew": false, "runId": "r" }, "createdAt": at }
+    ]);
+    let file = with_recall_file(&bytes, &serde_json::to_vec(&rows).unwrap());
+    let mut dest = Storage::open_in_memory().unwrap();
+    restore_backup(&mut dest, Cursor::new(file), &dir.join("restored")).unwrap();
+    let rows = all_recall_rows(&dest);
+    assert_eq!(rows.len(), 1, "only the row with both ids is restored");
+    assert_eq!((rows[0].payload["runId"].as_str(), rows[0].payload["knew"].as_bool()), (Some("r"), Some(false)));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn recall_rows_beyond_the_cap_are_skipped() {
+    let dir = tmp("recall-cap");
+    let assets_dir = dir.join("assets");
+    let (bytes, _) = backup_of(&books_with_recall(), &assets_dir);
+    let mut dest = Storage::open_in_memory().unwrap();
+    let report = restore_backup_recall_capped(&mut dest, Cursor::new(bytes), &dir.join("restored"), 3).unwrap();
+    assert_eq!(report.books.len(), 2);
+    let rows = all_recall_rows(&dest);
+    assert_eq!(rows.len(), 3, "the fourth row is past the cap");
+    assert_eq!((rows[2].payload["runId"].as_str(), rows[2].payload["knew"].as_bool()), (Some("r2"), Some(false)));
+    assert_eq!(MAX_RECALL_ROWS, 50_000);
+    let _ = fs::remove_dir_all(&dir);
+}

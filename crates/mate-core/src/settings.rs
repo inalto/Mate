@@ -14,12 +14,15 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub struct PenPreset {
     pub id: String,
-    /// `"pen" | "fountain-pen" | "highlighter"`.
+    /// `"pen" | "fountain-pen" | "highlighter" | "cover"`.
     pub r#type: String,
     pub color: String,
     pub width: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sharpness: Option<f64>,
+    /// Cover presets only: `"stroke" | "box"`; absent reads as `"stroke"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_shape: Option<String>,
 }
 
 fn preset(id: &str, kind: &str, color: &str, width: f64) -> PenPreset {
@@ -29,6 +32,7 @@ fn preset(id: &str, kind: &str, color: &str, width: f64) -> PenPreset {
         color: color.into(),
         width,
         sharpness: None,
+        cover_shape: None,
     }
 }
 
@@ -112,6 +116,8 @@ pub struct Settings {
     pub default_pen_width: f64,
     pub default_highlighter_color: String,
     pub default_highlighter_width: f64,
+    pub default_cover_color: String,
+    pub default_cover_width: f64,
     // Text
     pub default_text_color: String,
     pub default_text_size: f64,
@@ -251,6 +257,8 @@ impl Default for Settings {
             default_pen_width: 4.11,
             default_highlighter_color: s("#FDE047"),
             default_highlighter_width: 20.06,
+            default_cover_color: s("#334155"),
+            default_cover_width: 28.0,
             default_text_color: s("#000000"),
             default_text_size: 21.77,
             default_shape_type: s("rectangle"),

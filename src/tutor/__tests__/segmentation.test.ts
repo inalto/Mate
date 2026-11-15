@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Element } from "../../model/types";
 import { el } from "../../tools/__tests__/fixtures";
 import { elementBounds, type Rect } from "../../tools/spatialIndex";
-import { beyondMergeReach, DEFAULT_SEGMENTATION, mergeCost, regionIdOf, segmentPage } from "../segmentation";
+import { beyondMergeReach, DEFAULT_SEGMENTATION, isInkStroke, mergeCost, regionIdOf, segmentPage } from "../segmentation";
 
 const T0 = Date.parse("2026-10-23T10:00:00.000Z");
 
@@ -174,6 +174,15 @@ describe("segmentPage", () => {
         .sort();
       expect(got, `page ${page}`).toEqual(referencePartition(els));
     }
+  });
+
+  it("a cover stroke is not a tutor stroke, so covers are not sent to handwriting recognition", () => {
+    // segmentPage is the only place that collects strokes for recognition and search (the tutor
+    // pipeline and the palette's handwriting hits both take their regions from it).
+    const cover = glyph("cover", 0, 0, 0, { penStyle: "cover", width: 28 });
+    expect(isInkStroke(cover)).toBe(false);
+    const regions = segmentPage([cover, glyph("ink", 300, 0, 100)]);
+    expect(regions.flatMap((r) => r.elementIds)).toEqual(["ink"]);
   });
 
   it("beyond_merge_reach_uses_gaps_and_adaptive_threshold", () => {

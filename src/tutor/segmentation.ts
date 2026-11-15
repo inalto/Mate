@@ -116,9 +116,9 @@ export function regionIdOf(elementIds: readonly string[]): string {
   return hex(fnv1a(key, 0x811c9dc5)) + hex(fnv1a(key, 0x050c5d1f));
 }
 
-/** Stroke elements the tutor reads: pen ink only (no highlighter, shapes, boxes or PDF placements). */
+/** Stroke elements the tutor reads: pen ink only (no highlighter, cover, shapes, boxes or PDF placements). */
 export const isInkStroke = (el: Element): boolean =>
-  el.type === "stroke" && !el.isHighlighter && el.penStyle !== "highlighter" && !el.deletedAt && el.points.length > 0;
+  el.type === "stroke" && !el.isHighlighter && el.penStyle !== "highlighter" && el.penStyle !== "cover" && !el.deletedAt && el.points.length > 0;
 
 interface Cluster {
   ids: string[];

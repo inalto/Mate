@@ -42,6 +42,8 @@ import type { TKey } from "../i18n";
 import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
+import { isCover } from "../covers/cover";
+import CoverHistory from "../covers/CoverHistory";
 import { hasFill, isClosedShape } from "../shapes/geometry";
 import { shapeLabelOf, type ShapeLabel } from "../shapes/label";
 import { stepFontSize } from "../text/style";
@@ -714,7 +716,11 @@ export default function SelectionBar() {
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
   // What the fill menu applies to: a shape, or ink that closes on itself.
-  const fillable = firstShape ?? selected.find((e) => isClosedStroke(e));
+  // A lone cover ignores opacity and fill; a box cover's outline derives from its colour (a stroke
+  // cover is never "closed ink", so only the box needs the fill menu hidden).
+  const loneCover = selected.length === 1 && selected[0] && isCover(selected[0]) ? selected[0] : undefined;
+  const loneBoxCover = loneCover?.type === "shape" ? loneCover : undefined;
+  const fillable = loneBoxCover ? undefined : (firstShape ?? selected.find((e) => isClosedStroke(e)));
   const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
   const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
   const cardBoxes = selected.filter((e): e is Element => !!e && e.type === "text-box" && !isMathBox(e) && !isLocked(e));
@@ -725,7 +731,7 @@ export default function SelectionBar() {
   const lineShape =
     selected.length === 1 && selected[0]?.type === "shape" && (selected[0].shapeType === "line" || selected[0].shapeType === "arrow") ? selected[0] : undefined;
   const closedShape =
-    selected.length === 1 && selected[0]?.type === "shape" && isClosedShape(selected[0].shapeType ?? "rectangle") ? selected[0] : undefined;
+    selected.length === 1 && selected[0]?.type === "shape" && isClosedShape(selected[0].shapeType ?? "rectangle") && !isCover(selected[0]) ? selected[0] : undefined;
   const connector = selected.length === 1 && selected[0]?.type === "connector" ? selected[0] : undefined;
   const frame = selected.length === 1 && selected[0]?.type === "frame" ? selected[0] : undefined;
   const mindmap = selected.length === 1 && selected[0]?.type === "mindmap" ? selected[0] : undefined;
@@ -796,6 +802,7 @@ export default function SelectionBar() {
           style={{ background: c }}
           aria-label={t("library.colour", { color: c })}
           disabled={allLocked}
+          // A box cover's fill follows its colour (the store keeps the two equal).
           onClick={() => s().restyleSelection({ color: c })}
         />
       ))}
@@ -805,7 +812,8 @@ export default function SelectionBar() {
           <FillMenu current={fillable.fillColor} disabled={allLocked} />
         </>
       )}
-      {first && (
+      {loneCover && <CoverHistory id={loneCover.id} />}
+      {first && !loneBoxCover && (
         <>
           <span className="tb-sep" />
           <label className="tb-width" title={t("selection.widthPx")}>

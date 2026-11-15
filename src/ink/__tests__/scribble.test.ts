@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Point } from "../../model/types";
+import { coverBoxElement } from "../../covers/cover";
+import { shapeFromDrag } from "../../shapes/geometry";
 import { el } from "../../tools/__tests__/fixtures";
 import { SpatialIndex, elementBounds } from "../../tools/spatialIndex";
 import { isScribbleGesture, scribbleHits } from "../scribble";
@@ -88,5 +90,15 @@ describe("scribbleHits", () => {
     for (const e of els.values()) index.insert(e.id, elementBounds(e));
     const hits = scribbleHits(els, index, trace(crossingScribble(), 1), 1);
     expect(hits).toEqual(["under"]);
+  });
+
+  it("hits a box cover anywhere inside it, not only on its outline", () => {
+    const under = el("under", [[10, 10], [70, 10]]);
+    const cover = coverBoxElement("#334155", shapeFromDrag("rectangle", { x: -50, y: -50 }, { x: 200, y: 100 }, false), "pg", "box", "T");
+    const plain = { ...cover, id: "plain", content: { fillOpacity: 1 } };
+    const els = new Map([under, cover, plain].map((e) => [e.id, e]));
+    const index = new SpatialIndex();
+    for (const e of els.values()) index.insert(e.id, elementBounds(e));
+    expect(scribbleHits(els, index, trace(crossingScribble(), 1), 1).sort()).toEqual(["box", "under"]);
   });
 });

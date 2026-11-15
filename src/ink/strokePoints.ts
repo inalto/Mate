@@ -53,6 +53,18 @@ export function penParams(style: PenStyle, size: number, realPressure: boolean, 
         outline: true,
       };
     }
+    // A cover is a flat-ended marker band: no round caps, so it reads as a slab over the text.
+    case "cover":
+      return {
+        size,
+        thinning: 0,
+        smoothing: 0.5,
+        streamline: 0.5,
+        simulatePressure: false,
+        start: { cap: false },
+        end: { cap: false },
+        outline: true,
+      };
     case "highlighter":
       return { size, thinning: 0, smoothing: 0.5, streamline: 0.5, simulatePressure: false, outline: true };
     case "pencil":

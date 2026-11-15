@@ -2,8 +2,9 @@
 import { useModal } from "./useModal";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { coversOf } from "../covers/cover";
 import { paddedSelectionRegion } from "../export/copyImage";
-import { exportPage, type AnnotationMode } from "../export/exportPage";
+import { exportPage, type AnnotationMode, type CoverMode } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
 import { isPdfPlacement } from "../model/content";
 import { isMobile } from "../platform";
@@ -51,6 +52,14 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
   const editor = useFocusedEditor();
   const canSelect = editor((s) => s.loadedPageId === pageId && s.selection.size > 0);
   const hasPlacements = editor((s) => s.loadedPageId === pageId && [...s.elements.values()].some(isPdfPlacement));
+  const hasCovers = editor((s) => s.loadedPageId === pageId && coversOf(s.elements.values()).length > 0);
+  const [covers, setCovers] = useState<CoverMode>("covered");
+  // The choice belongs to its page: another page starts covered.
+  const [coversPage, setCoversOf] = useState(pageId);
+  if (coversPage !== pageId) {
+    setCoversOf(pageId);
+    setCovers("covered");
+  }
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [recordings, setRecordings] = useState(false);
   const hasRecordings = useHasRecordings(unitId);
@@ -75,9 +84,9 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
       } else if (format === "latex") {
         saved = await exportPage(pageId, "latex", {});
       } else if (format === "pdf") {
-        saved = await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable, region, annotations });
+        saved = await exportPage(pageId, "pdf", { theme, background, pages: pageMode ? pages : "all", searchable, region, annotations, covers });
       } else {
-        saved = await exportPage(pageId, format, format === "png" ? { theme, background, scale, region, annotations } : { theme, background, region, annotations });
+        saved = await exportPage(pageId, format, format === "png" ? { theme, background, scale, region, annotations, covers } : { theme, background, region, annotations, covers });
       }
       // Mobile: the file went to the share sheet (desktop users picked the path themselves).
       if (saved && isMobile()) showToast(t("export.shared"));
@@ -150,6 +159,12 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
               setAnnotations,
             )}
             <p className="field-hint">{t("export.annotationsHint")}</p>
+          </>
+        )}
+        {hasCovers && (format === "pdf" || format === "png" || format === "svg") && (
+          <>
+            {seg<CoverMode>(t("export.covers"), [["covered", t("export.coversCovered")], ["hidden", t("export.coversHidden")]], covers, setCovers)}
+            <p className="field-hint">{t("export.coversHint")}</p>
           </>
         )}
         {format === "png" && seg(t("export.scale"), SCALES.map((s): [number, string] => [s, t("export.times", { n: s })]), scale, setScale)}
