@@ -1,9 +1,14 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Page, Section, Unit } from "../../model/types";
+import type { Element, Page, Section, Unit } from "../../model/types";
+import { el } from "../../tools/__tests__/fixtures";
 
 const win = vi.hoisted(() => ({ page: false }));
+const loaded = vi.hoisted(() => ({ els: [] as Element[] }));
+vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => loaded.els) }));
+vi.mock("../../ipc/elementsQueue", () => ({ elementsQueue: { enqueueUpsert: vi.fn(), enqueueDelete: vi.fn(), flushAll: vi.fn(async () => {}), pending: () => 0, failed: () => 0 } }));
+vi.mock("../../ipc/recall", () => ({ recordRecall: vi.fn(async () => {}) }));
 
 vi.mock("../../ipc/windows", () => ({
   isPageWindow: () => win.page,
@@ -36,6 +41,9 @@ vi.mock("../../components/Sidebar", () => ({ default: () => <nav data-testid="si
 vi.mock("../../components/TabBar", () => ({ default: () => <div data-testid="tabbar" /> }));
 
 import { setThisWindowTitle } from "../../ipc/windows";
+import { requestRun } from "../../covers/pendingRun";
+import { runForPane } from "../../covers/panes";
+import { editorForPane } from "../../stores/focusedEditor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
 import Editor from "../Editor";
@@ -103,5 +111,47 @@ describe("Editor", () => {
     expect(setThisWindowTitle).toHaveBeenCalledWith("Algebra");
     // The main window's stored tabs are untouched.
     expect(localStorage.getItem("mate_tabs_v1")).toBeNull();
+  });
+
+  describe("a requested test run", () => {
+    const phase = () => runForPane(0).getState().phase;
+    const cover = el("c1", [[0, 0], [100, 0]], { width: 28, penStyle: "cover", pageId: "p1" });
+    beforeEach(async () => {
+      runForPane(0).getState().end();
+      // The pane's store still holds the previous test's page: start from another one.
+      await editorForPane(0).getState().loadPage("other");
+      loaded.els = [cover];
+    });
+
+    it("starts only once the page's elements are loaded", async () => {
+      requestRun("p1");
+      renderEditor("/edit/p1");
+      expect(phase()).toBe("idle");
+      await act(async () => editorForPane(0).getState().loadPage("p1"));
+      expect(phase()).toBe("asking");
+    });
+
+    it("ignores a copy of the page left in the pane from before; it starts after the reload", async () => {
+      await act(async () => editorForPane(0).getState().loadPage("p1"));
+      requestRun("p1");
+      renderEditor("/edit/p1");
+      expect(phase()).toBe("idle");
+      await act(async () => editorForPane(0).getState().loadPage("p1"));
+      expect(phase()).toBe("asking");
+    });
+
+    it("does not start without a request", async () => {
+      renderEditor("/edit/p1");
+      await act(async () => editorForPane(0).getState().loadPage("p1"));
+      expect(phase()).toBe("idle");
+    });
+
+    it("a page without covers is left alone", async () => {
+      loaded.els = [];
+      requestRun("p1");
+      renderEditor("/edit/p1");
+      await act(async () => editorForPane(0).getState().loadPage("p1"));
+      expect(phase()).toBe("idle");
+    });
   });
 });

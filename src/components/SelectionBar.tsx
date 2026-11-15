@@ -43,6 +43,7 @@ import { worldToScreen } from "../canvas/camera";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
 import { isCover } from "../covers/cover";
+import CoverHistory from "../covers/CoverHistory";
 import { hasFill, isClosedShape } from "../shapes/geometry";
 import { shapeLabelOf, type ShapeLabel } from "../shapes/label";
 import { stepFontSize } from "../text/style";
@@ -715,7 +716,9 @@ export default function SelectionBar() {
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
   // What the fill menu applies to: a shape, or ink that closes on itself.
-  const fillable = firstShape ?? selected.find((e) => isClosedStroke(e));
+  // A lone cover (stroke or box) ignores opacity and fill, and a box's outline derives from its colour.
+  const loneCover = selected.length === 1 && selected[0] && isCover(selected[0]) ? selected[0] : undefined;
+  const fillable = loneCover ? undefined : (firstShape ?? selected.find((e) => isClosedStroke(e)));
   const maths = selected.filter((e): e is NonNullable<typeof e> => !!e && isMathBox(e));
   const math = maths.length > 0 && maths.length === selected.length ? maths : undefined;
   const cardBoxes = selected.filter((e): e is Element => !!e && e.type === "text-box" && !isMathBox(e) && !isLocked(e));
@@ -797,7 +800,8 @@ export default function SelectionBar() {
           style={{ background: c }}
           aria-label={t("library.colour", { color: c })}
           disabled={allLocked}
-          onClick={() => s().restyleSelection({ color: c })}
+          // A box cover's fill is its colour: the two change together so they stay equal.
+          onClick={() => s().restyleSelection(loneCover?.type === "shape" ? { color: c, fillColor: c } : { color: c })}
         />
       ))}
       {fillable && (
@@ -806,7 +810,8 @@ export default function SelectionBar() {
           <FillMenu current={fillable.fillColor} disabled={allLocked} />
         </>
       )}
-      {first && (
+      {loneCover && <CoverHistory id={loneCover.id} />}
+      {first && !(loneCover?.type === "shape") && (
         <>
           <span className="tb-sep" />
           <label className="tb-width" title={t("selection.widthPx")}>

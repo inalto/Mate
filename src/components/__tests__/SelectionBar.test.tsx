@@ -6,7 +6,10 @@ vi.mock("../../ipc/elementsQueue", () => ({
   elementsQueue: { enqueueUpsert: vi.fn(), enqueueDelete: vi.fn(), flushAll: vi.fn(async () => {}) },
 }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
+vi.mock("../../ipc/recall", () => ({ recallElementHistory: vi.fn(async () => []) }));
 
+import { loadElements } from "../../ipc/elements";
+import { el } from "../../tools/__tests__/fixtures";
 import { contentOf, type TextBoxContent } from "../../model/content";
 import { shapeFromDrag } from "../../shapes/geometry";
 import { useEditorStore } from "../../stores/editor";
@@ -210,5 +213,35 @@ describe("SelectionBar align and math", () => {
     s().select([id]);
     render(<SelectionBar />);
     expect(screen.queryByRole("button", { name: "Add text" })).toBeNull();
+  });
+
+  it("a_lone_box_cover_offers_colour_only_and_keeps_fill_equal_to_it", async () => {
+    useNotebookStore.setState({ loaded: true });
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    const s = () => useEditorStore.getState();
+    const id = s().addCoverBox(shapeFromDrag("rectangle", { x: 100, y: 200 }, { x: 300, y: 300 }, false))!;
+    s().select([id]);
+    render(<SelectionBar />);
+    // Opacity is ignored and the outline derives from the colour: no fill menu, no width.
+    expect(screen.queryByRole("button", { name: "Fill colour" })).toBeNull();
+    expect(screen.queryByRole("slider", { name: "Selection width" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Colour #1565C0" }));
+    expect(s().elements.get(id)!.color).toBe("#1565C0");
+    expect(s().elements.get(id)!.fillColor).toBe("#1565C0");
+  });
+
+  it("a_lone_stroke_cover_keeps_colour_and_width_and_offers_no_fill_even_when_closed", async () => {
+    useNotebookStore.setState({ loaded: true });
+    const s = () => useEditorStore.getState();
+    vi.mocked(loadElements).mockResolvedValueOnce([el("sc", [[0, 0], [100, 0], [100, 50], [0, 50], [0, 1]], { width: 28, penStyle: "cover", color: "#4A5D4E" })]);
+    await useEditorStore.getState().loadPage("pg");
+    useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    s().select(["sc"]);
+    render(<SelectionBar />);
+    expect(screen.queryByRole("button", { name: "Fill colour" })).toBeNull();
+    expect(screen.getByRole("slider", { name: "Selection width" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Colour #1565C0" }));
+    expect(s().elements.get("sc")!.color).toBe("#1565C0");
   });
 });

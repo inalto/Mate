@@ -151,6 +151,7 @@ export default function BookCard({ unit }: { unit: Unit }) {
               </button>
               <button role="menuitem" onClick={act(async () => setMoving(true))}>{t("library.moveTo")}</button>
               <button role="menuitem" onClick={act(async () => setPractising(true))}>{t("library.practice")}</button>
+              <button role="menuitem" onClick={act(async () => navigate(`/recall/${unit.id}`))}>{t("library.recall")}</button>
               <button role="menuitem" onClick={act(exportBook)}>{t("library.exportBook")}</button>
               <button role="menuitem" onClick={act(async () => setSharing(true))}>{t("library.share")}</button>
               <button role="menuitem" onClick={act(() => useImportStore.getState().openDialog({ unitId: unit.id }))}>

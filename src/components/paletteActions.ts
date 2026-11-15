@@ -131,6 +131,16 @@ export const QUICK_ACTIONS: QuickAction[] = [
         .then((p) => navigate(`/edit/${p.id}`));
     },
   },
+  {
+    id: "recall.open",
+    labelKey: "palette.recall",
+    synonyms: ["recall", "covers", "statistics", "test", "flashcards"],
+    scope: "editor",
+    run: (navigate) => {
+      const cur = currentSection();
+      if (cur) navigate(`/recall/${cur.unitId}`);
+    },
+  },
   plain("window.openPage", "page", ["window", "detach"]),
   plain("recording.toggle", "page", ["record", "audio", "lecture", "microphone"]),
   plain("help.shortcuts", "global", ["keys", "keyboard", "help"]),
@@ -142,7 +152,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
  * A page window shows one page: actions that navigate elsewhere (settings, library, a new page or
  * section) or open the page in a window again are not offered there.
  */
-const NOT_IN_PAGE_WINDOW = new Set(["page.new", "section.new", "window.openPage", "go.settings", "go.library"]);
+const NOT_IN_PAGE_WINDOW = new Set(["page.new", "section.new", "window.openPage", "go.settings", "go.library", "recall.open"]);
 export const availableInPageWindow = (a: QuickAction): boolean => !NOT_IN_PAGE_WINDOW.has(a.id);
 
 /** Catalogue key of the hint shown on a disabled action. */

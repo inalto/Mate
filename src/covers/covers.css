@@ -46,3 +46,89 @@
   font-size: 0.875rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* The recall view: figures on top, one row per page below. */
+.recall-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.recall-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 0.8125rem;
+}
+
+.recall-figure strong {
+  color: var(--color-text);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.recall-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.recall-table th,
+.recall-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  text-align: start;
+  vertical-align: middle;
+}
+
+.recall-table th {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.recall-row {
+  cursor: pointer;
+}
+
+.recall-row:hover {
+  background: var(--color-surface-2);
+}
+
+.recall-page {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.recall-trend {
+  display: block;
+  stroke: var(--color-primary);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.recall-trend circle {
+  fill: var(--color-primary);
+  stroke: none;
+}
+
+/* The last answers to one cover (selection bar): filled = known, hollow = missed. */
+.cover-history {
+  flex: none;
+}
+
+.cover-dot {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 1.25;
+}
+
+.cover-dot.known {
+  fill: var(--color-primary);
+}

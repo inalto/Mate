@@ -331,6 +331,30 @@ describe("CommandPalette quick actions", () => {
     expect(screen.getByRole("option", { name: /Open settings/ }).getAttribute("aria-disabled")).toBeNull();
   });
 
+  it("opens the recall statistics of the current notebook", () => {
+    useNotebookStore.setState({
+      tree: {
+        bookshelves: [],
+        units: [],
+        sections: [{ id: "s1", unitId: "u1", title: "Notes", color: "#000", orderIndex: 0, isExpanded: true, createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", version: 0 }],
+        pages: [page("p1", "Quadratics")],
+      },
+    });
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "recall" } });
+    fireEvent.click(screen.getByRole("option", { name: /Open recall statistics/ }));
+    expect(screen.getByTestId("where").textContent).toBe("/recall/u1");
+  });
+
+  it("offers no recall statistics in a page window", () => {
+    win.page = true;
+    renderPalette();
+    open();
+    fireEvent.change(input(), { target: { value: "recall statistics" } });
+    expect(screen.queryByRole("option", { name: /Open recall statistics/ })).toBeNull();
+  });
+
   it("page_window_palette_is_single_page", () => {
     win.page = true;
     renderPalette();

@@ -664,7 +664,8 @@
       "editor": "先にエディターでページを開いてください",
       "selection": "先に何かを選択してください",
       "page": "先にページを開いてください"
-    }
+    },
+    "recall": "Open recall statistics"
   },
   "nav": {
     "home": "ホーム",
@@ -846,7 +847,8 @@
     "openFolder": "Open folder {{title}}",
     "folderActions": "Actions for folder {{title}}",
     "emptyFolder": "This folder is empty",
-    "breadcrumb": "Folder path"
+    "breadcrumb": "Folder path",
+    "recall": "Recall"
   },
   "export": {
     "failed": "書き出しに失敗しました: {{message}}",
@@ -1548,6 +1550,21 @@
       "repeatMissed": "Repeat missed",
       "done": "Done",
       "end": "End test"
-    }
+    },
+    "history": "Last answers: {{known}} known, {{missed}} missed"
+  },
+  "recall": {
+    "title": "Recall: {{title}}",
+    "covers": "Covers",
+    "answers": "Answers",
+    "last7": "Known, last 7 days",
+    "last30": "Known, last 30 days",
+    "page": "Page",
+    "lastScore": "Last score",
+    "runs": "Tests",
+    "trend": "Trend",
+    "test": "Test",
+    "empty": "No covers in this notebook yet. Hide part of a page with the cover tool, then test yourself.",
+    "never": "Not tested"
   }
 }

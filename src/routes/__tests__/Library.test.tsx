@@ -123,6 +123,16 @@ describe("Library", () => {
     await waitFor(() => expect(exportUnitArchive).toHaveBeenCalledWith("1"));
   });
 
+  it("opens the recall statistics of a book from its card menu", () => {
+    setUnits([unit("1", "Physics")]);
+    renderLibrary();
+    fireEvent.click(screen.getByLabelText("Actions for Physics"));
+    const items = screen.getAllByRole("menuitem").map((m) => m.textContent);
+    expect(items.indexOf("Recall")).toBe(items.findIndex((t) => t?.startsWith("Practice")) + 1);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Recall" }));
+    expect(navigate).toHaveBeenCalledWith("/recall/1");
+  });
+
   it("imports a PDF as a page and opens it", async () => {
     setUnits([unit("1", "Physics")]);
     renderLibrary();

@@ -664,7 +664,8 @@
       "editor": "Apri prima una pagina nell'editor",
       "selection": "Seleziona prima qualcosa",
       "page": "Apri prima una pagina"
-    }
+    },
+    "recall": "Apri le statistiche di ripasso"
   },
   "nav": {
     "home": "Home",
@@ -846,7 +847,8 @@
     "openFolder": "Apri la cartella {{title}}",
     "folderActions": "Azioni per la cartella {{title}}",
     "emptyFolder": "Questa cartella è vuota",
-    "breadcrumb": "Percorso della cartella"
+    "breadcrumb": "Percorso della cartella",
+    "recall": "Ripasso"
   },
   "export": {
     "failed": "Esportazione non riuscita: {{message}}",
@@ -1563,6 +1565,21 @@
       "repeatMissed": "Ripeti le sbagliate",
       "done": "Fine",
       "end": "Termina la prova"
-    }
+    },
+    "history": "Ultime risposte: {{known}} sapute, {{missed}} sbagliate"
+  },
+  "recall": {
+    "title": "Ripasso: {{title}}",
+    "covers": "Coperture",
+    "answers": "Risposte",
+    "last7": "Sapute, ultimi 7 giorni",
+    "last30": "Sapute, ultimi 30 giorni",
+    "page": "Pagina",
+    "lastScore": "Ultimo punteggio",
+    "runs": "Prove",
+    "trend": "Andamento",
+    "test": "Prova",
+    "empty": "Nessuna copertura in questo quaderno. Nascondi parte di una pagina con lo strumento copertura, poi mettiti alla prova.",
+    "never": "Mai provata"
   }
 }
