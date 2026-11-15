@@ -48,7 +48,7 @@ export type PointerTool = ToolId | "pan" | "none" | "cover-box";
 
 /** Corner handle half-size and hit slop (screen px). */
 export const HANDLE_PX = 5;
-const HIT_SLOP_PX = 8;
+export const HIT_SLOP_PX = 8;
 /** Mind maps: how near a node box or an edge (screen px) a press still hits. */
 const MINDMAP_HIT_PX = 4;
 const MIN_SCALE = 0.05;
@@ -404,6 +404,8 @@ export interface ToolDeps {
   replay?: ReplayTapTarget;
   /** Recording markers of this pane, and opening one in its replay (recording/panes.ts `markerTargetOf`). */
   markers?: MarkerTarget;
+  /** Recall covers of this pane, and peeking under one (covers/tap.ts `coverTargetOf`). */
+  covers?: MarkerTarget;
 }
 
 /** The pane's recording markers, as a press on the canvas sees them. */
@@ -431,12 +433,13 @@ export const REPLAY_TAP_MS = 300;
  * returns the tap: the press is consumed). With a non-ink tool, a second tap on the same note within
  * the double-tap window is not consumed (a double-click still opens editors). Anything else behaves as without a replay.
  * The same tap on a recording marker with an ink, text or other creating tool (not the cursor, lasso
- * or eraser) opens its replay instead, open or not.
+ * or eraser) opens its replay instead, open or not; on a recall cover it reveals or covers it,
+ * before anything else (a cover written during the recording peeks rather than seeks).
  */
-export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number, markers?: MarkerTarget) {
+export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | undefined, now: () => number, markers?: MarkerTarget, covers?: MarkerTarget) {
   let press: Tap | null = null;
-  /** The press is on a recording marker (a tap opens it). */
-  let onMarker = false;
+  /** The press is on a recording marker or a cover: what a tap opens. */
+  let onTarget: MarkerTarget | null = null;
   /** The last tap that seeked (its second tap falls through). */
   let seeked: Tap | null = null;
   const moved = (p: Vec2) => {
@@ -448,18 +451,19 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
     /** A press at world `p`: true when it may be a tap to seek. */
     down(p: Vec2, tool: PointerTool): boolean {
       press = null;
-      onMarker = false;
+      onTarget = null;
       if (tool === "eraser" || tool === "pan" || tool === "none") return false;
-      const marking = !!markers && tool !== "cursor" && tool !== "lasso";
-      if (!marking && !replay?.isOpen()) return false;
+      const creating = tool !== "cursor" && tool !== "lasso";
+      if (!(creating && (markers || covers)) && !replay?.isOpen()) return false;
       const s = store.getState();
       const id = hitTest(store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
       if (!id) return false;
       const scr = worldToScreen(s.camera, p);
       const tap: Tap = { id, x: scr.x, y: scr.y, t: now() };
-      if (marking && markers.isMarker(id)) {
+      const target = !creating ? null : covers?.isMarker(id) ? covers : markers?.isMarker(id) ? markers : null;
+      if (target) {
         press = tap;
-        onMarker = true;
+        onTarget = target;
         return true;
       }
       if (!replay?.isOpen() || !replay.canSeek(id)) return false;
@@ -481,10 +485,11 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
       if (p) moved(p);
       const tap = press && now() - press.t <= REPLAY_TAP_MS ? press : null;
       press = null;
-      if (onMarker) {
-        onMarker = false;
+      if (onTarget) {
+        const target = onTarget;
+        onTarget = null;
         seeked = null;
-        if (tap) markers?.open(tap.id);
+        if (tap) target.open(tap.id);
         return tap;
       }
       seeked = tap && replay?.seekToElement(tap.id) ? tap : null;
@@ -492,7 +497,7 @@ export function createReplayTap(store: EditorStore, replay: ReplayTapTarget | un
     },
     cancel() {
       press = null;
-      onMarker = false;
+      onTarget = null;
     },
   };
 }
@@ -537,7 +542,7 @@ export function createToolController(deps: ToolDeps) {
   let dupCount = 0;
   let lastTap: Tap | null = null;
   const now = deps.now ?? (() => performance.now());
-  const replayTap = createReplayTap(deps.store, deps.replay, now, deps.markers);
+  const replayTap = createReplayTap(deps.store, deps.replay, now, deps.markers, deps.covers);
   /** A cursor press on the already selected recording marker: its quick release without a drag opens it. */
   let markerClick: Tap | null = null;
 

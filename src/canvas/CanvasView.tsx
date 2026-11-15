@@ -16,6 +16,7 @@ import { drawElement } from "../renderers/registry";
 import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
 import { coverBoxActive, isCover } from "../covers/cover";
+import { coverTargetOf, dimOf } from "../covers/tap";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
 import LineCapsPopover from "../components/LineCapsPopover";
@@ -37,7 +38,7 @@ import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeEl
 import { clampToRect, sheetRectAt } from "./pageBounds";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
-import { createDismissPress, createToolController, HOLD_SLOP_PX, pointerTool, TAP_MS } from "./toolInteractions";
+import { createDismissPress, createToolController, HIT_SLOP_PX, hitTest, HOLD_SLOP_PX, pointerTool, TAP_MS } from "./toolInteractions";
 import { createTutorInk } from "./tutorInk";
 import { consumeDismissDown, paneOfStore } from "../stores/tutor";
 import { useAiStatus } from "../tutor/aiStatus";
@@ -170,7 +171,7 @@ function createEngine(
       if (hole) presentBackdrop(ctx, clip, hole, FRAME_RADIUS);
     } else if (!tools.hidden.has(el.id) && !(el.id === s.editingId && hasEditor(el.type))) {
       const shown = el.id === s.editingId && el.type === "shape" ? withShapeLabel(el, null) : el;
-      drawDimmed(asCtx(ctx), s.replayDim, el.id, () => drawElement(asCtx(ctx), shown, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper }));
+      drawDimmed(asCtx(ctx), dimOf(s), el.id, () => drawElement(asCtx(ctx), shown, { theme: theme(), zoomBucket: s.camera.z, pixelRatio: dpr, paper: colors.paper }));
     }
   };
 
@@ -252,6 +253,7 @@ function createEngine(
   const pane = paneOfStore(store);
   const { gestures: tutor, markers: markersNow } = createTutorInk({ store, pageId, pane, getSettings });
 
+  const covers = coverTargetOf(store);
   const tools = createToolController({
     store,
     el: liveCanvas,
@@ -261,10 +263,11 @@ function createEngine(
       requestStatic();
     },
     renderElement: (ctx, el) =>
-      drawDimmed(ctx, st().replayDim, el.id, () => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper })),
+      drawDimmed(ctx, dimOf(st()), el.id, () => drawElement(ctx, el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper })),
     getSettings,
     replay: replayTapOf(store),
     markers: markerTargetOf(store),
+    covers,
   });
 
   const resize = () => {
@@ -608,8 +611,18 @@ function createEngine(
           fingerTap = null;
           return;
         }
-        // Two quick taps of a panning finger zoom in about the spot tapped.
         const tap = fingerTapOf(g.samples, end.timeStamp);
+        // A finger's tap on a cover peeks under it (or covers it again); it starts no double-tap zoom.
+        if (tap && s.tool !== "eraser" && s.tool !== "cursor" && s.tool !== "lasso") {
+          const at = screenToWorld(s.camera, tap);
+          const id = hitTest(store.spatialIndex(), s.elements, at, HIT_SLOP_PX / s.camera.z);
+          if (id && covers.isMarker(id)) {
+            covers.open(id);
+            fingerTap = null;
+            return;
+          }
+        }
+        // Two quick taps of a panning finger zoom in about the spot tapped.
         const double = tap !== null && isFingerDoubleTap(fingerTap, tap);
         fingerTap = double ? null : tap;
         if (double && tap && getSettings().doubleTapZoom) {
@@ -709,7 +722,7 @@ function createEngine(
       requestStatic();
       requestLive();
     }
-    if (s.replayDim !== prev.replayDim) {
+    if (s.replayDim !== prev.replayDim || s.revealed !== prev.revealed) {
       cache.invalidate();
       requestStatic();
       requestLive();

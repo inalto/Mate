@@ -1,6 +1,6 @@
 // Editor state for the single active page. Element mutations are persisted through elementsQueue.
 import { create, type StoreApi, type UseBoundStore } from "zustand";
-import { coverBoxElement, isCover } from "../covers/cover";
+import { coverBoxElement, coversOf, isCover } from "../covers/cover";
 import { loadElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
 import type { Element, Page, PenPreset } from "../model/types";
@@ -141,6 +141,15 @@ export interface EditorState {
   replayDim: ReadonlySet<string> | null;
   /** Set the replay's dimmed ids (no history entry); the canvas re-rasterises its static layer. */
   setReplayDim(ids: ReadonlySet<string> | null): void;
+  /** Ids of the revealed recall covers of the open page (drawn at 25 %). Not an element change: no
+   * history, no save; empty every time a page is loaded, and a deleted cover leaves it. */
+  revealed: ReadonlySet<string>;
+  /** Reveal a covered cover or cover a revealed one; nothing unless `id` is a live cover. */
+  toggleReveal(id: string): void;
+  /** Reveal every live cover of the page. */
+  revealAll(): void;
+  /** Cover them all again. */
+  coverAll(): void;
   /** The page's frames in presentation order (`content.order`, then `createdAt`). */
   orderedFrames(): Element[];
   /** Present the frames from `index` (clamped): cursor tool, selection cleared, camera on the frame. Nothing without frames. */
@@ -649,9 +658,24 @@ export function createEditorStore(): EditorStore {
     presenting: null,
     mindmapFocus: null,
     replayDim: null,
+    revealed: new Set(),
 
     setReplayDim(ids) {
       if (get().replayDim !== ids) set({ replayDim: ids });
+    },
+
+    toggleReveal(id) {
+      const el = get().elements.get(id);
+      if (!el || el.deletedAt || !isCover(el)) return;
+      const revealed = new Set(get().revealed);
+      if (!revealed.delete(id)) revealed.add(id);
+      set({ revealed });
+    },
+    revealAll() {
+      set({ revealed: new Set(coversOf(get().elements.values()).map((el) => el.id)) });
+    },
+    coverAll() {
+      if (get().revealed.size > 0) set({ revealed: new Set() });
     },
 
     orderedFrames() {
@@ -708,6 +732,7 @@ export function createEditorStore(): EditorStore {
         presenting: null,
         mindmapFocus: null,
         replayDim: null,
+        revealed: new Set(),
         canUndo: false,
         canRedo: false,
         tempTool: null,
@@ -1880,11 +1905,18 @@ export function createEditorStore(): EditorStore {
       if (!visible) mindmapFocus = null;
       else if (visible !== mindmapFocus.nodeId) mindmapFocus = { elementId: mindmapFocus.elementId, nodeId: visible };
     }
+    // A cover that is gone (deleted, undone) is forgotten: brought back, it comes back covered.
+    let revealed = s.revealed;
+    if (revealed.size > 0 && removed.size > 0) {
+      const kept = [...revealed].filter((id) => !removed.has(id));
+      if (kept.length < revealed.size) revealed = new Set(kept);
+    }
     store.setState({
       elements,
       selection,
       editingId,
       mindmapFocus,
+      revealed,
       contentBottom: grewOnly ? bottom : bottomOf(elements.values()),
       ...(s.limitReached && elements.size < LIMITS.MAX_ELEMENTS_PER_PAGE ? { limitReached: false } : {}),
     });
