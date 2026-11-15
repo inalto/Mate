@@ -883,6 +883,10 @@
     "annotationsFlat": "Aplanadas",
     "annotationsLayer": "Capa separada",
     "annotationsHint": "Se aplica a las páginas PDF importadas. Una capa separada se puede ocultar o editar en editores de PDF.",
+    "covers": "Covers",
+    "coversCovered": "Covered",
+    "coversHidden": "Left out",
+    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
     "boxRender": "No se pudo generar el contenido del cuadro {{id}} para exportar.",
     "boxMissing": "El cuadro {{id}} no se generó para exportar."
   },

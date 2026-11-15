@@ -883,6 +883,10 @@
     "annotationsFlat": "Niveladas",
     "annotationsLayer": "Camada separada",
     "annotationsHint": "Aplica-se às páginas PDF importadas. Uma camada separada pode ser ocultada ou editada em editores de PDF.",
+    "covers": "Covers",
+    "coversCovered": "Covered",
+    "coversHidden": "Left out",
+    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
   },

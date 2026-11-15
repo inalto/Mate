@@ -883,6 +883,10 @@
     "annotationsFlat": "Aplaties",
     "annotationsLayer": "Calque séparé",
     "annotationsHint": "S'applique aux pages PDF importées. Un calque séparé peut être masqué ou modifié dans les éditeurs PDF.",
+    "covers": "Covers",
+    "coversCovered": "Covered",
+    "coversHidden": "Left out",
+    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
     "boxRender": "Impossible de générer le contenu de la zone {{id}} pour l'export.",
     "boxMissing": "La zone {{id}} n'a pas été générée pour l'export."
   },

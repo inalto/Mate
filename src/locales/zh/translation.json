@@ -880,6 +880,10 @@
     "annotationsFlat": "拼合到页面",
     "annotationsLayer": "独立图层",
     "annotationsHint": "适用于导入的 PDF 页面。独立图层可在 PDF 编辑器中隐藏或编辑。",
+    "covers": "Covers",
+    "coversCovered": "Covered",
+    "coversHidden": "Left out",
+    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
     "boxRender": "无法为导出渲染框 {{id}} 的内容。",
     "boxMissing": "框 {{id}} 未能为导出而渲染。"
   },

@@ -880,6 +880,10 @@
     "annotationsFlat": "フラット化済み",
     "annotationsLayer": "別レイヤー",
     "annotationsHint": "インポートした PDF ページに適用されます。別レイヤーは PDF エディタで非表示や編集ができます。",
+    "covers": "Covers",
+    "coversCovered": "Covered",
+    "coversHidden": "Left out",
+    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
     "boxRender": "書き出し用にボックス {{id}} の内容を描画できませんでした。",
     "boxMissing": "ボックス {{id}} は書き出し用に描画されませんでした。"
   },

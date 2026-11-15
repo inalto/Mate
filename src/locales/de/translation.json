@@ -883,6 +883,10 @@
     "annotationsFlat": "Auf Seite reduziert",
     "annotationsLayer": "Separate Ebene",
     "annotationsHint": "Gilt für importierte PDF-Seiten. Eine separate Ebene kann in PDF-Editoren ausgeblendet oder bearbeitet werden.",
+    "covers": "Covers",
+    "coversCovered": "Covered",
+    "coversHidden": "Left out",
+    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
     "boxMissing": "Feld {{id}} wurde für den Export nicht gerendert."
   },
