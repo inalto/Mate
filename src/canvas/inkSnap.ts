@@ -1,8 +1,8 @@
 // Ink-to-shape while drawing: a dwell timer runs while the pen is down; when the pen has held still
 // (≤ 2 screen px since the dwell started, 8 px for a finger) for `dwellMs`, the stroke so far is
 // recognised and, on a match, snaps to a shape (the caller previews it and commits it on pen-up).
-// With snap-on-release, a stroke lifted without a hold is recognised too. The highlighter never
-// snaps. A line or arrow lands on the horizontal / vertical when it is within a few degrees of it,
+// With snap-on-release, a stroke lifted without a hold is recognised too. The highlighter and the cover never
+// snap. A line or arrow lands on the horizontal / vertical when it is within a few degrees of it,
 // and after a hold snapped it, its end follows the pen until it lifts. Any other shape (or curve)
 // a hold snapped is then resized and turned by the pen, about its centre, until the pen lifts.
 import type { Element, PenPreset, Point, Settings } from "../model/types";
@@ -46,7 +46,7 @@ export const dwellSlopFor = (pointerType: string): number => (pointerType === "t
 
 /** Ink-to-shape applies to this ink type under these settings (any pointer type, touch included). */
 export const inkSnapAllowed = (type: PenPreset["type"], cfg: Pick<Settings, "inkToShape">): boolean =>
-  cfg.inkToShape && type !== "highlighter";
+  cfg.inkToShape && type !== "highlighter" && type !== "cover";
 
 const isLine = (r: RecognizedShape): boolean => !r.curve && (r.type === "line" || r.type === "arrow");
 

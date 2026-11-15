@@ -134,6 +134,8 @@
       "penWidth": "Spessore della penna",
       "highlighterColor": "Colore dell'evidenziatore",
       "highlighterWidth": "Spessore dell'evidenziatore",
+      "coverColor": "Colore della copertura",
+      "coverWidth": "Larghezza della copertura",
       "stabilization": {
         "label": "Stabilizzazione del tratto",
         "hint": "Attenua le oscillazioni; con valori alti la penna resta un po' indietro"
@@ -554,6 +556,7 @@
       "autoShapes": "Attiva/disattiva forme perfette",
       "pen": "Penna",
       "highlighter": "Evidenziatore",
+      "cover": "Strumento copertura",
       "eraser": "Gomma",
       "cursor": "Seleziona (cursore)",
       "lasso": "Lazo",
@@ -639,6 +642,7 @@
     "switchTo": {
       "pen": "Passa alla penna",
       "highlighter": "Passa all'evidenziatore",
+      "cover": "Passa allo strumento copertura",
       "eraser": "Passa alla gomma",
       "cursor": "Passa alla selezione (cursore)",
       "lasso": "Passa al lazo",
@@ -697,7 +701,8 @@
     "ink": {
       "pen": "Penna",
       "fountainPen": "Stilografica",
-      "highlighter": "Evidenziatore"
+      "highlighter": "Evidenziatore",
+      "cover": "Copertura"
     },
     "addPen": "Aggiungi penna",
     "eraser": "Gomma",
@@ -916,6 +921,9 @@
     "width": "Larghezza della selezione"
   },
   "preset": {
+    "coverShape": "Forma",
+    "coverStroke": "Tratto",
+    "coverBox": "Riquadro",
     "edit": "Modifica preimpostazione",
     "swatches": "I miei campioni",
     "addSwatch": "Salva il colore come campione",

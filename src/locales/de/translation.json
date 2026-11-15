@@ -137,6 +137,8 @@
       "penWidth": "Stiftstärke",
       "highlighterColor": "Markiererfarbe",
       "highlighterWidth": "Markierer-Stärke",
+      "coverColor": "Cover colour",
+      "coverWidth": "Cover width",
       "stabilization": {
         "label": "Strichstabilisierung",
         "hint": "Glättet Zittern; höhere Werte lassen den Stift leicht nachziehen"
@@ -557,6 +559,7 @@
       "autoShapes": "Perfekte Formen umschalten",
       "pen": "Stift",
       "highlighter": "Markierer",
+      "cover": "Cover tool",
       "eraser": "Radierer",
       "cursor": "Auswählen (Cursor)",
       "lasso": "Lasso",
@@ -642,6 +645,7 @@
     "switchTo": {
       "pen": "Zu Stift wechseln",
       "highlighter": "Zu Markierer wechseln",
+      "cover": "Switch to the cover tool",
       "eraser": "Zu Radierer wechseln",
       "cursor": "Zu Auswählen (Cursor) wechseln",
       "lasso": "Zu Lasso wechseln",
@@ -700,7 +704,8 @@
     "ink": {
       "pen": "Stift",
       "fountainPen": "Füllfederhalter",
-      "highlighter": "Markierer"
+      "highlighter": "Markierer",
+      "cover": "Cover"
     },
     "addPen": "Stift hinzufügen",
     "eraser": "Radierer",
@@ -919,6 +924,9 @@
     "width": "Breite der Auswahl"
   },
   "preset": {
+    "coverShape": "Shape",
+    "coverStroke": "Stroke",
+    "coverBox": "Box",
     "edit": "Voreinstellung bearbeiten",
     "swatches": "Meine Farbfelder",
     "addSwatch": "Farbe als Farbfeld speichern",

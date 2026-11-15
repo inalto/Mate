@@ -15,6 +15,7 @@ import "../renderers/builtins";
 import { drawElement } from "../renderers/registry";
 import { clampToPage, isInkTool, sheetStack, useEditorStore, type EditorStore } from "../stores/editor";
 import { renderOrder } from "../tools/zorder";
+import { isCover } from "../covers/cover";
 import { useSettingsStore } from "../stores/settings";
 import ZoomIndicator from "./ZoomIndicator";
 import LineCapsPopover from "../components/LineCapsPopover";
@@ -22,7 +23,7 @@ import { ConnectorLabelPopover } from "../components/LabelPopover";
 import { openLineCaps } from "../stores/lineCaps";
 import MediaLayer from "../media/MediaLayer";
 import { paintBackground, PRESENT_BACKDROP, presentBackdrop, type SurfaceColors } from "./background";
-import { boxRect, type Rect } from "../tools/spatialIndex";
+import { boxRect, elementBounds, type Rect } from "../tools/spatialIndex";
 import { FRAME_RADIUS } from "../frames/contain";
 import { clearMindmapCache } from "../mindmap/cache";
 import { animateCamera, screenToWorld, worldToScreen, type Camera, type Vec2 } from "./camera";
@@ -284,11 +285,24 @@ function createEngine(
 
   /** Append `el` to the snapshot and add it through `apply` (default: as a new element). */
   const commit = (el: Element, apply: () => void = () => st().addElement(el)) => {
-    cache.append((ctx) =>
-      el.type === "stroke"
-        ? renderStroke(asCtx(ctx), el, theme(), st().camera.z)
-        : drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
-    );
+    // Covers sort above all other content, but an appended element lands on top of the bitmap: ink
+    // written across a cover needs a full raster (which orders it below the cover) instead.
+    const overCover =
+      !isCover(el) &&
+      store
+        .spatialIndex()
+        .query(elementBounds(el))
+        .some((id) => {
+          const other = st().elements.get(id);
+          return other !== undefined && !other.deletedAt && isCover(other);
+        });
+    if (overCover) cache.invalidate();
+    else
+      cache.append((ctx) =>
+        el.type === "stroke"
+          ? renderStroke(asCtx(ctx), el, theme(), st().camera.z)
+          : drawElement(asCtx(ctx), el, { theme: theme(), zoomBucket: st().camera.z, paper: colors.paper }),
+      );
     committing = true;
     try {
       apply();
@@ -316,7 +330,7 @@ function createEngine(
   const scribbleErased = (raw: readonly Point[]): boolean => {
     const s = st();
     const cfg = getSettings();
-    if (!cfg.scribbleToErase || s.preset.type === "highlighter") return false;
+    if (!cfg.scribbleToErase || s.preset.type === "highlighter" || s.preset.type === "cover") return false;
     if (!isScribbleGesture(raw, s.camera.z, cfg.scribbleEraseSensitivity).scribble) return false;
     const hits = scribbleHits(s.elements, store.spatialIndex(), raw, s.camera.z);
     if (hits.length === 0) return false; // over empty paper it is just ink
@@ -386,7 +400,7 @@ function createEngine(
           return;
         }
         // No tutor gestures (double-tap, hold, marker tap) for the press that closed the card.
-        tutorStroke = !dismissing && s.preset.type !== "highlighter";
+        tutorStroke = !dismissing && s.preset.type !== "highlighter" && s.preset.type !== "cover";
         if (dismissing) dismissPress.down(worldToScreen(s.camera, p));
         const abortForAsk = () => {
           // Held still on ink: the stroke becomes "Ask the tutor" (nothing is drawn).
@@ -421,7 +435,8 @@ function createEngine(
           straight,
         });
         // Perfect-shapes mode: every stroke is recognised on pen-up, whatever the ink-to-shape settings.
-        const snapping = s.autoShapes || inkSnapAllowed(s.preset.type, set); // perfect shapes: the highlighter too
+        // Perfect shapes: the highlighter too, but never a cover (a wobbly cover must stay a stroke).
+        const snapping = s.preset.type !== "cover" && (s.autoShapes || inkSnapAllowed(s.preset.type, set));
         snap = !straight && snapping
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),

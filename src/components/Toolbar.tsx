@@ -13,6 +13,7 @@ import {
   ArrowsVertical,
   Eraser,
   DotsSixVertical,
+  EyeSlash,
   Highlighter,
   House,
   ImageSquare,
@@ -71,12 +72,11 @@ const INK_LABEL = {
   pen: "toolbar.ink.pen",
   "fountain-pen": "toolbar.ink.fountainPen",
   highlighter: "toolbar.ink.highlighter",
-  // Placeholder until the cover tool has its own label.
-  cover: "toolbar.ink.highlighter",
+  cover: "toolbar.ink.cover",
 } as const satisfies Record<PenPreset["type"], TKey>;
 
 function InkIcon({ type, color }: { type: PenPreset["type"]; color?: string }) {
-  const Icon = type === "highlighter" ? Highlighter : type === "fountain-pen" ? PenNib : Pen;
+  const Icon = type === "highlighter" ? Highlighter : type === "fountain-pen" ? PenNib : type === "cover" ? EyeSlash : Pen;
   return <Icon size={18} color={color} weight={color ? "fill" : "regular"} />;
 }
 
@@ -131,7 +131,7 @@ function AddPenMenu() {
       {open && (
         <DockPopover anchorRef={ref}>
         <div className="tb-popover tb-menu" role="menu">
-          {(["pen", "fountain-pen", "highlighter"] as const).map((ink) => (
+          {(["pen", "fountain-pen", "highlighter", "cover"] as const).map((ink) => (
             <button
               key={ink}
               type="button"

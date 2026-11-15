@@ -137,6 +137,8 @@
       "penWidth": "笔宽",
       "highlighterColor": "荧光笔颜色",
       "highlighterWidth": "荧光笔宽度",
+      "coverColor": "Cover colour",
+      "coverWidth": "Cover width",
       "stabilization": {
         "label": "笔画防抖",
         "hint": "减少抖动；数值越高，笔迹跟随会稍有延迟"
@@ -554,6 +556,7 @@
       "autoShapes": "切换自动规整图形",
       "pen": "笔",
       "highlighter": "荧光笔",
+      "cover": "Cover tool",
       "eraser": "橡皮擦",
       "cursor": "选择（光标）",
       "lasso": "套索",
@@ -639,6 +642,7 @@
     "switchTo": {
       "pen": "切换到笔",
       "highlighter": "切换到荧光笔",
+      "cover": "Switch to the cover tool",
       "eraser": "切换到橡皮擦",
       "cursor": "切换到选择（光标）",
       "lasso": "切换到套索",
@@ -697,7 +701,8 @@
     "ink": {
       "pen": "笔",
       "fountainPen": "钢笔",
-      "highlighter": "荧光笔"
+      "highlighter": "荧光笔",
+      "cover": "Cover"
     },
     "addPen": "添加笔",
     "eraser": "橡皮擦",
@@ -916,6 +921,9 @@
     "width": "所选内容宽度"
   },
   "preset": {
+    "coverShape": "Shape",
+    "coverStroke": "Stroke",
+    "coverBox": "Box",
     "edit": "编辑预设",
     "swatches": "我的色板",
     "addSwatch": "将颜色保存为色板",

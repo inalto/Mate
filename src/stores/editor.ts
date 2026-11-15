@@ -77,14 +77,11 @@ import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tr
 import type { MindmapLayoutMode } from "../mindmap/layout";
 import type { MindmapStyle } from "../mindmap/styles";
 
-export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
+export type ToolId = "pen" | "highlighter" | "fountain-pen" | "cover" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
-/** Ink tools on the toolbar; the cover preset type has no tool until the cover tool exists. */
-export type InkType = Exclude<PenPreset["type"], "cover">;
-
-export const INK_TYPES: readonly InkType[] = ["pen", "highlighter", "fountain-pen"];
-export const isInkTool = (t: string): t is InkType => (INK_TYPES as readonly string[]).includes(t);
+export const INK_TYPES: readonly PenPreset["type"][] = ["pen", "highlighter", "fountain-pen", "cover"];
+export const isInkTool = (t: string): t is PenPreset["type"] => (INK_TYPES as readonly string[]).includes(t);
 /** Offset applied by duplicate / paste (world units). */
 export const DUPLICATE_OFFSET = 20;
 /** Gap between a duplicated frame (with its contents) and its source, to the right of it (world units). */
@@ -402,8 +399,8 @@ export interface EditorState {
   /** Select the preset in toolbar slot `slot` (1-based). */
   selectSlot(slot: number): void;
   /** Switch to an ink tool, keeping the current preset when it has that type. */
-  selectInk(type: InkType): void;
-  addPreset(type: InkType): void;
+  selectInk(type: PenPreset["type"]): void;
+  addPreset(type: PenPreset["type"]): void;
   removePreset(id: string): void;
   movePreset(id: string, dir: -1 | 1): void;
   updatePreset(preset: PenPreset): void;
@@ -721,7 +718,7 @@ export function createEditorStore(): EditorStore {
         contentBottom: 0,
         limitReached: false,
         preset,
-        tool: preset.type as InkType,
+        tool: preset.type,
       });
       let page: Page | null;
       let els: Element[];
@@ -1283,7 +1280,7 @@ export function createEditorStore(): EditorStore {
     setPreset: (preset) => {
       if (get().presenting) return;
       closeEdit();
-      set({ preset, tool: preset.type as InkType, selection: new Set(), editingId: null });
+      set({ preset, tool: preset.type, selection: new Set(), editingId: null });
     },
     setCamera: (camera) => set({ camera }),
     setViewport(viewport) {
@@ -1340,7 +1337,7 @@ export function createEditorStore(): EditorStore {
       const on = !s.autoShapes;
       // Shapes are drawn with ink: the ink tool in hand stays (the highlighter too), any other tool
       // gives way to the ink used last.
-      if (on && !isInkTool(s.tool) && !s.presenting) get().selectInk(s.preset.type as InkType);
+      if (on && !isInkTool(s.tool) && !s.presenting) get().selectInk(s.preset.type);
       set({ autoShapes: on });
     },
     setPanHold: (panHold) => {
@@ -1640,11 +1637,13 @@ export function createEditorStore(): EditorStore {
 
   const S = () => store.getState();
 
-  function newPreset(type: InkType): PenPreset {
+  function newPreset(type: PenPreset["type"]): PenPreset {
     const cfg = useSettingsStore.getState().settings;
+    const id = `preset-${crypto.randomUUID()}`;
+    if (type === "cover") return { id, type, color: cfg.defaultCoverColor, width: cfg.defaultCoverWidth, coverShape: "stroke" };
     const hl = type === "highlighter";
     return {
-      id: `preset-${crypto.randomUUID()}`,
+      id,
       type,
       color: hl ? cfg.defaultHighlighterColor : cfg.defaultPenColor,
       width: hl ? cfg.defaultHighlighterWidth : cfg.defaultPenWidth,

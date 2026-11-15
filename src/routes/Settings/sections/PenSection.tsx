@@ -13,6 +13,8 @@ export default function PenSection() {
       <SliderRow k="defaultPenWidth" label={t("settings.pen.penWidth")} min={0.5} max={15.4} step={0.1} format={one} />
       <ColorRow k="defaultHighlighterColor" label={t("settings.pen.highlighterColor")} />
       <SliderRow k="defaultHighlighterWidth" label={t("settings.pen.highlighterWidth")} min={5} max={40} step={0.1} format={one} />
+      <ColorRow k="defaultCoverColor" label={t("settings.pen.coverColor")} />
+      <SliderRow k="defaultCoverWidth" label={t("settings.pen.coverWidth")} min={8} max={80} step={1} />
       <SliderRow
         k="strokeStabilization"
         label={t("settings.pen.stabilization.label")}

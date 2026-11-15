@@ -137,6 +137,8 @@
       "penWidth": "ペンの太さ",
       "highlighterColor": "蛍光ペンの色",
       "highlighterWidth": "蛍光ペンの太さ",
+      "coverColor": "Cover colour",
+      "coverWidth": "Cover width",
       "stabilization": {
         "label": "線の手ぶれ補正",
         "hint": "震えを抑えます。値を上げるほどペン先がわずかに遅れます"
@@ -554,6 +556,7 @@
       "autoShapes": "図形の自動整形の切り替え",
       "pen": "ペン",
       "highlighter": "蛍光ペン",
+      "cover": "Cover tool",
       "eraser": "消しゴム",
       "cursor": "選択（カーソル）",
       "lasso": "投げ縄選択",
@@ -639,6 +642,7 @@
     "switchTo": {
       "pen": "ペンに切り替え",
       "highlighter": "蛍光ペンに切り替え",
+      "cover": "Switch to the cover tool",
       "eraser": "消しゴムに切り替え",
       "cursor": "選択（カーソル）に切り替え",
       "lasso": "投げ縄選択に切り替え",
@@ -697,7 +701,8 @@
     "ink": {
       "pen": "ペン",
       "fountainPen": "万年筆",
-      "highlighter": "蛍光ペン"
+      "highlighter": "蛍光ペン",
+      "cover": "Cover"
     },
     "addPen": "ペンを追加",
     "eraser": "消しゴム",
@@ -916,6 +921,9 @@
     "width": "選択範囲の幅"
   },
   "preset": {
+    "coverShape": "Shape",
+    "coverStroke": "Stroke",
+    "coverBox": "Box",
     "edit": "プリセットを編集",
     "swatches": "マイスウォッチ",
     "addSwatch": "色をスウォッチとして保存",

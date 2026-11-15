@@ -137,6 +137,8 @@
       "penWidth": "Grosor del lápiz",
       "highlighterColor": "Color del marcador",
       "highlighterWidth": "Grosor del marcador",
+      "coverColor": "Cover colour",
+      "coverWidth": "Cover width",
       "stabilization": {
         "label": "Estabilización del trazo",
         "hint": "Suaviza los temblores; cuanto más alto, más retrasa un poco el lápiz"
@@ -557,6 +559,7 @@
       "autoShapes": "Alternar formas perfectas",
       "pen": "Lápiz",
       "highlighter": "Marcador",
+      "cover": "Cover tool",
       "eraser": "Goma",
       "cursor": "Seleccionar (cursor)",
       "lasso": "Lazo",
@@ -642,6 +645,7 @@
     "switchTo": {
       "pen": "Cambiar a lápiz",
       "highlighter": "Cambiar a marcador",
+      "cover": "Switch to the cover tool",
       "eraser": "Cambiar a goma",
       "cursor": "Cambiar a seleccionar (cursor)",
       "lasso": "Cambiar a lazo",
@@ -700,7 +704,8 @@
     "ink": {
       "pen": "Lápiz",
       "fountainPen": "Pluma estilográfica",
-      "highlighter": "Marcador"
+      "highlighter": "Marcador",
+      "cover": "Cover"
     },
     "addPen": "Añadir lápiz",
     "eraser": "Goma",
@@ -919,6 +924,9 @@
     "width": "Ancho de la selección"
   },
   "preset": {
+    "coverShape": "Shape",
+    "coverStroke": "Stroke",
+    "coverBox": "Box",
     "edit": "Editar preajuste",
     "swatches": "Mis muestras",
     "addSwatch": "Guardar el color como muestra",

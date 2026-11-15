@@ -44,6 +44,14 @@ describe("editor store tools", () => {
     useEditorStore.setState({ camera: { x: 0, y: 0, z: 1 } });
   });
 
+  it("selectInk(\"cover\") with no cover preset makes a transient one from the settings", () => {
+    useSettingsStore.setState((s) => ({ settings: { ...s.settings, toolbarPresets: s.settings.toolbarPresets.filter((p) => p.type !== "cover") } }));
+    useEditorStore.getState().selectInk("cover");
+    const s = useEditorStore.getState();
+    expect(s.tool).toBe("cover");
+    expect(s.preset).toMatchObject({ id: "transient-cover", type: "cover", color: "#334155", width: 28, coverShape: "stroke" });
+  });
+
   it("erase_drag_is_one_entry_and_undo_restores_persistence", async () => {
     await load([a, b]);
     const s = () => useEditorStore.getState();

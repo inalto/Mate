@@ -294,6 +294,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
       return s.selectInk(s.preset.type === "fountain-pen" ? "fountain-pen" : "pen");
     case "tool.highlighter":
       return s.selectInk("highlighter");
+    case "tool.cover":
+      return s.selectInk("cover");
     case "tool.eraser":
       return s.setTool("eraser");
     case "tool.cursor":

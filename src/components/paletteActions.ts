@@ -32,11 +32,12 @@ function insert(f: (s: ReturnType<typeof editor>) => unknown) {
   };
 }
 
-type ToolAction = "tool.pen" | "tool.highlighter" | "tool.eraser" | "tool.cursor" | "tool.lasso" | "tool.shape" | "tool.connector" | "tool.text" | "tool.insertSpace";
+type ToolAction = "tool.pen" | "tool.highlighter" | "tool.cover" | "tool.eraser" | "tool.cursor" | "tool.lasso" | "tool.shape" | "tool.connector" | "tool.text" | "tool.insertSpace";
 
 const SWITCH_TO_KEY = {
   "tool.pen": "palette.switchTo.pen",
   "tool.highlighter": "palette.switchTo.highlighter",
+  "tool.cover": "palette.switchTo.cover",
   "tool.eraser": "palette.switchTo.eraser",
   "tool.cursor": "palette.switchTo.cursor",
   "tool.lasso": "palette.switchTo.lasso",
@@ -50,6 +51,7 @@ const SWITCH_TO_KEY = {
 const TOOL_NAME: Record<ToolAction, string> = {
   "tool.pen": "pen",
   "tool.highlighter": "highlighter",
+  "tool.cover": "cover",
   "tool.eraser": "eraser",
   "tool.cursor": "select (cursor)",
   "tool.lasso": "lasso",
@@ -78,6 +80,7 @@ function currentSection(): { sectionId: string; unitId: string } | null {
 export const QUICK_ACTIONS: QuickAction[] = [
   switchTo("tool.pen", ["ink", "draw", "write"]),
   switchTo("tool.highlighter", ["marker"]),
+  switchTo("tool.cover", ["hide", "recall", "flashcard"]),
   switchTo("tool.eraser", ["rubber"]),
   switchTo("tool.cursor", ["select", "pointer"]),
   switchTo("tool.lasso", ["select"]),

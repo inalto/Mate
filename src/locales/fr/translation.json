@@ -137,6 +137,8 @@
       "penWidth": "Épaisseur du stylo",
       "highlighterColor": "Couleur du surligneur",
       "highlighterWidth": "Épaisseur du surligneur",
+      "coverColor": "Cover colour",
+      "coverWidth": "Cover width",
       "stabilization": {
         "label": "Stabilisation du tracé",
         "hint": "Lisse les tremblements ; plus la valeur est haute, plus le stylo a un léger retard"
@@ -557,6 +559,7 @@
       "autoShapes": "Activer/désactiver les formes parfaites",
       "pen": "Stylo",
       "highlighter": "Surligneur",
+      "cover": "Cover tool",
       "eraser": "Gomme",
       "cursor": "Sélectionner (curseur)",
       "lasso": "Lasso",
@@ -642,6 +645,7 @@
     "switchTo": {
       "pen": "Passer au stylo",
       "highlighter": "Passer au surligneur",
+      "cover": "Switch to the cover tool",
       "eraser": "Passer à la gomme",
       "cursor": "Passer à la sélection (curseur)",
       "lasso": "Passer au lasso",
@@ -700,7 +704,8 @@
     "ink": {
       "pen": "Stylo",
       "fountainPen": "Stylo plume",
-      "highlighter": "Surligneur"
+      "highlighter": "Surligneur",
+      "cover": "Cover"
     },
     "addPen": "Ajouter un stylo",
     "eraser": "Gomme",
@@ -919,6 +924,9 @@
     "width": "Largeur de la sélection"
   },
   "preset": {
+    "coverShape": "Shape",
+    "coverStroke": "Stroke",
+    "coverBox": "Box",
     "edit": "Modifier le préréglage",
     "swatches": "Mes nuances",
     "addSwatch": "Enregistrer la couleur comme nuance",

@@ -1,6 +1,8 @@
 // Ink palettes, width slider scale and colour conversions shared by the toolbar menus.
 export const PEN_PALETTE = ["#000000", "#C62828", "#E65100", "#C9A227", "#1B8E3E", "#1565C0", "#4527A0", "#AD1457"];
 export const HIGHLIGHTER_PALETTE = ["#E9D5FF", "#FDE047", "#86EFAC", "#93C5FD", "#FCA5A5", "#D4A373"];
+/** Cover swatches: slate first (the default), then the paper colours and the highlighter tints. */
+export const COVER_PALETTE = ["#334155", "#000000", "#FFFFFF", "#FDE047", "#F87171", "#60A5FA", "#4ADE80"] as const;
 /** Screen px per world unit for width sliders. */
 export const PX_PER_UNIT = 2.5;
 const HEX = /^#?([0-9a-f]{6})$/i;

@@ -137,6 +137,8 @@
       "penWidth": "Espessura da caneta",
       "highlighterColor": "Cor do marca-texto",
       "highlighterWidth": "Espessura do marca-texto",
+      "coverColor": "Cover colour",
+      "coverWidth": "Cover width",
       "stabilization": {
         "label": "Estabilização do traço",
         "hint": "Suaviza tremores; quanto maior, mais a caneta atrasa um pouco"
@@ -557,6 +559,7 @@
       "autoShapes": "Alternar formas perfeitas",
       "pen": "Caneta",
       "highlighter": "Marca-texto",
+      "cover": "Cover tool",
       "eraser": "Borracha",
       "cursor": "Selecionar (cursor)",
       "lasso": "Laço",
@@ -642,6 +645,7 @@
     "switchTo": {
       "pen": "Mudar para caneta",
       "highlighter": "Mudar para marca-texto",
+      "cover": "Switch to the cover tool",
       "eraser": "Mudar para borracha",
       "cursor": "Mudar para selecionar (cursor)",
       "lasso": "Mudar para laço",
@@ -700,7 +704,8 @@
     "ink": {
       "pen": "Caneta",
       "fountainPen": "Caneta-tinteiro",
-      "highlighter": "Marca-texto"
+      "highlighter": "Marca-texto",
+      "cover": "Cover"
     },
     "addPen": "Adicionar caneta",
     "eraser": "Borracha",
@@ -919,6 +924,9 @@
     "width": "Largura da seleção"
   },
   "preset": {
+    "coverShape": "Shape",
+    "coverStroke": "Stroke",
+    "coverBox": "Box",
     "edit": "Editar predefinição",
     "swatches": "As minhas amostras",
     "addSwatch": "Guardar a cor como amostra",

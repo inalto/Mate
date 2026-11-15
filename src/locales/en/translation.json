@@ -134,6 +134,8 @@
       "penWidth": "Pen width",
       "highlighterColor": "Highlighter colour",
       "highlighterWidth": "Highlighter width",
+      "coverColor": "Cover colour",
+      "coverWidth": "Cover width",
       "stabilization": {
         "label": "Stroke stabilisation",
         "hint": "Smooths wobble; higher lags the pen slightly"
@@ -554,6 +556,7 @@
       "autoShapes": "Toggle perfect shapes",
       "pen": "Pen",
       "highlighter": "Highlighter",
+      "cover": "Cover tool",
       "eraser": "Eraser",
       "cursor": "Select (cursor)",
       "lasso": "Lasso",
@@ -639,6 +642,7 @@
     "switchTo": {
       "pen": "Switch to pen",
       "highlighter": "Switch to highlighter",
+      "cover": "Switch to the cover tool",
       "eraser": "Switch to eraser",
       "cursor": "Switch to select (cursor)",
       "lasso": "Switch to lasso",
@@ -697,7 +701,8 @@
     "ink": {
       "pen": "Pen",
       "fountainPen": "Fountain pen",
-      "highlighter": "Highlighter"
+      "highlighter": "Highlighter",
+      "cover": "Cover"
     },
     "addPen": "Add pen",
     "eraser": "Eraser",
@@ -916,6 +921,9 @@
     "width": "Selection width"
   },
   "preset": {
+    "coverShape": "Shape",
+    "coverStroke": "Stroke",
+    "coverBox": "Box",
     "edit": "Edit preset",
     "swatches": "My swatches",
     "addSwatch": "Save colour as a swatch",

@@ -131,6 +131,10 @@ describe("ink snap state machine", () => {
     expect(inkSnapAllowed("pen", { ...DEFAULT_SETTINGS, inkToShape: false })).toBe(false);
   });
 
+  it("a cover never snaps, even with ink-to-shape on", () => {
+    expect(inkSnapAllowed("cover", { ...DEFAULT_SETTINGS, inkToShape: true })).toBe(false);
+  });
+
   it("snapped_shape_takes_the_stroke_colour_and_width_with_no_fill", () => {
     const el = snapShapeElement(
       { type: "rectangle", score: 0.9, rect: { x: 0, y: 0, width: 120, height: 80 }, rotation: 0.1 },
