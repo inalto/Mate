@@ -1541,5 +1541,16 @@
     "inserted": "Trascrizione aggiunta alla pagina.",
     "partial_one": "{{count}} parte non è stata trascritta.",
     "partial_other": "{{count}} parti non sono state trascritte."
+  },
+  "covers": {
+    "menu": "Coperture",
+    "revealAll": "Scopri tutte",
+    "coverAll": "Copri tutte",
+    "removeAll": "Rimuovi tutte le coperture",
+    "removeConfirmTitle": "Rimuovere tutte le coperture?",
+    "removeConfirmBody": "Verranno rimosse {{count}} coperture da questa pagina. Gli appunti restano. Puoi annullare.",
+    "testMe": "Mettimi alla prova",
+    "lastTest": "Ultima prova: {{known}} su {{total}}, {{date}}",
+    "notTested": "Non ancora provata"
   }
 }

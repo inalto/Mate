@@ -1544,5 +1544,16 @@
     "inserted": "Transkript zur Seite hinzugefügt.",
     "partial_one": "{{count}} Teil konnte nicht transkribiert werden.",
     "partial_other": "{{count}} Teile konnten nicht transkribiert werden."
+  },
+  "covers": {
+    "menu": "Covers",
+    "revealAll": "Reveal all",
+    "coverAll": "Cover all",
+    "removeAll": "Remove all covers",
+    "removeConfirmTitle": "Remove all covers?",
+    "removeConfirmBody": "{{count}} covers on this page will be removed. Your notes stay. You can undo this.",
+    "testMe": "Test me",
+    "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
+    "notTested": "Not tested yet"
   }
 }

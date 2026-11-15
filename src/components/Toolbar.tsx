@@ -43,6 +43,7 @@ import { pickAndInsertImage } from "../images/insert";
 import { pickAndInsertMedia } from "../media/insert";
 import { DictateButton } from "./DictateButton";
 import RecordButton from "../recording/RecordButton";
+import CoversMenu from "../covers/CoversMenu";
 import { zoomStep, ZOOM_STEP } from "../keys/editorCommands";
 import type { ShortcutAction } from "../keys/actions";
 import type { FingerAction, PenPreset, Settings } from "../model/types";
@@ -809,6 +810,7 @@ export default function Toolbar() {
         <PresetSlot key={p.id} preset={p} index={i} count={presets.length} />
       ))}
       <AddPenMenu />
+      <CoversMenu />
       <span className="tb-sep" />
       <EraserButton />
       <ShapeButton />

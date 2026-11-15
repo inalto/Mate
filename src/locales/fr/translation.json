@@ -1544,5 +1544,16 @@
     "inserted": "Transcription ajoutée à la page.",
     "partial_one": "{{count}} partie n'a pas pu être transcrite.",
     "partial_other": "{{count}} parties n'ont pas pu être transcrites."
+  },
+  "covers": {
+    "menu": "Covers",
+    "revealAll": "Reveal all",
+    "coverAll": "Cover all",
+    "removeAll": "Remove all covers",
+    "removeConfirmTitle": "Remove all covers?",
+    "removeConfirmBody": "{{count}} covers on this page will be removed. Your notes stay. You can undo this.",
+    "testMe": "Test me",
+    "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
+    "notTested": "Not tested yet"
   }
 }

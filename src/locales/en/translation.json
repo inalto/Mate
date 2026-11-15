@@ -1541,5 +1541,16 @@
     "inserted": "Transcript added to the page.",
     "partial_one": "{{count}} part could not be transcribed.",
     "partial_other": "{{count}} parts could not be transcribed."
+  },
+  "covers": {
+    "menu": "Covers",
+    "revealAll": "Reveal all",
+    "coverAll": "Cover all",
+    "removeAll": "Remove all covers",
+    "removeConfirmTitle": "Remove all covers?",
+    "removeConfirmBody": "{{count}} covers on this page will be removed. Your notes stay. You can undo this.",
+    "testMe": "Test me",
+    "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
+    "notTested": "Not tested yet"
   }
 }

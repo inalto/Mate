@@ -327,6 +327,8 @@ export interface EditorState {
   restyleTextBox(patch: Partial<TextAttributes>): void;
   /** Delete elements as one undo entry (`label` defaults to "Delete"). */
   removeElements(ids: string[], label?: string): void;
+  /** Delete every live, unlocked cover of the page as one undo entry ("Remove covers"); false when there is none. */
+  removeAllCovers(): boolean;
   /**
    * Add ready-made elements (already carrying this page's id) as ONE history entry `label`;
    * refused (false, `limitReached` set) when the page would pass the element limit.
@@ -1091,6 +1093,11 @@ export function createEditorStore(): EditorStore {
       const cur = get().elements;
       const ok = (id: string) => cur.has(id) && !isLocked(cur.get(id)!);
       record("Scribble erase", ids.filter(ok).map((id) => ({ type: "delete", el: cur.get(id)! })));
+    },
+
+    removeAllCovers() {
+      const gone = coversOf(get().elements.values()).filter((el) => !isLocked(el));
+      return record("Remove covers", gone.map((el) => ({ type: "delete", el })));
     },
 
     updateElements(els) {

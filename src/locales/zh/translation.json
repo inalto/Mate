@@ -1527,5 +1527,16 @@
     "copied": "已复制转写文本。",
     "inserted": "已将转写文本添加到页面。",
     "partial_other": "有 {{count}} 段无法转写。"
+  },
+  "covers": {
+    "menu": "Covers",
+    "revealAll": "Reveal all",
+    "coverAll": "Cover all",
+    "removeAll": "Remove all covers",
+    "removeConfirmTitle": "Remove all covers?",
+    "removeConfirmBody": "{{count}} covers on this page will be removed. Your notes stay. You can undo this.",
+    "testMe": "Test me",
+    "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
+    "notTested": "Not tested yet"
   }
 }

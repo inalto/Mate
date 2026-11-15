@@ -1,0 +1,28 @@
+/* The covers menu in the toolbar: the count badge on its button and the last-test line. */
+
+.covers-btn {
+  position: relative;
+}
+
+.covers-count {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--color-accent, #3b82f6);
+  color: var(--color-on-accent, #fff);
+  font-size: 0.625rem;
+  line-height: 14px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.covers-last {
+  padding: var(--space-2);
+  color: var(--color-text-muted, var(--color-text));
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}

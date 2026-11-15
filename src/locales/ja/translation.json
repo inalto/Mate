@@ -1527,5 +1527,16 @@
     "copied": "文字起こしをコピーしました。",
     "inserted": "文字起こしをページに追加しました。",
     "partial_other": "{{count}} 区間を文字起こしできませんでした。"
+  },
+  "covers": {
+    "menu": "Covers",
+    "revealAll": "Reveal all",
+    "coverAll": "Cover all",
+    "removeAll": "Remove all covers",
+    "removeConfirmTitle": "Remove all covers?",
+    "removeConfirmBody": "{{count}} covers on this page will be removed. Your notes stay. You can undo this.",
+    "testMe": "Test me",
+    "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
+    "notTested": "Not tested yet"
   }
 }
