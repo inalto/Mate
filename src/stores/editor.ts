@@ -80,7 +80,8 @@ import type { MindmapStyle } from "../mindmap/styles";
 export type ToolId = "pen" | "highlighter" | "fountain-pen" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
 export type TempTool = "eraser" | "cursor" | "lasso" | "pan" | "none";
-export type InkType = PenPreset["type"];
+/** Ink tools on the toolbar; the cover preset type has no tool until the cover tool exists. */
+export type InkType = Exclude<PenPreset["type"], "cover">;
 
 export const INK_TYPES: readonly InkType[] = ["pen", "highlighter", "fountain-pen"];
 export const isInkTool = (t: string): t is InkType => (INK_TYPES as readonly string[]).includes(t);
@@ -720,7 +721,7 @@ export function createEditorStore(): EditorStore {
         contentBottom: 0,
         limitReached: false,
         preset,
-        tool: preset.type,
+        tool: preset.type as InkType,
       });
       let page: Page | null;
       let els: Element[];
@@ -1282,7 +1283,7 @@ export function createEditorStore(): EditorStore {
     setPreset: (preset) => {
       if (get().presenting) return;
       closeEdit();
-      set({ preset, tool: preset.type, selection: new Set(), editingId: null });
+      set({ preset, tool: preset.type as InkType, selection: new Set(), editingId: null });
     },
     setCamera: (camera) => set({ camera }),
     setViewport(viewport) {
@@ -1339,7 +1340,7 @@ export function createEditorStore(): EditorStore {
       const on = !s.autoShapes;
       // Shapes are drawn with ink: the ink tool in hand stays (the highlighter too), any other tool
       // gives way to the ink used last.
-      if (on && !isInkTool(s.tool) && !s.presenting) get().selectInk(s.preset.type);
+      if (on && !isInkTool(s.tool) && !s.presenting) get().selectInk(s.preset.type as InkType);
       set({ autoShapes: on });
     },
     setPanHold: (panHold) => {

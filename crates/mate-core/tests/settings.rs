@@ -180,3 +180,20 @@ fn graph_presets_default_empty_and_round_trip_camel_case() {
     assert!(!text.contains("\"expressions\""));
     assert_eq!(Settings::load(&p), s);
 }
+
+#[test]
+fn cover_defaults_and_old_files() {
+    let s: Settings = serde_json::from_str("{}").unwrap();
+    assert_eq!(s.default_cover_color, "#334155");
+    assert_eq!(s.default_cover_width, 28.0);
+
+    let s: Settings = serde_json::from_str(
+        r##"{"toolbarPresets":[{"id":"c","type":"cover","color":"#334155","width":28,"coverShape":"box"},{"id":"d","type":"cover","color":"#334155","width":28}]}"##,
+    )
+    .unwrap();
+    assert_eq!(s.toolbar_presets[0].cover_shape.as_deref(), Some("box"));
+    assert_eq!(s.toolbar_presets[1].cover_shape, None);
+    let out = serde_json::to_value(&s).unwrap();
+    assert_eq!(out["toolbarPresets"][0]["coverShape"], "box");
+    assert!(out["toolbarPresets"][1].get("coverShape").is_none());
+}

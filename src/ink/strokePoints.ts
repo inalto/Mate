@@ -53,6 +53,8 @@ export function penParams(style: PenStyle, size: number, realPressure: boolean, 
         outline: true,
       };
     }
+    // Temporary until the cover pen gets its own parameters.
+    case "cover":
     case "highlighter":
       return { size, thinning: 0, smoothing: 0.5, streamline: 0.5, simulatePressure: false, outline: true };
     case "pencil":

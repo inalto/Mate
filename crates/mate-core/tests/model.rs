@@ -100,3 +100,9 @@ fn new_id_is_uuid() {
     assert!(uuid::Uuid::parse_str(&id).is_ok(), "{id}");
     assert_ne!(id, mate_core::model::new_id());
 }
+
+#[test]
+fn pen_style_cover_round_trips() {
+    assert_eq!(serde_json::to_string(&PenStyle::Cover).unwrap(), "\"cover\"");
+    assert_eq!(serde_json::from_str::<PenStyle>("\"cover\"").unwrap(), PenStyle::Cover);
+}

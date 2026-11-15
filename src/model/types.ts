@@ -4,7 +4,7 @@
 import type { GraphDomain, GraphExpression, GraphKind } from "../graph/data";
 
 export type PageMode = "canvas" | "page";
-export type PenStyle = "pen" | "highlighter" | "fountain-pen" | "pencil";
+export type PenStyle = "pen" | "highlighter" | "fountain-pen" | "pencil" | "cover";
 export type ElementType =
   | "stroke"
   | "shape"
@@ -176,12 +176,17 @@ export interface TrashItem {
 
 export type Theme = "light" | "dark" | "sepia" | "high-contrast";
 
+/** A cover is drawn either as a freehand stroke or as a box dragged out. */
+export type CoverShape = "stroke" | "box";
+
 export interface PenPreset {
   id: string;
-  type: "pen" | "fountain-pen" | "highlighter";
+  type: "pen" | "fountain-pen" | "highlighter" | "cover";
   color: string;
   width: number;
   sharpness?: number;
+  /** Cover presets only; absent reads as "stroke". */
+  coverShape?: CoverShape;
 }
 
 /** A named graph setup for one kind: domain, grid and optionally the expressions (with colours). */
@@ -357,6 +362,8 @@ export interface Settings {
   defaultPenWidth: number;
   defaultHighlighterColor: string;
   defaultHighlighterWidth: number;
+  defaultCoverColor: string;
+  defaultCoverWidth: number;
   defaultTextColor: string;
   defaultTextSize: number;
   defaultShapeType: ShapeType;

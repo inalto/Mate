@@ -47,6 +47,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultPenWidth: 4.11,
   defaultHighlighterColor: "#FDE047",
   defaultHighlighterWidth: 20.06,
+  defaultCoverColor: "#334155",
+  defaultCoverWidth: 28,
   defaultTextColor: "#000000",
   defaultTextSize: 21.77,
   defaultShapeType: "rectangle",

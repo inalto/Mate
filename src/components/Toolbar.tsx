@@ -48,7 +48,7 @@ import type { FingerAction, PenPreset, Settings } from "../model/types";
 import { CONNECTOR_MODES } from "../connectors/route";
 import { screenToWorld } from "../canvas/camera";
 import { FRAME_PRESETS, isFrame, presetFrameRect } from "../frames/contain";
-import { isInkTool, type InkType } from "../stores/editor";
+import { isInkTool } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
@@ -71,9 +71,11 @@ const INK_LABEL = {
   pen: "toolbar.ink.pen",
   "fountain-pen": "toolbar.ink.fountainPen",
   highlighter: "toolbar.ink.highlighter",
-} as const satisfies Record<InkType, TKey>;
+  // Placeholder until the cover tool has its own label.
+  cover: "toolbar.ink.highlighter",
+} as const satisfies Record<PenPreset["type"], TKey>;
 
-function InkIcon({ type, color }: { type: InkType; color?: string }) {
+function InkIcon({ type, color }: { type: PenPreset["type"]; color?: string }) {
   const Icon = type === "highlighter" ? Highlighter : type === "fountain-pen" ? PenNib : Pen;
   return <Icon size={18} color={color} weight={color ? "fill" : "regular"} />;
 }
