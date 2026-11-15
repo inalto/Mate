@@ -203,3 +203,43 @@ fn recall_rows_returns_only_the_units_recall_rows() {
     assert_eq!(rows.len(), 1);
     assert_eq!((rows[0].kind.as_str(), rows[0].page_id.as_str()), ("recall", "p1"));
 }
+
+#[test]
+fn recall_rows_skips_a_row_whose_payload_is_not_json() {
+    // A backup must not fail because one stored row is corrupt.
+    let path = std::env::temp_dir().join(format!("mate-recall-corrupt-{}.db", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let mut st = Storage::open(&path).unwrap();
+    st.upsert_unit(&unit("u1", None)).unwrap();
+    st.upsert_section(&section("sec1", "u1")).unwrap();
+    st.upsert_page(&page("p1", "sec1", None)).unwrap();
+    st.record_recall(&answer("p1", "c1", true, "r1")).unwrap();
+    st.record_recall(&answer("p1", "c2", false, "r1")).unwrap();
+    let raw = rusqlite::Connection::open(&path).unwrap();
+    raw.execute(
+        "UPDATE learning_events SET payload = 'not json' WHERE payload LIKE '%c2%'",
+        [],
+    )
+    .unwrap();
+    drop(raw);
+    let rows = st.recall_rows("u1").unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].payload["elementId"], "c1");
+    drop(st);
+    for suffix in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{suffix}", path.display()));
+    }
+}
+
+#[test]
+fn recall_rows_keeps_the_rows_of_a_trashed_page() {
+    // Deliberate: the backup carries them; a restore that does not bring the page back drops them.
+    let mut st = seeded();
+    st.upsert_page(&page("p2", "sec1", None)).unwrap();
+    st.record_recall(&answer("p1", "a", true, "r1")).unwrap();
+    st.record_recall(&answer("p2", "b", false, "r1")).unwrap();
+    st.soft_delete(EntityKind::Page, "p2").unwrap();
+    let rows = st.recall_rows("u1").unwrap();
+    let pages: Vec<&str> = rows.iter().map(|r| r.page_id.as_str()).collect();
+    assert_eq!(pages, ["p1", "p2"]);
+}

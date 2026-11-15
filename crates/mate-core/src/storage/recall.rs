@@ -248,7 +248,8 @@ impl Storage {
         Ok(knew)
     }
 
-    /// Every recall row of the unit's pages (live or not), oldest first, for the backup.
+    /// Every recall row of the unit's pages (live or not), oldest first, for the backup. A row
+    /// whose payload is not JSON is skipped: one bad row must not fail the whole backup.
     pub fn recall_rows(&self, unit_id: &str) -> Result<Vec<LearningEvent>> {
         let mut stmt = self.conn.prepare(
             "SELECT e.id, e.page_id, e.stroke_group_id, e.kind, e.payload, e.created_at \
@@ -257,15 +258,48 @@ impl Storage {
              WHERE s.unit_id = ?1 AND e.kind = ?2 ORDER BY e.created_at, e.rowid",
         )?;
         let rows = stmt.query_map(params![unit_id, RECALL_KIND], |r| {
-            Ok(LearningEvent {
+            let Ok(payload) = json_col::<serde_json::Value>(r, 4) else {
+                return Ok(None);
+            };
+            Ok(Some(LearningEvent {
                 id: r.get(0)?,
                 page_id: r.get(1)?,
                 stroke_group_id: r.get(2)?,
                 kind: r.get(3)?,
-                payload: json_col(r, 4)?,
+                payload,
                 created_at: r.get(5)?,
-            })
+            }))
         })?;
-        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+        let mut out = Vec::new();
+        for row in rows {
+            if let Some(ev) = row? {
+                out.push(ev);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Stores restored recall rows (ids and times as given) in one transaction, so a backup's
+    /// thousands of answers do not each wait for their own commit.
+    pub(crate) fn insert_recall_rows(&mut self, rows: &[LearningEvent]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        {
+            let mut stmt = tx.prepare_cached(
+                "INSERT INTO learning_events (id, page_id, stroke_group_id, kind, payload, created_at) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+            for ev in rows {
+                stmt.execute(params![
+                    ev.id,
+                    ev.page_id,
+                    ev.stroke_group_id,
+                    RECALL_KIND,
+                    serde_json::to_string(&ev.payload)?,
+                    ev.created_at
+                ])?;
+            }
+        }
+        tx.commit()?;
+        Ok(())
     }
 }

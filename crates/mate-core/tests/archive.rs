@@ -888,3 +888,56 @@ fn an_import_keeps_at_most_the_marker_cap_per_page() {
     assert_eq!(markers, MAX_MARKERS_PER_PAGE);
     assert_eq!(strokes, 10, "the rest of the page and the other pages import normally");
 }
+
+// --- Recall results never leave in an export or a share -------------------------------------
+
+/// [`source`] with recall answers on `pa1` and `pb1`.
+fn source_with_recall() -> Storage {
+    let mut st = source();
+    for (page, element, knew) in [("pa1", "ea0", true), ("pa1", "ea1", false), ("pb1", "ec0", true)] {
+        st.record_recall(&mate_core::storage::RecallAnswer {
+            page_id: page.into(),
+            element_id: element.into(),
+            knew,
+            run_id: "r1".into(),
+        })
+        .unwrap();
+    }
+    assert_eq!(st.recall_rows("u1").unwrap().len(), 3);
+    st
+}
+
+fn entry_names(bytes: &[u8]) -> Vec<String> {
+    zip::ZipArchive::new(Cursor::new(bytes)).unwrap().file_names().map(str::to_owned).collect()
+}
+
+#[test]
+fn an_exported_book_carries_no_recall_file() {
+    let src = source_with_recall();
+    for recordings in [Recordings::Include, Recordings::Exclude, Recordings::External] {
+        let bytes = export_unit(&src, "u1", &tmp("recall-export"), recordings).unwrap();
+        let names = entry_names(&bytes);
+        assert!(names.iter().any(|n| n == "unit.json"), "{names:?}");
+        assert!(!names.iter().any(|n| n.contains("recall")), "{recordings:?}: {names:?}");
+        assert!(!String::from_utf8_lossy(&bytes).contains("runId"), "{recordings:?}: no answer anywhere");
+    }
+}
+
+#[test]
+fn a_plain_import_ignores_a_recall_file() {
+    // The book as a backup writes it, with its `recall.json`.
+    let src = source_with_recall();
+    let (backup, _) = mate_core::archive::export_backup(&src, &tmp("recall-plain")).unwrap();
+    let mut zip = zip::ZipArchive::new(Cursor::new(backup)).unwrap();
+    let mut book = Vec::new();
+    std::io::Read::read_to_end(&mut zip.by_name("books/01-unit-u1.mate").unwrap(), &mut book).unwrap();
+    assert!(entry_names(&book).iter().any(|n| n == "recall.json"));
+
+    let mut dst = Storage::open_in_memory().unwrap();
+    let report = import_archive(&mut dst, &book, &tmp("recall-plain-dst")).unwrap();
+    assert_eq!(report.pages, 3);
+    assert!(dst.recall_rows(&report.unit_id).unwrap().is_empty());
+    let limits = ImportLimits::default();
+    let again = import_archive_with_limits(&mut dst, &book, &tmp("recall-plain-dst"), limits).unwrap();
+    assert!(dst.recall_rows(&again.unit_id).unwrap().is_empty());
+}
