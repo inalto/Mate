@@ -10,6 +10,7 @@ import { useDismiss } from "../components/useDismiss";
 import { recallPageStats } from "../ipc/recall";
 import type { RecallRun } from "../model/types";
 import { useFocusedEditor } from "../stores/focusedEditor";
+import { isLocked } from "../model/content";
 import { coversOf } from "./cover";
 import "./covers.css";
 
@@ -28,7 +29,11 @@ export default function CoversMenu({ onTest }: Props) {
   const [last, setLast] = useState<RecallRun | null | undefined>(undefined);
   const elements = ed((s) => s.elements);
   const pageId = ed((s) => s.pageId);
-  const count = useMemo(() => coversOf(elements.values()).length, [elements]);
+  const covers = useMemo(() => coversOf(elements.values()), [elements]);
+  const count = covers.length;
+  // Locked covers stay when the rest are removed, so the dialog counts only the others.
+  const locked = covers.filter(isLocked).length;
+  const removable = count - locked;
   useDismiss(ref, open, () => setOpen(false));
 
   // The score changes after every run, so it is read again each time the menu opens.
@@ -47,7 +52,6 @@ export default function CoversMenu({ onTest }: Props) {
   }, [open, pageId]);
 
   if (count === 0) return null;
-  const date = (at: string) => new Intl.DateTimeFormat(i18n.language, { day: "numeric", month: "short" }).format(new Date(at));
   const pick = (run: () => void) => () => {
     run();
     setOpen(false);
@@ -84,6 +88,7 @@ export default function CoversMenu({ onTest }: Props) {
               type="button"
               role="menuitem"
               className="tb-menu-item"
+              disabled={removable === 0}
               onClick={() => {
                 setOpen(false);
                 setConfirming(true);
@@ -93,7 +98,7 @@ export default function CoversMenu({ onTest }: Props) {
             </button>
             {last !== undefined && (
               <div className="covers-last">
-                {last ? t("covers.lastTest", { known: last.known, total: last.total, date: date(last.at) }) : t("covers.notTested")}
+                {last ? t("covers.lastTest", { known: last.known, total: last.total, date: new Intl.DateTimeFormat(i18n.language, { day: "numeric", month: "short" }).format(new Date(last.at)) }) : t("covers.notTested")}
               </div>
             )}
             <button type="button" role="menuitem" className="tb-menu-item" onClick={pick(() => onTest?.())}>
@@ -112,7 +117,8 @@ export default function CoversMenu({ onTest }: Props) {
           }}
           onCancel={() => setConfirming(false)}
         >
-          {t("covers.removeConfirmBody", { count })}
+          {t("covers.removeConfirmBody", { count: removable })}
+          {locked > 0 && <> {t("covers.removeLockedStay", { count: locked })}</>}
         </ConfirmDialog>
       )}
     </div>

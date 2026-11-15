@@ -1551,6 +1551,8 @@
     "removeConfirmBody": "Verranno rimosse {{count}} coperture da questa pagina. Gli appunti restano. Puoi annullare.",
     "testMe": "Mettimi alla prova",
     "lastTest": "Ultima prova: {{known}} su {{total}}, {{date}}",
-    "notTested": "Non ancora provata"
+    "notTested": "Non ancora provata",
+    "removeLockedStay_one": "{{count}} copertura bloccata resta.",
+    "removeLockedStay_other": "{{count}} coperture bloccate restano."
   }
 }

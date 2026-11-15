@@ -1551,6 +1551,8 @@
     "removeConfirmBody": "{{count}} covers on this page will be removed. Your notes stay. You can undo this.",
     "testMe": "Test me",
     "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
-    "notTested": "Not tested yet"
+    "notTested": "Not tested yet",
+    "removeLockedStay_one": "{{count}} locked cover stays.",
+    "removeLockedStay_other": "{{count}} locked covers stay."
   }
 }

@@ -77,6 +77,30 @@ describe("CoversMenu", () => {
     expect(live("b")).toBe(true);
   });
 
+  it("leaves locked covers out of the count and the removal", async () => {
+    const locked = { ...cover("l"), content: { locked: true } };
+    await load([cover("a"), cover("b"), locked]);
+    render(<CoversMenu />);
+    await openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove all covers" }));
+    expect(screen.getByText(/^2 covers on this page will be removed\./)).toBeTruthy();
+    expect(screen.getByText(/1 locked cover stays\./)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Remove all covers" }));
+    expect(live("a")).toBe(false);
+    expect(live("b")).toBe(false);
+    expect(live("l")).toBe(true);
+    act(() => ed().undo());
+    expect(live("a")).toBe(true);
+    expect(live("b")).toBe(true);
+  });
+
+  it("Remove all covers is disabled when every cover is locked", async () => {
+    await load([{ ...cover("l"), content: { locked: true } }]);
+    render(<CoversMenu />);
+    await openMenu();
+    expect((screen.getByRole("menuitem", { name: "Remove all covers" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("cancelling the confirmation removes nothing", async () => {
     await load([cover("a")]);
     render(<CoversMenu />);
