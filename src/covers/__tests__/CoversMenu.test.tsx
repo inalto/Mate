@@ -78,6 +78,14 @@ describe("CoversMenu", () => {
     expect(live("b")).toBe(true);
   });
 
+  it("asks about one cover in the singular", async () => {
+    await load([cover("a"), ink]);
+    render(<CoversMenu />);
+    await openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove all covers" }));
+    expect(screen.getByText("1 cover on this page will be removed. Your notes stay. You can undo this.")).toBeTruthy();
+  });
+
   it("leaves locked covers out of the count and the removal", async () => {
     const locked = { ...cover("l"), content: { locked: true } };
     await load([cover("a"), cover("b"), locked]);

@@ -137,8 +137,8 @@
       "penWidth": "Espessura da caneta",
       "highlighterColor": "Cor do marca-texto",
       "highlighterWidth": "Espessura do marca-texto",
-      "coverColor": "Cover colour",
-      "coverWidth": "Cover width",
+      "coverColor": "Cor da cobertura",
+      "coverWidth": "Largura da cobertura",
       "stabilization": {
         "label": "Estabilização do traço",
         "hint": "Suaviza tremores; quanto maior, mais a caneta atrasa um pouco"
@@ -559,7 +559,7 @@
       "autoShapes": "Alternar formas perfeitas",
       "pen": "Caneta",
       "highlighter": "Marca-texto",
-      "cover": "Cover tool",
+      "cover": "Ferramenta de cobertura",
       "eraser": "Borracha",
       "cursor": "Selecionar (cursor)",
       "lasso": "Laço",
@@ -645,7 +645,7 @@
     "switchTo": {
       "pen": "Mudar para caneta",
       "highlighter": "Mudar para marca-texto",
-      "cover": "Switch to the cover tool",
+      "cover": "Mudar para a ferramenta de cobertura",
       "eraser": "Mudar para borracha",
       "cursor": "Mudar para selecionar (cursor)",
       "lasso": "Mudar para laço",
@@ -668,7 +668,7 @@
       "selection": "Selecione algo primeiro",
       "page": "Abra primeiro uma página"
     },
-    "recall": "Open recall statistics"
+    "recall": "Abrir estatísticas de revisão"
   },
   "nav": {
     "home": "Início",
@@ -706,7 +706,7 @@
       "pen": "Caneta",
       "fountainPen": "Caneta-tinteiro",
       "highlighter": "Marca-texto",
-      "cover": "Cover"
+      "cover": "Cobertura"
     },
     "addPen": "Adicionar caneta",
     "eraser": "Borracha",
@@ -851,7 +851,7 @@
     "folderActions": "Actions for folder {{title}}",
     "emptyFolder": "This folder is empty",
     "breadcrumb": "Folder path",
-    "recall": "Recall"
+    "recall": "Revisão"
   },
   "export": {
     "failed": "Falha na exportação: {{message}}",
@@ -883,10 +883,10 @@
     "annotationsFlat": "Niveladas",
     "annotationsLayer": "Camada separada",
     "annotationsHint": "Aplica-se às páginas PDF importadas. Uma camada separada pode ser ocultada ou editada em editores de PDF.",
-    "covers": "Covers",
-    "coversCovered": "Covered",
-    "coversHidden": "Left out",
-    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
+    "covers": "Coberturas",
+    "coversCovered": "Cobertas",
+    "coversHidden": "Omitidas",
+    "coversHint": "Cobertas mantém oculto o que está sob cada cobertura. Omitidas exporta a página sem coberturas.",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
   },
@@ -930,9 +930,9 @@
     "width": "Largura da seleção"
   },
   "preset": {
-    "coverShape": "Shape",
-    "coverStroke": "Stroke",
-    "coverBox": "Box",
+    "coverShape": "Forma",
+    "coverStroke": "Traço",
+    "coverBox": "Caixa",
     "edit": "Editar predefinição",
     "swatches": "As minhas amostras",
     "addSwatch": "Guardar a cor como amostra",
@@ -1552,41 +1552,42 @@
     "partial_other": "{{count}} partes não puderam ser transcritas."
   },
   "covers": {
-    "menu": "Covers",
-    "revealAll": "Reveal all",
-    "coverAll": "Cover all",
-    "removeAll": "Remove all covers",
-    "removeConfirmTitle": "Remove all covers?",
-    "removeConfirmBody": "{{count}} covers on this page will be removed. Your notes stay. You can undo this.",
-    "testMe": "Test me",
-    "lastTest": "Last test: {{known}} of {{total}}, {{date}}",
-    "notTested": "Not tested yet",
-    "removeLockedStay_one": "{{count}} locked cover stays.",
-    "removeLockedStay_other": "{{count}} locked covers stay.",
+    "menu": "Coberturas",
+    "revealAll": "Descobrir todas",
+    "coverAll": "Cobrir todas",
+    "removeAll": "Remover todas as coberturas",
+    "removeConfirmTitle": "Remover todas as coberturas?",
+    "removeConfirmBody_one": "{{count}} cobertura desta página será removida. As tuas notas ficam. Podes anular.",
+    "removeConfirmBody_other": "{{count}} coberturas desta página serão removidas. As tuas notas ficam. Podes anular.",
+    "testMe": "Testa-me",
+    "lastTest": "Último teste: {{known}} de {{total}}, {{date}}",
+    "notTested": "Ainda não testada",
+    "removeLockedStay_one": "{{count}} cobertura bloqueada fica.",
+    "removeLockedStay_other": "{{count}} coberturas bloqueadas ficam.",
     "run": {
-      "progress": "{{n}} of {{total}}",
-      "reveal": "Reveal",
-      "knew": "Knew it",
-      "missed": "Missed",
-      "score": "You knew {{known}} of {{total}} in {{time}}.",
-      "repeatMissed": "Repeat missed",
-      "done": "Done",
-      "end": "End test"
+      "progress": "{{n}} de {{total}}",
+      "reveal": "Descobrir",
+      "knew": "Sabia",
+      "missed": "Falhei",
+      "score": "Sabias {{known}} de {{total}} em {{time}}.",
+      "repeatMissed": "Repetir as falhadas",
+      "done": "Concluído",
+      "end": "Terminar o teste"
     },
-    "history": "Last answers: {{known}} known, {{missed}} missed"
+    "history": "Últimas respostas: {{known}} certas, {{missed}} falhadas"
   },
   "recall": {
-    "title": "Recall: {{title}}",
-    "covers": "Covers",
-    "answers": "Answers",
-    "last7": "Known, last 7 days",
-    "last30": "Known, last 30 days",
-    "page": "Page",
-    "lastScore": "Last score",
-    "runs": "Tests",
-    "trend": "Trend",
-    "test": "Test",
-    "empty": "No covers in this notebook yet. Hide part of a page with the cover tool, then test yourself.",
-    "never": "Not tested"
+    "title": "Revisão: {{title}}",
+    "covers": "Coberturas",
+    "answers": "Respostas",
+    "last7": "Certas, últimos 7 dias",
+    "last30": "Certas, últimos 30 dias",
+    "page": "Página",
+    "lastScore": "Última pontuação",
+    "runs": "Testes",
+    "trend": "Evolução",
+    "test": "Testar",
+    "empty": "Ainda não há coberturas neste caderno. Esconde parte de uma página com a ferramenta de cobertura e depois testa-te.",
+    "never": "Não testada"
   }
 }
