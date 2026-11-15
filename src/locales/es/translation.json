@@ -884,9 +884,9 @@
     "annotationsLayer": "Capa separada",
     "annotationsHint": "Se aplica a las páginas PDF importadas. Una capa separada se puede ocultar o editar en editores de PDF.",
     "covers": "Cubiertas",
-    "coversCovered": "Cubiertas",
+    "coversCovered": "Tapadas",
     "coversHidden": "Omitidas",
-    "coversHint": "Cubiertas mantiene oculto lo que hay bajo cada cubierta. Omitidas exporta la página sin cubiertas.",
+    "coversHint": "Tapadas mantiene oculto lo que hay bajo cada cubierta. Omitidas exporta la página sin cubiertas. El texto escrito bajo una cubierta queda fuera del texto buscable.",
     "boxRender": "No se pudo generar el contenido del cuadro {{id}} para exportar.",
     "boxMissing": "El cuadro {{id}} no se generó para exportar."
   },

@@ -883,7 +883,7 @@
     "covers": "Covers",
     "coversCovered": "Covered",
     "coversHidden": "Left out",
-    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers.",
+    "coversHint": "Covered keeps what is under each cover hidden. Left out exports the page without covers. Typed text under a cover is left out of the searchable text.",
     "boxRender": "Could not render the content of box {{id}} for export.",
     "boxMissing": "Box {{id}} was not rendered for export."
   },

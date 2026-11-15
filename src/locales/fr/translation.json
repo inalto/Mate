@@ -886,7 +886,7 @@
     "covers": "Masques",
     "coversCovered": "Masqués",
     "coversHidden": "Omis",
-    "coversHint": "Masqués garde caché ce qui se trouve sous chaque masque. Omis exporte la page sans masques.",
+    "coversHint": "Masqués garde caché ce qui se trouve sous chaque masque. Omis exporte la page sans masques. Le texte saisi sous un masque est exclu du texte recherchable.",
     "boxRender": "Impossible de générer le contenu de la zone {{id}} pour l'export.",
     "boxMissing": "La zone {{id}} n'a pas été générée pour l'export."
   },
@@ -932,7 +932,7 @@
   "preset": {
     "coverShape": "Forme",
     "coverStroke": "Trait",
-    "coverBox": "Cadre",
+    "coverBox": "Zone",
     "edit": "Modifier le préréglage",
     "swatches": "Mes nuances",
     "addSwatch": "Enregistrer la couleur comme nuance",

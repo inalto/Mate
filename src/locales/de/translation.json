@@ -886,7 +886,7 @@
     "covers": "Abdeckungen",
     "coversCovered": "Abgedeckt",
     "coversHidden": "Weggelassen",
-    "coversHint": "Abgedeckt hält verborgen, was unter jeder Abdeckung liegt. Weggelassen exportiert die Seite ohne Abdeckungen.",
+    "coversHint": "Abgedeckt hält verborgen, was unter jeder Abdeckung liegt. Weggelassen exportiert die Seite ohne Abdeckungen. Getippter Text unter einer Abdeckung wird aus dem durchsuchbaren Text weggelassen.",
     "boxRender": "Der Inhalt von Feld {{id}} konnte für den Export nicht gerendert werden.",
     "boxMissing": "Feld {{id}} wurde für den Export nicht gerendert."
   },
@@ -932,7 +932,7 @@
   "preset": {
     "coverShape": "Form",
     "coverStroke": "Strich",
-    "coverBox": "Rahmen",
+    "coverBox": "Rechteck",
     "edit": "Voreinstellung bearbeiten",
     "swatches": "Meine Farbfelder",
     "addSwatch": "Farbe als Farbfeld speichern",
@@ -1570,7 +1570,7 @@
       "knew": "Gewusst",
       "missed": "Nicht gewusst",
       "score": "Du wusstest {{known}} von {{total}} in {{time}}.",
-      "repeatMissed": "Verpasste wiederholen",
+      "repeatMissed": "Nicht Gewusste wiederholen",
       "done": "Fertig",
       "end": "Test beenden"
     },

@@ -886,7 +886,7 @@
     "covers": "Coberturas",
     "coversCovered": "Cobertas",
     "coversHidden": "Omitidas",
-    "coversHint": "Cobertas mantém oculto o que está sob cada cobertura. Omitidas exporta a página sem coberturas.",
+    "coversHint": "Cobertas mantém oculto o que está sob cada cobertura. Omitidas exporta a página sem coberturas. O texto digitado sob uma cobertura fica fora do texto pesquisável.",
     "boxRender": "Não foi possível gerar o conteúdo da caixa {{id}} para exportação.",
     "boxMissing": "A caixa {{id}} não foi gerada para exportação."
   },
@@ -1557,9 +1557,9 @@
     "coverAll": "Cobrir todas",
     "removeAll": "Remover todas as coberturas",
     "removeConfirmTitle": "Remover todas as coberturas?",
-    "removeConfirmBody_one": "{{count}} cobertura desta página será removida. As tuas notas ficam. Podes anular.",
-    "removeConfirmBody_other": "{{count}} coberturas desta página serão removidas. As tuas notas ficam. Podes anular.",
-    "testMe": "Testa-me",
+    "removeConfirmBody_one": "{{count}} cobertura desta página será removida. Suas notas ficam. Você pode desfazer.",
+    "removeConfirmBody_other": "{{count}} coberturas desta página serão removidas. Suas notas ficam. Você pode desfazer.",
+    "testMe": "Teste-me",
     "lastTest": "Último teste: {{known}} de {{total}}, {{date}}",
     "notTested": "Ainda não testada",
     "removeLockedStay_one": "{{count}} cobertura bloqueada fica.",
@@ -1567,14 +1567,14 @@
     "run": {
       "progress": "{{n}} de {{total}}",
       "reveal": "Descobrir",
-      "knew": "Sabia",
-      "missed": "Falhei",
-      "score": "Sabias {{known}} de {{total}} em {{time}}.",
-      "repeatMissed": "Repetir as falhadas",
+      "knew": "Eu sabia",
+      "missed": "Errei",
+      "score": "Você sabia {{known}} de {{total}} em {{time}}.",
+      "repeatMissed": "Repetir as erradas",
       "done": "Concluído",
       "end": "Terminar o teste"
     },
-    "history": "Últimas respostas: {{known}} certas, {{missed}} falhadas"
+    "history": "Últimas respostas: {{known}} certas, {{missed}} erradas"
   },
   "recall": {
     "title": "Revisão: {{title}}",
@@ -1587,7 +1587,7 @@
     "runs": "Testes",
     "trend": "Evolução",
     "test": "Testar",
-    "empty": "Ainda não há coberturas neste caderno. Esconde parte de uma página com a ferramenta de cobertura e depois testa-te.",
+    "empty": "Ainda não há coberturas neste caderno. Esconda parte de uma página com a ferramenta de cobertura e depois teste-se.",
     "never": "Não testada"
   }
 }

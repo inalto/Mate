@@ -883,7 +883,7 @@
     "covers": "Coperture",
     "coversCovered": "Coperte",
     "coversHidden": "Escluse",
-    "coversHint": "Coperte tiene nascosto ciò che sta sotto. Escluse esporta la pagina senza coperture.",
+    "coversHint": "Coperte tiene nascosto ciò che sta sotto. Escluse esporta la pagina senza coperture. Il testo digitato sotto una copertura è escluso dal testo ricercabile.",
     "boxRender": "Impossibile renderizzare il contenuto della casella {{id}} per l'esportazione.",
     "boxMissing": "La casella {{id}} non è stata renderizzata per l'esportazione."
   },
