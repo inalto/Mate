@@ -10,6 +10,8 @@ html[data-theme="dark"] {
   --color-surface-1: #1b1b1f;
   --color-surface-2: #232328;
   --color-danger: #f97066;
+  --shadow-bar: 0 4px 16px rgb(0 0 0 / 0.45);
+  --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.6);
 }
 
 html[data-theme="sepia"] {
@@ -24,6 +26,8 @@ html[data-theme="sepia"] {
   --color-surface-1: #f7efdb;
   --color-surface-2: #e9dcc0;
   --color-danger: #9a2a1a;
+  --shadow-bar: 0 4px 16px rgb(70 52 20 / 0.14);
+  --shadow-popover: 0 8px 24px rgb(70 52 20 / 0.2);
 }
 
 html[data-theme="high-contrast"] {
@@ -38,4 +42,6 @@ html[data-theme="high-contrast"] {
   --color-surface-1: #0f1012;
   --color-surface-2: #16181b;
   --color-danger: #ff8a80;
+  --shadow-bar: 0 4px 16px rgb(0 0 0 / 0.6);
+  --shadow-popover: 0 8px 28px rgb(0 0 0 / 0.75);
 }

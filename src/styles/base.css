@@ -56,8 +56,17 @@ button.card:hover {
   cursor: pointer;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   background: var(--color-surface-2);
+}
+
+.btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 10%, var(--color-surface-2));
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .btn-primary {
@@ -66,9 +75,14 @@ button.card:hover {
   color: var(--color-primary-contrast);
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--color-primary);
   filter: brightness(1.1);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--color-primary);
+  filter: brightness(0.94);
 }
 
 .btn-danger {
@@ -87,6 +101,39 @@ button.card:hover {
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* The parts the browser draws: sliders, checkboxes, text selection and scrollbars follow the theme. */
+:root {
+  accent-color: var(--color-primary);
+  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 55%, transparent) transparent;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+/* Controls answer a press at once; the change of state eases in. */
+.btn,
+.tb-btn,
+.tb-menu-item,
+.icon-btn,
+.menu button {
+  transition:
+    background-color 120ms var(--ease-out),
+    color 120ms var(--ease-out),
+    box-shadow 120ms var(--ease-out),
+    opacity 120ms var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .tb-btn,
+  .tb-menu-item,
+  .icon-btn,
+  .menu button {
+    transition: none;
+  }
 }
 
 /* App shell */
@@ -269,7 +316,7 @@ button.card:hover {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
   display: flex;
   flex-direction: column;
 }
@@ -851,7 +898,7 @@ button.card:hover {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  box-shadow: var(--shadow-bar);
   color: var(--color-text);
   font: 14px / 1.2 var(--font-ui);
   text-align: left;
@@ -923,7 +970,7 @@ button.card:hover {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  box-shadow: var(--shadow-bar);
   color: var(--color-text);
   font: 13px / 1.3 var(--font-ui);
   text-align: left;
@@ -1141,7 +1188,7 @@ button.card:hover {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+  box-shadow: var(--shadow-bar);
 }
 
 /* Dock bar: spans the pane edge, one track that scrolls (wheel on top/bottom) instead of wrapping.
@@ -1262,6 +1309,10 @@ button.card:hover {
   padding: 0;
 }
 
+.tb-btn:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 10%, var(--color-surface-2));
+}
+
 .tb-btn.active {
   color: var(--color-primary);
   box-shadow: inset 0 0 0 1px var(--color-primary);
@@ -1279,7 +1330,8 @@ button.card:hover {
   padding: 0;
   border: 2px solid var(--color-surface-1);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--color-border);
+  /* The ring follows the text colour, so a dark swatch stays visible on a dark surface. */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-text) 30%, transparent);
   cursor: pointer;
 }
 
@@ -1381,7 +1433,7 @@ button.card:hover {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-popover);
 }
 
 .tb-menu {
@@ -1404,7 +1456,7 @@ button.card:hover {
   cursor: pointer;
 }
 
-.tb-menu-item:hover,
+.tb-menu-item:hover:not(:disabled),
 .tb-menu-item.active {
   background: var(--color-surface-2);
 }
@@ -2164,7 +2216,7 @@ html.mobile .sb-resize {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-popover);
 }
 
 .line-caps-picker {
@@ -2196,7 +2248,7 @@ html.mobile .sb-resize {
   background: var(--color-surface-1);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+  box-shadow: var(--shadow-popover);
 }
 
 .label-popover-input {

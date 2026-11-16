@@ -34,4 +34,9 @@
   --font-mono: "JetBrains Mono", monospace;
 
   --nav-width: 56px;
+
+  /* Floating chrome: bars sit low, popovers and menus sit above them. */
+  --shadow-bar: 0 4px 16px rgb(0 0 0 / 0.08);
+  --shadow-popover: 0 8px 24px rgb(0 0 0 / 0.12);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
