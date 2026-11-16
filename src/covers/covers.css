@@ -38,6 +38,14 @@
   color: var(--color-primary-contrast);
 }
 
+.study-bar .tb-btn.study-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 86%, var(--color-text));
+}
+
+.study-bar .tb-btn.study-primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-primary) 74%, var(--color-text));
+}
+
 .study-bar .replay-label {
   padding-inline: var(--space-2);
 }
