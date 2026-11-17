@@ -418,3 +418,72 @@ describe("RulerLayer: angle field", () => {
     expect(pose()).toEqual(start);
   });
 });
+
+describe("RulerLayer: position snap", () => {
+  /** A canvas page ruled every 40: lines at y = …, 240, 280, 320, 360, … */
+  const ruledPage = () => store.setState({ page: { id: "pg", mode: "canvas", backgroundConfig: { type: "ruled", spacing: 40, dotRadius: 1.5 } } as never });
+  const withSettings = (patch: object) => useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, ...patch } });
+
+  it("snaps an edge to a background line while snapToGrid is on, and clears the guide on pointer up", () => {
+    withSettings({ snapToGrid: true, smartGuides: false });
+    ruledPage();
+    showRuler();
+    // Default pose (400, 300): edges at 245 and 355. Down 2: the lower edge is 3 from 360.
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 400, 302);
+    expect(pose()).toEqual({ x: 400, y: 305, angle: 0 });
+    expect(store.getState().guides).toEqual([{ axis: "y", at: 360, from: 0, to: 800 }]);
+    // Further on, the snap lets go: the drag keeps its own unsnapped pose.
+    move(hitStrip(), 400, 320);
+    expect(pose()).toEqual({ x: 400, y: 320, angle: 0 });
+    expect(store.getState().guides).toEqual([]);
+    move(hitStrip(), 400, 302);
+    expect(store.getState().guides).toHaveLength(1);
+    up(hitStrip(), 400, 302);
+    expect(store.getState().guides).toEqual([]);
+    expect(pose()).toEqual({ x: 400, y: 305, angle: 0 });
+  });
+
+  it("never snaps with smartGuides and snapToGrid off", () => {
+    withSettings({ snapToGrid: false, smartGuides: false });
+    ruledPage();
+    showRuler();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 400, 302);
+    expect(pose()).toEqual({ x: 400, y: 302, angle: 0 });
+    expect(store.getState().guides).toEqual([]);
+    up(hitStrip(), 400, 302);
+  });
+
+  it("does not snap while Shift is held", () => {
+    withSettings({ snapToGrid: true });
+    ruledPage();
+    showRuler();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 400, 302, 1, { shiftKey: true });
+    expect(pose()).toEqual({ x: 400, y: 302, angle: 0 });
+    expect(store.getState().guides).toEqual([]);
+  });
+
+  it("clears the guide when the drag ends because a guided stroke starts", () => {
+    withSettings({ snapToGrid: true });
+    ruledPage();
+    showRuler();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 400, 302);
+    expect(store.getState().guides).toHaveLength(1);
+    act(() => store.getState().setRulerGuiding(true));
+    expect(store.getState().guides).toEqual([]);
+  });
+
+  it("clears the guide when the ruler is turned off mid-drag", () => {
+    withSettings({ snapToGrid: true });
+    ruledPage();
+    showRuler();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 400, 302);
+    expect(store.getState().guides).toHaveLength(1);
+    act(() => store.getState().toggleRuler());
+    expect(store.getState().guides).toEqual([]);
+  });
+});

@@ -54,6 +54,21 @@ function colors(theme: ThemeName, cfg: BackgroundConfig) {
   };
 }
 
+/** The pattern's pitch before any thinning for density: `spacing`, or 40 when unset. */
+function baseStep(cfg: BackgroundConfig): number {
+  return cfg.spacing > 0 ? cfg.spacing : 40;
+}
+
+/** Where the vertical lines and dot columns of a region start: its left edge plus `offsetX`. */
+function columnOrigin(cfg: BackgroundConfig, originX: number): number {
+  return originX + (cfg.offsetX ?? 0);
+}
+
+/** Sheet `i` of a page-mode stack (the pattern of each sheet starts at its top-left corner). */
+function sheetRect(page: BackgroundPage, i: number): Rect {
+  return { x: 0, y: i * (page.height + PAGE_GAP), width: page.width, height: page.height };
+}
+
 /** Indices k with origin + k·step inside [lo, hi]. */
 function range(lo: number, hi: number, origin: number, step: number): [number, number] {
   return [Math.ceil((lo - origin) / step), Math.floor((hi - origin) / step)];
@@ -73,8 +88,8 @@ function emitRegion(
 ): void {
   const right = r.x + r.width;
   const bottom = r.y + r.height;
-  const ox = originX + (cfg.offsetX ?? 0);
-  let step = cfg.spacing > 0 ? cfg.spacing : 40;
+  const ox = columnOrigin(cfg, originX);
+  let step = baseStep(cfg);
   const tooDense = (s: number) => Math.max(r.width, r.height) / s > MAX_LINES_PER_AXIS;
   const hLine = (y: number, color: string, width: number, major: boolean) =>
     out.lines.push({ x1: r.x, y1: y, x2: right, y2: y, color, width, major });
@@ -273,14 +288,99 @@ export function buildBackgroundPattern(
     emitRegion(cfg, clip, 0, 0, c, out, null);
     return out;
   }
-  const stride = page.height + PAGE_GAP;
   for (const i of visibleSheets(clip, page)) {
-    const top = i * stride;
-    const sheet = { x: 0, y: top, width: page.width, height: page.height };
+    const sheet = sheetRect(page, i);
     const r = intersect(clip, sheet);
-    if (r) emitRegion(cfg, r, 0, top, c, out, sheet);
+    if (r) emitRegion(cfg, r, sheet.x, sheet.y, c, out, sheet);
   }
   return out;
+}
+
+/** A regular family of parallel lines: origin + k·pitch for whole k in [kMin, kMax]. */
+interface Lattice {
+  origin: number;
+  pitch: number;
+  kMin: number;
+  kMax: number;
+}
+
+/**
+ * The regular lines (or rows and columns of dots) the painter draws across `axis` in a region
+ * starting at (originX, originY); `sheet` bounds them in page mode, null in canvas mode. Null when
+ * the type draws none on that axis at a regular spacing. Margins, cue, summary and column rules,
+ * diagonals and music staves are not included.
+ */
+function latticeOf(cfg: BackgroundConfig, axis: "x" | "y", originX: number, originY: number, sheet: Rect | null): Lattice | null {
+  const step = baseStep(cfg);
+  const lo = sheet ? (axis === "y" ? sheet.y : sheet.x) : -Infinity;
+  const hi = sheet ? (axis === "y" ? sheet.y + sheet.height : sheet.x + sheet.width) : Infinity;
+  const within = (origin: number, pitch: number, firstK = -Infinity): Lattice => {
+    const [k0, k1] = sheet ? range(lo, hi, origin, pitch) : [-Infinity, Infinity];
+    return { origin, pitch, kMin: Math.max(k0, firstK), kMax: k1 };
+  };
+  if (axis === "x") {
+    switch (cfg.type) {
+      case "grid":
+      case "grid-uniform":
+      case "dot-grid":
+        return within(columnOrigin(cfg, originX), step);
+      default:
+        return null;
+    }
+  }
+  // On a sheet no ruled line is drawn on its top edge (k ≥ 1).
+  const skipTop = sheet ? 1 : -Infinity;
+  switch (cfg.type) {
+    case "ruled":
+    case "ruled-no-margin":
+    case "cornell":
+    case "columns":
+      return within(originY, step, skipTop);
+    case "grid":
+    case "grid-uniform":
+    case "dot-grid":
+      return within(originY, step);
+    case "isometric":
+      return within(originY, step * SIN60, skipTop);
+    case "hex":
+      return within(originY, step * SIN60);
+    case "handwriting": {
+      // Groups of three lines s/2 apart with s/2 between groups: every s/2 from originY + s/2.
+      // On a sheet only whole groups below its top edge: group g spans [s/2 + 1.5·s·g, + s].
+      if (!sheet) return within(originY, step / 2);
+      const lastGroup = Math.floor((sheet.y + sheet.height - originY - 1.5 * step) / (1.5 * step));
+      return { origin: originY, pitch: step / 2, kMin: 1, kMax: 3 * lastGroup + 3 };
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The nearest line (or row or column of dots) the painter draws across `axis` to `value`, in page
+ * units: `axis` "y" asks for a horizontal line (a y), "x" for a vertical one (an x). Null when the
+ * background draws none on that axis, and in page mode for a value off the sheets (on the desk or
+ * in a gap). Uses the pattern's own spacing, before any thinning for density.
+ */
+export function backgroundLineNear(cfg: BackgroundConfig, page: BackgroundPage, axis: "x" | "y", value: number): number | null {
+  if (!Number.isFinite(value)) return null;
+  let sheet: Rect | null = null;
+  if (page.mode === "page") {
+    if (axis === "y") {
+      const i = Math.floor(value / (page.height + PAGE_GAP));
+      if (i < 0 || (page.count !== undefined && i >= page.count)) return null;
+      sheet = sheetRect(page, i);
+      if (value > sheet.y + sheet.height) return null;
+    } else {
+      // Every sheet has the same columns.
+      sheet = sheetRect(page, 0);
+      if (value < sheet.x || value > sheet.x + sheet.width) return null;
+    }
+  }
+  const lat = latticeOf(cfg, axis, sheet?.x ?? 0, sheet?.y ?? 0, sheet);
+  if (!lat || !(lat.pitch > 0) || lat.kMin > lat.kMax) return null;
+  const k = Math.min(lat.kMax, Math.max(lat.kMin, Math.round((value - lat.origin) / lat.pitch)));
+  return lat.origin + k * lat.pitch;
 }
 
 export interface SurfaceColors {
@@ -304,13 +404,13 @@ export function paintBackground(
     ctx.fillStyle = surface.desk;
     ctx.fillRect(clip.x, clip.y, clip.width, clip.height);
     ctx.fillStyle = surface.paper;
-    const stride = page.height + PAGE_GAP;
     for (const i of visibleSheets(clip, page)) {
+      const sheet = sheetRect(page, i);
       ctx.beginPath();
       if (typeof ctx.roundRect === "function") {
-        ctx.roundRect(0, i * stride, page.width, page.height, PAGE_BORDER_RADIUS);
+        ctx.roundRect(sheet.x, sheet.y, sheet.width, sheet.height, PAGE_BORDER_RADIUS);
       } else {
-        ctx.rect(0, i * stride, page.width, page.height);
+        ctx.rect(sheet.x, sheet.y, sheet.width, sheet.height);
       }
       ctx.fill();
     }

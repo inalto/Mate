@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBackgroundPattern, type Line } from "../background";
+import { backgroundLineNear, buildBackgroundPattern, type Line } from "../background";
 import type { BackgroundType } from "../../model/types";
 
 const clip = { x: 0, y: 0, width: 600, height: 400 };
@@ -175,4 +175,80 @@ describe("background", () => {
       }
     });
   });
+});
+
+describe("backgroundLineNear", () => {
+  const two = { mode: "page" as const, width: 1080, height: 1528, count: 2 };
+  const stride = 1528 + 24; // PAGE_GAP
+  const cfgOf = (type: BackgroundType, spacing = 40) => ({ type, spacing, dotRadius: 1.5 });
+  /** Painted horizontal line ys (or dot rows) over both sheets. */
+  const paintedYs = (type: BackgroundType) => {
+    const { lines, dots } = buildBackgroundPattern(cfgOf(type), { x: 0, y: 0, width: 1080, height: stride + 1528 }, two, "light");
+    return [...lines.filter((l) => l.y1 === l.y2).map((l) => l.y1), ...dots.map((d) => d.y)];
+  };
+
+  it("ruled_answers_the_painted_line_nearest_97_and_no_vertical_line", () => {
+    const cfg = cfgOf("ruled");
+    expect(backgroundLineNear(cfg, canvas, "y", 97)).toBe(80);
+    expect(backgroundLineNear(cfg, canvas, "y", 101)).toBe(120);
+    // The margin is not a snap target.
+    expect(backgroundLineNear(cfg, canvas, "x", 97)).toBeNull();
+  });
+
+  it("grid_and_dots_answer_both_axes_with_the_offset", () => {
+    for (const type of ["grid", "grid-uniform", "dot-grid"] as const) {
+      const cfg = { ...cfgOf(type, 20), offsetX: 5 };
+      expect(backgroundLineNear(cfg, canvas, "y", 97), type).toBe(100);
+      expect(backgroundLineNear(cfg, canvas, "x", 31), type).toBe(25);
+    }
+  });
+
+  it("blank_custom_and_music_answer_nothing", () => {
+    for (const type of ["blank", "custom", "music"] as const) {
+      expect(backgroundLineNear(cfgOf(type), canvas, "y", 97), type).toBeNull();
+      expect(backgroundLineNear(cfgOf(type), canvas, "x", 97), type).toBeNull();
+    }
+  });
+
+  it("page_mode_answers_a_line_of_the_sheet_the_value_is_on", () => {
+    const cfg = cfgOf("ruled");
+    const v = stride + 97;
+    const got = backgroundLineNear(cfg, two, "y", v);
+    expect(got).toBe(stride + 80);
+    expect(paintedYs("ruled")).toContain(got);
+    // No line on a sheet's top edge: just below it the first line is the answer.
+    expect(backgroundLineNear(cfg, two, "y", stride + 3)).toBe(stride + 40);
+  });
+
+  it("page_mode_answers_nothing_in_the_gap_on_the_desk_or_past_the_last_sheet", () => {
+    const cfg = cfgOf("grid");
+    expect(backgroundLineNear(cfg, two, "y", 1528 + 10)).toBeNull();
+    expect(backgroundLineNear(cfg, two, "y", -5)).toBeNull();
+    expect(backgroundLineNear(cfg, two, "y", 2 * stride + 50)).toBeNull();
+    expect(backgroundLineNear(cfg, two, "x", -5)).toBeNull();
+    expect(backgroundLineNear(cfg, two, "x", 1090)).toBeNull();
+    expect(backgroundLineNear(cfg, two, "x", 1075)).toBe(1080);
+  });
+
+  it.each(["ruled", "ruled-no-margin", "grid", "dot-grid", "isometric", "hex", "handwriting", "cornell", "columns"] as BackgroundType[])(
+    "%s_answers_a_painted_line_and_none_painted_is_nearer",
+    (type) => {
+      const ys = paintedYs(type);
+      const regular = type === "cornell" || type === "columns" ? ys.filter((y) => Math.abs(y / 40 - Math.round(y / 40)) < 1e-9 || Math.abs((y - stride) / 40 - Math.round((y - stride) / 40)) < 1e-9) : ys;
+      for (let v = 0; v <= stride + 1528; v += 37) {
+        const got = backgroundLineNear(cfgOf(type), two, "y", v);
+        const onSheet = v <= 1528 || v >= stride;
+        if (!onSheet) {
+          expect(got, `${type} ${v}`).toBeNull();
+          continue;
+        }
+        expect(got, `${type} ${v}`).not.toBeNull();
+        expect(ys.some((y) => Math.abs(y - got!) < 1e-6), `${type} ${v} -> ${got}`).toBe(true);
+        const sheetTop = v >= stride ? stride : 0;
+        const sameSheet = regular.filter((y) => y >= sheetTop && y <= sheetTop + 1528);
+        const best = Math.min(...sameSheet.map((y) => Math.abs(y - v)));
+        expect(Math.abs(got! - v), `${type} ${v}`).toBeLessThanOrEqual(best + 1e-6);
+      }
+    },
+  );
 });

@@ -2,18 +2,23 @@
 // over the body (the body less the rim along each edge) that moves and turns the ruler, two rotate
 // handles and, at the middle of the visible part of the ruler, its angle readout. Nothing while the
 // ruler is off or the pane presents. Session-only view state: nothing here touches the page or its
-// history; only the ruler's pose and, for a plain wheel, the camera change.
+// history; only the ruler's pose, the smart guide of its position snap and, for a plain wheel, the
+// camera change.
 import { useEffect, useRef } from "react";
 import type { PointerEvent } from "react";
 import { screenToWorld, type Vec2 } from "../canvas/camera";
+import { backgroundLineNear, type BackgroundPage } from "../canvas/background";
 import { applyWheel, SNAP_BACK_MS } from "../canvas/gestures";
-import { clampToPage, type EditorStore } from "../stores/editor";
+import { guideCandidates, GUIDE_SNAP_PX } from "../canvas/toolInteractions";
+import { clampToPage, sheetStack, type EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
+import type { Guide } from "../tools/smartGuides";
 import { createRulerDrag, type RulerDrag } from "./drag";
 import { drawRuler, type RulerColors } from "./draw";
 import { angleStep, RULER_RIM_PX, RULER_WIDTH_PX, rotatePose, visibleSpan, type RulerPose } from "./pose";
 import RulerAngle from "./RulerAngle";
 import RulerHandles from "./RulerHandles";
+import { snapRulerPosition, type PositionTargets } from "./snapPosition";
 import "./ruler.css";
 
 const FALLBACK: RulerColors = { body: "rgba(110, 168, 230, 0.35)", edge: "#3d6fa8", ink: "#1c3c63" };
@@ -50,6 +55,7 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
   const frameRef = useRef<number | null>(null);
   const dragRef = useRef<RulerDrag | null>(null);
   const capturedRef = useRef(new Set<number>());
+  const guideShownRef = useRef(false);
 
   if (!dragRef.current) {
     dragRef.current = createRulerDrag({
@@ -98,8 +104,16 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
     [],
   );
 
+  /** Shows the position snap's guide, or none; the store is touched only when that changes. */
+  const showGuide = (guide: Guide | null) => {
+    if (!guide && !guideShownRef.current) return;
+    guideShownRef.current = guide !== null;
+    store.getState().setGuides(guide ? [guide] : []);
+  };
+
   /** Ends the drag of every pointer on the strip. */
   const releaseAll = () => {
+    showGuide(null);
     const drag = dragRef.current;
     for (const id of capturedRef.current) {
       drag?.up(id);
@@ -195,13 +209,39 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!capturedRef.current.has(e.pointerId)) return;
     e.stopPropagation();
-    const next = dragRef.current?.move(e.pointerId, toLocal(e));
-    if (next) store.getState().setRulerPose(next);
+    const drag = dragRef.current;
+    const next = drag?.move(e.pointerId, toLocal(e));
+    if (!next) return;
+    // One pointer only, and not while Shift is held. The drag keeps its own unsnapped pose, so the
+    // snap lets go as soon as the edge is past the threshold.
+    if (drag?.count() === 1 && !e.shiftKey) {
+      const snapped = snapRulerPosition(next, store.getState().camera, positionTargets(), GUIDE_SNAP_PX);
+      store.getState().setRulerPose(snapped.pose);
+      showGuide(snapped.guide);
+      return;
+    }
+    showGuide(null);
+    store.getState().setRulerPose(next);
+  };
+
+  /** Background lines while snapToGrid is on, element sides and centres while smartGuides is on. */
+  const positionTargets = (): PositionTargets => {
+    const s = store.getState();
+    const settings = useSettingsStore.getState().settings;
+    const page = s.page;
+    let lineNear: PositionTargets["lineNear"] = () => null;
+    if (settings.snapToGrid && page) {
+      const stack = sheetStack(s);
+      const bgPage: BackgroundPage = { mode: page.mode, width: stack.width, height: stack.height, count: stack.count };
+      lineNear = (axis, v) => backgroundLineNear(page.backgroundConfig, bgPage, axis, v);
+    }
+    return { lineNear, rects: settings.smartGuides ? guideCandidates(store, new Set()) : [], viewport: s.viewport };
   };
 
   const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
     if (!capturedRef.current.delete(e.pointerId)) return;
     dragRef.current?.up(e.pointerId);
+    if (capturedRef.current.size === 0) showGuide(null);
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
