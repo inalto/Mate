@@ -39,6 +39,11 @@ export function snapRulerAngle(deg: number, step: number): number {
   return Math.abs(deg - nearest) <= magnet ? normalizeAngle(nearest) : deg;
 }
 
+/** One keyboard or wheel turn in degrees: the snap step (1° when off), or 0.1° when `fine`. */
+export function angleStep(snap: number, fine: boolean): number {
+  return fine ? 0.1 : snap > 0 ? snap : 1;
+}
+
 export function rulerDir(pose: RulerPose): Vec2 {
   const a = pose.angle * RAD;
   return { x: Math.cos(a), y: -Math.sin(a) };

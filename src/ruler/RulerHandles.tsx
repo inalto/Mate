@@ -8,7 +8,7 @@ import { screenToWorld, worldToScreen, type Camera, type Vec2, type Viewport } f
 import type { EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import { angleDelta, screenAngle } from "./drag";
-import { rotatePose, snapRulerAngle, visibleSpan, type RulerPose } from "./pose";
+import { angleStep, rotatePose, snapRulerAngle, visibleSpan, type RulerPose } from "./pose";
 
 const HANDLE_INSET_PX = 48;
 const SHORT_SPAN_PX = 160;
@@ -33,7 +33,7 @@ function pivotOf(pose: RulerPose, camera: Camera, viewport: Viewport): Vec2 | nu
   return span ? mid(span) : null;
 }
 
-const angleStep = (): number => useSettingsStore.getState().settings.rulerAngleSnap;
+const snapSetting = (): number => useSettingsStore.getState().settings.rulerAngleSnap;
 
 interface HandleDrag {
   id: number;
@@ -116,7 +116,7 @@ export default function RulerHandles({
     const a = screenAngle(d.pivot, p);
     d.raw += angleDelta(d.last, a);
     d.last = a;
-    turnTo(pose, d.pivotWorld, e.shiftKey ? d.raw : snapRulerAngle(d.raw, angleStep()));
+    turnTo(pose, d.pivotWorld, e.shiftKey ? d.raw : snapRulerAngle(d.raw, snapSetting()));
   };
 
   const onPointerEnd = (e: PointerEvent<HTMLButtonElement>) => {
@@ -129,11 +129,12 @@ export default function RulerHandles({
     e.preventDefault();
     e.stopPropagation();
     const s = store.getState();
+    // A guided stroke freezes the edge at pen-down.
+    if (s.rulerGuiding) return;
     const pose = s.ruler.pose;
     const pivot = pose && pivotOf(pose, s.camera, s.viewport);
     if (!pose || !pivot) return;
-    const snap = angleStep();
-    const step = e.shiftKey ? 0.1 : snap > 0 ? snap : 1;
+    const step = angleStep(snapSetting(), e.shiftKey);
     s.setRulerPose(rotatePose(pose, screenToWorld(s.camera, pivot), dir * step));
   };
 

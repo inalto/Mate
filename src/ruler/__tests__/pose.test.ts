@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "../../canvas/camera";
 import {
   alongUnits,
+  angleStep,
   defaultPose,
   edgeLine,
   normalizeAngle,
@@ -48,6 +49,13 @@ describe("angles", () => {
     expect(snapRulerAngle(0.4, 1)).toBe(0);
     expect(snapRulerAngle(33.3, 0)).toBe(33.3);
     expect(snapRulerAngle(359, 15)).toBe(0);
+  });
+
+  it("turns by the snap step, 1° when the snap is off, 0.1° when fine", () => {
+    expect(angleStep(15, false)).toBe(15);
+    expect(angleStep(0, false)).toBe(1);
+    expect(angleStep(15, true)).toBe(0.1);
+    expect(angleStep(0, true)).toBe(0.1);
   });
 
   it("never snaps by more than half a step", () => {

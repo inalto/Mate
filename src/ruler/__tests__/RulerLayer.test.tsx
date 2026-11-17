@@ -97,13 +97,40 @@ describe("RulerLayer: moving the ruler", () => {
     showRuler();
     act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 0 }));
     const hit = hitStrip();
-    expect(hit.style.width).toBe("1200px");
+    // The visible span (800) plus twice the pane's diagonal (2 × 1000), centred on the span.
+    expect(hit.style.width).toBe("2800px");
     expect(hit.style.height).toBe("94px");
-    expect(hit.style.left).toBe("-200px");
+    expect(hit.style.left).toBe("-1000px");
     expect(hit.style.top).toBe("253px");
     expect(hit.style.transform).toBe("rotate(0deg)");
     act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 30 }));
     expect(hitStrip().style.transform).toBe("rotate(-30deg)");
+  });
+
+  it("releases its pointers when a drag carries the ruler off the pane", () => {
+    showRuler();
+    down(hitStrip(), 400, 300, 1);
+    move(hitStrip(), 400, 1000, 1);
+    // The centreline is below the pane: no strip, and no pointerup will reach it.
+    expect(document.querySelector(".ruler-hit")).toBeNull();
+    act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 0 }));
+    // A fresh touch id moves the ruler on its own, without turning about a phantom first finger.
+    down(hitStrip(), 400, 300, 7);
+    move(hitStrip(), 420, 310, 7);
+    expect(pose()).toEqual({ x: 420, y: 310, angle: 0 });
+    // And a second fresh contact is still accepted as the pair's second finger.
+    down(hitStrip(), 500, 310, 8);
+    move(hitStrip(), 520, 310, 8);
+    expect(pose().angle).toBe(0);
+    expect(pose().x).toBeCloseTo(430, 9);
+  });
+
+  it("ignores Alt+wheel while a guided stroke is being drawn", () => {
+    showRuler();
+    act(() => store.getState().setRulerGuiding(true));
+    const start = pose();
+    act(() => void fireEvent.wheel(hitStrip(), { deltaY: -100, altKey: true, clientX: 400, clientY: 300 }));
+    expect(pose()).toEqual(start);
   });
 
   it("moves the ruler with a pointer on the strip, without pan, drawing or an undo step", () => {
@@ -279,6 +306,13 @@ describe("RulerLayer: rotate handles", () => {
     expect(pose().y).toBeCloseTo(300, 9);
   });
 
+  it("ignores the arrow keys while a guided stroke is being drawn", () => {
+    showRuler();
+    act(() => store.getState().setRulerGuiding(true));
+    act(() => void fireEvent.keyDown(handles()[0], { key: "ArrowRight" }));
+    expect(pose().angle).toBe(0);
+  });
+
   it("turns by 1° per arrow key when the snap is off", () => {
     useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, rulerAngleSnap: 0 } });
     showRuler();
@@ -354,6 +388,17 @@ describe("RulerLayer: angle field", () => {
     act(() => void fireEvent.blur(field()));
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(pose()).toEqual(start);
+  });
+
+  it("does not apply a typed angle while a guided stroke is being drawn", () => {
+    showRuler();
+    const start = pose();
+    open();
+    typeIn("30");
+    act(() => store.getState().setRulerGuiding(true));
+    key("Enter");
+    expect(pose()).toEqual(start);
+    expect(field().getAttribute("aria-invalid")).toBeNull();
   });
 
   it("keeps the field inside the pane", () => {

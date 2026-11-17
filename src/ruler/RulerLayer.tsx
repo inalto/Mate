@@ -11,14 +11,12 @@ import { clampToPage, type EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import { createRulerDrag, type RulerDrag } from "./drag";
 import { drawRuler, type RulerColors } from "./draw";
-import { RULER_RIM_PX, RULER_WIDTH_PX, rotatePose, visibleSpan, type RulerPose } from "./pose";
+import { angleStep, RULER_RIM_PX, RULER_WIDTH_PX, rotatePose, visibleSpan, type RulerPose } from "./pose";
 import RulerAngle from "./RulerAngle";
 import RulerHandles from "./RulerHandles";
 import "./ruler.css";
 
 const FALLBACK: RulerColors = { body: "rgba(110, 168, 230, 0.35)", edge: "#3d6fa8", ink: "#1c3c63" };
-/** The hit strip runs past the visible span so its rounded-off ends never show inside the pane. */
-const HIT_OVERRUN_PX = 400;
 const HIT_HEIGHT_PX = RULER_WIDTH_PX - 2 * RULER_RIM_PX;
 
 /** The ruler's colours from the theme tokens (re-read when the theme changes). */
@@ -130,6 +128,15 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
   const span = visibleSpan(pose, camera, viewport);
   const hasSpan = span !== null;
 
+  // A drag can carry the centreline off the pane: the strip then unmounts and no pointerup reaches
+  // it, so its pointers are released here (touch and pen ids are fresh per contact and would leak).
+  // Turning the ruler off, presenting and unmounting are covered by the cleanup above.
+  useEffect(() => {
+    if (!hasSpan) releaseAll();
+    // releaseAll reads refs only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasSpan]);
+
   // Wheel over the strip: Alt turns the ruler, otherwise the page scrolls or zooms as elsewhere.
   // Native and non-passive so preventDefault holds.
   useEffect(() => {
@@ -144,11 +151,13 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
       if (!cur) return;
       const settings = useSettingsStore.getState().settings;
       if (e.altKey) {
+        // A guided stroke freezes the edge at pen-down.
+        if (s.rulerGuiding) return;
         // Shift+wheel may arrive as a horizontal delta.
         const d = e.deltaY !== 0 ? e.deltaY : e.deltaX;
         const sp = visibleSpan(cur, s.camera, s.viewport);
         if (d === 0 || !sp) return;
-        const step = e.shiftKey ? 0.1 : settings.rulerAngleSnap > 0 ? settings.rulerAngleSnap : 1;
+        const step = angleStep(settings.rulerAngleSnap, e.shiftKey);
         s.setRulerPose(rotatePose(cur, screenToWorld(s.camera, mid(sp)), d < 0 ? step : -step));
         return;
       }
@@ -201,7 +210,11 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
   };
 
   const centre = span ? mid(span) : null;
-  const hitLength = span ? Math.hypot(span[1].x - span[0].x, span[1].y - span[0].y) + HIT_OVERRUN_PX : 0;
+  // Past the span by twice the pane's diagonal on the whole, so the body is grabbable wherever it
+  // shows at every angle; the layer clips the rest.
+  const hitLength = span
+    ? Math.hypot(span[1].x - span[0].x, span[1].y - span[0].y) + 2 * Math.hypot(viewport.width, viewport.height)
+    : 0;
   return (
     <div ref={layerRef} className="ruler-layer">
       <canvas

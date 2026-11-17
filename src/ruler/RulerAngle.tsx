@@ -80,6 +80,8 @@ export default function RulerAngle({
     const value = parseAngle(text);
     if (value === null) return setInvalid(true);
     const s = store.getState();
+    // A guided stroke freezes the edge at pen-down: the field stays open, to apply afterwards.
+    if (s.rulerGuiding) return;
     const cur = s.ruler.pose;
     const span = cur && visibleSpan(cur, s.camera, s.viewport);
     if (cur && span) {
