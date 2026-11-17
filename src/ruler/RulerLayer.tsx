@@ -9,7 +9,7 @@ import type { PointerEvent } from "react";
 import { screenToWorld, type Vec2 } from "../canvas/camera";
 import { backgroundLineNear, type BackgroundPage } from "../canvas/background";
 import { applyWheel, SNAP_BACK_MS, wheelDeltaScale } from "../canvas/gestures";
-import { noteStylusSeen, STYLUS_SEEN_WINDOW_MS, stylusSeenAt, touchRejected, type PalmRejection } from "../canvas/input";
+import { DEFINITE_PALM_RADIUS, noteStylusSeen } from "../canvas/input";
 import { guideCandidates, GUIDE_SNAP_PX } from "../canvas/toolInteractions";
 import { isCover } from "../covers/cover";
 import type { Element as PageElement } from "../model/types";
@@ -236,11 +236,12 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
     if (store.getState().rulerGuiding) return;
     const touch = e.pointerType === "touch";
     if (touch) {
-      // A palm is ignored here as on the page: it neither moves the ruler nor reaches the canvas. A
-      // fingertip right after the pen is fine: moving the ruler while holding the pen is the gesture.
-      const settings = useSettingsStore.getState().settings;
-      const stylusRecent = e.timeStamp - stylusSeenAt() < STYLUS_SEEN_WINDOW_MS;
-      if (touchRejected(e, settings.palmRejection as PalmRejection, settings.fingerAction, stylusRecent) === "palm") {
+      // Only a definite palm (radius above 45 px) is ignored, unless palm rejection is off: a finger
+      // moving the ruler while the pen is in the other hand, or right after writing, is the normal
+      // gesture, so the smaller palm thresholds and the "stylus seen" window do not apply here; the
+      // slop absorbs small accidental contacts.
+      const radius = Math.max(e.width || 0, e.height || 0) / 2;
+      if (useSettingsStore.getState().settings.palmRejection !== "off" && radius > DEFINITE_PALM_RADIUS) {
         e.preventDefault();
         e.stopPropagation();
         return;

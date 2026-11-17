@@ -597,26 +597,43 @@ describe("RulerLayer: touch on the body", () => {
     up(hitStrip(), 430, 300, 1);
   });
 
-  it("judges a wide fingertip against the pen last seen anywhere (palm rejection high)", () => {
-    showRuler();
-    const start = pose();
-    const touchAt = (type: string, x: number, id: number, timeStamp: number) =>
+  describe("only a definite palm is refused, even right after the pen", () => {
+    const touchAt = (type: string, x: number, id: number, size: number, timeStamp: number) =>
       act(() => {
-        const ev = new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: id, pointerType: "touch", clientX: x, clientY: 300, width: 30, height: 30 });
+        const ev = new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: id, pointerType: "touch", clientX: x, clientY: 300, width: size, height: size });
         Object.defineProperty(ev, "timeStamp", { value: timeStamp });
         hitStrip().dispatchEvent(ev);
       });
-    // The pen wrote on the page 100 ms ago: a 30 px contact is a palm.
-    noteStylusSeen(10_000);
-    touchAt("pointerdown", 400, 1, 10_100);
-    touchAt("pointermove", 440, 1, 10_120);
-    expect(pose()).toEqual(start);
-    touchAt("pointerup", 440, 1, 10_140);
-    // Three seconds later the same contact is a finger.
-    touchAt("pointerdown", 400, 2, 13_000);
-    touchAt("pointermove", 410, 2, 13_020);
-    touchAt("pointermove", 440, 2, 13_040);
-    expect(pose()).toEqual({ x: start.x + 30, y: start.y, angle: 0 });
+    /** A drag of 40 px (past the 6 px slop at 410) 500 ms after a stylus was seen. */
+    const dragWith = (size: number) => {
+      noteStylusSeen(10_000);
+      touchAt("pointerdown", 400, 1, size, 10_500);
+      touchAt("pointermove", 410, 1, size, 10_520);
+      touchAt("pointermove", 440, 1, size, 10_540);
+      touchAt("pointerup", 440, 1, size, 10_560);
+    };
+
+    it("refuses a contact of radius 50", () => {
+      showRuler();
+      const start = pose();
+      dragWith(100);
+      expect(pose()).toEqual(start);
+    });
+
+    it("moves with a contact of radius 30 after the slop", () => {
+      showRuler();
+      const start = pose();
+      dragWith(60);
+      expect(pose()).toEqual({ x: start.x + 30, y: start.y, angle: 0 });
+    });
+
+    it("moves with a contact of radius 50 when palm rejection is off", () => {
+      useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, palmRejection: "off" } });
+      showRuler();
+      const start = pose();
+      dragWith(100);
+      expect(pose()).toEqual({ x: start.x + 30, y: start.y, angle: 0 });
+    });
   });
 
   it("moves with a pen from the first pixel", () => {
