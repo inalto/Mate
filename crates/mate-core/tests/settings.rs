@@ -182,6 +182,26 @@ fn graph_presets_default_empty_and_round_trip_camel_case() {
 }
 
 #[test]
+fn ruler_defaults_and_old_files() {
+    let s: Settings = serde_json::from_str("{}").unwrap();
+    assert_eq!(s.ruler_units, "both");
+    assert_eq!(s.ruler_angle_snap, 15.0);
+    assert_eq!(s.ruler_length_snap, "off");
+
+    let s: Settings = serde_json::from_str(
+        r#"{"rulerUnits":"metric","rulerAngleSnap":5,"rulerLengthSnap":"1/8in"}"#,
+    )
+    .unwrap();
+    assert_eq!(s.ruler_units, "metric");
+    assert_eq!(s.ruler_angle_snap, 5.0);
+    assert_eq!(s.ruler_length_snap, "1/8in");
+    let out = serde_json::to_value(&s).unwrap();
+    assert_eq!(out["rulerUnits"], "metric");
+    assert_eq!(out["rulerAngleSnap"], 5.0);
+    assert_eq!(out["rulerLengthSnap"], "1/8in");
+}
+
+#[test]
 fn cover_defaults_and_old_files() {
     let s: Settings = serde_json::from_str("{}").unwrap();
     assert_eq!(s.default_cover_color, "#334155");

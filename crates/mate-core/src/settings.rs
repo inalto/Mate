@@ -159,6 +159,12 @@ pub struct Settings {
     pub snap_to_grid: bool,
     /// Snap a moved or resized selection to other elements' edges and centres (smart guides).
     pub smart_guides: bool,
+    /// Ruler scales: "both" (metric and imperial), "metric" or "imperial".
+    pub ruler_units: String,
+    /// Ruler angle snap step in degrees (0 = off).
+    pub ruler_angle_snap: f64,
+    /// Ruler length snap: "off", "1mm", "5mm", "1cm", "1/8in" or "1/4in".
+    pub ruler_length_snap: String,
     pub pen_barrel_button_action: String,
     pub pen_eraser_button_action: String,
     pub scroll_behavior: String,
@@ -289,6 +295,9 @@ impl Default for Settings {
             palm_rejection: s("high"),
             snap_to_grid: false,
             smart_guides: true,
+            ruler_units: s("both"),
+            ruler_angle_snap: 15.0,
+            ruler_length_snap: s("off"),
             pen_barrel_button_action: s("eraser"),
             pen_eraser_button_action: s("eraser"),
             scroll_behavior: s("pan"),

@@ -4,6 +4,8 @@
 import type { GraphDomain, GraphExpression, GraphKind } from "../graph/data";
 
 export type PageMode = "canvas" | "page";
+export type RulerUnits = "both" | "metric" | "imperial";
+export type RulerLengthSnap = "off" | "1mm" | "5mm" | "1cm" | "1/8in" | "1/4in";
 export type PenStyle = "pen" | "highlighter" | "fountain-pen" | "pencil" | "cover";
 export type ElementType =
   | "stroke"
@@ -401,6 +403,11 @@ export interface Settings {
   snapToGrid: boolean;
   /** Snap a moved or resized selection to other elements' edges and centres. */
   smartGuides: boolean;
+  /** Ruler scales: metric on one edge and imperial on the other, or one system on both. */
+  rulerUnits: RulerUnits;
+  /** Ruler angle snap step in degrees (0 = off). */
+  rulerAngleSnap: number;
+  rulerLengthSnap: RulerLengthSnap;
   penBarrelButtonAction: string;
   penEraserButtonAction: string;
   scrollBehavior: string;
