@@ -554,6 +554,7 @@
     "actions": {
       "straightLines": "直線の切り替え",
       "autoShapes": "図形の自動整形の切り替え",
+      "ruler": "Show or hide the ruler",
       "pen": "ペン",
       "highlighter": "蛍光ペン",
       "cover": "カバーツール",
@@ -652,6 +653,7 @@
       "insertSpace": "スペース挿入に切り替え"
     },
     "insertText": "テキストボックスを挿入",
+    "ruler": "Show or hide the ruler",
     "insertCode": "コードブロックを挿入",
     "insertTable": "表を挿入",
     "insertGraph": "グラフを挿入",
@@ -690,6 +692,7 @@
   "toolbar": {
     "straightLines": "直線",
     "autoShapes": "図形を自動整形",
+    "ruler": "Ruler",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

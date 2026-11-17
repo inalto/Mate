@@ -77,6 +77,7 @@ import { frameCamera } from "../canvas/presentCamera";
 import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tree";
 import type { MindmapLayoutMode } from "../mindmap/layout";
 import type { MindmapStyle } from "../mindmap/styles";
+import { defaultPose, visibleSpan, type RulerPose } from "../ruler/pose";
 
 export type ToolId = "pen" | "highlighter" | "fountain-pen" | "cover" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
@@ -120,6 +121,10 @@ export interface EditorState {
   panHold: boolean;
   /** Session-only: strokes keep just their first and last point. */
   straightLines: boolean;
+  /** Session-only view state, never an element: the ruler's visibility and pose (page units). Kept across `loadPage`. */
+  ruler: { on: boolean; pose: RulerPose | null };
+  /** A guided stroke is in progress (the ruler ignores new pointers meanwhile). */
+  rulerGuiding: boolean;
   /** Session-only: every ink stroke that reads as a shape, line, arrow or curve becomes one on pen-up. */
   autoShapes: boolean;
   canUndo: boolean;
@@ -356,6 +361,10 @@ export interface EditorState {
   setPanHold(held: boolean): void;
   setStraightLines(v: boolean): void;
   toggleStraightLines(): void;
+  /** Show or hide the ruler; showing it with no pose, or one out of view, centres it in the pane. */
+  toggleRuler(): void;
+  setRulerPose(pose: RulerPose): void;
+  setRulerGuiding(on: boolean): void;
   toggleAutoShapes(): void;
   /** Erase at a world point with the settings' eraser; one drag is one history entry (endEraser). */
   eraser(center: Vec2): void;
@@ -657,6 +666,8 @@ export function createEditorStore(): EditorStore {
     tempTool: null,
     panHold: false,
     straightLines: false,
+    ruler: { on: false, pose: null },
+    rulerGuiding: false,
     autoShapes: false,
     canUndo: false,
     canRedo: false,
@@ -1388,6 +1399,20 @@ export function createEditorStore(): EditorStore {
       if (get().straightLines !== straightLines) set({ straightLines });
     },
     toggleStraightLines: () => set({ straightLines: !get().straightLines }),
+    toggleRuler: () => {
+      const { ruler, camera, viewport } = get();
+      if (ruler.on) return set({ ruler: { on: false, pose: ruler.pose } });
+      const pose = ruler.pose && visibleSpan(ruler.pose, camera, viewport) !== null ? ruler.pose : defaultPose(camera, viewport);
+      set({ ruler: { on: true, pose } });
+    },
+    setRulerPose: (pose) => {
+      const cur = get().ruler.pose;
+      if (cur && cur.x === pose.x && cur.y === pose.y && cur.angle === pose.angle) return;
+      set({ ruler: { on: get().ruler.on, pose } });
+    },
+    setRulerGuiding: (rulerGuiding) => {
+      if (get().rulerGuiding !== rulerGuiding) set({ rulerGuiding });
+    },
     toggleAutoShapes() {
       const s = get();
       const on = !s.autoShapes;

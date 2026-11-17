@@ -557,6 +557,7 @@
     "actions": {
       "straightLines": "Gerade Linien umschalten",
       "autoShapes": "Perfekte Formen umschalten",
+      "ruler": "Show or hide the ruler",
       "pen": "Stift",
       "highlighter": "Markierer",
       "cover": "Abdeckwerkzeug",
@@ -655,6 +656,7 @@
       "insertSpace": "Zu Platz einfügen wechseln"
     },
     "insertText": "Textfeld einfügen",
+    "ruler": "Show or hide the ruler",
     "insertCode": "Codeblock einfügen",
     "insertTable": "Tabelle einfügen",
     "insertGraph": "Graph einfügen",
@@ -693,6 +695,7 @@
   "toolbar": {
     "straightLines": "Gerade Linien",
     "autoShapes": "Perfekte Formen",
+    "ruler": "Ruler",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

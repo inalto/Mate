@@ -88,6 +88,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
   switchTo("tool.connector", ["arrow", "flowchart", "link"]),
   switchTo("tool.text", ["type"]),
   switchTo("tool.insertSpace", ["gap"]),
+  { id: "view.ruler", labelKey: "palette.ruler", synonyms: ["ruler", "righello", "straightedge", "measure"], scope: "editor", shortcut: "view.ruler", run: viaKeys("view.ruler") },
   plain("zoom.in", "editor", ["magnify"]),
   plain("zoom.out", "editor", ["shrink"]),
   plain("zoom.reset", "editor", ["100%", "actual size"]),

@@ -289,6 +289,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   switch (action) {
     case "ink.straight":
       return s.toggleStraightLines();
+    case "view.ruler":
+      return s.toggleRuler();
     case "ink.shapes":
       return s.toggleAutoShapes();
     case "tool.pen":

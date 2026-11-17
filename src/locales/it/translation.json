@@ -554,6 +554,7 @@
     "actions": {
       "straightLines": "Attiva/disattiva linee dritte",
       "autoShapes": "Attiva/disattiva forme perfette",
+      "ruler": "Mostra o nascondi il righello",
       "pen": "Penna",
       "highlighter": "Evidenziatore",
       "cover": "Strumento copertura",
@@ -652,6 +653,7 @@
       "insertSpace": "Passa a inserisci spazio"
     },
     "insertText": "Inserisci una casella di testo",
+    "ruler": "Mostra o nascondi il righello",
     "insertCode": "Inserisci un blocco di codice",
     "insertTable": "Inserisci una tabella",
     "insertGraph": "Inserisci un grafico",
@@ -690,6 +692,7 @@
   "toolbar": {
     "straightLines": "Linee dritte",
     "autoShapes": "Forme perfette",
+    "ruler": "Righello",
     "finger": {
       "auto": "Dita: automatico",
       "draw": "Le dita disegnano",

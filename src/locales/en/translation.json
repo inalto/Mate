@@ -554,6 +554,7 @@
     "actions": {
       "straightLines": "Toggle straight lines",
       "autoShapes": "Toggle perfect shapes",
+      "ruler": "Show or hide the ruler",
       "pen": "Pen",
       "highlighter": "Highlighter",
       "cover": "Cover tool",
@@ -652,6 +653,7 @@
       "insertSpace": "Switch to insert space"
     },
     "insertText": "Insert text box",
+    "ruler": "Show or hide the ruler",
     "insertCode": "Insert code block",
     "insertTable": "Insert table",
     "insertGraph": "Insert graph",
@@ -690,6 +692,7 @@
   "toolbar": {
     "straightLines": "Straight lines",
     "autoShapes": "Perfect shapes",
+    "ruler": "Ruler",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

@@ -6,6 +6,7 @@ export type ShortcutAction =
   | "tool.pen"
   | "ink.straight"
   | "ink.shapes"
+  | "view.ruler"
   | "tool.highlighter"
   | "tool.cover"
   | "tool.eraser"
@@ -76,6 +77,7 @@ export interface ActionMeta {
 export const ACTION_META: Record<ShortcutAction, ActionMeta> = {
   "ink.straight": { labelKey: "keys.actions.straightLines", group: "tools", defaultKeys: ["Shift+L"] },
   "ink.shapes": { labelKey: "keys.actions.autoShapes", group: "tools", defaultKeys: ["Shift+S"] },
+  "view.ruler": { labelKey: "keys.actions.ruler", group: "view", defaultKeys: ["R"] },
   "tool.pen": { labelKey: "keys.actions.pen", group: "tools", defaultKeys: ["P"] },
   "tool.highlighter": { labelKey: "keys.actions.highlighter", group: "tools", defaultKeys: ["H"] },
   "tool.cover": { labelKey: "keys.actions.cover", group: "tools", defaultKeys: ["O"] },

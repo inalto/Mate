@@ -59,6 +59,21 @@ describe("Toolbar", () => {
     expect(btn().getAttribute("aria-pressed")).toBe("false");
   });
 
+  it("ruler_toggle_is_pressed_when_on_and_its_title_carries_the_key", () => {
+    setPlatformForTests(false);
+    useEditorStore.setState({ ruler: { on: false, pose: null } });
+    renderBar();
+    const btn = () => screen.getByRole("button", { name: "Ruler" });
+    expect(btn().getAttribute("aria-pressed")).toBe("false");
+    expect(btn().getAttribute("title")).toContain("R");
+    fireEvent.click(btn());
+    expect(useEditorStore.getState().ruler.on).toBe(true);
+    expect(btn().getAttribute("aria-pressed")).toBe("true");
+    expect(btn().className).toContain("active");
+    act(() => useEditorStore.getState().toggleRuler());
+    expect(btn().getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("finger_toggle_only_on_mobile_and_cycles_draw_pan", () => {
     setPlatformForTests(false);
     renderBar();

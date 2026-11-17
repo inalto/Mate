@@ -665,6 +665,21 @@ function StraightToggle() {
   );
 }
 
+/** The ruler: a straightedge over the page, per pane, never part of the note. */
+function RulerToggle() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const on = ed((s) => s.ruler.on);
+  return (
+    <HintButton action="view.ruler" label={t("toolbar.ruler")} className={on ? "tb-btn active" : "tb-btn"} pressed={on} onClick={() => ed.getState().toggleRuler()}>
+      <svg width={18} height={18} viewBox="0 0 256 256" fill="none" stroke="currentColor" strokeWidth={16} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="24" y="84" width="208" height="88" rx="8" />
+        <path d="M64 84v28M104 84v20M144 84v28M184 84v20" />
+      </svg>
+    </HintButton>
+  );
+}
+
 /** Perfect-shapes mode: each stroke that reads as a shape, line, arrow or curve becomes one on pen-up. */
 function AutoShapesToggle() {
   const { t } = useTranslation();
@@ -858,6 +873,7 @@ export default function Toolbar() {
       <InsertSpaceButton />
       {isMobile() && <FingerToggle />}
       <StraightToggle />
+      <RulerToggle />
       <AutoShapesToggle />
       <span className="tb-sep" />
       <HintButton action="undo" label={t("keys.actions.undo")} disabled={!canUndo} onClick={() => s().undo()}>

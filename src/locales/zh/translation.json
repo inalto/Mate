@@ -554,6 +554,7 @@
     "actions": {
       "straightLines": "切换直线",
       "autoShapes": "切换自动规整图形",
+      "ruler": "Show or hide the ruler",
       "pen": "笔",
       "highlighter": "荧光笔",
       "cover": "遮盖工具",
@@ -652,6 +653,7 @@
       "insertSpace": "切换到插入空白"
     },
     "insertText": "插入文本框",
+    "ruler": "Show or hide the ruler",
     "insertCode": "插入代码块",
     "insertTable": "插入表格",
     "insertGraph": "插入图形",
@@ -690,6 +692,7 @@
   "toolbar": {
     "straightLines": "直线",
     "autoShapes": "自动规整图形",
+    "ruler": "Ruler",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

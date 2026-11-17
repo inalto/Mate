@@ -73,6 +73,15 @@ describe("runEditorShortcut", () => {
     expect(useEditorStore.getState().straightLines).toBe(false);
   });
 
+  it("view_ruler_toggles_the_focused_panes_ruler", () => {
+    useEditorStore.setState({ ruler: { on: false, pose: null } });
+    runEditorShortcut("view.ruler", {});
+    expect(useEditorStore.getState().ruler.on).toBe(true);
+    expect(useEditorStore.getState().ruler.pose).not.toBeNull();
+    runEditorShortcut("view.ruler", {});
+    expect(useEditorStore.getState().ruler.on).toBe(false);
+  });
+
   it("ctrl_d_duplicates_selection_else_page", () => {
     runEditorShortcut("duplicate", {});
     expect(useNotebookStore.getState().duplicatePage).toHaveBeenCalledWith("b");

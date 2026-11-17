@@ -557,6 +557,7 @@
     "actions": {
       "straightLines": "Alternar linhas retas",
       "autoShapes": "Alternar formas perfeitas",
+      "ruler": "Show or hide the ruler",
       "pen": "Caneta",
       "highlighter": "Marca-texto",
       "cover": "Ferramenta de cobertura",
@@ -655,6 +656,7 @@
       "insertSpace": "Mudar para inserir espaço"
     },
     "insertText": "Inserir caixa de texto",
+    "ruler": "Show or hide the ruler",
     "insertCode": "Inserir bloco de código",
     "insertTable": "Inserir tabela",
     "insertGraph": "Inserir grafo",
@@ -693,6 +695,7 @@
   "toolbar": {
     "straightLines": "Linhas retas",
     "autoShapes": "Formas perfeitas",
+    "ruler": "Ruler",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
