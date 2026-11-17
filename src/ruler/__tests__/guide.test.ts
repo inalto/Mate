@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Camera } from "../../canvas/camera";
 import type { Point } from "../../model/types";
-import { drawLengthReadout, guideFor, guidedLength, projectOnLine, snapGuidedLength } from "../guide";
+import { drawLengthReadout, finalGuidedLength, finishGuided, guideFor, guidedLength, projectOnLine, snapGuidedLength } from "../guide";
 import { edgeLine, type Line, type RulerPose } from "../pose";
 
 const cam: Camera = { x: 30, y: -20, z: 2 };
@@ -100,6 +100,31 @@ describe("snapGuidedLength", () => {
   });
 });
 
+describe("finalGuidedLength / finishGuided", () => {
+  const snap = { step: 10, minLength: 6 };
+
+  it("snaps a stroke at least minLength long and leaves shorter ones as drawn", () => {
+    expect(finalGuidedLength(run(23), horizontal, snap)).toBe(20);
+    expect(finalGuidedLength(run(-7), horizontal, snap)).toBe(-10);
+    expect(finalGuidedLength(run(5), horizontal, snap)).toBe(5); // a still press or a stroke across the ruler
+    expect(finalGuidedLength([pt(0, 50)], horizontal, snap)).toBe(0);
+    expect(finalGuidedLength(run(23), horizontal, { step: 0, minLength: 6 })).toBe(23);
+  });
+
+  it("keeps the length drawn when the snapped end does not fit", () => {
+    const fits = (end: { x: number }) => end.x <= 25;
+    expect(finalGuidedLength(run(27), horizontal, { ...snap, fits })).toBe(27);
+    expect(finalGuidedLength(run(23), horizontal, { ...snap, fits })).toBe(20);
+  });
+
+  it("finishGuided ends the points at that length, or returns them unchanged", () => {
+    const pts = run(23);
+    expect(guidedLength(finishGuided(pts, horizontal, snap), horizontal)).toBeCloseTo(20, 9);
+    const short = run(4);
+    expect(finishGuided(short, horizontal, snap)).toBe(short);
+  });
+});
+
 describe("drawLengthReadout", () => {
   it("draws the text centred on the point given, on a plate", () => {
     const calls: string[] = [];
@@ -115,7 +140,7 @@ describe("drawLengthReadout", () => {
       fill: () => calls.push("fill"),
       fillText: (t: string, x: number, y: number) => calls.push(`text ${t} ${x} ${y}`),
     } as unknown as CanvasRenderingContext2D;
-    drawLengthReadout(ctx, { x: 40, y: 60 }, "12.5 cm", 2);
+    drawLengthReadout(ctx, { x: 40, y: 60 }, "12.5 cm", 2, { plate: "#fff", ink: "#123" });
     expect(ctx.setTransform).toHaveBeenCalledWith(2, 0, 0, 2, 0, 0);
     expect(calls).toEqual(["fill", "text 12.5 cm 40 60"]);
   });

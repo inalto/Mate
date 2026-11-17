@@ -343,6 +343,64 @@ describe("strokes along the ruler's edge", () => {
     expect(Math.abs(guidedLength(dot.points, line))).toBeLessThan(1);
   });
 
+  it("with a 1 cm length snap a press held still in the band commits a dot, not a centimetre", async () => {
+    await mount();
+    setSettings({ rulerLengthSnap: "1cm" });
+    rulerOn();
+    const at = { x: 300, y: EDGE_Y - 10 };
+    down(at);
+    for (let i = 0; i < 5; i++) {
+      clock += 100;
+      moveTo([at]);
+    }
+    up(at);
+    const dot = added()[0];
+    expect(dot).toBeDefined();
+    expect(Math.abs(guidedLength(dot.points, edgeLine(POSE, s().camera, 1)))).toBeLessThan(1);
+  });
+
+  it("with a 1 cm length snap a slow stroke straight across the ruler is not stretched to a centimetre", async () => {
+    await mount();
+    setSettings({ rulerLengthSnap: "1cm" });
+    rulerOn();
+    const across = Array.from({ length: 11 }, (_, i) => ({ x: 300 + i * 0.1, y: EDGE_Y - 10 + i * 5 }));
+    down(across[0]);
+    for (const q of across.slice(1)) {
+      clock += 40;
+      moveTo([q]);
+    }
+    up(across[across.length - 1]);
+    expect(Math.abs(guidedLength(added()[0].points, edgeLine(POSE, s().camera, 1)))).toBeLessThan(2);
+  });
+
+  it("with a 1 cm length snap the readout shows the length the stroke will get", async () => {
+    await mount();
+    setSettings({ rulerLengthSnap: "1cm", strokeStabilization: 0 });
+    rulerOn();
+    const length = 23 * UNITS_PER_MM;
+    const pts = Array.from({ length: 21 }, (_, i) => ({ x: 200 + (length * i) / 20, y: EDGE_Y - 10 + (i % 2) }));
+    down(pts[0]);
+    moveTo(pts.slice(1));
+    await frame();
+    expect(texts).toContain("2 cm");
+    expect(texts).not.toContain("2.3 cm");
+    up(pts[pts.length - 1]);
+    expect(guidedLength(added()[0].points, edgeLine(POSE, s().camera, 1)) / (10 * UNITS_PER_MM)).toBeCloseTo(2, 6);
+  });
+
+  it("with perfect shapes on, a tap in the band on a shape's outline 12 px from the edge line selects it", async () => {
+    // A rectangle whose top side lies at y = 200; the edge line is at y = 212.
+    const box = el("box", [[100, 200]], { type: "shape", shapeType: "rectangle", fillColor: "transparent", boxWidth: 200, boxHeight: 100 });
+    ipc.els = [box];
+    await mount();
+    rulerOn({ x: 400, y: 267, angle: 0 });
+    s().toggleAutoShapes();
+    s().selectInk("pen");
+    tap({ x: 150, y: 200 });
+    expect(s().selection).toEqual(new Set(["box"]));
+    expect(s().elements.size).toBe(1);
+  });
+
   it("shows the length beside a guided stroke while it is drawn, and not beside an unguided one", async () => {
     await mount();
     rulerOn();

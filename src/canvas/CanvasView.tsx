@@ -38,7 +38,7 @@ import { turnPage } from "../keys/editorCommands";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
 import { clampToRect, inRect, sheetRectAt } from "./pageBounds";
-import { drawLengthReadout, guidedLength, guideFor, projectOnLine, snapGuidedLength } from "../ruler/guide";
+import { drawLengthReadout, finalGuidedLength, finishGuided, guideFor, projectOnLine, readoutColors, type GuidedSnap } from "../ruler/guide";
 import type { Line } from "../ruler/pose";
 import { formatLength, lengthSnapUnits } from "../ruler/scale";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
@@ -116,6 +116,7 @@ function createEngine(
   let dpr = window.devicePixelRatio || 1;
   let colors = surfaceColors();
   let accent = accentColor();
+  let readout = readoutColors();
   let staticQueued = false;
   let liveQueued = false;
   let rasterTimer: ReturnType<typeof setTimeout> | null = null;
@@ -167,6 +168,8 @@ function createEngine(
   let guideAway: Vec2 = { x: 0, y: 0 };
   let guideFrom: Vec2 | null = null;
   let guideTo: Vec2 | null = null;
+  /** A guided pen stroke's points where the pen actually was (its tap tests are judged on these). */
+  let guideRaw: Point[] = [];
   /** `pts` moved onto the guide (the same array when unguided). */
   const onGuide = <P extends Vec2>(pts: P[]): P[] => {
     const g = guide;
@@ -189,6 +192,7 @@ function createEngine(
     guide = null;
     guideFrom = null;
     guideTo = null;
+    guideRaw = [];
     st().setRulerGuiding(false);
   };
 
@@ -294,18 +298,33 @@ function createEngine(
     if (!lctx || !g) return;
     let from: Vec2 | null = null;
     let to: Vec2 | null = null;
+    // A stroke shows the length it will be committed with; the eraser's drag never snaps.
+    let snap: GuidedSnap = { step: 0, minLength: 0 };
     if (mode === "draw" && builder) {
       const pts = builder.points();
       from = pts[0] ?? null;
       to = pts[pts.length - 1] ?? null;
+      snap = guidedSnap();
     } else if (mode === "tool") {
       from = guideFrom;
       to = guideTo;
     }
     if (!from || !to) return;
-    const text = formatLength(Math.abs(guidedLength([from, to], g)), getSettings().rulerUnits);
+    const text = formatLength(Math.abs(finalGuidedLength([from, to], g, snap)), getSettings().rulerUnits);
     const end = worldToScreen(c, to);
-    drawLengthReadout(lctx, { x: end.x + guideAway.x * READOUT_OFFSET_PX, y: end.y + guideAway.y * READOUT_OFFSET_PX }, text, dpr);
+    drawLengthReadout(lctx, { x: end.x + guideAway.x * READOUT_OFFSET_PX, y: end.y + guideAway.y * READOUT_OFFSET_PX }, text, dpr, readout);
+  };
+  /**
+   * The length snap of the guided stroke in progress: none for a still press or a stroke across the
+   * ruler (shorter than the hold slop), and in page mode none that would end off the stroke's sheet.
+   */
+  const guidedSnap = (): GuidedSnap => {
+    const sheet = strokeSheet;
+    return {
+      step: lengthSnapUnits(getSettings().rulerLengthSnap),
+      minLength: HOLD_SLOP_PX / st().camera.z,
+      fits: sheet ? (end) => inRect(end, sheet) : undefined,
+    };
   };
   const run = runOf(store);
   /** The study run's current cover, outlined just outside its bounds. */
@@ -443,15 +462,6 @@ function createEngine(
     });
   };
 
-  /** A guided stroke's finished points with the ruler's length snap applied (a tap stays a dot). */
-  const snapGuided = (line: Line, pts: Point[], raw: readonly Point[], upAt: number): Point[] => {
-    const step = lengthSnapUnits(getSettings().rulerLengthSnap);
-    if (!(step > 0) || isTapStroke(raw, upAt)) return pts;
-    const snapped = snapGuidedLength(pts, line, step);
-    // Page mode: a length that would run off the sheet stays as drawn.
-    return strokeSheet && snapped.length > 0 && !inRect(snapped[snapped.length - 1], strokeSheet) ? pts : snapped;
-  };
-
   const adapter = createPointerAdapter(
     liveCanvas,
     {
@@ -543,7 +553,10 @@ function createEngine(
         }
         const set = getSettings();
         mode = "draw";
-        if (guided) startGuide(guided, start);
+        if (guided) {
+          startGuide(guided, start);
+          guideRaw = [p];
+        }
         tools.replayTap.down(p, tool); // a quick tap on a replayed note seeks instead (pen-up)
         penInk.start(info.pointerType);
         strokeSheet = sheet ?? undefined;
@@ -588,6 +601,7 @@ function createEngine(
           lastPan = scr;
         } else if (mode === "draw" && builder) {
           builder.push(onGuide(points));
+          if (guide) guideRaw.push(...points);
           if (points.length > 0) {
             const last = points[points.length - 1];
             snap?.move(strokeSheet ? { ...last, ...clampToRect(last, strokeSheet) } : last);
@@ -620,7 +634,10 @@ function createEngine(
           builder.push(line ? [projectOnLine(p, line)] : [p]);
           const shape = snap?.up() ?? null;
           const raw = builder.points();
-          const pts = line ? snapGuided(line, builder.finish(), raw, p.timestamp) : builder.finish();
+          const pts = line ? finishGuided(builder.finish(), line, guidedSnap()) : builder.finish();
+          // Tap tests are judged where the pen actually was, not on its projection onto the ruler.
+          if (line) guideRaw.push(p);
+          const press = line ? guideRaw : raw;
           const stroke = pts.length > 0 ? strokeElement(pts, { pageId, preset: st().preset }) : null;
           // Committed at once, except a tap on a marker's blank area (opens its card) or the second
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
@@ -629,30 +646,21 @@ function createEngine(
           // A replay tap on a note seeks the audio; it neither selects a shape nor leaves a dot.
           const seeked = tools.replayTap.up(p) !== null;
           // Perfect shapes: a tap on a shape's outline selects it (its handles show) instead of leaving a dot.
-          let picked = false;
-          if (!seeked && st().autoShapes && !shape && dismissed !== "discard" && raw.length > 0 && p.timestamp - raw[0].timestamp <= TAP_MS) {
-            const cam = st().camera;
-            const first = worldToScreen(cam, raw[0]);
-            const still = raw.every((q) => {
-              const at = worldToScreen(cam, q);
-              return Math.hypot(at.x - first.x, at.y - first.y) <= HOLD_SLOP_PX;
-            });
-            picked = still && tools.tapSelect(raw[0]);
-          }
+          const picked = !seeked && st().autoShapes && !shape && dismissed !== "discard" && isTapStroke(press, p.timestamp) && tools.tapSelect(press[0]);
           const t = seeked || dismissed === "discard" || picked ? "discard" : tutorStroke && !shape ? tutor.inkUp(stroke?.id) : "commit";
           // A finger that draws: two quick taps zoom in instead of leaving two dots (the first dot is
           // taken back).
           let tap: FingerTap | null = null;
           let zoomed = false;
-          if (drawPointer === "touch" && !shape && t === "commit" && raw.length > 0 && getSettings().doubleTapZoom) {
+          if (drawPointer === "touch" && !shape && t === "commit" && press.length > 0 && getSettings().doubleTapZoom) {
             const cam = st().camera;
-            const first = worldToScreen(cam, raw[0]);
+            const first = worldToScreen(cam, press[0]);
             let travel = 0;
-            for (const q of raw) {
+            for (const q of press) {
               const at = worldToScreen(cam, q);
               travel = Math.max(travel, Math.hypot(at.x - first.x, at.y - first.y));
             }
-            tap = gestureTapOf({ x: first.x, y: first.y, t: raw[0].timestamp }, p.timestamp, travel);
+            tap = gestureTapOf({ x: first.x, y: first.y, t: press[0].timestamp }, p.timestamp, travel);
             if (tap && inkTap && isFingerDoubleTap(inkTap.tap, tap)) {
               zoomed = true;
               if (st().elements.has(inkTap.id)) st().undo();
@@ -918,6 +926,7 @@ function createEngine(
     restyle() {
       colors = surfaceColors();
       accent = accentColor();
+      readout = readoutColors();
       cache.invalidate();
       requestStatic();
       requestLive();
