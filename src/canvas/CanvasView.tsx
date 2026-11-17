@@ -37,7 +37,10 @@ import { canSwipeAt, detectSwipe, type SwipeSample } from "./pageSwipe";
 import { turnPage } from "../keys/editorCommands";
 import { SnapshotCache, type SnapshotContext } from "./snapshot";
 import { createInkSnap, drawSnapFlash, dwellSlopFor, inkSnapAllowed, snapShapeElement, SNAP_FLASH_MS, type InkSnap } from "./inkSnap";
-import { clampToRect, sheetRectAt } from "./pageBounds";
+import { clampToRect, inRect, sheetRectAt } from "./pageBounds";
+import { drawLengthReadout, guidedLength, guideFor, projectOnLine, snapGuidedLength } from "../ruler/guide";
+import type { Line } from "../ruler/pose";
+import { formatLength, lengthSnapUnits } from "../ruler/scale";
 import { createStrokeBuilder, strokeElement, type StrokeBuilder } from "./strokeCommit";
 import type { RecognizedShape } from "../shapes/recognize";
 import { createDismissPress, createToolController, HIT_SLOP_PX, hitTest, HOLD_SLOP_PX, pointerTool, TAP_MS } from "./toolInteractions";
@@ -60,6 +63,9 @@ const ASKED_OUTLINE_PX = 2;
 
 /** The accent colour of the interface (the study run's outline). */
 const accentColor = (): string => getComputedStyle(document.documentElement).getPropertyValue("--color-primary").trim() || SNAP_FLASH_COLOR;
+
+/** Distance of the ruler's length readout from the end of the stroke, away from the ruler (screen px). */
+const READOUT_OFFSET_PX = 24;
 
 /** Quiet period after the last camera change before the snapshot is re-rasterised. */
 const RASTER_DEBOUNCE_MS = 150;
@@ -152,6 +158,39 @@ function createEngine(
   const dismissPress = createDismissPress();
   /** Group whose "couldn't check" marker the mouse hovers (its label is drawn). */
   let hoverGroup: string | null = null;
+  /**
+   * The ruler's edge the stroke or eraser drag in progress follows, frozen at pen-down (null when
+   * unguided); the unit vector from the ruler's body towards that edge; and the eraser's first and
+   * last points on it (for the length readout).
+   */
+  let guide: Line | null = null;
+  let guideAway: Vec2 = { x: 0, y: 0 };
+  let guideFrom: Vec2 | null = null;
+  let guideTo: Vec2 | null = null;
+  /** `pts` moved onto the guide (the same array when unguided). */
+  const onGuide = <P extends Vec2>(pts: P[]): P[] => {
+    const g = guide;
+    return g ? pts.map((q) => projectOnLine(q, g)) : pts;
+  };
+  const startGuide = (line: Line, at: Vec2) => {
+    const pose = st().ruler.pose;
+    const ax = pose ? line.a.x - pose.x : 0;
+    const ay = pose ? line.a.y - pose.y : 0;
+    const n = Math.hypot(ax, ay) || 1;
+    guide = line;
+    guideAway = { x: ax / n, y: ay / n };
+    guideFrom = at;
+    guideTo = at;
+    st().setRulerGuiding(true);
+  };
+  /** Every path that ends or abandons a stroke or eraser drag comes through here. */
+  const endGuide = () => {
+    if (guide === null) return;
+    guide = null;
+    guideFrom = null;
+    guideTo = null;
+    st().setRulerGuiding(false);
+  };
 
   const ready = () => {
     const s = st();
@@ -238,6 +277,7 @@ function createEngine(
       if (liveEl.type === "shape") drawElement(lctx, liveEl, { theme: theme(), zoomBucket: c.z });
       else renderStroke(lctx, liveEl, theme(), c.z);
     }
+    if (guide) drawGuideReadout(c);
     if (flash && performance.now() < flash.until) drawSnapFlash(lctx, flash.shape, c, dpr, SNAP_FLASH_COLOR);
     const antsMove = tools.draw(lctx, c, dpr); // marching ants animate while selected
     drawAsked(c);
@@ -247,6 +287,25 @@ function createEngine(
     const hovered = hoverGroup ? tutorMarkersNow.find((m) => m.groupId === hoverGroup) : undefined;
     if (hovered) drawTutorTip(lctx, hovered, c, dpr);
     if (antsMove || ringTurns) requestLive();
+  };
+  /** The length of the guided stroke (or eraser drag) in progress, beside its end on the far side from the ruler. */
+  const drawGuideReadout = (c: Camera) => {
+    const g = guide;
+    if (!lctx || !g) return;
+    let from: Vec2 | null = null;
+    let to: Vec2 | null = null;
+    if (mode === "draw" && builder) {
+      const pts = builder.points();
+      from = pts[0] ?? null;
+      to = pts[pts.length - 1] ?? null;
+    } else if (mode === "tool") {
+      from = guideFrom;
+      to = guideTo;
+    }
+    if (!from || !to) return;
+    const text = formatLength(Math.abs(guidedLength([from, to], g)), getSettings().rulerUnits);
+    const end = worldToScreen(c, to);
+    drawLengthReadout(lctx, { x: end.x + guideAway.x * READOUT_OFFSET_PX, y: end.y + guideAway.y * READOUT_OFFSET_PX }, text, dpr);
   };
   const run = runOf(store);
   /** The study run's current cover, outlined just outside its bounds. */
@@ -370,6 +429,27 @@ function createEngine(
     snap?.cancel();
     snap = null;
     snapShape = null;
+    endGuide();
+  };
+
+  /** All the stroke's points stayed within the hold slop of the first, and it was lifted within a tap's time. */
+  const isTapStroke = (raw: readonly Point[], upAt: number): boolean => {
+    if (raw.length === 0 || upAt - raw[0].timestamp > TAP_MS) return false;
+    const cam = st().camera;
+    const first = worldToScreen(cam, raw[0]);
+    return raw.every((q) => {
+      const at = worldToScreen(cam, q);
+      return Math.hypot(at.x - first.x, at.y - first.y) <= HOLD_SLOP_PX;
+    });
+  };
+
+  /** A guided stroke's finished points with the ruler's length snap applied (a tap stays a dot). */
+  const snapGuided = (line: Line, pts: Point[], raw: readonly Point[], upAt: number): Point[] => {
+    const step = lengthSnapUnits(getSettings().rulerLengthSnap);
+    if (!(step > 0) || isTapStroke(raw, upAt)) return pts;
+    const snapped = snapGuidedLength(pts, line, step);
+    // Page mode: a length that would run off the sheet stays as drawn.
+    return strokeSheet && snapped.length > 0 && !inRect(snapped[snapped.length - 1], strokeSheet) ? pts : snapped;
   };
 
   const adapter = createPointerAdapter(
@@ -399,6 +479,10 @@ function createEngine(
           lastPan = worldToScreen(s.camera, p);
           return;
         }
+        // The ruler: a press in an edge band with an ink tool (a stroke cover, not a box) or the
+        // eraser follows that edge's line, as it is now, for the whole stroke.
+        const guided =
+          tool === "eraser" || (isInkTool(tool) && !(tool === "cover" && coverBoxActive(s))) ? guideFor(s.ruler, s.camera, p) : null;
         if (!isInkTool(tool)) {
           // A press on a tutor marker: a tap opens its card (on up), a drag selects as usual.
           if ((tool === "cursor" || tool === "lasso") && tutor.selectDown(p, worldToScreen(s.camera, p))) {
@@ -407,7 +491,11 @@ function createEngine(
             return;
           }
           mode = tool === "none" ? "none" : "tool";
-          if (mode === "tool") tools.down(p, tool);
+          if (mode === "tool" && guided) {
+            const at = projectOnLine(p, guided);
+            startGuide(guided, at);
+            tools.down(at, tool);
+          } else if (mode === "tool") tools.down(p, tool);
           return;
         }
         // A box cover is dragged out like a shape (the tool controller owns the gesture).
@@ -426,14 +514,16 @@ function createEngine(
           s.select([]);
         }
         // Page mode: strokes belong to the sheet they start on and end where they leave it; the desk
-        // around the sheets draws nothing.
-        const sheet = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), p) : undefined;
+        // around the sheets draws nothing. A guided stroke starts where the press lands on the guide.
+        const start = guided ? projectOnLine(p, guided) : p;
+        const sheet = s.page?.mode === "page" ? sheetRectAt(sheetStack(s), start) : undefined;
         if (sheet === null) {
           mode = "none";
           return;
         }
-        // No tutor gestures (double-tap, hold, marker tap) for the press that closed the card.
-        tutorStroke = !dismissing && s.preset.type !== "highlighter" && s.preset.type !== "cover";
+        // No tutor gestures (double-tap, hold, marker tap) for the press that closed the card, nor
+        // for a stroke along the ruler.
+        tutorStroke = !guided && !dismissing && s.preset.type !== "highlighter" && s.preset.type !== "cover";
         if (dismissing) dismissPress.down(worldToScreen(s.camera, p));
         const abortForAsk = () => {
           // Held still on ink: the stroke becomes "Ask the tutor" (nothing is drawn).
@@ -453,11 +543,13 @@ function createEngine(
         }
         const set = getSettings();
         mode = "draw";
+        if (guided) startGuide(guided, start);
         tools.replayTap.down(p, tool); // a quick tap on a replayed note seeks instead (pen-up)
         penInk.start(info.pointerType);
         strokeSheet = sheet ?? undefined;
         drawPointer = info.pointerType;
-        const straight = s.straightLines || info.shiftKey;
+        // Along the ruler the stroke is already straight: no straight-line or shape snapping.
+        const straight = !guided && (s.straightLines || info.shiftKey);
         builder = createStrokeBuilder({
           pageId,
           preset: s.preset,
@@ -466,11 +558,12 @@ function createEngine(
           nibFlatness: set.fountainPenNibFlatness,
           clampRect: sheet,
           straight,
+          guided: guided !== null,
         });
         // Perfect-shapes mode: every stroke is recognised on pen-up, whatever the ink-to-shape settings.
         // Perfect shapes: the highlighter too, but never a cover (a wobbly cover must stay a stroke).
         const snapping = s.preset.type !== "cover" && (s.autoShapes || inkSnapAllowed(s.preset.type, set));
-        snap = !straight && snapping
+        snap = !guided && !straight && snapping
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
               snapsOnRelease: s.autoShapes || set.inkToShapeSnapsOnRelease,
@@ -484,7 +577,7 @@ function createEngine(
               },
             })
           : null;
-        setLive(builder.push([p]));
+        setLive(builder.push([start]));
         snap?.down(p);
       },
       onMove(points, predicted) {
@@ -494,7 +587,7 @@ function createEngine(
           s.setCamera(dragPan(s.camera, scr.x - lastPan.x, scr.y - lastPan.y, clamp));
           lastPan = scr;
         } else if (mode === "draw" && builder) {
-          builder.push(points);
+          builder.push(onGuide(points));
           if (points.length > 0) {
             const last = points[points.length - 1];
             snap?.move(strokeSheet ? { ...last, ...clampToRect(last, strokeSheet) } : last);
@@ -502,9 +595,15 @@ function createEngine(
           if (tutorStroke && points.length > 0) tutor.inkMove(worldToScreen(st().camera, points[points.length - 1]));
           if (dismissPress.active() && points.length > 0) dismissPress.move(worldToScreen(st().camera, points[points.length - 1]));
           if (points.length > 0) tools.replayTap.move(points[points.length - 1]);
-          if (!snapShape) setLive(builder.preview(predicted));
-        } else if (mode === "tool") tools.move(points);
-        else if (mode === "marker" && markerPress && points.length > 0) {
+          if (!snapShape) setLive(builder.preview(onGuide(predicted)));
+        } else if (mode === "tool") {
+          const pts = onGuide(points);
+          tools.move(pts);
+          if (guide && pts.length > 0) {
+            guideTo = pts[pts.length - 1];
+            requestLive(); // the length readout follows the eraser
+          }
+        } else if (mode === "marker" && markerPress && points.length > 0) {
           markerPress.points.push(...points);
           if (tutor.selectMove(worldToScreen(st().camera, points[points.length - 1]))) {
             // Dragged off the marker: a normal selection gesture from where it started, replaying
@@ -517,10 +616,11 @@ function createEngine(
       },
       onUp(p) {
         if (mode === "draw" && builder) {
-          builder.push([p]);
+          const line = guide;
+          builder.push(line ? [projectOnLine(p, line)] : [p]);
           const shape = snap?.up() ?? null;
           const raw = builder.points();
-          const pts = builder.finish();
+          const pts = line ? snapGuided(line, builder.finish(), raw, p.timestamp) : builder.finish();
           const stroke = pts.length > 0 ? strokeElement(pts, { pageId, preset: st().preset }) : null;
           // Committed at once, except a tap on a marker's blank area (opens its card) or the second
           // tap of a double-tap on ink (opens Ask); see createTutorGestures.
@@ -569,9 +669,9 @@ function createEngine(
               });
               // A straightened line/arrow offers its end caps next to the end point.
               if (added && (el.shapeType === "line" || el.shapeType === "arrow") && getSettings().lineCapsPopover) openLineCaps(store, el.id);
-            } else if (!scribbleErased(raw)) commit(stroke);
+            } else if (line || !scribbleErased(raw)) commit(stroke); // a stroke along the ruler is never a scribble
           }
-        } else if (mode === "tool") tools.up(p);
+        } else if (mode === "tool") tools.up(guide ? projectOnLine(p, guide) : p);
         else if (mode === "marker") tutor.selectUp();
         markerPress = null;
         if (tutorStroke) tutor.cancel(); // a snapped shape or an aborted stroke: clear any hold
@@ -824,6 +924,7 @@ function createEngine(
     },
     dispose() {
       tutor.dispose();
+      endGuide();
       disposed = true;
       stopFling?.();
       stopFling = null;

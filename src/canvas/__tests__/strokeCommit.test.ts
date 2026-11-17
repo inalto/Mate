@@ -89,4 +89,32 @@ describe("strokeCommit", () => {
     b.push([pt(500, 700), pt(1100, 700)]);
     expect(b.points().map((p) => [p.x, p.y])).toEqual([[500, 700], [1080, 700]]);
   });
+
+  describe("guided", () => {
+    /** 50 collinear points, 2 units apart, pressures rising from 0.2 to 0.9. */
+    const line = (): Point[] => Array.from({ length: 50 }, (_, i) => ({ x: 100 + i * 2, y: 300 + i, pressure: 0.2 + (0.7 * i) / 49, timestamp: i * 8 }));
+
+    it("guided_finish_keeps_the_pressures_of_collinear_points", () => {
+      const b = createStrokeBuilder({ ...opts(pen), guided: true });
+      b.push(line());
+      const pts = b.finish();
+      expect(pts.length).toBeGreaterThan(2);
+      expect(new Set(pts.map((p) => p.pressure)).size).toBeGreaterThan(1);
+      expect(pts[0]).toEqual(b.points()[0]);
+      expect(pts[pts.length - 1]).toEqual(b.points()[b.points().length - 1]);
+    });
+
+    it("unguided_finish_still_simplifies_collinear_points_to_two", () => {
+      const b = createStrokeBuilder(opts(pen));
+      b.push(line());
+      expect(b.finish()).toHaveLength(2);
+    });
+
+    it("guided_finish_drops_points_nearer_than_one_screen_px", () => {
+      const pt = (x: number): Point => ({ x, y: 0, pressure: 0.5, timestamp: x });
+      const b = createStrokeBuilder({ ...opts(pen), zoom: 2, stabilization: 0, guided: true });
+      b.push([pt(0), pt(0.2), pt(0.6), pt(1), pt(1.1), pt(3), pt(3.2)]);
+      expect(b.finish().map((p) => p.x)).toEqual([0, 0.6, 1.1, 3, 3.2]);
+    });
+  });
 });

@@ -24,6 +24,20 @@ export interface StrokeOptions {
   clampRect?: Rect;
   /** Keep only the first and last point (straight line; near-horizontal / vertical ones land on the axis). */
   straight?: boolean;
+  /** Points are already on one line (the ruler's edge): finish() keeps their pressures instead of simplifying them away. */
+  guided?: boolean;
+}
+
+/** First and last points, and those in between at least `minGap` from the one kept before them. */
+function thinGuided(points: Point[], minGap: number): Point[] {
+  if (points.length < 3) return points.slice();
+  const kept: Point[] = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = kept[kept.length - 1];
+    if (Math.hypot(points[i].x - prev.x, points[i].y - prev.y) >= minGap) kept.push(points[i]);
+  }
+  kept.push(points[points.length - 1]);
+  return kept;
 }
 
 /** `[]` for empty, `[p]` for one, else the first and last points unchanged. */
@@ -51,7 +65,7 @@ export interface StrokeBuilder {
   preview(predicted: Point[]): Point[];
   /** Processed points so far. */
   points(): Point[];
-  /** Resampled + simplified final points. */
+  /** Resampled + simplified final points (guided: thinned to one point per screen px, pressures kept). */
   finish(): Point[];
 }
 
@@ -136,6 +150,8 @@ export function createStrokeBuilder(opts: StrokeOptions): StrokeBuilder {
     points: () => (opts.straight ? straightened(out) : out),
     finish() {
       if (opts.straight) return straightened(out);
+      // Collinear points would simplify to two and lose the pressure between them.
+      if (opts.guided) return thinGuided(out, 1 / opts.zoom).slice(0, LIMITS.MAX_POINTS_PER_STROKE);
       const resampled = resampleInkPoints(out, 0.08);
       const simplified = simplifyPolylineXY(resampled, simplifyEpsForZoom(opts.zoom));
       return simplified.slice(0, LIMITS.MAX_POINTS_PER_STROKE);
