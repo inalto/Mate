@@ -190,22 +190,22 @@
       "eraseImages": "Effacer les images"
     },
     "ruler": {
-      "title": "Ruler",
+      "title": "Règle",
       "units": {
-        "label": "Scales",
-        "both": "Millimetres and inches",
-        "metric": "Millimetres",
-        "imperial": "Inches"
+        "label": "Graduations",
+        "both": "Millimètres et pouces",
+        "metric": "Millimètres",
+        "imperial": "Pouces"
       },
       "angleSnap": {
-        "label": "Snap the angle every",
-        "off": "Off"
+        "label": "Aimanter l'angle tous les",
+        "off": "Non"
       },
       "lengthSnap": {
-        "label": "Snap line length to",
-        "off": "Off"
+        "label": "Aimanter la longueur des traits à",
+        "off": "Non"
       },
-      "snapHint": "The edge also snaps to the page's lines when Snap to grid is on, and to other objects when Smart guides is on."
+      "snapHint": "Le bord s'aimante aussi aux lignes de la page quand Magnétisme sur la grille est activé, et aux autres objets quand Repères intelligents est activé."
     },
     "penButtons": {
       "barrel": {
@@ -575,7 +575,7 @@
     "actions": {
       "straightLines": "Activer les lignes droites",
       "autoShapes": "Activer/désactiver les formes parfaites",
-      "ruler": "Show or hide the ruler",
+      "ruler": "Afficher ou masquer la règle",
       "pen": "Stylo",
       "highlighter": "Surligneur",
       "cover": "Outil masque",
@@ -674,7 +674,7 @@
       "insertSpace": "Passer à l'insertion d'espace"
     },
     "insertText": "Insérer une zone de texte",
-    "ruler": "Show or hide the ruler",
+    "ruler": "Afficher ou masquer la règle",
     "insertCode": "Insérer un bloc de code",
     "insertTable": "Insérer un tableau",
     "insertGraph": "Insérer un graphe",
@@ -713,7 +713,7 @@
   "toolbar": {
     "straightLines": "Lignes droites",
     "autoShapes": "Formes parfaites",
-    "ruler": "Ruler",
+    "ruler": "Règle",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -1612,8 +1612,8 @@
     "never": "Jamais testé"
   },
   "ruler": {
-    "angle": "Ruler angle: {{angle}} degrees",
-    "angleField": "Angle in degrees, 0 to 180",
-    "rotate": "Rotate the ruler"
+    "angle": "Angle de la règle : {{angle}} degrés",
+    "angleField": "Angle en degrés, de 0 à 180",
+    "rotate": "Faire tourner la règle"
   }
 }

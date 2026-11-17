@@ -190,22 +190,22 @@
       "eraseImages": "Bilder radieren"
     },
     "ruler": {
-      "title": "Ruler",
+      "title": "Lineal",
       "units": {
-        "label": "Scales",
-        "both": "Millimetres and inches",
-        "metric": "Millimetres",
-        "imperial": "Inches"
+        "label": "Skalen",
+        "both": "Millimeter und Zoll",
+        "metric": "Millimeter",
+        "imperial": "Zoll"
       },
       "angleSnap": {
-        "label": "Snap the angle every",
-        "off": "Off"
+        "label": "Winkel einrasten alle",
+        "off": "Aus"
       },
       "lengthSnap": {
-        "label": "Snap line length to",
-        "off": "Off"
+        "label": "Linienlänge einrasten auf",
+        "off": "Aus"
       },
-      "snapHint": "The edge also snaps to the page's lines when Snap to grid is on, and to other objects when Smart guides is on."
+      "snapHint": "Die Kante rastet auch an den Linien der Seite ein, wenn „Am Raster ausrichten“ an ist, und an anderen Objekten, wenn „Intelligente Hilfslinien“ an sind."
     },
     "penButtons": {
       "barrel": {
@@ -575,7 +575,7 @@
     "actions": {
       "straightLines": "Gerade Linien umschalten",
       "autoShapes": "Perfekte Formen umschalten",
-      "ruler": "Show or hide the ruler",
+      "ruler": "Lineal ein- oder ausblenden",
       "pen": "Stift",
       "highlighter": "Markierer",
       "cover": "Abdeckwerkzeug",
@@ -674,7 +674,7 @@
       "insertSpace": "Zu Platz einfügen wechseln"
     },
     "insertText": "Textfeld einfügen",
-    "ruler": "Show or hide the ruler",
+    "ruler": "Lineal ein- oder ausblenden",
     "insertCode": "Codeblock einfügen",
     "insertTable": "Tabelle einfügen",
     "insertGraph": "Graph einfügen",
@@ -713,7 +713,7 @@
   "toolbar": {
     "straightLines": "Gerade Linien",
     "autoShapes": "Perfekte Formen",
-    "ruler": "Ruler",
+    "ruler": "Lineal",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -1612,8 +1612,8 @@
     "never": "Nicht getestet"
   },
   "ruler": {
-    "angle": "Ruler angle: {{angle}} degrees",
-    "angleField": "Angle in degrees, 0 to 180",
-    "rotate": "Rotate the ruler"
+    "angle": "Winkel des Lineals: {{angle}} Grad",
+    "angleField": "Winkel in Grad, 0 bis 180",
+    "rotate": "Lineal drehen"
   }
 }

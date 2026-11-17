@@ -190,22 +190,22 @@
       "eraseImages": "Borrar imágenes"
     },
     "ruler": {
-      "title": "Ruler",
+      "title": "Regla",
       "units": {
-        "label": "Scales",
-        "both": "Millimetres and inches",
-        "metric": "Millimetres",
-        "imperial": "Inches"
+        "label": "Escalas",
+        "both": "Milímetros y pulgadas",
+        "metric": "Milímetros",
+        "imperial": "Pulgadas"
       },
       "angleSnap": {
-        "label": "Snap the angle every",
-        "off": "Off"
+        "label": "Ajustar el ángulo cada",
+        "off": "No"
       },
       "lengthSnap": {
-        "label": "Snap line length to",
-        "off": "Off"
+        "label": "Ajustar la longitud de las líneas a",
+        "off": "No"
       },
-      "snapHint": "The edge also snaps to the page's lines when Snap to grid is on, and to other objects when Smart guides is on."
+      "snapHint": "El borde también se ajusta a las líneas de la página si Ajustar a la cuadrícula está activado, y a otros objetos si Guías inteligentes está activado."
     },
     "penButtons": {
       "barrel": {
@@ -575,7 +575,7 @@
     "actions": {
       "straightLines": "Activar líneas rectas",
       "autoShapes": "Alternar formas perfectas",
-      "ruler": "Show or hide the ruler",
+      "ruler": "Mostrar u ocultar la regla",
       "pen": "Lápiz",
       "highlighter": "Marcador",
       "cover": "Herramienta de cubierta",
@@ -674,7 +674,7 @@
       "insertSpace": "Cambiar a insertar espacio"
     },
     "insertText": "Insertar cuadro de texto",
-    "ruler": "Show or hide the ruler",
+    "ruler": "Mostrar u ocultar la regla",
     "insertCode": "Insertar bloque de código",
     "insertTable": "Insertar tabla",
     "insertGraph": "Insertar gráfico",
@@ -713,7 +713,7 @@
   "toolbar": {
     "straightLines": "Líneas rectas",
     "autoShapes": "Formas perfectas",
-    "ruler": "Ruler",
+    "ruler": "Regla",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -1612,8 +1612,8 @@
     "never": "Sin probar"
   },
   "ruler": {
-    "angle": "Ruler angle: {{angle}} degrees",
-    "angleField": "Angle in degrees, 0 to 180",
-    "rotate": "Rotate the ruler"
+    "angle": "Ángulo de la regla: {{angle}} grados",
+    "angleField": "Ángulo en grados, de 0 a 180",
+    "rotate": "Girar la regla"
   }
 }

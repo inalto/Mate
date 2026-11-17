@@ -90,7 +90,7 @@ describe.skipIf(others.length === 0)("translated catalogues", () => {
   });
 });
 
-/** Keys the cover and recall work added; a translated locale must not keep the English text. */
+/** Keys the cover, recall and ruler work added; a translated locale must not keep the English text. */
 const COVER_KEYS = ["settings.pen.coverColor", "settings.pen.coverWidth", "keys.actions.cover", "palette.switchTo.cover", "palette.recall", "toolbar.ink.cover", "library.recall", "export.covers", "export.coversCovered", "export.coversHidden", "export.coversHint", "preset.coverShape", "preset.coverStroke", "preset.coverBox"];
 /** Translations that are legitimately the same word as English in that language. */
 const SAME_AS_ENGLISH: Record<string, string[]> = {
@@ -98,11 +98,11 @@ const SAME_AS_ENGLISH: Record<string, string[]> = {
   fr: ["recall.page", "recall.runs"],
 };
 
-describe.skipIf(others.length === 0)("cover and recall text", () => {
-  it.each(others)("%s has no cover or recall key left in English", (lang) => {
+describe.skipIf(others.length === 0)("cover, recall and ruler text", () => {
+  it.each(others)("%s has no cover, recall or ruler key left in English", (lang) => {
     const flatEn = flatten(en as Tree);
     const theirs = flatten(byLang[lang]);
-    const keys = [...flatEn.keys()].filter((k) => COVER_KEYS.includes(k) || k.startsWith("covers.") || k.startsWith("recall."));
+    const keys = [...flatEn.keys()].filter((k) => COVER_KEYS.includes(k) || k.startsWith("covers.") || k.startsWith("recall.") || k.startsWith("ruler.") || k.startsWith("settings.ruler.") || k === "toolbar.ruler" || k === "keys.actions.ruler" || k === "palette.ruler");
     const same = keys.filter((k) => theirs.get(k) === flatEn.get(k) && !(SAME_AS_ENGLISH[lang] ?? []).includes(k));
     expect(same).toEqual([]);
   });

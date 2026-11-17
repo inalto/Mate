@@ -190,22 +190,22 @@
       "eraseImages": "擦除图片"
     },
     "ruler": {
-      "title": "Ruler",
+      "title": "尺子",
       "units": {
-        "label": "Scales",
-        "both": "Millimetres and inches",
-        "metric": "Millimetres",
-        "imperial": "Inches"
+        "label": "刻度",
+        "both": "毫米和英寸",
+        "metric": "毫米",
+        "imperial": "英寸"
       },
       "angleSnap": {
-        "label": "Snap the angle every",
-        "off": "Off"
+        "label": "角度吸附间隔",
+        "off": "关闭"
       },
       "lengthSnap": {
-        "label": "Snap line length to",
-        "off": "Off"
+        "label": "线条长度吸附到",
+        "off": "关闭"
       },
-      "snapHint": "The edge also snaps to the page's lines when Snap to grid is on, and to other objects when Smart guides is on."
+      "snapHint": "开启“对齐到方格”后，尺子边缘也会吸附到页面的线上；开启“智能参考线”后，也会吸附到其他对象。"
     },
     "penButtons": {
       "barrel": {
@@ -572,7 +572,7 @@
     "actions": {
       "straightLines": "切换直线",
       "autoShapes": "切换自动规整图形",
-      "ruler": "Show or hide the ruler",
+      "ruler": "显示或隐藏尺子",
       "pen": "笔",
       "highlighter": "荧光笔",
       "cover": "遮盖工具",
@@ -671,7 +671,7 @@
       "insertSpace": "切换到插入空白"
     },
     "insertText": "插入文本框",
-    "ruler": "Show or hide the ruler",
+    "ruler": "显示或隐藏尺子",
     "insertCode": "插入代码块",
     "insertTable": "插入表格",
     "insertGraph": "插入图形",
@@ -710,7 +710,7 @@
   "toolbar": {
     "straightLines": "直线",
     "autoShapes": "自动规整图形",
-    "ruler": "Ruler",
+    "ruler": "尺子",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -1593,8 +1593,8 @@
     "never": "未测试"
   },
   "ruler": {
-    "angle": "Ruler angle: {{angle}} degrees",
-    "angleField": "Angle in degrees, 0 to 180",
-    "rotate": "Rotate the ruler"
+    "angle": "尺子角度：{{angle}} 度",
+    "angleField": "角度（度），0 到 180",
+    "rotate": "旋转尺子"
   }
 }

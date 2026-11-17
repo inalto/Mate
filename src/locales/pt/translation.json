@@ -190,22 +190,22 @@
       "eraseImages": "Apagar imagens"
     },
     "ruler": {
-      "title": "Ruler",
+      "title": "Régua",
       "units": {
-        "label": "Scales",
-        "both": "Millimetres and inches",
-        "metric": "Millimetres",
-        "imperial": "Inches"
+        "label": "Escalas",
+        "both": "Milímetros e polegadas",
+        "metric": "Milímetros",
+        "imperial": "Polegadas"
       },
       "angleSnap": {
-        "label": "Snap the angle every",
-        "off": "Off"
+        "label": "Encaixar o ângulo a cada",
+        "off": "Desligado"
       },
       "lengthSnap": {
-        "label": "Snap line length to",
-        "off": "Off"
+        "label": "Encaixar o comprimento das linhas em",
+        "off": "Desligado"
       },
-      "snapHint": "The edge also snaps to the page's lines when Snap to grid is on, and to other objects when Smart guides is on."
+      "snapHint": "A borda também se encaixa nas linhas da página quando Encaixar na grade está ativado, e em outros objetos quando Guias inteligentes está ativado."
     },
     "penButtons": {
       "barrel": {
@@ -575,7 +575,7 @@
     "actions": {
       "straightLines": "Alternar linhas retas",
       "autoShapes": "Alternar formas perfeitas",
-      "ruler": "Show or hide the ruler",
+      "ruler": "Mostrar ou ocultar a régua",
       "pen": "Caneta",
       "highlighter": "Marca-texto",
       "cover": "Ferramenta de cobertura",
@@ -674,7 +674,7 @@
       "insertSpace": "Mudar para inserir espaço"
     },
     "insertText": "Inserir caixa de texto",
-    "ruler": "Show or hide the ruler",
+    "ruler": "Mostrar ou ocultar a régua",
     "insertCode": "Inserir bloco de código",
     "insertTable": "Inserir tabela",
     "insertGraph": "Inserir grafo",
@@ -713,7 +713,7 @@
   "toolbar": {
     "straightLines": "Linhas retas",
     "autoShapes": "Formas perfeitas",
-    "ruler": "Ruler",
+    "ruler": "Régua",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -1612,8 +1612,8 @@
     "never": "Não testada"
   },
   "ruler": {
-    "angle": "Ruler angle: {{angle}} degrees",
-    "angleField": "Angle in degrees, 0 to 180",
-    "rotate": "Rotate the ruler"
+    "angle": "Ângulo da régua: {{angle}} graus",
+    "angleField": "Ângulo em graus, de 0 a 180",
+    "rotate": "Girar a régua"
   }
 }

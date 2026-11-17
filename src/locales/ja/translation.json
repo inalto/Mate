@@ -190,22 +190,22 @@
       "eraseImages": "画像を消す"
     },
     "ruler": {
-      "title": "Ruler",
+      "title": "定規",
       "units": {
-        "label": "Scales",
-        "both": "Millimetres and inches",
-        "metric": "Millimetres",
-        "imperial": "Inches"
+        "label": "目盛り",
+        "both": "ミリメートルとインチ",
+        "metric": "ミリメートル",
+        "imperial": "インチ"
       },
       "angleSnap": {
-        "label": "Snap the angle every",
-        "off": "Off"
+        "label": "角度の吸着間隔",
+        "off": "オフ"
       },
       "lengthSnap": {
-        "label": "Snap line length to",
-        "off": "Off"
+        "label": "線の長さの吸着単位",
+        "off": "オフ"
       },
-      "snapHint": "The edge also snaps to the page's lines when Snap to grid is on, and to other objects when Smart guides is on."
+      "snapHint": "「方眼に吸着」がオンのときは、定規の辺はページの線にも吸着します。「スマートガイド」がオンのときは、ほかのオブジェクトにも吸着します。"
     },
     "penButtons": {
       "barrel": {
@@ -572,7 +572,7 @@
     "actions": {
       "straightLines": "直線の切り替え",
       "autoShapes": "図形の自動整形の切り替え",
-      "ruler": "Show or hide the ruler",
+      "ruler": "定規を表示/非表示",
       "pen": "ペン",
       "highlighter": "蛍光ペン",
       "cover": "カバーツール",
@@ -671,7 +671,7 @@
       "insertSpace": "スペース挿入に切り替え"
     },
     "insertText": "テキストボックスを挿入",
-    "ruler": "Show or hide the ruler",
+    "ruler": "定規を表示/非表示",
     "insertCode": "コードブロックを挿入",
     "insertTable": "表を挿入",
     "insertGraph": "グラフを挿入",
@@ -710,7 +710,7 @@
   "toolbar": {
     "straightLines": "直線",
     "autoShapes": "図形を自動整形",
-    "ruler": "Ruler",
+    "ruler": "定規",
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -1593,8 +1593,8 @@
     "never": "未テスト"
   },
   "ruler": {
-    "angle": "Ruler angle: {{angle}} degrees",
-    "angleField": "Angle in degrees, 0 to 180",
-    "rotate": "Rotate the ruler"
+    "angle": "定規の角度：{{angle}}度",
+    "angleField": "角度（度）、0〜180",
+    "rotate": "定規を回転"
   }
 }
