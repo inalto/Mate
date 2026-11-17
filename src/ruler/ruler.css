@@ -1,0 +1,33 @@
+/* The ruler of a pane: above the page's DOM overlays (box editors sit in the overlay layer's own
+   stacking context), below the bottom bars (z-index 3) and the popovers. Pointers pass through the
+   canvas; the angle readout takes them. */
+.ruler-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ruler-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.ruler-angle {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 8px;
+  border: 1px solid var(--ruler-edge);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--ruler-ink);
+  font: 12px / 1.2 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: auto;
+  cursor: default;
+}

@@ -1573,5 +1573,8 @@
     "test": "测试",
     "empty": "此笔记本中还没有遮盖。用遮盖工具隐藏页面的一部分，然后测试自己。",
     "never": "未测试"
+  },
+  "ruler": {
+    "angle": "Ruler angle: {{angle}} degrees"
   }
 }

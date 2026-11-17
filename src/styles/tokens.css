@@ -10,6 +10,10 @@
   --color-danger: #b42318;
   --canvas-page: #ffffff;
   --canvas-desk: #eceef1;
+  /* The ruler: light blue, translucent, with ticks and labels dark enough to read through it. */
+  --ruler-body: rgb(110 170 230 / 0.35);
+  --ruler-edge: #2f6aa6;
+  --ruler-ink: #163a63;
 
   --space-1: 4px;
   --space-2: 8px;

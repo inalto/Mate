@@ -1,6 +1,9 @@
 html[data-theme="dark"] {
   --canvas-page: #18181b;
   --canvas-desk: #0e0e10;
+  --ruler-body: rgb(100 160 225 / 0.35);
+  --ruler-edge: #7fb2ea;
+  --ruler-ink: #dcebff;
   --color-background: #121215;
   --color-primary: #6b8e73;
   --color-primary-contrast: #0c0d0e;
@@ -17,6 +20,9 @@ html[data-theme="dark"] {
 html[data-theme="sepia"] {
   --canvas-page: #f7efdb;
   --canvas-desk: #e6d8b9;
+  --ruler-body: rgb(110 165 220 / 0.35);
+  --ruler-edge: #2f6493;
+  --ruler-ink: #183a5e;
   --color-background: #f1e7cf;
   --color-primary: #5c6b4a;
   --color-primary-contrast: #ffffff;
@@ -33,6 +39,9 @@ html[data-theme="sepia"] {
 html[data-theme="high-contrast"] {
   --canvas-page: #000000;
   --canvas-desk: #16181b;
+  --ruler-body: rgb(120 180 255 / 0.38);
+  --ruler-edge: #9fd0ff;
+  --ruler-ink: #ffffff;
   --color-background: #08090b;
   --color-primary: #9bc1a4;
   --color-primary-contrast: #000000;

@@ -1592,5 +1592,8 @@
     "test": "Tester",
     "empty": "Aucun masque dans ce cahier pour l'instant. Cache une partie d'une page avec l'outil masque, puis teste-toi.",
     "never": "Jamais testé"
+  },
+  "ruler": {
+    "angle": "Ruler angle: {{angle}} degrees"
   }
 }

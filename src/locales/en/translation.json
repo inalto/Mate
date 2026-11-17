@@ -1589,5 +1589,8 @@
     "test": "Test",
     "empty": "No covers in this notebook yet. Hide part of a page with the cover tool, then test yourself.",
     "never": "Not tested"
+  },
+  "ruler": {
+    "angle": "Ruler angle: {{angle}} degrees"
   }
 }

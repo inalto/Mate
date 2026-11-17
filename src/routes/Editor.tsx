@@ -32,6 +32,7 @@ import ReplayBar from "../recording/ReplayBar";
 import { runForPane, runOf } from "../covers/panes";
 import { takeRun } from "../covers/pendingRun";
 import StudyBar from "../covers/StudyBar";
+import RulerLayer from "../ruler/RulerLayer";
 
 const closePaperPicker = () => useChromeStore.getState().setPaperPickerOpen(false);
 
@@ -192,6 +193,8 @@ export default function Editor() {
                 {/* Live tutor (checks only with AI consent and a key); renders nothing. */}
                 <TutorController store={editorForPane(i as PaneIndex)} pane={i as PaneIndex} />
                 <PaneOverlay store={editorForPane(i as PaneIndex)} />
+                {/* The ruler: above the page's DOM overlays, below the bottom bars. */}
+                <RulerLayer store={editorForPane(i as PaneIndex)} />
                 <PresentationBar store={editorForPane(i as PaneIndex)} />
                 <ReplayBar store={editorForPane(i as PaneIndex)} replay={replayForPane(i as PaneIndex)} />
                 <StudyBar store={editorForPane(i as PaneIndex)} run={runForPane(i as PaneIndex)} />

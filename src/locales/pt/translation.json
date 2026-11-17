@@ -1592,5 +1592,8 @@
     "test": "Testar",
     "empty": "Ainda não há coberturas neste caderno. Esconda parte de uma página com a ferramenta de cobertura e depois teste-se.",
     "never": "Não testada"
+  },
+  "ruler": {
+    "angle": "Ruler angle: {{angle}} degrees"
   }
 }

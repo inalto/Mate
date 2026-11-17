@@ -1592,5 +1592,8 @@
     "test": "Probar",
     "empty": "Aún no hay cubiertas en este cuaderno. Oculta parte de una página con la herramienta de cubierta y ponte a prueba.",
     "never": "Sin probar"
+  },
+  "ruler": {
+    "angle": "Ruler angle: {{angle}} degrees"
   }
 }

@@ -1592,5 +1592,8 @@
     "test": "Testen",
     "empty": "Noch keine Abdeckungen in diesem Notizbuch. Verdecke einen Teil einer Seite mit dem Abdeckwerkzeug und teste dich dann.",
     "never": "Nicht getestet"
+  },
+  "ruler": {
+    "angle": "Ruler angle: {{angle}} degrees"
   }
 }
