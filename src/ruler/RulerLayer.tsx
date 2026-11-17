@@ -12,7 +12,7 @@ import { applyWheel, SNAP_BACK_MS, wheelDeltaScale } from "../canvas/gestures";
 import { noteStylusSeen, STYLUS_SEEN_WINDOW_MS, stylusSeenAt, touchRejected, type PalmRejection } from "../canvas/input";
 import { guideCandidates, GUIDE_SNAP_PX } from "../canvas/toolInteractions";
 import { isCover } from "../covers/cover";
-import type { Element } from "../model/types";
+import type { Element as PageElement } from "../model/types";
 import { clampToPage, sheetStack, type EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import type { Guide } from "../tools/smartGuides";
@@ -36,7 +36,7 @@ const WHEEL_IDLE_MS = 200;
 const isStylus = (e: { pointerType: string }) => e.pointerType === "pen" || e.pointerType === "eraser";
 
 /** Elements the position snap aims at: no handwriting (it would jump between every stroke's sides). */
-const snapsTo = (el: Element) => el.type !== "stroke" || isCover(el);
+const snapsTo = (el: PageElement) => el.type !== "stroke" || isCover(el);
 
 /** The ruler's colours from the theme tokens (re-read when the theme changes). */
 function rulerColors(): RulerColors {
