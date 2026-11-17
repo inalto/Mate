@@ -85,6 +85,20 @@ export const BUTTON_ERASER = 32;
 export const STYLUS_SEEN_WINDOW_MS = 2000;
 export const DEFINITE_PALM_RADIUS = 45;
 
+/** When a stylus was last seen by any surface (event timeStamp, ms): the canvas adapters and the
+ * ruler share it, so a palm on the ruler is judged against the pen that just wrote on the page. */
+let sharedStylusAt = -Infinity;
+
+/** Notes that a stylus was seen (down, move, hover or up) at `now` (event timeStamp, ms). */
+export function noteStylusSeen(now: number): void {
+  sharedStylusAt = now;
+}
+
+/** When a stylus was last seen anywhere (event timeStamp, ms); −Infinity if never. */
+export function stylusSeenAt(): number {
+  return sharedStylusAt;
+}
+
 export function pointerInfo(e: PointerEvent): PointerInfo {
   const pen = e.pointerType === "pen" || e.pointerType === "eraser";
   return {
@@ -238,10 +252,15 @@ export function createPointerAdapter(
   const addGestureTouch = (e: PointerEvent) => addGestureTouchAt(e.pointerId, local(e), e.timeStamp);
 
   const isStylus = (e: PointerEvent) => e.pointerType === "pen" || e.pointerType === "eraser";
+  /** This adapter's own record, mirrored into the shared one the ruler reads. */
+  const seeStylus = (now: number) => {
+    lastStylusAt = now;
+    noteStylusSeen(now);
+  };
 
   const onDown = (e: PointerEvent) => {
     const t = e.pointerType;
-    if (isStylus(e)) lastStylusAt = e.timeStamp;
+    if (isStylus(e)) seeStylus(e.timeStamp);
     if (t === "touch") {
       if (drawId !== null && drawType !== "touch") {
         // Touch during a pen/mouse stroke is a resting hand: reject the whole contact.
@@ -313,7 +332,7 @@ export function createPointerAdapter(
   };
 
   const onMove = (e: PointerEvent) => {
-    if (isStylus(e)) lastStylusAt = e.timeStamp; // hover counts as "stylus seen"
+    if (isStylus(e)) seeStylus(e.timeStamp); // hover counts as "stylus seen"
     if (e.pointerId === drawId && drawType !== "touch" && e.buttons === 0) {
       end(e, false); // buttons released without a pointerup reaching us
       return;
@@ -350,7 +369,7 @@ export function createPointerAdapter(
   };
 
   function end(e: PointerEvent, cancelled: boolean) {
-    if (isStylus(e)) lastStylusAt = e.timeStamp;
+    if (isStylus(e)) seeStylus(e.timeStamp);
     rejected.delete(e.pointerId);
     if (pending.delete(e.pointerId)) {
       release(e.pointerId);

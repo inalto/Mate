@@ -8,12 +8,25 @@ vi.mock("../../ipc/elementsQueue", () => ({
   elementsQueue: { enqueueUpsert: vi.fn(), enqueueDelete: vi.fn(), flushAll: vi.fn(async () => {}), pending: () => 0, failed: () => 0 },
 }));
 vi.mock("../../ipc/elements", () => ({ loadElements: vi.fn(async () => []) }));
+/** Counts the position snap's target collections (the real query still runs). */
+const candidates = vi.hoisted(() => ({ calls: 0 }));
+vi.mock("../../canvas/toolInteractions", async (orig) => {
+  const m = await orig<typeof import("../../canvas/toolInteractions")>();
+  return {
+    ...m,
+    guideCandidates: (...a: Parameters<typeof m.guideCandidates>) => {
+      candidates.calls++;
+      return m.guideCandidates(...a);
+    },
+  };
+});
 
 import { DEFAULT_SETTINGS } from "../../model/constants";
+import { el } from "../../tools/__tests__/fixtures";
+import { noteStylusSeen } from "../../canvas/input";
 import { createEditorStore, type EditorStore } from "../../stores/editor";
 import { useSettingsStore } from "../../stores/settings";
 import RulerLayer from "../RulerLayer";
-
 let store: EditorStore;
 
 beforeEach(() => {
@@ -97,14 +110,33 @@ describe("RulerLayer: moving the ruler", () => {
     showRuler();
     act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 0 }));
     const hit = hitStrip();
-    // The visible span (800) plus twice the pane's diagonal (2 × 1000), centred on the span.
-    expect(hit.style.width).toBe("2800px");
+    // The body's span (800 plus 55 on each side) plus twice the pane's diagonal (2 × 1000), centred.
+    expect(hit.style.width).toBe("2910px");
     expect(hit.style.height).toBe("94px");
-    expect(hit.style.left).toBe("-1000px");
+    expect(hit.style.left).toBe("-1055px");
     expect(hit.style.top).toBe("253px");
     expect(hit.style.transform).toBe("rotate(0deg)");
     act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 30 }));
     expect(hitStrip().style.transform).toBe("rotate(-30deg)");
+  });
+
+  it("keeps the strip while half the body shows above the pane, without handles or angle button", () => {
+    showRuler();
+    act(() => store.getState().setRulerPose({ x: 400, y: -20, angle: 0 }));
+    const hit = hitStrip();
+    expect(hit).toBeTruthy();
+    expect(hit.style.top).toBe(`${-20 - 47}px`);
+    expect(screen.queryAllByRole("button", { name: "Rotate the ruler" })).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /Ruler angle/ })).toBeNull();
+    // The visible lower part drags it back into the pane.
+    down(hit, 400, 20);
+    move(hit, 400, 300);
+    up(hit, 400, 300);
+    expect(pose()).toEqual({ x: 400, y: 260, angle: 0 });
+    expect(handles()).toHaveLength(2);
+    // 80 px above the pane nothing of it shows: no strip.
+    act(() => store.getState().setRulerPose({ x: 400, y: -80, angle: 0 }));
+    expect(document.querySelector(".ruler-hit")).toBeNull();
   });
 
   it("releases its pointers when a drag carries the ruler off the pane", () => {
@@ -485,5 +517,178 @@ describe("RulerLayer: position snap", () => {
     expect(store.getState().guides).toHaveLength(1);
     act(() => store.getState().toggleRuler());
     expect(store.getState().guides).toEqual([]);
+  });
+
+  // Default pose (400, 300): the lower edge (−1) lies at y = 355. A drag sideways keeps it there.
+  const besideTheEdge = (element: ReturnType<typeof el>) => {
+    withSettings({ snapToGrid: false, smartGuides: true });
+    act(() => store.getState().addElement(element));
+    showRuler();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 410, 300);
+  };
+
+  it("does not snap to handwriting 3 px from the edge", () => {
+    besideTheEdge(el("ink", [[100, 358], [300, 358]], { width: 2 }));
+    expect(pose()).toEqual({ x: 410, y: 300, angle: 0 });
+    expect(store.getState().guides).toEqual([]);
+  });
+
+  it("snaps to a rectangle shape 3 px from the edge", () => {
+    besideTheEdge(el("box", [[100, 358]], { type: "shape", shapeType: "rectangle", fillColor: "transparent", boxWidth: 200, boxHeight: 100 }));
+    // The edge moves onto the rectangle's top (its outline included).
+    expect(pose().x).toBe(410);
+    expect(pose().y).toBeGreaterThan(300);
+    expect(pose().y).toBeLessThanOrEqual(303);
+    expect(store.getState().guides).toHaveLength(1);
+  });
+
+  it("snaps to a cover stroke 3 px from the edge", () => {
+    besideTheEdge(el("cv", [[100, 358], [300, 358]], { width: 2, penStyle: "cover", color: "#334155" }));
+    expect(pose().y).not.toBe(300);
+    expect(Math.abs(pose().y - 303)).toBeLessThanOrEqual(2);
+    expect(store.getState().guides).toHaveLength(1);
+  });
+
+  it("gathers the element targets once per drag, and not at all off 0° and 90°", () => {
+    withSettings({ snapToGrid: false, smartGuides: true });
+    showRuler();
+    candidates.calls = 0;
+    down(hitStrip(), 400, 300);
+    for (let i = 1; i <= 6; i++) move(hitStrip(), 400 + 10 * i, 300 + 3 * i);
+    up(hitStrip(), 460, 318);
+    expect(candidates.calls).toBe(1);
+    down(hitStrip(), 460, 318, 2);
+    move(hitStrip(), 470, 318, 2);
+    expect(candidates.calls).toBe(2);
+    up(hitStrip(), 470, 318, 2);
+    act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 30 }));
+    candidates.calls = 0;
+    down(hitStrip(), 400, 300, 3);
+    for (let i = 1; i <= 4; i++) move(hitStrip(), 400 + 10 * i, 300, 3);
+    expect(candidates.calls).toBe(0);
+    expect(pose().x).toBeCloseTo(440, 9);
+  });
+});
+
+describe("RulerLayer: touch on the body", () => {
+  const touch = (width = 20) => ({ pointerType: "touch", width, height: width });
+
+  it("ignores a palm-sized touch on the strip", () => {
+    showRuler();
+    const start = pose();
+    down(hitStrip(), 400, 300, 1, touch(100));
+    move(hitStrip(), 450, 330, 1, touch(100));
+    up(hitStrip(), 450, 330, 1);
+    expect(pose()).toEqual(start);
+  });
+
+  it("moves with a fingertip only past 6 px, from there on and without a jump", () => {
+    showRuler();
+    const start = pose();
+    down(hitStrip(), 400, 300, 1, touch());
+    move(hitStrip(), 404, 300, 1, touch());
+    expect(pose()).toEqual(start);
+    // The threshold is crossed here: the ruler stays and follows from this point.
+    move(hitStrip(), 407, 300, 1, touch());
+    expect(pose()).toEqual(start);
+    move(hitStrip(), 430, 300, 1, touch());
+    expect(pose()).toEqual({ x: start.x + 23, y: start.y, angle: 0 });
+    up(hitStrip(), 430, 300, 1);
+  });
+
+  it("judges a wide fingertip against the pen last seen anywhere (palm rejection high)", () => {
+    showRuler();
+    const start = pose();
+    const touchAt = (type: string, x: number, id: number, timeStamp: number) =>
+      act(() => {
+        const ev = new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: id, pointerType: "touch", clientX: x, clientY: 300, width: 30, height: 30 });
+        Object.defineProperty(ev, "timeStamp", { value: timeStamp });
+        hitStrip().dispatchEvent(ev);
+      });
+    // The pen wrote on the page 100 ms ago: a 30 px contact is a palm.
+    noteStylusSeen(10_000);
+    touchAt("pointerdown", 400, 1, 10_100);
+    touchAt("pointermove", 440, 1, 10_120);
+    expect(pose()).toEqual(start);
+    touchAt("pointerup", 440, 1, 10_140);
+    // Three seconds later the same contact is a finger.
+    touchAt("pointerdown", 400, 2, 13_000);
+    touchAt("pointermove", 410, 2, 13_020);
+    touchAt("pointermove", 440, 2, 13_040);
+    expect(pose()).toEqual({ x: start.x + 30, y: start.y, angle: 0 });
+  });
+
+  it("moves with a pen from the first pixel", () => {
+    showRuler();
+    const start = pose();
+    down(hitStrip(), 400, 300, 1, { pointerType: "pen" });
+    move(hitStrip(), 401, 300, 1, { pointerType: "pen" });
+    expect(pose()).toEqual({ x: start.x + 1, y: start.y, angle: 0 });
+  });
+
+  it("has no slop for two fingers: the first one's small move counts once the second lands", () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, rulerAngleSnap: 0 } });
+    showRuler();
+    const start = pose();
+    down(hitStrip(), 300, 300, 1, touch());
+    move(hitStrip(), 303, 300, 1, touch());
+    expect(pose()).toEqual(start);
+    down(hitStrip(), 500, 300, 2, touch());
+    move(hitStrip(), 503, 300, 2, touch());
+    expect(pose().x).toBeCloseTo(start.x + 1.5, 9);
+    // The first finger takes part from where it was when the second landed (303), not from 300.
+    move(hitStrip(), 306, 300, 1, touch());
+    expect(pose().x).toBeCloseTo(start.x + 3, 9);
+    expect(pose().angle).toBe(0);
+  });
+});
+
+describe("RulerLayer: Alt+wheel", () => {
+  const altWheel = (target: Element, deltaY: number, timeStamp?: number) =>
+    act(() => {
+      const ev = new WheelEvent("wheel", { deltaY, altKey: true, clientX: 400, clientY: 300, bubbles: true, cancelable: true });
+      if (timeStamp !== undefined) Object.defineProperty(ev, "timeStamp", { value: timeStamp });
+      target.dispatchEvent(ev);
+    });
+
+  it("turns one step for ten trackpad events of −10", () => {
+    showRuler();
+    for (let i = 0; i < 10; i++) altWheel(hitStrip(), -10, 1000 + i * 16);
+    expect(pose().angle).toBe(15);
+  });
+
+  it("turns one step for a mouse notch of −120", () => {
+    showRuler();
+    altWheel(hitStrip(), -120, 1000);
+    expect(pose().angle).toBe(15);
+    altWheel(hitStrip(), -120, 1050);
+    expect(pose().angle).toBe(30);
+  });
+
+  it("turns nothing for +30 then −30, nor across a pause", () => {
+    showRuler();
+    altWheel(hitStrip(), 30, 1000);
+    altWheel(hitStrip(), -30, 1016);
+    expect(pose().angle).toBe(0);
+    altWheel(hitStrip(), -60, 2000);
+    altWheel(hitStrip(), -60, 2300);
+    expect(pose().angle).toBe(0);
+    altWheel(hitStrip(), -60, 2350);
+    expect(pose().angle).toBe(15);
+  });
+
+  it("works over a handle and the angle button, and leaves the open angle field's wheel alone", () => {
+    showRuler();
+    altWheel(handles()[0], -120, 1000);
+    expect(pose().angle).toBe(15);
+    altWheel(angleButton(), -120, 2000);
+    expect(pose().angle).toBe(30);
+    act(() => void fireEvent.click(angleButton()));
+    const field = screen.getByRole("textbox");
+    const ev = new WheelEvent("wheel", { deltaY: -120, altKey: true, bubbles: true, cancelable: true });
+    act(() => void field.dispatchEvent(ev));
+    expect(ev.defaultPrevented).toBe(false);
+    expect(pose().angle).toBe(30);
   });
 });

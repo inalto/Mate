@@ -77,7 +77,7 @@ import { frameCamera } from "../canvas/presentCamera";
 import { findNode, newNode, visibleAncestor, type MindNode } from "../mindmap/tree";
 import type { MindmapLayoutMode } from "../mindmap/layout";
 import type { MindmapStyle } from "../mindmap/styles";
-import { defaultPose, visibleSpan, type RulerPose } from "../ruler/pose";
+import { defaultPose, rulerShown, type RulerPose } from "../ruler/pose";
 
 export type ToolId = "pen" | "highlighter" | "fountain-pen" | "cover" | "eraser" | "cursor" | "lasso" | "shape" | "connector" | "frame" | "note" | "text" | "insert-space";
 /** Pen button actions (settings.penBarrelButtonAction / penEraserButtonAction). */
@@ -1402,7 +1402,7 @@ export function createEditorStore(): EditorStore {
     toggleRuler: () => {
       const { ruler, camera, viewport } = get();
       if (ruler.on) return set({ ruler: { on: false, pose: ruler.pose } });
-      const pose = ruler.pose && visibleSpan(ruler.pose, camera, viewport) !== null ? ruler.pose : defaultPose(camera, viewport);
+      const pose = ruler.pose && rulerShown(ruler.pose, camera, viewport) ? ruler.pose : defaultPose(camera, viewport);
       set({ ruler: { on: true, pose } });
     },
     setRulerPose: (pose) => {

@@ -162,4 +162,13 @@ describe("drawRuler", () => {
     const calls = paint({ x: 5000, y: 5000, angle: 0 }, at(1), "both");
     expect(calls).toEqual([]);
   });
+
+  it("paints the body while its centreline is 20 px above the pane, and nothing at 80 px", () => {
+    const near = paint({ x: 500, y: -20, angle: 0 }, at(1), "both");
+    expect(near.filter((c) => (c[0] === "fill" || c[0] === "fillRect") && c[1] === colors.body)).toHaveLength(1);
+    expect(paint({ x: 500, y: -80, angle: 0 }, at(1), "both")).toEqual([]);
+    // Also beside the pane, turned upright.
+    expect(paint({ x: 1040, y: 350, angle: 90 }, at(1), "both").length).toBeGreaterThan(0);
+    expect(paint({ x: 1080, y: 350, angle: 90 }, at(1), "both")).toEqual([]);
+  });
 });

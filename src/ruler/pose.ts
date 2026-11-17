@@ -79,18 +79,18 @@ export function alongUnits(pose: RulerPose, world: Vec2): number {
   return (world.x - pose.x) * d.x + (world.y - pose.y) * d.y;
 }
 
-/** Crossings of the centreline with the pane rectangle (screen px), ordered along `rulerDir`. */
-export function visibleSpan(pose: RulerPose, camera: Camera, viewport: Viewport): [Vec2, Vec2] | null {
+/** Crossings of the centreline with the pane grown by `pad` px on every side, ordered along `rulerDir`. */
+function clippedSpan(pose: RulerPose, camera: Camera, viewport: Viewport, pad: number): [Vec2, Vec2] | null {
   if (!(viewport.width > 0) || !(viewport.height > 0)) return null;
   const p = worldToScreen(camera, pose);
   const d = rulerDir(pose);
   let t0 = -Infinity;
   let t1 = Infinity;
-  // Liang–Barsky against [0, width] × [0, height].
+  // Liang–Barsky against [−pad, width + pad] × [−pad, height + pad].
   const clip = (pos: number, dir: number, size: number): boolean => {
-    if (Math.abs(dir) < 1e-12) return pos >= 0 && pos <= size;
-    const ta = (0 - pos) / dir;
-    const tb = (size - pos) / dir;
+    if (Math.abs(dir) < 1e-12) return pos >= -pad && pos <= size + pad;
+    const ta = (-pad - pos) / dir;
+    const tb = (size + pad - pos) / dir;
     t0 = Math.max(t0, Math.min(ta, tb));
     t1 = Math.min(t1, Math.max(ta, tb));
     return true;
@@ -101,6 +101,24 @@ export function visibleSpan(pose: RulerPose, camera: Camera, viewport: Viewport)
     { x: p.x + d.x * t0, y: p.y + d.y * t0 },
     { x: p.x + d.x * t1, y: p.y + d.y * t1 },
   ];
+}
+
+/** Crossings of the centreline with the pane rectangle (screen px), ordered along `rulerDir`. */
+export function visibleSpan(pose: RulerPose, camera: Camera, viewport: Viewport): [Vec2, Vec2] | null {
+  return clippedSpan(pose, camera, viewport, 0);
+}
+
+/**
+ * The centreline clipped against the pane grown by half the ruler's width on every side (screen
+ * px): non-null exactly when some part of the body can be in view. It may lie partly off the pane.
+ */
+export function bodySpan(pose: RulerPose, camera: Camera, viewport: Viewport): [Vec2, Vec2] | null {
+  return clippedSpan(pose, camera, viewport, HALF_WIDTH_PX);
+}
+
+/** Whether any part of the ruler's body can be in the pane (it is painted, grabbable and guides). */
+export function rulerShown(pose: RulerPose, camera: Camera, viewport: Viewport): boolean {
+  return bodySpan(pose, camera, viewport) !== null;
 }
 
 export function defaultPose(camera: Camera, viewport: Viewport): RulerPose {

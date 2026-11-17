@@ -492,7 +492,7 @@ function createEngine(
         // The ruler: a press in an edge band with an ink tool (a stroke cover, not a box) or the
         // eraser follows that edge's line, as it is now, for the whole stroke.
         const guided =
-          tool === "eraser" || (isInkTool(tool) && !(tool === "cover" && coverBoxActive(s))) ? guideFor(s.ruler, s.camera, p) : null;
+          tool === "eraser" || (isInkTool(tool) && !(tool === "cover" && coverBoxActive(s))) ? guideFor(s.ruler, s.camera, s.viewport, p) : null;
         if (!isInkTool(tool)) {
           // A press on a tutor marker: a tap opens its card (on up), a drag selects as usual.
           if ((tool === "cursor" || tool === "lasso") && tutor.selectDown(p, worldToScreen(s.camera, p))) {

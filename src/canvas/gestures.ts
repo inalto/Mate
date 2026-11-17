@@ -25,9 +25,14 @@ export function isLikelyTrackpadWheel(e: Pick<WheelLike, "deltaX" | "deltaY">): 
 
 export type WheelAction = { kind: "zoom"; factor: number } | { kind: "pan"; dx: number; dy: number };
 
+/** Screen px in one unit of a wheel delta: 1 (pixels), a line, or a page. */
+export function wheelDeltaScale(deltaMode: number): number {
+  return deltaMode === 1 ? LINE_PX : deltaMode === 2 ? 800 : 1;
+}
+
 /** Decide what a wheel event does. Pan deltas are camera deltas in screen px. */
 export function classifyWheel(e: WheelLike, scrollBehavior: string): WheelAction {
-  const scale = e.deltaMode === 1 ? LINE_PX : e.deltaMode === 2 ? 800 : 1;
+  const scale = wheelDeltaScale(e.deltaMode);
   const dx = e.deltaX * scale;
   const dy = e.deltaY * scale;
   if (e.ctrlKey || e.metaKey) return { kind: "zoom", factor: wheelZoomFactor(dy) };

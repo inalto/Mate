@@ -7,6 +7,10 @@
   z-index: 1;
   overflow: hidden;
   pointer-events: none;
+  /* A long press on the body or a handle selects nothing and raises no callout (iPadOS). */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .ruler-canvas {

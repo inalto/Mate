@@ -3,6 +3,7 @@ import { screenToWorld, worldToScreen, type Camera, type Vec2 } from "../../canv
 import {
   alongUnits,
   angleStep,
+  bodySpan,
   defaultPose,
   edgeLine,
   normalizeAngle,
@@ -10,6 +11,7 @@ import {
   readoutAngle,
   rotatePose,
   rulerDir,
+  rulerShown,
   snapRulerAngle,
   translatePose,
   visibleSpan,
@@ -167,6 +169,31 @@ describe("visibleSpan", () => {
     expect(span[0].y).toBeCloseTo(600);
     expect(span[1].x).toBeCloseTo(700);
     expect(span[1].y).toBeCloseTo(0);
+  });
+});
+
+describe("bodySpan and rulerShown", () => {
+  const c: Camera = { x: 0, y: 0, z: 1 };
+  it("clips the centreline against the pane grown by half the ruler's width", () => {
+    const span = bodySpan({ x: 400, y: 300, angle: 0 }, c, VIEW)!;
+    expect(span[0]).toEqual({ x: -55, y: 300 });
+    expect(span[1]).toEqual({ x: 855, y: 300 });
+  });
+
+  it("is there while part of the body can show, though the centreline is off the pane", () => {
+    for (const y of [-20, -54, 620, 654]) {
+      const p = { x: 400, y, angle: 0 };
+      expect(visibleSpan(p, c, VIEW)).toBeNull();
+      expect(bodySpan(p, c, VIEW)).not.toBeNull();
+      expect(rulerShown(p, c, VIEW)).toBe(true);
+    }
+    for (const y of [-56, -80, 656, 5000]) {
+      expect(bodySpan({ x: 400, y, angle: 0 }, c, VIEW)).toBeNull();
+      expect(rulerShown({ x: 400, y, angle: 0 }, c, VIEW)).toBe(false);
+    }
+    expect(rulerShown({ x: 840, y: 300, angle: 90 }, c, VIEW)).toBe(true);
+    expect(rulerShown({ x: 860, y: 300, angle: 90 }, c, VIEW)).toBe(false);
+    expect(rulerShown({ x: 400, y: 300, angle: 0 }, c, { width: 0, height: 0 })).toBe(false);
   });
 });
 

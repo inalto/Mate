@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { screenToWorld, worldToScreen, type Camera, type Vec2, type Viewport } from "../canvas/camera";
+import { noteStylusSeen } from "../canvas/input";
 import type { EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import { angleDelta, screenAngle } from "./drag";
@@ -34,6 +35,7 @@ function pivotOf(pose: RulerPose, camera: Camera, viewport: Viewport): Vec2 | nu
 }
 
 const snapSetting = (): number => useSettingsStore.getState().settings.rulerAngleSnap;
+const isStylus = (e: { pointerType: string }) => e.pointerType === "pen" || e.pointerType === "eraser";
 
 interface HandleDrag {
   id: number;
@@ -84,6 +86,7 @@ export default function RulerHandles({
   };
 
   const onPointerDown = (e: PointerEvent<HTMLButtonElement>) => {
+    if (isStylus(e)) noteStylusSeen(e.timeStamp);
     e.stopPropagation();
     const s = store.getState();
     if (s.rulerGuiding || dragRef.current || !s.ruler.pose) return;
@@ -107,6 +110,7 @@ export default function RulerHandles({
   };
 
   const onPointerMove = (e: PointerEvent<HTMLButtonElement>) => {
+    if (isStylus(e)) noteStylusSeen(e.timeStamp);
     const d = dragRef.current;
     if (!d || d.id !== e.pointerId) return;
     e.stopPropagation();

@@ -41,6 +41,7 @@ import { createReplay } from "../../recording/replay";
 import type { RecordingContent } from "../../recording/types";
 import { guidedLength } from "../../ruler/guide";
 import { edgeLine, type RulerPose } from "../../ruler/pose";
+import RulerLayer from "../../ruler/RulerLayer";
 import { UNITS_PER_MM } from "../../ruler/scale";
 import { createEditorStore, sheetStack, type EditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
@@ -399,6 +400,48 @@ describe("strokes along the ruler's edge", () => {
     tap({ x: 150, y: 200 });
     expect(s().selection).toEqual(new Set(["box"]));
     expect(s().elements.size).toBe(1);
+  });
+
+  it("a finger moving the ruler is cut off by a guided pen stroke, which follows the edge frozen at pen-down", async () => {
+    await mount();
+    rulerOn();
+    render(createElement(RulerLayer, { store }));
+    const strip = () => document.querySelector(".ruler-hit") as HTMLElement;
+    const finger = (type: string, id: number, x: number, y: number) =>
+      act(() => {
+        const ev = new PointerEvent(type, { pointerId: id, pointerType: "touch", bubbles: true, cancelable: true, clientX: x, clientY: y, buttons: type === "pointerup" ? 0 : 1, width: 20, height: 20 });
+        Object.defineProperty(ev, "timeStamp", { value: clock });
+        clock += 8;
+        strip().dispatchEvent(ev);
+      });
+    // A finger on the body moves the ruler down 30 (past its slop first).
+    finger("pointerdown", 21, 400, 400);
+    finger("pointermove", 21, 400, 410);
+    finger("pointermove", 21, 400, 440);
+    const moved = s().ruler.pose!;
+    expect(moved).toEqual({ x: 400, y: 430, angle: 0 });
+    const edgeY = moved.y - 55;
+    // The pen goes down in the band above the upper edge: the stroke is guided.
+    const pts = wavy(200, edgeY - 10);
+    down(pts[0]);
+    expect(s().rulerGuiding).toBe(true);
+    finger("pointermove", 21, 400, 470);
+    expect(s().ruler.pose).toEqual(moved);
+    moveTo(pts.slice(1));
+    up(pts[pts.length - 1]);
+    const ink = added();
+    expect(ink).toHaveLength(1);
+    expect(onEdge(ink[0], edgeY)).toBe(true);
+    // The finger never lifted: it moves nothing more until it does.
+    finger("pointermove", 21, 400, 500);
+    expect(s().ruler.pose).toEqual(moved);
+    finger("pointerup", 21, 400, 500);
+    // A new touch moves the ruler again (a fingertip right after the pen is accepted on the ruler).
+    finger("pointerdown", 22, 400, 430);
+    finger("pointermove", 22, 400, 440);
+    finger("pointermove", 22, 400, 470);
+    expect(s().ruler.pose).toEqual({ x: 400, y: 460, angle: 0 });
+    finger("pointerup", 22, 400, 470);
   });
 
   it("shows the length beside a guided stroke while it is drawn, and not beside an unguided one", async () => {

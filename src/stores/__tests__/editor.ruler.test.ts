@@ -54,6 +54,20 @@ describe("ruler state", () => {
     expect(visibleSpan(pose, s().camera, s().viewport)).not.toBeNull();
   });
 
+  it("showing it again keeps a pose whose body is partly in view and re-centres one wholly out of it", () => {
+    s().toggleRuler();
+    // Centreline 20 px above the pane: half the body shows, so the pose is kept.
+    s().setRulerPose({ x: 100, y: -20, angle: 0 });
+    s().toggleRuler();
+    s().toggleRuler();
+    expect(s().ruler.pose).toEqual({ x: 100, y: -20, angle: 0 });
+    // 80 px above: nothing of it shows, so it comes back through the middle of the pane.
+    s().setRulerPose({ x: 100, y: -80, angle: 0 });
+    s().toggleRuler();
+    s().toggleRuler();
+    expect(s().ruler.pose).toEqual({ x: 400, y: 300, angle: 0 });
+  });
+
   it("with no viewport area it still turns on, with the default pose", () => {
     const fresh = createEditorStore();
     fresh.getState().toggleRuler();

@@ -1,14 +1,32 @@
 // Strokes along the ruler's edge (pure apart from the context the readout draws on). A press in an
 // edge band takes that edge's line as its guide; every point of the stroke is projected onto it, the
 // finished stroke may snap its length to a step of the scale, and a small label shows the length.
-import type { Camera, Vec2 } from "../canvas/camera";
-import { edgeLine, zoneAt, type Line, type RulerPose } from "./pose";
+import type { Camera, Vec2, Viewport } from "../canvas/camera";
+import { edgeLine, offsetPx, RULER_RIM_PX, RULER_WIDTH_PX, rulerShown, zoneAt, type Line, type RulerPose } from "./pose";
 
-/** The edge line when `world` is in an edge band of a ruler that is on, else null. */
-export function guideFor(ruler: { on: boolean; pose: RulerPose | null }, camera: Camera, world: Vec2): Line | null {
-  if (!ruler.on || !ruler.pose) return null;
+/** Where the hit strip ends, from the centreline (screen px). */
+const STRIP_HALF_PX = RULER_WIDTH_PX / 2 - RULER_RIM_PX;
+/** A body press this close to the strip's end reached the canvas through a sub-pixel disagreement. */
+const STRIP_BOUNDARY_SLACK_PX = 1;
+
+/**
+ * The edge line when `world` is in an edge band of a ruler that is on and in view, else null. A
+ * press on the body within 1 px of the hit strip's end counts as the nearer edge's band (the strip
+ * did not take it); a deeper body press has no guide.
+ */
+export function guideFor(
+  ruler: { on: boolean; pose: RulerPose | null },
+  camera: Camera,
+  viewport: Viewport,
+  world: Vec2,
+): Line | null {
+  if (!ruler.on || !ruler.pose || !rulerShown(ruler.pose, camera, viewport)) return null;
   const zone = zoneAt(ruler.pose, camera, world);
-  return zone === 1 || zone === -1 ? edgeLine(ruler.pose, camera, zone) : null;
+  if (zone === 1 || zone === -1) return edgeLine(ruler.pose, camera, zone);
+  if (zone !== "body") return null;
+  const o = offsetPx(ruler.pose, camera, world);
+  if (Math.abs(o) < STRIP_HALF_PX - STRIP_BOUNDARY_SLACK_PX) return null;
+  return edgeLine(ruler.pose, camera, o >= 0 ? 1 : -1);
 }
 
 /** Position of `p` along `line` from its anchor (page units). */

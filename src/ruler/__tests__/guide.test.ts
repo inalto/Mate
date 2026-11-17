@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Camera } from "../../canvas/camera";
+import type { Camera, Viewport } from "../../canvas/camera";
 import type { Point } from "../../model/types";
 import { drawLengthReadout, finalGuidedLength, finishGuided, guideFor, guidedLength, projectOnLine, snapGuidedLength } from "../guide";
 import { edgeLine, type Line, type RulerPose } from "../pose";
 
 const cam: Camera = { x: 30, y: -20, z: 2 };
+const VIEW: Viewport = { width: 800, height: 600 };
 const flat: RulerPose = { x: 100, y: 200, angle: 0 };
 const tilted: RulerPose = { x: 100, y: 200, angle: 30 };
 /** World point `px` screen px from the centreline of `pose` (positive = edge 1 side), `along` units along it. */
@@ -25,24 +26,46 @@ const run = (to: number): Point[] => {
 
 describe("guideFor", () => {
   it("is null with the ruler off or without a pose", () => {
-    expect(guideFor({ on: false, pose: flat }, cam, at(flat, cam, 65))).toBeNull();
-    expect(guideFor({ on: true, pose: null }, cam, at(flat, cam, 65))).toBeNull();
+    expect(guideFor({ on: false, pose: flat }, cam, VIEW, at(flat, cam, 65))).toBeNull();
+    expect(guideFor({ on: true, pose: null }, cam, VIEW, at(flat, cam, 65))).toBeNull();
   });
 
   it("is null on the body and 20 px outside an edge", () => {
-    expect(guideFor(on(flat), cam, at(flat, cam, 0))).toBeNull();
-    expect(guideFor(on(flat), cam, at(flat, cam, 40))).toBeNull();
-    expect(guideFor(on(flat), cam, at(flat, cam, 75))).toBeNull();
-    expect(guideFor(on(flat), cam, at(flat, cam, -75))).toBeNull();
+    expect(guideFor(on(flat), cam, VIEW, at(flat, cam, 0))).toBeNull();
+    expect(guideFor(on(flat), cam, VIEW, at(flat, cam, 40))).toBeNull();
+    expect(guideFor(on(flat), cam, VIEW, at(flat, cam, 75))).toBeNull();
+    expect(guideFor(on(flat), cam, VIEW, at(flat, cam, -75))).toBeNull();
   });
 
   it("returns the nearer edge's line 10 px outside it and 5 px inside it", () => {
     for (const pose of [flat, tilted]) {
-      expect(guideFor(on(pose), cam, at(pose, cam, 65, 30))).toEqual(edgeLine(pose, cam, 1));
-      expect(guideFor(on(pose), cam, at(pose, cam, 50, -30))).toEqual(edgeLine(pose, cam, 1));
-      expect(guideFor(on(pose), cam, at(pose, cam, -65))).toEqual(edgeLine(pose, cam, -1));
-      expect(guideFor(on(pose), cam, at(pose, cam, -50))).toEqual(edgeLine(pose, cam, -1));
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, 65, 30))).toEqual(edgeLine(pose, cam, 1));
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, 50, -30))).toEqual(edgeLine(pose, cam, 1));
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, -65))).toEqual(edgeLine(pose, cam, -1));
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, -50))).toEqual(edgeLine(pose, cam, -1));
     }
+  });
+
+  it("takes a body press within 1 px of the strip's boundary (47 px) as the nearer edge, and no deeper one", () => {
+    for (const pose of [flat, tilted]) {
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, 46.5))).toEqual(edgeLine(pose, cam, 1));
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, -46.5))).toEqual(edgeLine(pose, cam, -1));
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, 45.5))).toBeNull();
+      expect(guideFor(on(pose), cam, VIEW, at(pose, cam, -45.5))).toBeNull();
+    }
+  });
+
+  it("guides with the centreline 20 px above the pane, and not with it 80 px above (nothing of it in view)", () => {
+    // Screen y = 2 * world y − 20: world y 0 puts the centreline at −20, world y −30 at −80.
+    const near: RulerPose = { x: 100, y: 0, angle: 0 };
+    const press = at(near, cam, -60); // screen y 40, in the band below edge −1 (screen y 35)
+    expect(guideFor(on(near), cam, VIEW, press)).toEqual(edgeLine(near, cam, -1));
+    const far: RulerPose = { x: 100, y: -30, angle: 0 };
+    expect(guideFor(on(far), cam, VIEW, at(far, cam, -60))).toBeNull();
+    expect(guideFor(on(far), cam, VIEW, at(far, cam, -70))).toBeNull();
+    // 60 px above, the body is gone though the band below it reaches 11 px into the pane: no guide.
+    const hidden: RulerPose = { x: 100, y: -20, angle: 0 };
+    expect(guideFor(on(hidden), cam, VIEW, at(hidden, cam, -65))).toBeNull();
   });
 });
 

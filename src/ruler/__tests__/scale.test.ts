@@ -79,6 +79,8 @@ describe("ruler scale", () => {
     expect(edgeSystems("both")).toEqual(["metric", "imperial"]);
     expect(edgeSystems("metric")).toEqual(["metric", "metric"]);
     expect(edgeSystems("imperial")).toEqual(["imperial", "imperial"]);
+    // A bad setting falls back to both, so the painter never meets an unknown system.
+    expect(edgeSystems("cubits" as never)).toEqual(["metric", "imperial"]);
   });
 
   it("converts length snaps to page units", () => {

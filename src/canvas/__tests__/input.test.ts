@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPointerAdapter, fingerMayDraw, touchRejected, type FingerAction } from "../input";
+import { createPointerAdapter, fingerMayDraw, noteStylusSeen, stylusSeenAt, touchRejected, type FingerAction } from "../input";
 
 const camera = () => ({ x: 0, y: 0, z: 1 });
 
@@ -39,6 +39,25 @@ describe("pointer adapter", () => {
     expect(handlers.onDown).not.toHaveBeenCalled(); // input still comes from pointer events only
     dispose();
     expect(touch("touchstart")).toBe(false);
+  });
+
+  it("stylus_seen_is_shared_with_the_ruler_pen_down_and_hover_update_it_mouse_does_not", () => {
+    const { el, dispose } = setup();
+    const at = (type: string, pointerType: string, timeStamp: number) => {
+      const ev = new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 3, pointerType, buttons: type === "pointerup" ? 0 : 1 });
+      Object.defineProperty(ev, "timeStamp", { value: timeStamp });
+      el.dispatchEvent(ev);
+    };
+    noteStylusSeen(-Infinity);
+    at("pointerdown", "mouse", 100);
+    at("pointerup", "mouse", 110);
+    expect(stylusSeenAt()).toBe(-Infinity);
+    at("pointerdown", "pen", 500);
+    expect(stylusSeenAt()).toBe(500);
+    at("pointerup", "pen", 520);
+    at("pointermove", "pen", 900); // hover
+    expect(stylusSeenAt()).toBe(900);
+    dispose();
   });
 
   it("mouse_down_move_up_calls_handlers", () => {

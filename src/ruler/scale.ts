@@ -60,10 +60,10 @@ export function ticks(system: RulerSystem, zoom: number, from: number, to: numbe
   return out;
 }
 
-/** The systems on edge +1 and edge -1. */
+/** The systems on edge +1 and edge -1; anything but "metric" or "imperial" shows both. */
 export function edgeSystems(units: RulerUnits): [RulerSystem, RulerSystem] {
-  if (units === "both") return ["metric", "imperial"];
-  return [units, units];
+  if (units === "metric" || units === "imperial") return [units, units];
+  return ["metric", "imperial"];
 }
 
 /** Length snap step in page units; 0 for "off". */

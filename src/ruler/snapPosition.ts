@@ -18,15 +18,22 @@ export interface PositionTargets {
 const ANGLE_EPS = 1e-6;
 const TIE_EPS = 1e-9;
 
+const isHorizontal = (deg: number) => deg < ANGLE_EPS || deg > 180 - ANGLE_EPS;
+
+/** Whether the position snap can apply at this pose's angle (0° or 90°). */
+export function positionSnapApplies(pose: RulerPose): boolean {
+  const deg = readoutAngle(pose);
+  return isHorizontal(deg) || Math.abs(deg - 90) < ANGLE_EPS;
+}
+
 export function snapRulerPosition(
   pose: RulerPose,
   camera: Camera,
   targets: PositionTargets,
   thresholdPx: number,
 ): { pose: RulerPose; guide: Guide | null } {
-  const deg = readoutAngle(pose);
-  const horizontal = deg < ANGLE_EPS || deg > 180 - ANGLE_EPS;
-  if (!horizontal && Math.abs(deg - 90) >= ANGLE_EPS) return { pose, guide: null };
+  if (!positionSnapApplies(pose)) return { pose, guide: null };
+  const horizontal = isHorizontal(readoutAngle(pose));
   // A horizontal ruler snaps y values and draws a horizontal guide (axis "y"), and vice versa.
   const axis = horizontal ? "y" : "x";
   const limit = thresholdPx / camera.z;

@@ -8,21 +8,35 @@ import { useEffect, useRef } from "react";
 import type { PointerEvent } from "react";
 import { screenToWorld, type Vec2 } from "../canvas/camera";
 import { backgroundLineNear, type BackgroundPage } from "../canvas/background";
-import { applyWheel, SNAP_BACK_MS } from "../canvas/gestures";
+import { applyWheel, SNAP_BACK_MS, wheelDeltaScale } from "../canvas/gestures";
+import { noteStylusSeen, STYLUS_SEEN_WINDOW_MS, stylusSeenAt, touchRejected, type PalmRejection } from "../canvas/input";
 import { guideCandidates, GUIDE_SNAP_PX } from "../canvas/toolInteractions";
+import { isCover } from "../covers/cover";
+import type { Element } from "../model/types";
 import { clampToPage, sheetStack, type EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
 import type { Guide } from "../tools/smartGuides";
 import { createRulerDrag, type RulerDrag } from "./drag";
 import { drawRuler, type RulerColors } from "./draw";
-import { angleStep, RULER_RIM_PX, RULER_WIDTH_PX, rotatePose, visibleSpan, type RulerPose } from "./pose";
+import { angleStep, bodySpan, RULER_RIM_PX, RULER_WIDTH_PX, rotatePose, visibleSpan, type RulerPose } from "./pose";
 import RulerAngle from "./RulerAngle";
 import RulerHandles from "./RulerHandles";
-import { snapRulerPosition, type PositionTargets } from "./snapPosition";
+import { positionSnapApplies, snapRulerPosition, type PositionTargets } from "./snapPosition";
 import "./ruler.css";
 
 const FALLBACK: RulerColors = { body: "rgba(110, 168, 230, 0.35)", edge: "#3d6fa8", ink: "#1c3c63" };
 const HIT_HEIGHT_PX = RULER_WIDTH_PX - 2 * RULER_RIM_PX;
+/** A lone finger on the body moves the ruler only once it has travelled this far (screen px). */
+const TOUCH_SLOP_PX = 6;
+/** Alt+wheel turns one step per this much wheel delta (screen px), so a trackpad swipe does not spin it. */
+const WHEEL_STEP_PX = 100;
+/** The Alt+wheel delta is summed while events keep coming within this long (ms) in one direction. */
+const WHEEL_IDLE_MS = 200;
+
+const isStylus = (e: { pointerType: string }) => e.pointerType === "pen" || e.pointerType === "eraser";
+
+/** Elements the position snap aims at: no handwriting (it would jump between every stroke's sides). */
+const snapsTo = (el: Element) => el.type !== "stroke" || isCover(el);
 
 /** The ruler's colours from the theme tokens (re-read when the theme changes). */
 function rulerColors(): RulerColors {
@@ -56,6 +70,10 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
   const dragRef = useRef<RulerDrag | null>(null);
   const capturedRef = useRef(new Set<number>());
   const guideShownRef = useRef(false);
+  /** Lone fingers still inside their slop: where each landed and where it is now (pane px). */
+  const slopRef = useRef(new Map<number, { landed: Vec2; last: Vec2 }>());
+  /** The position snap's targets, gathered once per drag at its first one-pointer move. */
+  const targetsRef = useRef<PositionTargets | null>(null);
 
   if (!dragRef.current) {
     dragRef.current = createRulerDrag({
@@ -124,6 +142,8 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
       }
     }
     capturedRef.current.clear();
+    slopRef.current.clear();
+    targetsRef.current = null;
   };
 
   // A guided stroke freezes the ruler: a drag in progress ends.
@@ -139,25 +159,33 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store]);
 
+  // The body (strip and paint) shows while any of it can be in the pane; the handles and the angle
+  // readout need the centreline itself in the pane, since they must stay inside it.
+  const body = bodySpan(pose, camera, viewport);
   const span = visibleSpan(pose, camera, viewport);
-  const hasSpan = span !== null;
+  const hasBody = body !== null;
 
-  // A drag can carry the centreline off the pane: the strip then unmounts and no pointerup reaches
-  // it, so its pointers are released here (touch and pen ids are fresh per contact and would leak).
+  // A drag can carry the body off the pane: the strip then unmounts and no pointerup reaches it, so
+  // its pointers are released here (touch and pen ids are fresh per contact and would leak).
   // Turning the ruler off, presenting and unmounting are covered by the cleanup above.
   useEffect(() => {
-    if (!hasSpan) releaseAll();
+    if (!hasBody) releaseAll();
     // releaseAll reads refs only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasSpan]);
+  }, [hasBody]);
 
-  // Wheel over the strip: Alt turns the ruler, otherwise the page scrolls or zooms as elsewhere.
-  // Native and non-passive so preventDefault holds.
+  // Wheel over the strip, the handles or the angle button: Alt turns the ruler, otherwise the page
+  // scrolls or zooms as elsewhere. Native and non-passive so preventDefault holds; the layer itself
+  // lets pointers through, so only its controls ever see a wheel. The angle field keeps its own.
   useEffect(() => {
-    const el = hitRef.current;
+    const el = layerRef.current;
     if (!el) return;
     let snapTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Alt+wheel delta not yet turned into steps, and when the last Alt+wheel event came. */
+    let turnAcc = 0;
+    let turnAt = -Infinity;
     const onWheel = (e: WheelEvent) => {
+      if (e.target instanceof Element && e.target.closest(".ruler-angle-field")) return;
       e.preventDefault();
       e.stopPropagation();
       const s = store.getState();
@@ -168,11 +196,21 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
         // A guided stroke freezes the edge at pen-down.
         if (s.rulerGuiding) return;
         // Shift+wheel may arrive as a horizontal delta.
-        const d = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-        const sp = visibleSpan(cur, s.camera, s.viewport);
-        if (d === 0 || !sp) return;
+        const d = (e.deltaY !== 0 ? e.deltaY : e.deltaX) * wheelDeltaScale(e.deltaMode);
+        if (d === 0) return;
+        // Summed while it keeps coming one way; a pause or a change of direction starts afresh.
+        if (e.timeStamp - turnAt > WHEEL_IDLE_MS || Math.sign(d) !== Math.sign(turnAcc)) turnAcc = 0;
+        turnAt = e.timeStamp;
+        turnAcc += d;
+        const steps = Math.trunc(turnAcc / WHEEL_STEP_PX);
+        if (steps === 0) return;
+        turnAcc -= steps * WHEEL_STEP_PX;
+        // A mouse notch (a step or more on its own) turns whole steps and leaves no remainder behind.
+        if (Math.abs(d) >= WHEEL_STEP_PX) turnAcc = 0;
+        const sp = visibleSpan(cur, s.camera, s.viewport) ?? bodySpan(cur, s.camera, s.viewport);
+        if (!sp) return;
         const step = angleStep(settings.rulerAngleSnap, e.shiftKey);
-        s.setRulerPose(rotatePose(cur, screenToWorld(s.camera, mid(sp)), d < 0 ? step : -step));
+        s.setRulerPose(rotatePose(cur, screenToWorld(s.camera, mid(sp)), -steps * step));
         return;
       }
       const clamp = (c: typeof s.camera) => clampToPage(c, store.getState());
@@ -191,31 +229,67 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
     };
     // toLocal reads a ref only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store, hasSpan]);
+  }, [store]);
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (isStylus(e)) noteStylusSeen(e.timeStamp);
     if (store.getState().rulerGuiding) return;
-    if (!dragRef.current?.down(e.pointerId, toLocal(e))) return;
+    const touch = e.pointerType === "touch";
+    if (touch) {
+      // A palm is ignored here as on the page: it neither moves the ruler nor reaches the canvas. A
+      // fingertip right after the pen is fine: moving the ruler while holding the pen is the gesture.
+      const settings = useSettingsStore.getState().settings;
+      const stylusRecent = e.timeStamp - stylusSeenAt() < STYLUS_SEEN_WINDOW_MS;
+      if (touchRejected(e, settings.palmRejection as PalmRejection, settings.fingerAction, stylusRecent) === "palm") {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+    }
+    const drag = dragRef.current;
+    const at = toLocal(e);
+    if (!drag?.down(e.pointerId, at)) return;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
       /* jsdom or a stale pointer id */
     }
     capturedRef.current.add(e.pointerId);
+    targetsRef.current = null;
+    if (drag.count() > 1) {
+      // A second pointer: a finger still inside its slop takes part from where it is now.
+      for (const [id, s] of slopRef.current) if (id !== e.pointerId) drag.down(id, s.last);
+      slopRef.current.clear();
+    } else if (touch) {
+      slopRef.current.set(e.pointerId, { landed: at, last: at });
+    }
     e.preventDefault();
     e.stopPropagation();
   };
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (isStylus(e)) noteStylusSeen(e.timeStamp);
     if (!capturedRef.current.has(e.pointerId)) return;
     e.stopPropagation();
     const drag = dragRef.current;
-    const next = drag?.move(e.pointerId, toLocal(e));
+    if (!drag) return;
+    const at = toLocal(e);
+    const slop = slopRef.current.get(e.pointerId);
+    if (slop) {
+      slop.last = at;
+      if (Math.hypot(at.x - slop.landed.x, at.y - slop.landed.y) < TOUCH_SLOP_PX) return;
+      // Past the slop: the ruler follows from here on, without catching up the distance so far.
+      slopRef.current.delete(e.pointerId);
+      drag.down(e.pointerId, at);
+      return;
+    }
+    const next = drag.move(e.pointerId, at);
     if (!next) return;
-    // One pointer only, and not while Shift is held. The drag keeps its own unsnapped pose, so the
-    // snap lets go as soon as the edge is past the threshold.
-    if (drag?.count() === 1 && !e.shiftKey) {
-      const snapped = snapRulerPosition(next, store.getState().camera, positionTargets(), GUIDE_SNAP_PX);
+    // One pointer only, at 0° or 90°, and not while Shift is held. The drag keeps its own unsnapped
+    // pose, so the snap lets go as soon as the edge is past the threshold.
+    if (drag.count() === 1 && !e.shiftKey && positionSnapApplies(next)) {
+      targetsRef.current ??= positionTargets();
+      const snapped = snapRulerPosition(next, store.getState().camera, targetsRef.current, GUIDE_SNAP_PX);
       store.getState().setRulerPose(snapped.pose);
       showGuide(snapped.guide);
       return;
@@ -224,7 +298,11 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
     store.getState().setRulerPose(next);
   };
 
-  /** Background lines while snapToGrid is on, element sides and centres while smartGuides is on. */
+  /**
+   * Background lines while snapToGrid is on, element sides and centres while smartGuides is on.
+   * Handwriting is left out (covers are kept): over notes the ruler would jump between every
+   * stroke's top, middle and bottom.
+   */
   const positionTargets = (): PositionTargets => {
     const s = store.getState();
     const settings = useSettingsStore.getState().settings;
@@ -235,12 +313,14 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
       const bgPage: BackgroundPage = { mode: page.mode, width: stack.width, height: stack.height, count: stack.count };
       lineNear = (axis, v) => backgroundLineNear(page.backgroundConfig, bgPage, axis, v);
     }
-    return { lineNear, rects: settings.smartGuides ? guideCandidates(store, new Set()) : [], viewport: s.viewport };
+    return { lineNear, rects: settings.smartGuides ? guideCandidates(store, new Set(), snapsTo) : [], viewport: s.viewport };
   };
 
   const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
     if (!capturedRef.current.delete(e.pointerId)) return;
     dragRef.current?.up(e.pointerId);
+    slopRef.current.delete(e.pointerId);
+    targetsRef.current = null;
     if (capturedRef.current.size === 0) showGuide(null);
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
@@ -249,11 +329,11 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
     }
   };
 
-  const centre = span ? mid(span) : null;
-  // Past the span by twice the pane's diagonal on the whole, so the body is grabbable wherever it
-  // shows at every angle; the layer clips the rest.
-  const hitLength = span
-    ? Math.hypot(span[1].x - span[0].x, span[1].y - span[0].y) + 2 * Math.hypot(viewport.width, viewport.height)
+  const centre = body ? mid(body) : null;
+  // Past the body's span by twice the pane's diagonal on the whole, so the body is grabbable wherever
+  // it shows at every angle; the layer clips the rest.
+  const hitLength = body
+    ? Math.hypot(body[1].x - body[0].x, body[1].y - body[0].y) + 2 * Math.hypot(viewport.width, viewport.height)
     : 0;
   return (
     <div ref={layerRef} className="ruler-layer">
@@ -262,27 +342,29 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
         className="ruler-canvas"
         style={{ width: `${viewport.width}px`, height: `${viewport.height}px`, pointerEvents: "none" }}
       />
-      {span && centre && (
+      {centre && (
+        <div
+          ref={hitRef}
+          className="ruler-hit"
+          aria-hidden="true"
+          style={{
+            left: `${centre.x - hitLength / 2}px`,
+            top: `${centre.y - HIT_HEIGHT_PX / 2}px`,
+            width: `${hitLength}px`,
+            height: `${HIT_HEIGHT_PX}px`,
+            transform: `rotate(${-pose.angle}deg)`,
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerEnd}
+          onPointerCancel={onPointerEnd}
+          onLostPointerCapture={onPointerEnd}
+        />
+      )}
+      {span && (
         <>
-          <div
-            ref={hitRef}
-            className="ruler-hit"
-            aria-hidden="true"
-            style={{
-              left: `${centre.x - hitLength / 2}px`,
-              top: `${centre.y - HIT_HEIGHT_PX / 2}px`,
-              width: `${hitLength}px`,
-              height: `${HIT_HEIGHT_PX}px`,
-              transform: `rotate(${-pose.angle}deg)`,
-            }}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerEnd}
-            onPointerCancel={onPointerEnd}
-            onLostPointerCapture={onPointerEnd}
-          />
           <RulerHandles store={store} span={span} toLocal={toLocal} />
-          <RulerAngle store={store} pose={pose} at={centre} viewport={viewport} />
+          <RulerAngle store={store} pose={pose} at={mid(span)} viewport={viewport} />
         </>
       )}
     </div>

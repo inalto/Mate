@@ -3,7 +3,7 @@
 // edge +1 (the left-hand normal, "up" at angle 0) at v = −55 and edge −1 at v = +55.
 import { worldToScreen, type Camera, type Viewport } from "../canvas/camera";
 import type { RulerUnits } from "../model/types";
-import { RULER_WIDTH_PX, rulerDir, visibleSpan, type RulerPose } from "./pose";
+import { bodySpan, RULER_WIDTH_PX, rulerDir, type RulerPose } from "./pose";
 import { UNITS_PER_INCH, UNITS_PER_MM, edgeSystems, ticks, type RulerSystem } from "./scale";
 
 export interface RulerColors {
@@ -47,7 +47,8 @@ export function drawRuler(
   colors: RulerColors,
   dpr: number,
 ): void {
-  if (!visibleSpan(pose, camera, viewport)) return;
+  // Painted whenever part of the body can be in the pane, though its centreline may be off it.
+  if (!bodySpan(pose, camera, viewport)) return;
   const z = camera.z;
   const origin = worldToScreen(camera, pose);
   const d = rulerDir(pose);

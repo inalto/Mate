@@ -133,7 +133,11 @@ export const angleLabel = (rad: number): string => {
  * Smart-guide candidates: the bounds of the elements intersecting the viewport expanded by 25 %
  * (page units), minus `exclude` (the moving ids), locked elements and PDF placements.
  */
-export function guideCandidates(store: EditorStore, exclude: ReadonlySet<string>): Rect[] {
+export function guideCandidates(
+  store: EditorStore,
+  exclude: ReadonlySet<string>,
+  include?: (el: Element) => boolean,
+): Rect[] {
   const s = store.getState();
   const { camera: c, viewport: vp } = s;
   const w = vp.width / c.z;
@@ -143,7 +147,7 @@ export function guideCandidates(store: EditorStore, exclude: ReadonlySet<string>
   for (const id of store.spatialIndex().query(view)) {
     if (exclude.has(id)) continue;
     const el = s.elements.get(id);
-    if (el && !isLocked(el) && !isPdfPlacement(el)) out.push(elementBounds(el));
+    if (el && !isLocked(el) && !isPdfPlacement(el) && (!include || include(el))) out.push(elementBounds(el));
   }
   return out;
 }
