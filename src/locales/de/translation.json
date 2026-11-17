@@ -189,6 +189,24 @@
       "eraseShapes": "Formen radieren",
       "eraseImages": "Bilder radieren"
     },
+    "ruler": {
+      "title": "Ruler",
+      "units": {
+        "label": "Scales",
+        "both": "Millimetres and inches",
+        "metric": "Millimetres",
+        "imperial": "Inches"
+      },
+      "angleSnap": {
+        "label": "Snap the angle every",
+        "off": "Off"
+      },
+      "lengthSnap": {
+        "label": "Snap line length to",
+        "off": "Off"
+      },
+      "snapHint": "The edge also snaps to the page's lines when Snap to grid is on, and to other objects when Smart guides is on."
+    },
     "penButtons": {
       "barrel": {
         "label": "Seitentaste",

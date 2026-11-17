@@ -12,6 +12,8 @@ interface RowProps {
   id: string;
   label: string;
   hint?: string;
+  /** Extra words search matches besides the label (a sub-group's name, for instance). */
+  keywords?: string;
   /** The setting this row edits (the "keys are consumed" test reads it from the DOM). */
   settingKey?: SettingKey;
   /** Id of the control the label names. Omit for composite controls that label themselves. */
@@ -20,10 +22,10 @@ interface RowProps {
 }
 
 /** One labelled settings row. Search finds rows by `data-row-label` and flashes `data-row-id`. */
-export function Row({ id, label, hint, settingKey, htmlFor, children }: RowProps) {
+export function Row({ id, label, hint, keywords, settingKey, htmlFor, children }: RowProps) {
   const labelId = `${id}-label`;
   return (
-    <div className="srow" data-row-id={id} data-row-label={label} data-setting-key={settingKey}>
+    <div className="srow" data-row-id={id} data-row-label={label} data-row-keywords={keywords} data-setting-key={settingKey}>
       {htmlFor ? (
         <label id={labelId} htmlFor={htmlFor} className="srow-label">
           {label}
@@ -71,6 +73,7 @@ interface BoundProps {
   k: SettingKey;
   label: string;
   hint?: string;
+  keywords?: string;
 }
 
 const useValue = (k: SettingKey) => useSettingsStore((s) => s.settings[k]);
@@ -97,11 +100,11 @@ export interface Option<V extends string | number = string> {
   label: string;
 }
 
-export function SelectRow<V extends string | number>({ k, label, hint, options }: BoundProps & { options: Option<V>[] }) {
+export function SelectRow<V extends string | number>({ k, label, hint, keywords, options }: BoundProps & { options: Option<V>[] }) {
   const value = useValue(k) as V;
   const id = rowId(k);
   return (
-    <Row id={id} label={label} hint={hint} settingKey={k} htmlFor={`${id}-input`}>
+    <Row id={id} label={label} hint={hint} keywords={keywords} settingKey={k} htmlFor={`${id}-input`}>
       <select
         id={`${id}-input`}
         className="input"

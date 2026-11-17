@@ -186,6 +186,24 @@
       "eraseShapes": "Cancella le forme",
       "eraseImages": "Cancella le immagini"
     },
+    "ruler": {
+      "title": "Righello",
+      "units": {
+        "label": "Scale",
+        "both": "Millimetri e pollici",
+        "metric": "Millimetri",
+        "imperial": "Pollici"
+      },
+      "angleSnap": {
+        "label": "Aggancia l'angolo ogni",
+        "off": "No"
+      },
+      "lengthSnap": {
+        "label": "Aggancia la lunghezza delle linee a",
+        "off": "No"
+      },
+      "snapHint": "Il bordo si aggancia anche alle righe della pagina quando Aggancia alla griglia è attivo, e agli altri oggetti quando le Guide intelligenti sono attive."
+    },
     "penButtons": {
       "barrel": {
         "label": "Pulsante laterale",

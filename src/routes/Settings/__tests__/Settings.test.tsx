@@ -33,6 +33,7 @@ vi.mock("../../../ipc/share", () => ({
 }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(async () => "9.9.9") }));
 
+import i18n, { loadLanguage } from "../../../i18n";
 import { exportBackup, resetLocalData } from "../../../ipc/backup";
 import { setPlatformForTests } from "../../../platform";
 import { useSettingsStore } from "../../../stores/settings";
@@ -83,6 +84,41 @@ describe("Settings rows", () => {
     expect(cfg().scribbleToErase).toBe(false);
     fireEvent.change(screen.getByLabelText("Scribble sensitivity"), { target: { value: "more" } });
     expect(cfg().scribbleEraseSensitivity).toBe("more");
+  });
+
+  it("ruler_rows_render_their_options_and_write_the_settings", () => {
+    renderPane();
+    expect(screen.getByRole("heading", { name: "Ruler" })).toBeTruthy();
+    const options = (label: string) =>
+      [...(screen.getByLabelText(label) as HTMLSelectElement).options].map((o) => [o.value, o.textContent]);
+    expect(options("Scales")).toEqual([
+      ["both", "Millimetres and inches"],
+      ["metric", "Millimetres"],
+      ["imperial", "Inches"],
+    ]);
+    expect(options("Snap the angle every")).toEqual([
+      ["0", "Off"],
+      ["1", "1°"],
+      ["5", "5°"],
+      ["15", "15°"],
+      ["45", "45°"],
+    ]);
+    expect(options("Snap line length to")).toEqual([
+      ["off", "Off"],
+      ["1mm", "1 mm"],
+      ["5mm", "5 mm"],
+      ["1cm", "1 cm"],
+      ["1/8in", "1/8 in"],
+      ["1/4in", "1/4 in"],
+    ]);
+    expect((screen.getByLabelText("Snap the angle every") as HTMLSelectElement).value).toBe("15");
+    fireEvent.change(screen.getByLabelText("Scales"), { target: { value: "metric" } });
+    expect(cfg().rulerUnits).toBe("metric");
+    fireEvent.change(screen.getByLabelText("Snap the angle every"), { target: { value: "0" } });
+    expect(cfg().rulerAngleSnap).toBe(0);
+    fireEvent.change(screen.getByLabelText("Snap line length to"), { target: { value: "1/8in" } });
+    expect(cfg().rulerLengthSnap).toBe("1/8in");
+    expect(screen.getByText(/also snaps to the page's lines when Snap to grid is on/)).toBeTruthy();
   });
 
   it("invert_images_toggle_updates_setting", () => {
@@ -211,6 +247,28 @@ describe("search", () => {
     const results = screen.getByRole("list", { name: "Search results" });
     expect(within(results).getAllByRole("button").some((b) => b.textContent?.includes("Dictation"))).toBe(true);
     expect(screen.getByRole("button", { name: "Dictation" })).toBeTruthy();
+  });
+
+  it("search_finds_the_ruler_rows_by_the_word_ruler", () => {
+    renderPane();
+    const box = screen.getByLabelText("Search settings");
+    fireEvent.change(box, { target: { value: "ruler" } });
+    const results = within(screen.getByRole("list", { name: "Search results" })).getAllByRole("button");
+    expect(results.some((b) => b.textContent?.includes("Snap line length to"))).toBe(true);
+  });
+
+  it("search_finds_the_ruler_rows_by_righello_in_italian", async () => {
+    vi.useRealTimers();
+    expect(await loadLanguage("it")).toBe(true);
+    await i18n.changeLanguage("it");
+    try {
+      renderPane();
+      fireEvent.change(screen.getByLabelText("Cerca nelle impostazioni"), { target: { value: "righello" } });
+      const results = within(screen.getByRole("list", { name: "Risultati della ricerca" })).getAllByRole("button");
+      expect(results.some((b) => b.textContent?.includes("Aggancia la lunghezza delle linee a"))).toBe(true);
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 
   it("fuzzy_scoring_prefers_substrings_and_rejects_non_subsequences", () => {

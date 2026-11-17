@@ -4,6 +4,8 @@ export interface SearchEntry {
   label: string;
   section: string;
   sectionId: string;
+  /** Extra words that find the row without being its label. */
+  keywords?: string;
 }
 
 /** How long a jumped-to row stays highlighted. */
@@ -39,7 +41,7 @@ export function searchEntries(query: string, entries: SearchEntry[]): SearchEntr
   const scored: Array<{ e: SearchEntry; s: number }> = [];
   for (const e of entries) {
     const label = fuzzyScore(query, e.label);
-    const s = label >= 0 ? label + 500 : fuzzyScore(query, `${e.section} ${e.label}`);
+    const s = label >= 0 ? label + 500 : fuzzyScore(query, `${e.section} ${e.label} ${e.keywords ?? ""}`);
     if (s >= 0) scored.push({ e, s });
   }
   return scored.sort((a, b) => b.s - a.s).map((x) => x.e);
@@ -53,6 +55,7 @@ export function collectEntries(root: ParentNode): SearchEntry[] {
     out.push({
       id: row.dataset.rowId ?? "",
       label: row.dataset.rowLabel ?? "",
+      keywords: row.dataset.rowKeywords,
       section: section?.dataset.sectionTitle ?? "",
       sectionId: section?.dataset.sectionId ?? "",
     });

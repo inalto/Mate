@@ -7,6 +7,7 @@ const one = (v: number) => v.toFixed(1);
 
 export default function PenSection() {
   const { t } = useTranslation();
+  const ruler = t("settings.ruler.title");
   return (
     <SettingsSection id="pen" title={t("settings.nav.sections.pen")}>
       <ColorRow k="defaultPenColor" label={t("settings.pen.penColor")} />
@@ -90,6 +91,44 @@ export default function PenSection() {
       <SliderRow k="defaultEraserWidth" label={t("settings.pen.eraserWidth")} min={4} max={100} step={1} />
       <ToggleRow k="eraserEraseShapes" label={t("settings.pen.eraseShapes")} />
       <ToggleRow k="eraserEraseImages" label={t("settings.pen.eraseImages")} />
+
+      <SubTitle>{t("settings.ruler.title")}</SubTitle>
+      <SelectRow
+        k="rulerUnits"
+        label={t("settings.ruler.units.label")}
+        keywords={ruler}
+        options={[
+          { value: "both", label: t("settings.ruler.units.both") },
+          { value: "metric", label: t("settings.ruler.units.metric") },
+          { value: "imperial", label: t("settings.ruler.units.imperial") },
+        ]}
+      />
+      <SelectRow
+        k="rulerAngleSnap"
+        label={t("settings.ruler.angleSnap.label")}
+        keywords={ruler}
+        options={[
+          { value: 0, label: t("settings.ruler.angleSnap.off") },
+          { value: 1, label: "1°" },
+          { value: 5, label: "5°" },
+          { value: 15, label: "15°" },
+          { value: 45, label: "45°" },
+        ]}
+      />
+      <SelectRow
+        k="rulerLengthSnap"
+        label={t("settings.ruler.lengthSnap.label")}
+        hint={t("settings.ruler.snapHint")}
+        keywords={ruler}
+        options={[
+          { value: "off", label: t("settings.ruler.lengthSnap.off") },
+          { value: "1mm", label: "1 mm" },
+          { value: "5mm", label: "5 mm" },
+          { value: "1cm", label: "1 cm" },
+          { value: "1/8in", label: "1/8 in" },
+          { value: "1/4in", label: "1/4 in" },
+        ]}
+      />
     </SettingsSection>
   );
 }
