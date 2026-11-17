@@ -1594,6 +1594,8 @@
     "never": "Sin probar"
   },
   "ruler": {
-    "angle": "Ruler angle: {{angle}} degrees"
+    "angle": "Ruler angle: {{angle}} degrees",
+    "angleField": "Angle in degrees, 0 to 180",
+    "rotate": "Rotate the ruler"
   }
 }

@@ -1,15 +1,25 @@
-// The ruler of one pane: a pane-sized canvas that lets pointers through and, at the middle of the
-// visible part of the ruler, its angle readout. Nothing while the ruler is off or the pane presents.
-// Session-only view state: nothing here touches the page or its history.
+// The ruler of one pane: a pane-sized canvas that lets pointers through, a transparent hit strip
+// over the body (the body less the rim along each edge) that moves and turns the ruler, two rotate
+// handles and, at the middle of the visible part of the ruler, its angle readout. Nothing while the
+// ruler is off or the pane presents. Session-only view state: nothing here touches the page or its
+// history; only the ruler's pose and, for a plain wheel, the camera change.
 import { useEffect, useRef } from "react";
-import { useTranslation } from "react-i18next";
-import type { EditorStore } from "../stores/editor";
+import type { PointerEvent } from "react";
+import { screenToWorld, type Vec2 } from "../canvas/camera";
+import { applyWheel, SNAP_BACK_MS } from "../canvas/gestures";
+import { clampToPage, type EditorStore } from "../stores/editor";
 import { useSettingsStore } from "../stores/settings";
+import { createRulerDrag, type RulerDrag } from "./drag";
 import { drawRuler, type RulerColors } from "./draw";
-import { readoutAngle, visibleSpan, type RulerPose } from "./pose";
+import { RULER_RIM_PX, RULER_WIDTH_PX, rotatePose, visibleSpan, type RulerPose } from "./pose";
+import RulerAngle from "./RulerAngle";
+import RulerHandles from "./RulerHandles";
 import "./ruler.css";
 
 const FALLBACK: RulerColors = { body: "rgba(110, 168, 230, 0.35)", edge: "#3d6fa8", ink: "#1c3c63" };
+/** The hit strip runs past the visible span so its rounded-off ends never show inside the pane. */
+const HIT_OVERRUN_PX = 400;
+const HIT_HEIGHT_PX = RULER_WIDTH_PX - 2 * RULER_RIM_PX;
 
 /** The ruler's colours from the theme tokens (re-read when the theme changes). */
 function rulerColors(): RulerColors {
@@ -22,6 +32,8 @@ function rulerColors(): RulerColors {
   };
 }
 
+const mid = (s: [Vec2, Vec2]): Vec2 => ({ x: (s[0].x + s[1].x) / 2, y: (s[0].y + s[1].y) / 2 });
+
 export default function RulerLayer({ store }: { store: EditorStore }) {
   const pose = store((s) => (s.ruler.on && s.presenting === null ? s.ruler.pose : null));
   if (!pose) return null;
@@ -29,14 +41,31 @@ export default function RulerLayer({ store }: { store: EditorStore }) {
 }
 
 function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
-  const { t } = useTranslation();
   const camera = store((s) => s.camera);
   const viewport = store((s) => s.viewport);
   const units = useSettingsStore((s) => s.settings.rulerUnits);
   const theme = useSettingsStore((s) => s.settings.theme);
+  const layerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const hitRef = useRef<HTMLDivElement>(null);
   const colorsRef = useRef<RulerColors | null>(null);
   const frameRef = useRef<number | null>(null);
+  const dragRef = useRef<RulerDrag | null>(null);
+  const capturedRef = useRef(new Set<number>());
+
+  if (!dragRef.current) {
+    dragRef.current = createRulerDrag({
+      pose: () => store.getState().ruler.pose ?? pose,
+      camera: () => store.getState().camera,
+      angleStep: () => useSettingsStore.getState().settings.rulerAngleSnap,
+    });
+  }
+
+  /** Client coordinates to pane px (the frame the camera uses). */
+  const toLocal = (e: { clientX: number; clientY: number }): Vec2 => {
+    const r = layerRef.current?.getBoundingClientRect();
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
+  };
 
   // The theme attribute is set before this effect runs: read the tokens again.
   useEffect(() => {
@@ -71,24 +100,137 @@ function RulerView({ store, pose }: { store: EditorStore; pose: RulerPose }) {
     [],
   );
 
+  /** Ends the drag of every pointer on the strip. */
+  const releaseAll = () => {
+    const drag = dragRef.current;
+    for (const id of capturedRef.current) {
+      drag?.up(id);
+      try {
+        hitRef.current?.releasePointerCapture(id);
+      } catch {
+        /* stale pointer id or no capture support */
+      }
+    }
+    capturedRef.current.clear();
+  };
+
+  // A guided stroke freezes the ruler: a drag in progress ends.
+  useEffect(() => {
+    const unsub = store.subscribe((s) => {
+      if (s.rulerGuiding) releaseAll();
+    });
+    return () => {
+      unsub();
+      releaseAll();
+    };
+    // releaseAll reads refs only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store]);
+
   const span = visibleSpan(pose, camera, viewport);
-  const angle = readoutAngle(pose).toFixed(1);
+  const hasSpan = span !== null;
+
+  // Wheel over the strip: Alt turns the ruler, otherwise the page scrolls or zooms as elsewhere.
+  // Native and non-passive so preventDefault holds.
+  useEffect(() => {
+    const el = hitRef.current;
+    if (!el) return;
+    let snapTimer: ReturnType<typeof setTimeout> | null = null;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const s = store.getState();
+      const cur = s.ruler.pose;
+      if (!cur) return;
+      const settings = useSettingsStore.getState().settings;
+      if (e.altKey) {
+        // Shift+wheel may arrive as a horizontal delta.
+        const d = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+        const sp = visibleSpan(cur, s.camera, s.viewport);
+        if (d === 0 || !sp) return;
+        const step = e.shiftKey ? 0.1 : settings.rulerAngleSnap > 0 ? settings.rulerAngleSnap : 1;
+        s.setRulerPose(rotatePose(cur, screenToWorld(s.camera, mid(sp)), d < 0 ? step : -step));
+        return;
+      }
+      const clamp = (c: typeof s.camera) => clampToPage(c, store.getState());
+      s.setCamera(applyWheel(s.camera, e, toLocal(e), settings.scrollBehavior, clamp));
+      // As on the canvas: an overscroll springs back shortly after the last wheel event.
+      if (snapTimer !== null) clearTimeout(snapTimer);
+      snapTimer = setTimeout(() => {
+        snapTimer = null;
+        store.getState().setCamera(clamp(store.getState().camera));
+      }, SNAP_BACK_MS);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      if (snapTimer !== null) clearTimeout(snapTimer);
+    };
+    // toLocal reads a ref only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, hasSpan]);
+
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (store.getState().rulerGuiding) return;
+    if (!dragRef.current?.down(e.pointerId, toLocal(e))) return;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* jsdom or a stale pointer id */
+    }
+    capturedRef.current.add(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!capturedRef.current.has(e.pointerId)) return;
+    e.stopPropagation();
+    const next = dragRef.current?.move(e.pointerId, toLocal(e));
+    if (next) store.getState().setRulerPose(next);
+  };
+
+  const onPointerEnd = (e: PointerEvent<HTMLDivElement>) => {
+    if (!capturedRef.current.delete(e.pointerId)) return;
+    dragRef.current?.up(e.pointerId);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  };
+
+  const centre = span ? mid(span) : null;
+  const hitLength = span ? Math.hypot(span[1].x - span[0].x, span[1].y - span[0].y) + HIT_OVERRUN_PX : 0;
   return (
-    <div className="ruler-layer">
+    <div ref={layerRef} className="ruler-layer">
       <canvas
         ref={canvasRef}
         className="ruler-canvas"
         style={{ width: `${viewport.width}px`, height: `${viewport.height}px`, pointerEvents: "none" }}
       />
-      {span && (
-        <button
-          type="button"
-          className="ruler-angle"
-          aria-label={t("ruler.angle", { angle })}
-          style={{ left: `${(span[0].x + span[1].x) / 2}px`, top: `${(span[0].y + span[1].y) / 2}px` }}
-        >
-          {`${angle}°`}
-        </button>
+      {span && centre && (
+        <>
+          <div
+            ref={hitRef}
+            className="ruler-hit"
+            aria-hidden="true"
+            style={{
+              left: `${centre.x - hitLength / 2}px`,
+              top: `${centre.y - HIT_HEIGHT_PX / 2}px`,
+              width: `${hitLength}px`,
+              height: `${HIT_HEIGHT_PX}px`,
+              transform: `rotate(${-pose.angle}deg)`,
+            }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
+            onLostPointerCapture={onPointerEnd}
+          />
+          <RulerHandles store={store} span={span} toLocal={toLocal} />
+          <RulerAngle store={store} pose={pose} at={centre} viewport={viewport} />
+        </>
       )}
     </div>
   );

@@ -31,3 +31,64 @@
   pointer-events: auto;
   cursor: default;
 }
+
+/* The body less the rim along each edge: presses here move the ruler, whatever the pointer. The
+   layer clips it (overflow: hidden), so its overrun past the pane never scrolls anything. */
+.ruler-hit {
+  position: absolute;
+  background: transparent;
+  transform-origin: 50% 50%;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: move;
+}
+
+.ruler-handle {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--ruler-edge);
+  border-radius: 50%;
+  background: var(--color-surface-1);
+  opacity: 0.85;
+  touch-action: none;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.ruler-handle::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: var(--ruler-edge);
+}
+
+.ruler-handle:active {
+  cursor: grabbing;
+}
+
+/* Same box as the code assumes (RulerAngle: 72 × 28) so the field can be kept inside the pane. */
+.ruler-angle-field {
+  position: absolute;
+  box-sizing: border-box;
+  width: 72px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  padding: 2px 6px;
+  border: 1px solid var(--ruler-edge);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--ruler-ink);
+  font: 12px / 1.2 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: auto;
+}
+
+.ruler-angle-field[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  outline-color: var(--color-danger);
+}

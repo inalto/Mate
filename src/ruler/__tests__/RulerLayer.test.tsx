@@ -1,6 +1,6 @@
 // The ruler layer of one pane: nothing while the ruler is off or the pane presents; otherwise a
 // pane-sized canvas that lets pointers through and the angle readout at the middle of the ruler.
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../ipc/settings", () => ({ getSettings: vi.fn(), patchSettings: vi.fn(async () => {}) }));
@@ -70,5 +70,306 @@ describe("RulerLayer", () => {
     expect(canvas.style.pointerEvents).toBe("none");
     expect(canvas.style.width).toBe("800px");
     expect(canvas.style.height).toBe("600px");
+  });
+});
+
+const hitStrip = () => document.querySelector(".ruler-hit") as HTMLElement;
+const handles = () => screen.getAllByRole("button", { name: "Rotate the ruler" });
+const pose = () => store.getState().ruler.pose!;
+const down = (el: Element, x: number, y: number, id = 1, init: object = {}) =>
+  act(() => void fireEvent.pointerDown(el, { clientX: x, clientY: y, pointerId: id, button: 0, ...init }));
+const move = (el: Element, x: number, y: number, id = 1, init: object = {}) =>
+  act(() => void fireEvent.pointerMove(el, { clientX: x, clientY: y, pointerId: id, ...init }));
+const up = (el: Element, x: number, y: number, id = 1) =>
+  act(() => void fireEvent.pointerUp(el, { clientX: x, clientY: y, pointerId: id }));
+const at = (c: { x: number; y: number }, r: number, deg: number) => ({
+  x: c.x + r * Math.cos((deg * Math.PI) / 180),
+  y: c.y - r * Math.sin((deg * Math.PI) / 180),
+});
+
+function showRuler() {
+  act(() => store.getState().toggleRuler());
+  return render(<RulerLayer store={store} />);
+}
+
+describe("RulerLayer: moving the ruler", () => {
+  it("lays a rotated hit strip over the body, longer than the visible span", () => {
+    showRuler();
+    act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 0 }));
+    const hit = hitStrip();
+    expect(hit.style.width).toBe("1200px");
+    expect(hit.style.height).toBe("94px");
+    expect(hit.style.left).toBe("-200px");
+    expect(hit.style.top).toBe("253px");
+    expect(hit.style.transform).toBe("rotate(0deg)");
+    act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 30 }));
+    expect(hitStrip().style.transform).toBe("rotate(-30deg)");
+  });
+
+  it("moves the ruler with a pointer on the strip, without pan, drawing or an undo step", () => {
+    showRuler();
+    const camera = store.getState().camera;
+    const elements = store.getState().elements;
+    const start = pose();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 450, 320);
+    up(hitStrip(), 450, 320);
+    expect(pose()).toEqual({ x: start.x + 50, y: start.y + 20, angle: 0 });
+    expect(store.getState().camera).toBe(camera);
+    expect(store.getState().elements).toBe(elements);
+    expect(store.getState().elements.size).toBe(0);
+    expect(store.getState().canUndo).toBe(false);
+    // After the pointer is up, moves do nothing.
+    move(hitStrip(), 500, 400);
+    expect(pose()).toEqual({ x: start.x + 50, y: start.y + 20, angle: 0 });
+  });
+
+  it("does nothing while a guided stroke is being drawn", () => {
+    showRuler();
+    act(() => store.getState().setRulerGuiding(true));
+    const start = pose();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 450, 320);
+    up(hitStrip(), 450, 320);
+    expect(pose()).toEqual(start);
+  });
+
+  it("ends a drag when a guided stroke starts", () => {
+    showRuler();
+    const start = pose();
+    down(hitStrip(), 400, 300);
+    move(hitStrip(), 410, 300);
+    act(() => store.getState().setRulerGuiding(true));
+    move(hitStrip(), 450, 300);
+    act(() => store.getState().setRulerGuiding(false));
+    move(hitStrip(), 480, 300);
+    expect(pose()).toEqual({ x: start.x + 10, y: start.y, angle: 0 });
+  });
+
+  it("turns with two pointers on the strip", () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, rulerAngleSnap: 0 } });
+    showRuler();
+    const mid = { x: 400, y: 300 };
+    const a0 = at(mid, 100, 180);
+    const b0 = at(mid, 100, 0);
+    down(hitStrip(), a0.x, a0.y, 1);
+    down(hitStrip(), b0.x, b0.y, 2);
+    for (let d = 1; d <= 10; d++) {
+      const a = at(mid, 100, 180 + d);
+      const b = at(mid, 100, d);
+      move(hitStrip(), a.x, a.y, 1);
+      move(hitStrip(), b.x, b.y, 2);
+    }
+    expect(pose().angle).toBeCloseTo(10, 6);
+    expect(pose().x).toBeCloseTo(400, 6);
+    expect(pose().y).toBeCloseTo(300, 6);
+  });
+
+  it("turns with Alt+wheel and leaves the camera; a plain wheel moves the camera and leaves the pose", () => {
+    showRuler();
+    const camera = store.getState().camera;
+    act(() => void fireEvent.wheel(hitStrip(), { deltaY: -100, altKey: true, clientX: 400, clientY: 300 }));
+    expect(pose().angle).toBe(15);
+    expect(store.getState().camera).toBe(camera);
+    act(() => void fireEvent.wheel(hitStrip(), { deltaY: 100, altKey: true, shiftKey: true, clientX: 400, clientY: 300 }));
+    expect(pose().angle).toBeCloseTo(14.9, 9);
+    expect(store.getState().camera).toBe(camera);
+    const turned = pose();
+    act(() => void fireEvent.wheel(hitStrip(), { deltaY: 100, clientX: 400, clientY: 300 }));
+    expect(store.getState().camera).not.toEqual(camera);
+    expect(pose()).toEqual(turned);
+  });
+
+  it("turns by 1° per Alt+wheel notch when the snap is off", () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, rulerAngleSnap: 0 } });
+    showRuler();
+    act(() => void fireEvent.wheel(hitStrip(), { deltaY: 100, altKey: true, clientX: 400, clientY: 300 }));
+    expect(pose().angle).toBe(359);
+  });
+});
+
+describe("RulerLayer: rotate handles", () => {
+  it("places two handles 48 px in from the ends of the visible span", () => {
+    showRuler();
+    const [a, b] = handles();
+    expect([a.style.left, a.style.top]).toEqual(["48px", "300px"]);
+    expect([b.style.left, b.style.top]).toEqual(["752px", "300px"]);
+  });
+
+  it("places the handles at a quarter and three quarters of a short span", () => {
+    showRuler();
+    // The centreline crosses the corner: span from (0, 100) to (100, 0), about 141 px long.
+    act(() => store.getState().setRulerPose({ x: 50, y: 50, angle: 45 }));
+    const [a, b] = handles();
+    expect(parseFloat(a.style.left)).toBeCloseTo(25, 6);
+    expect(parseFloat(a.style.top)).toBeCloseTo(75, 6);
+    expect(parseFloat(b.style.left)).toBeCloseTo(75, 6);
+    expect(parseFloat(b.style.top)).toBeCloseTo(25, 6);
+  });
+
+  it("turns about the anchor with the snap, and without it while Shift is held", () => {
+    showRuler();
+    const anchor = { x: 400, y: 300 };
+    const h = handles()[1];
+    down(h, 752, 300);
+    let p = at(anchor, 352, 14);
+    move(h, p.x, p.y);
+    expect(pose().angle).toBe(15);
+    expect(pose().x).toBeCloseTo(400, 9);
+    expect(pose().y).toBeCloseTo(300, 9);
+    move(h, p.x, p.y, 1, { shiftKey: true });
+    expect(pose().angle).toBeCloseTo(14, 9);
+    // The unsnapped angle is tracked: a slow turn does not stick at 15.
+    for (let d = 14.5; d <= 20; d += 0.5) {
+      p = at(anchor, 352, d);
+      move(h, p.x, p.y);
+    }
+    expect(pose().angle).toBeCloseTo(20, 9);
+    up(h, p.x, p.y);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it("turns about the middle of the visible span when the anchor is off the pane", () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, rulerAngleSnap: 0 } });
+    showRuler();
+    act(() => store.getState().setRulerPose({ x: -200, y: 300, angle: 0 }));
+    const h = handles()[1];
+    down(h, 752, 300);
+    const p = at({ x: 400, y: 300 }, 352, 10);
+    move(h, p.x, p.y);
+    expect(pose().angle).toBeCloseTo(10, 9);
+    // The world point under the middle of the old span (400, 300) is still on the centreline.
+    const r = (10 * Math.PI) / 180;
+    const dx = 400 - pose().x;
+    const dy = 300 - pose().y;
+    expect(Math.abs(-Math.sin(r) * dx - Math.cos(r) * dy)).toBeLessThan(1e-9);
+  });
+
+  it("does not start a handle drag while a guided stroke is drawn, and ends one when it starts", () => {
+    showRuler();
+    const h = handles()[1];
+    act(() => store.getState().setRulerGuiding(true));
+    down(h, 752, 300);
+    let p = at({ x: 400, y: 300 }, 352, 30);
+    move(h, p.x, p.y);
+    expect(pose().angle).toBe(0);
+    up(h, p.x, p.y);
+    act(() => store.getState().setRulerGuiding(false));
+    down(h, 752, 300);
+    move(h, p.x, p.y);
+    expect(pose().angle).toBe(30);
+    act(() => store.getState().setRulerGuiding(true));
+    p = at({ x: 400, y: 300 }, 352, 60);
+    move(h, p.x, p.y);
+    expect(pose().angle).toBe(30);
+  });
+
+  it("turns with the arrow keys on a focused handle", () => {
+    showRuler();
+    const h = handles()[0];
+    act(() => void fireEvent.keyDown(h, { key: "ArrowRight" }));
+    expect(pose().angle).toBe(15);
+    act(() => void fireEvent.keyDown(h, { key: "ArrowUp" }));
+    expect(pose().angle).toBe(30);
+    act(() => void fireEvent.keyDown(h, { key: "ArrowLeft" }));
+    expect(pose().angle).toBe(15);
+    act(() => void fireEvent.keyDown(h, { key: "ArrowDown", shiftKey: true }));
+    expect(pose().angle).toBeCloseTo(14.9, 9);
+    expect(pose().x).toBeCloseTo(400, 9);
+    expect(pose().y).toBeCloseTo(300, 9);
+  });
+
+  it("turns by 1° per arrow key when the snap is off", () => {
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, rulerAngleSnap: 0 } });
+    showRuler();
+    act(() => void fireEvent.keyDown(handles()[0], { key: "ArrowDown" }));
+    expect(pose().angle).toBe(359);
+  });
+});
+
+describe("RulerLayer: angle field", () => {
+  const field = () => screen.getByRole("textbox", { name: "Angle in degrees, 0 to 180" }) as HTMLInputElement;
+  const open = () => act(() => void fireEvent.click(angleButton()));
+  const typeIn = (text: string) => act(() => void fireEvent.change(field(), { target: { value: text } }));
+  const key = (k: string) => act(() => void fireEvent.keyDown(field(), { key: k }));
+
+  it("opens prefilled with the readout, focused", () => {
+    showRuler();
+    act(() => store.getState().setRulerPose({ x: 400, y: 300, angle: 12.34 }));
+    open();
+    expect(field().value).toBe("12.3");
+    expect(field().getAttribute("inputmode")).toBe("decimal");
+    expect(document.activeElement).toBe(field());
+    expect(screen.queryByRole("button", { name: /Ruler angle/ })).toBeNull();
+  });
+
+  it("applies 30 on Enter about the middle of the visible span", () => {
+    showRuler();
+    open();
+    typeIn("30");
+    key("Enter");
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(angleButton().textContent).toBe("30.0°");
+    expect(pose().x).toBeCloseTo(400, 9);
+    expect(pose().y).toBeCloseTo(300, 9);
+    expect(store.getState().canUndo).toBe(false);
+  });
+
+  it("accepts a comma as decimal separator, and 180 as 0.0°", () => {
+    showRuler();
+    open();
+    typeIn("12,5");
+    key("Enter");
+    expect(angleButton().textContent).toBe("12.5°");
+    open();
+    typeIn("180");
+    key("Enter");
+    expect(angleButton().textContent).toBe("0.0°");
+  });
+
+  it("refuses 200 and keeps the field open", () => {
+    showRuler();
+    const start = pose();
+    open();
+    typeIn("200");
+    key("Enter");
+    expect(field().getAttribute("aria-invalid")).toBe("true");
+    expect(pose()).toEqual(start);
+    typeIn("abc");
+    key("Enter");
+    expect(field().getAttribute("aria-invalid")).toBe("true");
+    expect(pose()).toEqual(start);
+  });
+
+  it("closes without change on Escape and on blur", () => {
+    showRuler();
+    const start = pose();
+    open();
+    typeIn("45");
+    key("Escape");
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(pose()).toEqual(start);
+    open();
+    typeIn("45");
+    act(() => void fireEvent.blur(field()));
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(pose()).toEqual(start);
+  });
+
+  it("keeps the field inside the pane", () => {
+    showRuler();
+    act(() => store.getState().setRulerPose({ x: 2, y: 2, angle: 45 }));
+    open();
+    expect(parseFloat(field().style.left)).toBeGreaterThanOrEqual(8 + 36);
+    expect(parseFloat(field().style.top)).toBeGreaterThanOrEqual(8 + 14);
+  });
+
+  it("does not start a ruler drag from a press on the angle button", () => {
+    showRuler();
+    const start = pose();
+    down(angleButton(), 400, 300);
+    move(hitStrip(), 450, 300);
+    up(hitStrip(), 450, 300);
+    expect(pose()).toEqual(start);
   });
 });

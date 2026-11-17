@@ -1591,6 +1591,8 @@
     "never": "Mai provata"
   },
   "ruler": {
-    "angle": "Angolo del righello: {{angle}} gradi"
+    "angle": "Angolo del righello: {{angle}} gradi",
+    "angleField": "Angolo in gradi, da 0 a 180",
+    "rotate": "Ruota il righello"
   }
 }
