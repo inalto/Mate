@@ -711,6 +711,15 @@
     "straightLines": "直線",
     "autoShapes": "図形を自動整形",
     "ruler": "定規",
+    "items": {
+      "pens": "ペン",
+      "covers": "カバー",
+      "insert": "挿入",
+      "dictate": "音声入力",
+      "record": "録音",
+      "finger": "指モード",
+      "zoom": "ズーム"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

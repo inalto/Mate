@@ -711,6 +711,15 @@
     "straightLines": "Straight lines",
     "autoShapes": "Perfect shapes",
     "ruler": "Ruler",
+    "items": {
+      "pens": "Pens",
+      "covers": "Covers",
+      "insert": "Insert",
+      "dictate": "Dictate",
+      "record": "Record",
+      "finger": "Finger mode",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

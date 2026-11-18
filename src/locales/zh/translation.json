@@ -711,6 +711,15 @@
     "straightLines": "直线",
     "autoShapes": "自动规整图形",
     "ruler": "尺子",
+    "items": {
+      "pens": "笔",
+      "covers": "遮盖",
+      "insert": "插入",
+      "dictate": "听写",
+      "record": "录制",
+      "finger": "手指模式",
+      "zoom": "缩放"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

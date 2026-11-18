@@ -714,6 +714,15 @@
     "straightLines": "Lignes droites",
     "autoShapes": "Formes parfaites",
     "ruler": "Règle",
+    "items": {
+      "pens": "Stylos",
+      "covers": "Masques",
+      "insert": "Insérer",
+      "dictate": "Dicter",
+      "record": "Enregistrer",
+      "finger": "Mode doigt",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",

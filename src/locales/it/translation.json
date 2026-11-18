@@ -711,6 +711,15 @@
     "straightLines": "Linee dritte",
     "autoShapes": "Forme perfette",
     "ruler": "Righello",
+    "items": {
+      "pens": "Penne",
+      "covers": "Coperture",
+      "insert": "Inserisci",
+      "dictate": "Detta",
+      "record": "Registra",
+      "finger": "Modalità dito",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Dita: automatico",
       "draw": "Le dita disegnano",
