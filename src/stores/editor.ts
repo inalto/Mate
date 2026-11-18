@@ -842,10 +842,20 @@ export function createEditorStore(): EditorStore {
       const top = topZ(get().elements.values());
       const onTop = (el: Element) => (top > 0 && zOf(el) < top ? withMeta(el, { zIndex: top }) : el);
       const added = onTop(shape);
-      // The stroke was never committed: the entry records it (so undo can restore it) but only the
-      // shape is applied now.
-      const actions: Action[] = [{ type: "delete", el: onTop(stroke) }, { type: "add", el: added }];
-      return record("Ink to shape", actions, undefined, [{ type: "add", el: added }]);
+      const drawn = onTop(stroke);
+      const applied: Action[] = [{ type: "add", el: added }];
+      if (get().presenting) return false;
+      if (exceedsLimit(applied)) {
+        set({ limitReached: true, limitKind: "page" });
+        return false;
+      }
+      // The stroke was never committed, and only the shape is applied now. History still holds two
+      // steps, as if it had been: drawing the stroke, then the snap. The first undo gives the stroke
+      // back, the second removes it (without its own entry it would stay and the undo would take
+      // back whatever came before it).
+      flushEraseBatch();
+      history.push({ label: "Draw", actions: [{ type: "add", el: drawn }] });
+      return record("Ink to shape", [{ type: "delete", el: drawn }, ...applied], undefined, applied);
     },
 
     addConnector(input) {
