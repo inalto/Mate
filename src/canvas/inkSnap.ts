@@ -171,6 +171,21 @@ export function createInkSnap(opts: InkSnapOptions): InkSnap {
   };
 }
 
+/** `poly` with extra points along its segments so that no two neighbours are more than `step` apart. */
+export function densify(poly: readonly { x: number; y: number }[], step: number): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const b = poly[i];
+    if (i > 0) {
+      const a = poly[i - 1];
+      const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step);
+      for (let k = 1; k < n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+    }
+    out.push({ x: b.x, y: b.y });
+  }
+  return out;
+}
+
 /** Fill opacity of a perfect shape filled with its own (lighter) stroke colour. */
 export const SNAP_FILL_OPACITY = 0.2;
 
@@ -189,7 +204,9 @@ export function snapShapeElement(
   fill = false,
 ): Element {
   if (preset.type === "highlighter") {
-    const outline = r.curve ?? shapeOutline(r.type, r.rect, r.rotation)[0] ?? [];
+    // The highlighter's renderer streamlines its points (each is pulled toward the one before), so
+    // an outline of bare corners would be drawn with every corner cut: lay points along the sides.
+    const outline = densify(r.curve ?? shapeOutline(r.type, r.rect, r.rotation)[0] ?? [], Math.max(0.5, preset.width / 8));
     return {
       id,
       pageId,

@@ -99,8 +99,15 @@ describe("perfect shapes", () => {
     const hl = { color: "#FDE047", width: 20, type: "highlighter" as const };
     const box = snapShapeElement(rect, hl, "pg", "a", "");
     expect(box).toMatchObject({ type: "stroke", isHighlighter: true, penStyle: "highlighter", color: "#FDE047", width: 20 });
-    expect(box.points.map((p) => [p.x, p.y])).toEqual([[0, 0], [100, 0], [100, 60], [0, 60], [0, 0]]);
-    const straight = snapShapeElement(line, hl, "pg", "a", "");
-    expect(straight.points.map((p) => [p.x, p.y])).toEqual([[0, 0], [100, 0]]); // no arrow head
+    // Along the outline, through every corner, with points laid densely on the sides.
+    const xy = box.points.map((p) => [p.x, p.y]);
+    for (const corner of [[0, 0], [100, 0], [100, 60], [0, 60]]) expect(xy).toContainEqual(corner);
+    expect(xy[0]).toEqual([0, 0]);
+    expect(xy[xy.length - 1]).toEqual([0, 0]);
+    for (const [x, y] of xy) expect(x === 0 || x === 100 || y === 0 || y === 60).toBe(true);
+    const straight = snapShapeElement(line, hl, "pg", "a", "").points;
+    expect([straight[0].x, straight[0].y]).toEqual([0, 0]);
+    expect([straight[straight.length - 1].x, straight[straight.length - 1].y]).toEqual([100, 0]); // no arrow head
+    expect(straight.every((p) => p.y === 0)).toBe(true);
   });
 });
