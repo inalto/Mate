@@ -679,6 +679,7 @@
     "insertTable": "Insérer un tableau",
     "insertGraph": "Insérer un graphe",
     "insertImage": "Insérer une image",
+    "scan": "Numériser une photo",
     "newPage": "Nouvelle page",
     "newSection": "Nouvelle section",
     "openSettings": "Ouvrir les réglages",
@@ -786,6 +787,7 @@
     "cutImages": "Découper les images",
     "text": "Texte",
     "insertImage": "Insérer une image…",
+    "scan": "Numériser",
     "insertTable": "Insérer un tableau",
     "insertCode": "Insérer du code",
     "insertEquation": "Insérer une équation",
@@ -1654,5 +1656,32 @@
     "angle": "Angle de la règle : {{angle}} degrés",
     "angleField": "Angle en degrés, de 0 à 180",
     "rotate": "Faire tourner la règle"
+  },
+  "scan": {
+    "title": "Numériser",
+    "takePhoto": "Prendre une photo",
+    "choosePhoto": "Choisir une photo",
+    "fromFile": "Depuis un fichier…",
+    "fromWebcam": "Depuis la webcam…",
+    "capture": "Capturer",
+    "rotate": "Pivoter",
+    "resetCorners": "Réinitialiser les coins",
+    "colour": "Couleur",
+    "grey": "Gris",
+    "blackWhite": "Noir et blanc",
+    "mode": "Nettoyage",
+    "insert": "Insérer",
+    "cancel": "Annuler",
+    "working": "Traitement en cours…",
+    "failed": "Impossible de numériser cette image.",
+    "noCamera": "Aucune caméra n'est disponible.",
+    "straighten": "Redresser",
+    "preview": "Aperçu",
+    "corner": {
+      "topLeft": "Coin supérieur gauche",
+      "topRight": "Coin supérieur droit",
+      "bottomRight": "Coin inférieur droit",
+      "bottomLeft": "Coin inférieur gauche"
+    }
   }
 }

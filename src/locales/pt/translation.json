@@ -679,6 +679,7 @@
     "insertTable": "Inserir tabela",
     "insertGraph": "Inserir grafo",
     "insertImage": "Inserir imagem",
+    "scan": "Digitalizar uma foto",
     "newPage": "Nova página",
     "newSection": "Nova seção",
     "openSettings": "Abrir configurações",
@@ -786,6 +787,7 @@
     "cutImages": "Recortar imagens",
     "text": "Texto",
     "insertImage": "Inserir imagem…",
+    "scan": "Digitalizar",
     "insertTable": "Inserir tabela",
     "insertCode": "Inserir código",
     "insertEquation": "Inserir equação",
@@ -1654,5 +1656,32 @@
     "angle": "Ângulo da régua: {{angle}} graus",
     "angleField": "Ângulo em graus, de 0 a 180",
     "rotate": "Girar a régua"
+  },
+  "scan": {
+    "title": "Digitalizar",
+    "takePhoto": "Tirar foto",
+    "choosePhoto": "Escolher foto",
+    "fromFile": "De um arquivo…",
+    "fromWebcam": "Da webcam…",
+    "capture": "Capturar",
+    "rotate": "Girar",
+    "resetCorners": "Redefinir cantos",
+    "colour": "Cor",
+    "grey": "Cinzento",
+    "blackWhite": "Preto e branco",
+    "mode": "Limpeza",
+    "insert": "Inserir",
+    "cancel": "Cancelar",
+    "working": "Trabalhando…",
+    "failed": "Não foi possível digitalizar essa imagem.",
+    "noCamera": "Nenhuma câmera disponível.",
+    "straighten": "Endireitar",
+    "preview": "Pré-visualização",
+    "corner": {
+      "topLeft": "Canto superior esquerdo",
+      "topRight": "Canto superior direito",
+      "bottomRight": "Canto inferior direito",
+      "bottomLeft": "Canto inferior esquerdo"
+    }
   }
 }

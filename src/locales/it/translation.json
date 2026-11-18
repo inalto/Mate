@@ -676,6 +676,7 @@
     "insertTable": "Inserisci una tabella",
     "insertGraph": "Inserisci un grafico",
     "insertImage": "Inserisci un'immagine",
+    "scan": "Scansiona una foto",
     "newPage": "Nuova pagina",
     "newSection": "Nuova sezione",
     "openSettings": "Apri le impostazioni",
@@ -783,6 +784,7 @@
     "cutImages": "Taglia le immagini",
     "text": "Testo",
     "insertImage": "Inserisci un'immagine…",
+    "scan": "Scansiona",
     "insertTable": "Inserisci una tabella",
     "insertCode": "Inserisci codice",
     "insertEquation": "Inserisci un'equazione",
@@ -1651,5 +1653,32 @@
     "angle": "Angolo del righello: {{angle}} gradi",
     "angleField": "Angolo in gradi, da 0 a 180",
     "rotate": "Ruota il righello"
+  },
+  "scan": {
+    "title": "Scansiona",
+    "takePhoto": "Scatta foto",
+    "choosePhoto": "Scegli foto",
+    "fromFile": "Da file…",
+    "fromWebcam": "Dalla webcam…",
+    "capture": "Acquisisci",
+    "rotate": "Ruota",
+    "resetCorners": "Ripristina gli angoli",
+    "colour": "Colore",
+    "grey": "Grigio",
+    "blackWhite": "Bianco e nero",
+    "mode": "Pulizia",
+    "insert": "Inserisci",
+    "cancel": "Annulla",
+    "working": "Elaborazione…",
+    "failed": "Impossibile scansionare questa foto.",
+    "noCamera": "Nessuna fotocamera disponibile.",
+    "straighten": "Raddrizza",
+    "preview": "Anteprima",
+    "corner": {
+      "topLeft": "Angolo in alto a sinistra",
+      "topRight": "Angolo in alto a destra",
+      "bottomRight": "Angolo in basso a destra",
+      "bottomLeft": "Angolo in basso a sinistra"
+    }
   }
 }

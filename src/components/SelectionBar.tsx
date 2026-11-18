@@ -1,6 +1,6 @@
 // Floating actions above the current selection: copy, duplicate, delete, arrange, line ends (one
 // line/arrow), connector controls (one connector: routing mode, ends, dash, label), frame controls
-// (one frame: rename, background, select contents, export, present from here, frame order), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
+// (one frame: rename, background, select contents, export, present from here, frame order), Straighten (one unlocked image), colour, fill (when shapes are selected), width; a single text box gets box-wide text formatting instead of
 // colour and width; a single math box also gets Graph and Compute; a single runnable code block gets Run. Hidden while a text box is
 // being edited (its editor has its own bar). Lock (nothing locked) / Unlock (anything locked) and Copy as image are always
 // offered; when every selected element is locked the buttons that would change them are disabled.
@@ -31,6 +31,7 @@ import {
   Image as ImageIcon,
   LockSimple,
   LockSimpleOpen,
+  Perspective,
   Play,
   Stack,
   Trash,
@@ -54,6 +55,7 @@ import { getRuntime } from "../code/runtime";
 import { runCodeElement } from "../code/runElement";
 import type { EditorStore } from "../stores/editor";
 import type { Element } from "../model/types";
+import { canStraighten, straightenImage } from "../scan/open";
 import { CARD_RADII, CARD_SHADOWS, CONNECTOR_CAPS, cardOf, effectiveCaps, isLocked, mindmapOf, type CardStyle, type ConnectorContent } from "../model/content";
 import type { MindmapLayoutMode } from "../mindmap/layout";
 import { BRANCH_PALETTE, branchColor, type MindmapStyle } from "../mindmap/styles";
@@ -735,6 +737,7 @@ export default function SelectionBar() {
   const connector = selected.length === 1 && selected[0]?.type === "connector" ? selected[0] : undefined;
   const frame = selected.length === 1 && selected[0]?.type === "frame" ? selected[0] : undefined;
   const mindmap = selected.length === 1 && selected[0]?.type === "mindmap" ? selected[0] : undefined;
+  const straightenable = selected.length === 1 && selected[0] && canStraighten(selected[0]) ? selected[0] : undefined;
   const lockedCount = selected.filter((e) => !!e && isLocked(e)).length;
   /** Every selected element is locked: nothing here may change them. */
   const allLocked = lockedCount > 0 && lockedCount === selected.length;
@@ -789,6 +792,11 @@ export default function SelectionBar() {
       {connector && <ConnectorControls connector={connector} />}
       {frame && <FrameControls frame={frame} />}
       {mindmap && <MindmapControls map={mindmap} />}
+      {straightenable && (
+        <button type="button" className="tb-btn" aria-label={t("scan.straighten")} title={t("scan.straighten")} onClick={() => void straightenImage(ed, straightenable.id)}>
+          <Perspective size={16} /> {t("scan.straighten")}
+        </button>
+      )}
       {closedShape && <ShapeTextControls shape={closedShape} />}
       {selected.length >= 2 && <AlignMenu count={selected.length} disabled={selected.length - lockedCount < 2} />}
       <span className="tb-sep" />

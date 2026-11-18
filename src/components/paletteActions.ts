@@ -5,6 +5,7 @@ import { pickAndInsertImage } from "../images/insert";
 import { runEditorShortcut } from "../keys/editorCommands";
 import i18n, { type TKey } from "../i18n";
 import { ACTION_META, type ShortcutAction } from "../keys/actions";
+import { scanFromFilePicker } from "../scan/open";
 import { getFocusedEditor } from "../stores/focusedEditor";
 import { useNotebookStore } from "../stores/notebook";
 import { focusedPageId, useTabsStore } from "../stores/tabs";
@@ -107,6 +108,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { id: "insert.table", labelKey: "palette.insertTable", synonyms: ["add", "grid"], scope: "editor", run: insert((s) => s.addTable()) },
   { id: "insert.graph", labelKey: "palette.insertGraph", synonyms: ["add", "plot", "chart"], scope: "editor", run: insert((s) => s.addGraph()) },
   { id: "insert.image", labelKey: "palette.insertImage", synonyms: ["add", "picture", "photo"], scope: "editor", run: () => void pickAndInsertImage() },
+  { id: "insert.scan", labelKey: "palette.scan", synonyms: ["scan", "document", "photo", "camera", "straighten"], scope: "editor", run: () => scanFromFilePicker() },
   {
     id: "page.new",
     labelKey: "palette.newPage",
