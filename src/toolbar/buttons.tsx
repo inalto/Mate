@@ -713,6 +713,9 @@ export function PaperButton() {
   const focusedId = useTabsStore((s) => focusedPageId(s));
   const page = useNotebookStore((s) => (open ? s.tree.pages.find((p) => p.id === focusedId) : undefined));
   const set = useChromeStore.getState().setPaperPickerOpen;
+  // In the More tray the button goes when the tray closes: the picker goes with it, so does the flag
+  // (left on, the picker would come back by itself with the next tray).
+  useEffect(() => () => useChromeStore.getState().setPaperPickerOpen(false), []);
   return (
     <div ref={ref} className="tb-anchor">
       <button

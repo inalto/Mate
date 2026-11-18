@@ -9,10 +9,13 @@ vi.mock("../../ipc/elementsQueue", () => ({
 }));
 
 import { DEFAULT_SETTINGS } from "../../model/constants";
+import type { Page } from "../../model/types";
 import { setPlatformForTests } from "../../platform";
 import { useChromeStore } from "../../stores/chrome";
 import { useEditorStore } from "../../stores/editor";
+import { useNotebookStore } from "../../stores/notebook";
 import { useSettingsStore } from "../../stores/settings";
+import { useTabsStore } from "../../stores/tabs";
 import Toolbar from "../../components/Toolbar";
 import { ITEM_IDS, toSaved, type Slot } from "../layout";
 import MoreMenu from "../MoreMenu";
@@ -34,7 +37,7 @@ describe("MoreMenu", () => {
   afterEach(() => {
     cleanup();
     useSettingsStore.setState({ settings: DEFAULT_SETTINGS, update: realUpdate });
-    useChromeStore.setState({ modalDepth: 0, toolbarCustomizeOpen: false });
+    useChromeStore.setState({ modalDepth: 0, toolbarCustomizeOpen: false, paperPickerOpen: false });
     useEditorStore.setState({ ruler: { on: false, pose: null } });
     setPlatformForTests(false);
   });
@@ -85,6 +88,38 @@ describe("MoreMenu", () => {
     expect(tray()).not.toBeNull();
     act(() => useChromeStore.getState().pushModal());
     expect(tray()).toBeNull();
+  });
+
+  it("paper_opens_from_the_tray_and_the_tray_stays", () => {
+    const STAMP = "2026-01-01T00:00:00.000Z";
+    const page: Page = {
+      id: "p1",
+      sectionId: "s1",
+      title: "P",
+      isExpanded: false,
+      isFavourite: false,
+      depth: 0,
+      mode: "page",
+      backgroundConfig: { type: "ruled", spacing: 40, dotRadius: 1.5 },
+      thumbnailVersion: 0,
+      orderIndex: 0,
+      createdAt: STAMP,
+      updatedAt: STAMP,
+      version: 0,
+    };
+    useNotebookStore.setState((s) => ({ tree: { ...s.tree, pages: [page] } }));
+    useTabsStore.setState({ tabs: [{ id: "t1", panes: [{ pageId: "p1" }], focusedPaneIndex: 0 }], activeTabId: "t1" } as never);
+    withLayout([["pens"]]);
+    renderBar();
+    openMore();
+    fireEvent.click(within(tray()!).getByRole("button", { name: "Paper" }));
+    expect(screen.getByRole("dialog", { name: /paper/i })).toBeTruthy();
+    expect(tray()).not.toBeNull();
+    // Closing More (a pointer-down outside) takes the picker with it and clears the flag.
+    fireEvent.pointerDown(document.body);
+    expect(tray()).toBeNull();
+    expect(useChromeStore.getState().paperPickerOpen).toBe(false);
+    expect(useChromeStore.getState().modalDepth).toBe(0);
   });
 
   it("dock_position_moved_into_more", () => {
