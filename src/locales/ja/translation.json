@@ -813,6 +813,7 @@
     "pageTitle": "ページのタイトル"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "開いているページ",
     "close": "{{title}} を閉じる",
     "split": "分割表示",
