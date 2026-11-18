@@ -146,7 +146,8 @@ export const useTabsStore = create<TabsState>((set, get) => {
       const showing = tabs.find((t) => t.id === activeTabId && shows(t)) ?? tabs.find(shows);
       const active = tabs.find((t) => t.id === activeTabId);
       // A page of another book gets its own tab: the book that was open stays open.
-      const from = active ? bookOfPage(active.panes[active.focusedPaneIndex].pageId) : null;
+      const fromPage = active?.panes[active.focusedPaneIndex]?.pageId;
+      const from = fromPage ? bookOfPage(fromPage) : null;
       const to = bookOfPage(pageId);
       const otherBook = !!from && !!to && from !== to;
       let next: TabsSnapshot;

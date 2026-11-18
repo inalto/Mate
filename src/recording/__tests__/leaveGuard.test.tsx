@@ -127,30 +127,35 @@ describe("leaving the recording's notebook", () => {
     expect(useRecording.getState().phase).toBe("recording");
   });
 
-  it("opening another notebook in the only tab asks, and Stay keeps the page", async () => {
-    const router = await mount();
+  it("opening another notebook gives it its own tab and does not ask", async () => {
+    await mount();
     act(() => tabs().openPage("p2"));
-    expect(dialog()).toBeTruthy();
-    expect(focusedPageId(tabs())).toBe("p1");
-    fireEvent.click(screen.getByRole("button", { name: "Stay" }));
+    // The recorded notebook stays open in its tab, so nothing is left behind.
     expect(dialog()).toBeNull();
-    expect(focusedPageId(tabs())).toBe("p1");
-    expect(router.state.location.pathname).toBe("/edit/p1");
+    expect(tabs().tabs.map((t) => t.panes[0].pageId)).toEqual(["p1", "p2"]);
+    expect(focusedPageId(tabs())).toBe("p2");
     expect(stop).not.toHaveBeenCalled();
     expect(useRecording.getState().phase).toBe("recording");
-    // Another page of the same notebook never asks.
+    expect(pill()).toBeTruthy();
+    // Another page of the same notebook reuses that notebook's tab and never asks.
+    act(() => tabs().activateTab(tabs().tabs[0].id));
     act(() => tabs().openPage("p1b"));
     expect(dialog()).toBeNull();
     expect(focusedPageId(tabs())).toBe("p1b");
+    expect(tabs().tabs).toHaveLength(2);
   });
 
-  it("Stop and leave stops the recording, then opens the page", async () => {
+  it("Stop and leave stops the recording, then closes the notebook's last tab", async () => {
     await mount();
+    const first = tabs().activeTabId!;
     act(() => tabs().openPage("p2"));
+    act(() => tabs().closeTab(first));
+    expect(dialog()).toBeTruthy();
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Stop and leave" }));
     });
     expect(stop).toHaveBeenCalledTimes(1);
+    expect(tabs().tabs.map((t) => t.panes[0].pageId)).toEqual(["p2"]);
     expect(focusedPageId(tabs())).toBe("p2");
   });
 
@@ -160,11 +165,13 @@ describe("leaving the recording's notebook", () => {
     });
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     await mount();
+    const first = tabs().activeTabId!;
     act(() => tabs().openPage("p2"));
+    act(() => tabs().closeTab(first));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Stop and leave" }));
     });
-    expect(focusedPageId(tabs())).toBe("p1");
+    expect(tabs().tabs.map((t) => t.panes[0].pageId)).toEqual(["p1", "p2"]);
     expect(useToastStore.getState().message).toBe("Something went wrong.");
     expect(error).toHaveBeenCalled();
     error.mockRestore();
@@ -191,23 +198,19 @@ describe("leaving the recording's notebook", () => {
     expect(focusedPageId(tabs())).toBe("p1");
   });
 
-  it("the guard works on a fresh editor mount", async () => {
+  it("a URL-driven open of another notebook on a fresh editor mount does not ask", async () => {
     const router = await mount("/library");
     await act(async () => {
       await router.navigate("/edit/p2");
     });
-    expect(dialog()).toBeTruthy();
-    expect(focusedPageId(tabs())).toBe("p1");
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Stay" }));
-    });
     expect(dialog()).toBeNull();
-    expect(router.state.location.pathname).toBe("/edit/p1");
+    expect(router.state.location.pathname).toBe("/edit/p2");
+    expect(tabs().tabs.map((t) => t.panes[0].pageId)).toEqual(["p1", "p2"]);
     expect(screen.getByTestId("canvas")).toBeTruthy();
     expect(pill()).toBeTruthy();
   });
 
-  it("stay after opening another notebook from the library returns to the recorded page", async () => {
+  it("opening another notebook from the library keeps the recorded notebook's tab and the recording", async () => {
     const router = await mount();
     await act(async () => {
       await router.navigate("/library");
@@ -216,13 +219,10 @@ describe("leaving the recording's notebook", () => {
     await act(async () => {
       await router.navigate("/edit/p2");
     });
-    expect(dialog()).toBeTruthy();
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Stay" }));
-    });
-    expect(router.state.location.pathname).toBe("/edit/p1");
-    expect(focusedPageId(tabs())).toBe("p1");
-    expect(screen.getByTestId("canvas")).toBeTruthy();
+    expect(dialog()).toBeNull();
+    expect(router.state.location.pathname).toBe("/edit/p2");
+    expect(focusedPageId(tabs())).toBe("p2");
+    expect(tabs().tabs.map((t) => t.panes[0].pageId)).toEqual(["p1", "p2"]);
     expect(pill()).toBeTruthy();
     expect(stop).not.toHaveBeenCalled();
     expect(useRecording.getState().phase).toBe("recording");
