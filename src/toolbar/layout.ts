@@ -15,6 +15,7 @@ export const ITEM_IDS = [
   "insertSpace",
   "insert",
   "image",
+  "scan",
   "media",
   "table",
   "code",
@@ -49,7 +50,7 @@ export function defaultRows(mobile: boolean): Slot[][] {
   const row: Slot[] = [
     "pens", "covers", SEP,
     "cursor", "lasso", "eraser", "shape", "connector", "frame", "text", "note", "mindmap", "insertSpace", SEP,
-    "insert", "dictate", "record", SEP,
+    "insert", "scan", "dictate", "record", SEP,
     "straight", "ruler", "autoShapes",
   ];
   if (mobile) row.push("finger");

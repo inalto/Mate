@@ -676,6 +676,7 @@
     "insertTable": "表を挿入",
     "insertGraph": "グラフを挿入",
     "insertImage": "画像を挿入",
+    "scan": "写真をスキャン",
     "newPage": "新しいページ",
     "newSection": "新しいセクション",
     "openSettings": "設定を開く",
@@ -783,6 +784,7 @@
     "cutImages": "画像を切り抜く",
     "text": "テキスト",
     "insertImage": "画像を挿入…",
+    "scan": "スキャン",
     "insertTable": "表を挿入",
     "insertCode": "コードを挿入",
     "insertEquation": "数式を挿入",
@@ -1636,5 +1638,32 @@
     "angle": "定規の角度：{{angle}}度",
     "angleField": "角度（度）、0〜180",
     "rotate": "定規を回転"
+  },
+  "scan": {
+    "title": "スキャン",
+    "takePhoto": "写真を撮る",
+    "choosePhoto": "写真を選ぶ",
+    "fromFile": "ファイルから…",
+    "fromWebcam": "ウェブカメラから…",
+    "capture": "撮影",
+    "rotate": "回転",
+    "resetCorners": "角をリセット",
+    "colour": "カラー",
+    "grey": "グレー",
+    "blackWhite": "白黒",
+    "mode": "クリーンアップ",
+    "insert": "挿入",
+    "cancel": "キャンセル",
+    "working": "処理中…",
+    "failed": "その写真をスキャンできませんでした。",
+    "noCamera": "利用できるカメラがありません。",
+    "straighten": "傾きを補正",
+    "preview": "プレビュー",
+    "corner": {
+      "topLeft": "左上の角",
+      "topRight": "右上の角",
+      "bottomRight": "右下の角",
+      "bottomLeft": "左下の角"
+    }
   }
 }

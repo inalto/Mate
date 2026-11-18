@@ -279,7 +279,7 @@ export interface EditorState {
    * covered (not revealed) cover only the covers among them go: what a cover hides is never erased.
    */
   scribbleErase(ids: string[]): void;
-  updateElements(els: Element[]): void;
+  updateElements(els: Element[], label?: string): void;
   /**
    * Text tool: add an empty text box at `at` (first baseline snapped to ruled lines when the
    * setting is on) and open its editor; its id, or null when refused.
@@ -1132,7 +1132,7 @@ export function createEditorStore(): EditorStore {
       return record("Remove covers", gone.map((el) => ({ type: "delete", el })));
     },
 
-    updateElements(els) {
+    updateElements(els, label = "Edit") {
       const cur = get().elements;
       let clamped = false;
       // A table never grows past MAX_TABLE_CELLS: an over-limit one is cut to the limit and flagged.
@@ -1143,7 +1143,7 @@ export function createEditorStore(): EditorStore {
       };
       // Locked elements are never edited (only unlockSelection changes them).
       record(
-        "Edit",
+        label,
         els
           .filter((e) => cur.has(e.id) && !isLocked(cur.get(e.id)!))
           .map((e) => fit(e))

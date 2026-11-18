@@ -679,6 +679,7 @@
     "insertTable": "Tabelle einfügen",
     "insertGraph": "Graph einfügen",
     "insertImage": "Bild einfügen",
+    "scan": "Foto scannen",
     "newPage": "Neue Seite",
     "newSection": "Neuer Abschnitt",
     "openSettings": "Einstellungen öffnen",
@@ -786,6 +787,7 @@
     "cutImages": "Bilder zuschneiden",
     "text": "Text",
     "insertImage": "Bild einfügen…",
+    "scan": "Scannen",
     "insertTable": "Tabelle einfügen",
     "insertCode": "Code einfügen",
     "insertEquation": "Gleichung einfügen",
@@ -1655,5 +1657,32 @@
     "angle": "Winkel des Lineals: {{angle}} Grad",
     "angleField": "Winkel in Grad, 0 bis 180",
     "rotate": "Lineal drehen"
+  },
+  "scan": {
+    "title": "Scannen",
+    "takePhoto": "Foto aufnehmen",
+    "choosePhoto": "Foto auswählen",
+    "fromFile": "Aus Datei…",
+    "fromWebcam": "Von Webcam…",
+    "capture": "Aufnehmen",
+    "rotate": "Drehen",
+    "resetCorners": "Ecken zurücksetzen",
+    "colour": "Farbe",
+    "grey": "Grau",
+    "blackWhite": "Schwarzweiß",
+    "mode": "Bereinigung",
+    "insert": "Einfügen",
+    "cancel": "Abbrechen",
+    "working": "Wird bearbeitet…",
+    "failed": "Dieses Bild konnte nicht gescannt werden.",
+    "noCamera": "Keine Kamera verfügbar.",
+    "straighten": "Gerade richten",
+    "preview": "Vorschau",
+    "corner": {
+      "topLeft": "Obere linke Ecke",
+      "topRight": "Obere rechte Ecke",
+      "bottomRight": "Untere rechte Ecke",
+      "bottomLeft": "Untere linke Ecke"
+    }
   }
 }

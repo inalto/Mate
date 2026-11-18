@@ -9,6 +9,7 @@ import { isImportPath } from "../ipc/import";
 import { useImportStore } from "../stores/importStore";
 import CommandPalette from "./CommandPalette";
 import ImportDialog from "./ImportDialog";
+import ScanDialog from "./ScanDialog";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
@@ -97,6 +98,7 @@ export default function Shell() {
       <RecordingLeaveGuard />
       <CommandPalette />
       <ImportDialog />
+      <ScanDialog />
       <ShortcutHelp />
       {customizeOpen && <CustomizeToolbar onClose={() => useChromeStore.getState().setToolbarCustomizeOpen(false)} />}
     </div>

@@ -47,6 +47,13 @@ describe("Toolbar", () => {
     setPlatformForTests(false);
   });
 
+  it("scan_button_is_on_the_default_toolbar_and_opens_its_menu", () => {
+    renderBar();
+    const scan = screen.getByRole("button", { name: "Scan" });
+    fireEvent.click(scan);
+    expect(screen.getByRole("menuitem", { name: "From file…" })).toBeTruthy();
+  });
+
   it("straight_toggle_follows_the_flag_on_every_platform", () => {
     setPlatformForTests(false);
     renderBar();

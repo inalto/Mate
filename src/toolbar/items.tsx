@@ -22,6 +22,7 @@ import {
   PlusSquare,
   Presentation,
   Record,
+  Scan,
   Shapes,
   Table,
   TextT,
@@ -34,6 +35,7 @@ import type { ShortcutAction } from "../keys/actions";
 import { DictateButton } from "../components/DictateButton";
 import RecordButton from "../recording/RecordButton";
 import CoversMenu from "../covers/CoversMenu";
+import ScanMenu from "../components/ScanMenu";
 import {
   AutoShapesToggle,
   CodeButton,
@@ -94,6 +96,7 @@ export const ITEMS: Record<ItemId, ToolbarItem> = {
   insertSpace: { id: "insertSpace", label: "toolbar.insertSpace", Icon: ArrowsVertical, Button: InsertSpaceButton },
   insert: { id: "insert", label: "toolbar.items.insert", Icon: PlusSquare, Button: InsertMenu },
   image: { id: "image", label: "toolbar.insertImage", Icon: ImageSquare, Button: ImageButton },
+  scan: { id: "scan", label: "toolbar.scan", Icon: Scan, Button: ScanMenu },
   media: { id: "media", label: "media.insert", Icon: FilmSlate, Button: MediaButton },
   table: { id: "table", label: "toolbar.insertTable", Icon: Table, Button: TableButton },
   code: { id: "code", label: "toolbar.insertCode", Icon: Code, Button: CodeButton },
