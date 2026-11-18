@@ -84,6 +84,20 @@ describe("dialogs of tools on the bar and in the More tray", () => {
     expect(useChromeStore.getState().modalDepth).toBe(0);
   });
 
+  it("a pending remove-all question does not survive the toolbar going away", async () => {
+    await load([cover("a"), cover("b")]);
+    withLayout([["pens", "covers"]]);
+    const first = renderBar();
+    fireEvent.click(screen.getByRole("button", { name: "Covers" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Remove all covers" }));
+    expect(screen.getByRole("alertdialog", { name: "Remove all covers?" })).toBeTruthy();
+    first.unmount();
+    expect(useChromeStore.getState().removeCoversOpen).toBe(false);
+    renderBar();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(live("a")).toBe(true);
+  });
+
   it("covers remove-all from the More tray asks and removes", async () => {
     await load([cover("a"), cover("b")]);
     withLayout([["pens", "eraser"]]);

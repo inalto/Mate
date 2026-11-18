@@ -144,6 +144,9 @@ export function RemoveCoversConfirm() {
   useEffect(() => {
     if (requested && count === 0) useChromeStore.getState().setRemoveCoversOpen(false);
   }, [requested, count]);
+  // The toolbar going away (the editor closes) drops the question: left on, it would come back
+  // unasked on the next page with covers.
+  useEffect(() => () => useChromeStore.getState().setRemoveCoversOpen(false), []);
   if (!open) return null;
   // Locked covers stay when the rest are removed, so the dialog counts only the others.
   const locked = covers.filter(isLocked).length;
