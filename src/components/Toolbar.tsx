@@ -63,7 +63,7 @@ export default function Toolbar() {
       aria-label={t("toolbar.label")}
     >
       {rows.map((slots, r) => (
-        <div key={r} className="tb-row" data-row={r}>
+        <div key={r} className="tb-line" data-row={r}>
           {r === 0 && (
             <div className="tb-fixed tb-start">
               <Link to="/" className="tb-btn" aria-label={t("nav.home")} title={t("nav.home")}>

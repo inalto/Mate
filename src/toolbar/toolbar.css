@@ -1,5 +1,6 @@
-/* Editor toolbar: rows of a fixed start, a scrolling middle and a fixed end (see components/Toolbar.tsx). */
-.tb-row {
+/* Editor toolbar: rows (.tb-line) of a fixed start, a scrolling middle and a fixed end (see
+   components/Toolbar.tsx). Not .tb-row: that is the wrapping row inside popovers (base.css). */
+.tb-line {
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -52,8 +53,8 @@
   align-items: stretch;
 }
 
-.toolbar[data-dock="left"] .tb-row,
-.toolbar[data-dock="right"] .tb-row,
+.toolbar[data-dock="left"] .tb-line,
+.toolbar[data-dock="right"] .tb-line,
 .toolbar[data-dock="left"] .tb-fixed,
 .toolbar[data-dock="right"] .tb-fixed,
 .toolbar[data-dock="left"] .tb-scroll,
@@ -65,6 +66,14 @@
 .toolbar[data-dock="right"] .tb-scroll {
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+/* A separator with nothing to separate (an item beside it renders nothing, e.g. Covers on a page
+   without covers) is not shown. Only in the scrolling strip: the fixed ends keep theirs. */
+.tb-scroll > .tb-sep:first-child,
+.tb-scroll > .tb-sep:last-child,
+.tb-scroll > .tb-sep + .tb-sep {
+  display: none;
 }
 
 .toolbar[data-dock="left"] .tb-sep,
@@ -120,6 +129,11 @@
   padding: var(--space-1);
   margin-bottom: var(--space-1);
   border-bottom: 1px solid var(--color-border);
+}
+
+/* Every hidden tool renders nothing just now (Covers on a page without covers): no empty box. */
+.tb-tray:empty {
+  display: none;
 }
 
 /* The Customize toolbar dialog. */
@@ -192,6 +206,8 @@
 }
 
 html.mobile .tbc-handle {
+  justify-content: center;
+  width: 40px;
   padding: 10px 4px;
 }
 

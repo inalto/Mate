@@ -150,6 +150,13 @@ describe("MoreMenu", () => {
     expect(screen.getByRole("menu", { name: "Toolbar position" })).toBeTruthy();
   });
 
+  it("a_tray_whose_tools_render_nothing_is_empty_so_css_hides_it", () => {
+    withLayout([[...ITEM_IDS.filter((id) => id !== "finger" && id !== "covers")]]);
+    renderBar();
+    openMore();
+    expect(tray()!.matches(":empty")).toBe(true); // Covers without covers: `.tb-tray:empty` hides the box
+  });
+
   it("customize_entry_calls_back_and_closes", () => {
     const onCustomize = vi.fn();
     render(<MoreMenu onCustomize={onCustomize} />);

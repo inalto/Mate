@@ -146,7 +146,7 @@ describe("Toolbar", () => {
     const { rerender } = renderBar();
     const bar = () => screen.getByRole("toolbar");
     expect(bar().getAttribute("data-rows")).toBe("2");
-    const rows = bar().querySelectorAll(".tb-row");
+    const rows = bar().querySelectorAll(".tb-line");
     expect(rows).toHaveLength(2);
     expect(within(rows[1] as HTMLElement).getByRole("button", { name: "Eraser" })).toBeTruthy();
     expect(within(rows[1] as HTMLElement).getByRole("button", { name: "Shape" })).toBeTruthy();
@@ -159,7 +159,7 @@ describe("Toolbar", () => {
     );
     expect(bar().getAttribute("aria-orientation")).toBe("vertical");
     expect(bar().getAttribute("data-rows")).toBe("2");
-    expect(bar().querySelectorAll(".tb-row")).toHaveLength(2);
+    expect(bar().querySelectorAll(".tb-line")).toHaveLength(2);
   });
 
   it("one_row_by_default_and_the_wheel_scrolls_the_strip_sideways", () => {
