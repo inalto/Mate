@@ -46,6 +46,15 @@ describe("Toolbar", () => {
     setPlatformForTests(false);
   });
 
+  it("scan_button_sits_right_after_insert_image_and_opens_its_menu", () => {
+    renderBar();
+    const insert = screen.getByRole("button", { name: "Insert image…" });
+    const scan = screen.getByRole("button", { name: "Scan" });
+    expect(insert.nextElementSibling).toBe(scan.closest(".tb-anchor"));
+    fireEvent.click(scan);
+    expect(screen.getByRole("menuitem", { name: "From file…" })).toBeTruthy();
+  });
+
   it("straight_toggle_follows_the_flag_on_every_platform", () => {
     setPlatformForTests(false);
     renderBar();

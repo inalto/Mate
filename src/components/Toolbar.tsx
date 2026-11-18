@@ -63,6 +63,7 @@ import PresetMenu from "./PresetMenu";
 import { SHAPE_LABEL_KEY } from "../shapes/catalog";
 import ShapeMenu, { ShapeIcon } from "./ShapeMenu";
 import MindmapMenu, { MindmapImportInput } from "./MindmapMenu";
+import ScanMenu from "./ScanMenu";
 import { addMindmapAndEdit } from "../mindmap/editSession";
 import type { MindmapStyle } from "../mindmap/styles";
 import { useShortcutHint } from "./shortcutHints";
@@ -843,6 +844,7 @@ export default function Toolbar() {
       >
         <ImageSquare size={18} />
       </button>
+      <ScanMenu />
       <button
         type="button"
         className="tb-btn"
