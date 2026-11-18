@@ -1,0 +1,245 @@
+/* Scan screen: a near-full-window dialog with the photo stage, the preview beside it (below it on a
+   narrow screen) and the controls underneath. Colours come from the theme tokens; the dimming
+   outside the outline matches the dialog backdrop. */
+
+.scan-dialog {
+  width: min(1200px, calc(100vw - 2 * var(--space-4)));
+  height: min(900px, calc(100dvh - 2 * var(--space-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  outline: none;
+}
+
+.scan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.scan-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--space-4);
+}
+
+.scan-status {
+  margin: auto;
+  color: var(--color-text-muted);
+}
+
+.scan-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.scan-fit {
+  position: relative;
+}
+
+.scan-photo,
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.scan-photo {
+  display: block;
+}
+
+.scan-dim {
+  fill: rgb(0 0 0 / 45%);
+}
+
+.scan-outline {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.scan-outline[data-invalid] {
+  stroke: var(--color-danger);
+  stroke-dasharray: 6 4;
+}
+
+/* 44 px target around an 18 px dot. */
+.scan-handle {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  touch-action: none;
+}
+
+.scan-handle::after {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  background: var(--color-surface-1);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 40%);
+}
+
+.scan-handle[data-active] {
+  cursor: grabbing;
+}
+
+.scan-handle[data-active]::after {
+  background: var(--color-primary);
+}
+
+.scan-handle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.scan-handle:disabled {
+  cursor: default;
+}
+
+.scan-loupe {
+  position: absolute;
+  width: 96px;
+  height: 96px;
+  border: 2px solid var(--color-primary);
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-surface-2);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 40%);
+  pointer-events: none;
+}
+
+.scan-loupe canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Crosshair at the exact corner. */
+.scan-loupe::before,
+.scan-loupe::after {
+  content: "";
+  position: absolute;
+  background: var(--color-primary);
+}
+
+.scan-loupe::before {
+  left: 50%;
+  top: 30%;
+  bottom: 30%;
+  width: 1px;
+}
+
+.scan-loupe::after {
+  top: 50%;
+  left: 30%;
+  right: 30%;
+  height: 1px;
+}
+
+.scan-preview {
+  margin: 0;
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.scan-preview canvas {
+  max-width: 100%;
+  max-height: 320px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+
+.scan-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.scan-actions {
+  margin-left: auto;
+}
+
+.scan-modes label {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The radios stay real inputs (arrow keys, screen readers) under the segmented look. */
+.scan-modes input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.scan-modes span {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+}
+
+.scan-modes input:checked + span {
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+.scan-modes input:focus-visible + span {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -4px;
+}
+
+.scan-modes input:disabled + span {
+  opacity: 0.5;
+}
+
+.scan-webcam {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .scan-body {
+    flex-direction: column;
+  }
+
+  .scan-preview {
+    width: auto;
+    flex-direction: row;
+  }
+
+  .scan-preview canvas {
+    max-height: 96px;
+  }
+}

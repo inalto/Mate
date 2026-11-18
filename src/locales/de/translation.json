@@ -679,6 +679,7 @@
     "insertTable": "Tabelle einfügen",
     "insertGraph": "Graph einfügen",
     "insertImage": "Bild einfügen",
+    "scan": "Scan a photo",
     "newPage": "Neue Seite",
     "newSection": "Neuer Abschnitt",
     "openSettings": "Einstellungen öffnen",
@@ -756,6 +757,7 @@
     "cutImages": "Bilder zuschneiden",
     "text": "Text",
     "insertImage": "Bild einfügen…",
+    "scan": "Scan",
     "insertTable": "Tabelle einfügen",
     "insertCode": "Code einfügen",
     "insertEquation": "Gleichung einfügen",
@@ -1615,5 +1617,32 @@
     "angle": "Winkel des Lineals: {{angle}} Grad",
     "angleField": "Winkel in Grad, 0 bis 180",
     "rotate": "Lineal drehen"
+  },
+  "scan": {
+    "title": "Scan",
+    "takePhoto": "Take photo",
+    "choosePhoto": "Choose photo",
+    "fromFile": "From file…",
+    "fromWebcam": "From webcam…",
+    "capture": "Capture",
+    "rotate": "Rotate",
+    "resetCorners": "Reset corners",
+    "colour": "Colour",
+    "grey": "Grey",
+    "blackWhite": "Black and white",
+    "mode": "Clean-up",
+    "insert": "Insert",
+    "cancel": "Cancel",
+    "working": "Working…",
+    "failed": "Could not scan that picture.",
+    "noCamera": "No camera is available.",
+    "straighten": "Straighten",
+    "preview": "Preview",
+    "corner": {
+      "topLeft": "Top left corner",
+      "topRight": "Top right corner",
+      "bottomRight": "Bottom right corner",
+      "bottomLeft": "Bottom left corner"
+    }
   }
 }

@@ -679,6 +679,7 @@
     "insertTable": "Insérer un tableau",
     "insertGraph": "Insérer un graphe",
     "insertImage": "Insérer une image",
+    "scan": "Scan a photo",
     "newPage": "Nouvelle page",
     "newSection": "Nouvelle section",
     "openSettings": "Ouvrir les réglages",
@@ -756,6 +757,7 @@
     "cutImages": "Découper les images",
     "text": "Texte",
     "insertImage": "Insérer une image…",
+    "scan": "Scan",
     "insertTable": "Insérer un tableau",
     "insertCode": "Insérer du code",
     "insertEquation": "Insérer une équation",
@@ -1615,5 +1617,32 @@
     "angle": "Angle de la règle : {{angle}} degrés",
     "angleField": "Angle en degrés, de 0 à 180",
     "rotate": "Faire tourner la règle"
+  },
+  "scan": {
+    "title": "Scan",
+    "takePhoto": "Take photo",
+    "choosePhoto": "Choose photo",
+    "fromFile": "From file…",
+    "fromWebcam": "From webcam…",
+    "capture": "Capture",
+    "rotate": "Rotate",
+    "resetCorners": "Reset corners",
+    "colour": "Colour",
+    "grey": "Grey",
+    "blackWhite": "Black and white",
+    "mode": "Clean-up",
+    "insert": "Insert",
+    "cancel": "Cancel",
+    "working": "Working…",
+    "failed": "Could not scan that picture.",
+    "noCamera": "No camera is available.",
+    "straighten": "Straighten",
+    "preview": "Preview",
+    "corner": {
+      "topLeft": "Top left corner",
+      "topRight": "Top right corner",
+      "bottomRight": "Bottom right corner",
+      "bottomLeft": "Bottom left corner"
+    }
   }
 }

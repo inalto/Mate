@@ -9,6 +9,7 @@ import { isImportPath } from "../ipc/import";
 import { useImportStore } from "../stores/importStore";
 import CommandPalette from "./CommandPalette";
 import ImportDialog from "./ImportDialog";
+import ScanDialog from "./ScanDialog";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
@@ -93,6 +94,7 @@ export default function Shell() {
       <RecordingLeaveGuard />
       <CommandPalette />
       <ImportDialog />
+      <ScanDialog />
       <ShortcutHelp />
     </div>
   );

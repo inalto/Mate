@@ -676,6 +676,7 @@
     "insertTable": "插入表格",
     "insertGraph": "插入图形",
     "insertImage": "插入图片",
+    "scan": "Scan a photo",
     "newPage": "新建页面",
     "newSection": "新建分区",
     "openSettings": "打开设置",
@@ -753,6 +754,7 @@
     "cutImages": "裁剪图片",
     "text": "文字",
     "insertImage": "插入图片…",
+    "scan": "Scan",
     "insertTable": "插入表格",
     "insertCode": "插入代码",
     "insertEquation": "插入公式",
@@ -1596,5 +1598,32 @@
     "angle": "尺子角度：{{angle}} 度",
     "angleField": "角度（度），0 到 180",
     "rotate": "旋转尺子"
+  },
+  "scan": {
+    "title": "Scan",
+    "takePhoto": "Take photo",
+    "choosePhoto": "Choose photo",
+    "fromFile": "From file…",
+    "fromWebcam": "From webcam…",
+    "capture": "Capture",
+    "rotate": "Rotate",
+    "resetCorners": "Reset corners",
+    "colour": "Colour",
+    "grey": "Grey",
+    "blackWhite": "Black and white",
+    "mode": "Clean-up",
+    "insert": "Insert",
+    "cancel": "Cancel",
+    "working": "Working…",
+    "failed": "Could not scan that picture.",
+    "noCamera": "No camera is available.",
+    "straighten": "Straighten",
+    "preview": "Preview",
+    "corner": {
+      "topLeft": "Top left corner",
+      "topRight": "Top right corner",
+      "bottomRight": "Bottom right corner",
+      "bottomLeft": "Bottom left corner"
+    }
   }
 }

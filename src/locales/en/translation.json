@@ -676,6 +676,7 @@
     "insertTable": "Insert table",
     "insertGraph": "Insert graph",
     "insertImage": "Insert image",
+    "scan": "Scan a photo",
     "newPage": "New page",
     "newSection": "New section",
     "openSettings": "Open settings",
@@ -753,6 +754,7 @@
     "cutImages": "Cut images",
     "text": "Text",
     "insertImage": "Insert image…",
+    "scan": "Scan",
     "insertTable": "Insert table",
     "insertCode": "Insert code",
     "insertEquation": "Insert equation",
@@ -1612,5 +1614,32 @@
     "angle": "Ruler angle: {{angle}} degrees",
     "angleField": "Angle in degrees, 0 to 180",
     "rotate": "Rotate the ruler"
+  },
+  "scan": {
+    "title": "Scan",
+    "takePhoto": "Take photo",
+    "choosePhoto": "Choose photo",
+    "fromFile": "From file…",
+    "fromWebcam": "From webcam…",
+    "capture": "Capture",
+    "rotate": "Rotate",
+    "resetCorners": "Reset corners",
+    "colour": "Colour",
+    "grey": "Grey",
+    "blackWhite": "Black and white",
+    "mode": "Clean-up",
+    "insert": "Insert",
+    "cancel": "Cancel",
+    "working": "Working…",
+    "failed": "Could not scan that picture.",
+    "noCamera": "No camera is available.",
+    "straighten": "Straighten",
+    "preview": "Preview",
+    "corner": {
+      "topLeft": "Top left corner",
+      "topRight": "Top right corner",
+      "bottomRight": "Bottom right corner",
+      "bottomLeft": "Bottom left corner"
+    }
   }
 }
