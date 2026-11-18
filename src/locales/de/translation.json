@@ -711,9 +711,39 @@
     "updateSettings": "Update-Einstellungen"
   },
   "toolbar": {
+    "more": "Weitere Werkzeuge",
+    "hiddenTools": "Ausgeblendete Werkzeuge",
+    "customize": "Werkzeugleiste anpassen…",
+    "customizeTitle": "Werkzeugleiste anpassen",
+    "row1": "Zeile 1",
+    "row2": "Zeile 2",
+    "hidden": "Ausgeblendet",
+    "hiddenEmpty": "Nichts ausgeblendet. Zieh ein Werkzeug hierher, um es auszublenden.",
+    "separator": "Trennlinie",
+    "moveUp": "{{item}} nach oben",
+    "moveDown": "{{item}} nach unten",
+    "hide": "{{item}} ausblenden",
+    "show": "{{item}} einblenden",
+    "toOtherRow": "{{item}} in die andere Zeile verschieben",
+    "removeSeparator": "Trennlinie entfernen",
+    "addSeparator": "Trennlinie hinzufügen",
+    "twoRows": "Zwei Zeilen verwenden",
+    "twoRowsNote": "Eine zweite Zeile lässt weniger Platz für die Seite.",
+    "reset": "Auf Standard zurücksetzen",
+    "resetConfirm": "Die Werkzeugleiste auf das Standardlayout zurücksetzen?",
+    "rowEmpty": "Noch nichts hier",
     "straightLines": "Gerade Linien",
     "autoShapes": "Perfekte Formen",
     "ruler": "Lineal",
+    "items": {
+      "pens": "Stifte",
+      "covers": "Abdeckungen",
+      "insert": "Einfügen",
+      "dictate": "Diktieren",
+      "record": "Aufnehmen",
+      "finger": "Fingermodus",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -972,7 +1002,8 @@
     "recent": "Zuletzt verwendete Farben",
     "width": "Stärke",
     "moveLeft": "Nach links verschieben",
-    "moveRight": "Nach rechts verschieben"
+    "moveRight": "Nach rechts verschieben",
+    "remove": "Stift entfernen"
   },
   "text": {
     "bold": "Fett",

@@ -708,9 +708,39 @@
     "updateSettings": "アップデートの設定"
   },
   "toolbar": {
+    "more": "その他のツール",
+    "hiddenTools": "非表示のツール",
+    "customize": "ツールバーをカスタマイズ…",
+    "customizeTitle": "ツールバーをカスタマイズ",
+    "row1": "1行目",
+    "row2": "2行目",
+    "hidden": "非表示",
+    "hiddenEmpty": "非表示のツールはありません。ここにツールをドラッグすると非表示になります。",
+    "separator": "区切り線",
+    "moveUp": "{{item}}を上へ移動",
+    "moveDown": "{{item}}を下へ移動",
+    "hide": "{{item}}を非表示にする",
+    "show": "{{item}}を表示する",
+    "toOtherRow": "{{item}}をもう一方の行へ移動",
+    "removeSeparator": "区切り線を削除",
+    "addSeparator": "区切り線を追加",
+    "twoRows": "2行にする",
+    "twoRowsNote": "2行にするとページの表示領域が狭くなります。",
+    "reset": "初期設定に戻す",
+    "resetConfirm": "ツールバーを初期のレイアウトに戻しますか？",
+    "rowEmpty": "まだ何もありません",
     "straightLines": "直線",
     "autoShapes": "図形を自動整形",
     "ruler": "定規",
+    "items": {
+      "pens": "ペン",
+      "covers": "カバー",
+      "insert": "挿入",
+      "dictate": "音声入力",
+      "record": "録音",
+      "finger": "指モード",
+      "zoom": "ズーム"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -969,7 +999,8 @@
     "recent": "最近使った色",
     "width": "太さ",
     "moveLeft": "左へ移動",
-    "moveRight": "右へ移動"
+    "moveRight": "右へ移動",
+    "remove": "ペンを削除"
   },
   "text": {
     "bold": "太字",

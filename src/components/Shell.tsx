@@ -10,15 +10,19 @@ import { useImportStore } from "../stores/importStore";
 import CommandPalette from "./CommandPalette";
 import ImportDialog from "./ImportDialog";
 import { NavLink, Outlet, useLocation } from "react-router";
+import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
 import { useSettingsStore } from "../stores/settings";
 import RecordingLeaveGuard from "../recording/LeaveGuard";
+import CustomizeToolbar from "../toolbar/CustomizeToolbar";
 import { RecordingGapBanner, RecordingPill } from "../recording/RecordingPill";
 
 const link = ({ isActive }: { isActive: boolean }) => (isActive ? "nav-link active" : "nav-link");
 
 export default function Shell() {
   const { t } = useTranslation();
+  // The Customize toolbar dialog opens from the editor's More menu and from Settings.
+  const customizeOpen = useChromeStore((s) => s.toolbarCustomizeOpen);
   // The editor has its own chrome (top bar, sidebar), so the app rail steps aside there.
   const inEditor = useLocation().pathname.startsWith("/edit/");
   useEffect(() => {
@@ -94,6 +98,7 @@ export default function Shell() {
       <CommandPalette />
       <ImportDialog />
       <ShortcutHelp />
+      {customizeOpen && <CustomizeToolbar onClose={() => useChromeStore.getState().setToolbarCustomizeOpen(false)} />}
     </div>
   );
 }

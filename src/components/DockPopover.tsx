@@ -31,9 +31,29 @@ const MARGIN = 4;
 
 /** Portal content per anchor element, so `useDismiss` treats pointer-downs inside it as inside. */
 const portals = new WeakMap<HTMLElement, HTMLElement>();
+/** The reverse: the anchor each open portal belongs to. */
+const anchors = new WeakMap<HTMLElement, HTMLElement>();
+const PORTAL = ".tb-portal";
+
+const portalOf = (n: Node): HTMLElement | null => (n instanceof Element ? n : n.parentElement)?.closest<HTMLElement>(PORTAL) ?? null;
+
+/** Whether `anchor` itself sits inside a popover: its own popover is nested in that one. */
+export const isNestedAnchor = (anchor: HTMLElement | null): boolean => !!anchor && portalOf(anchor) !== null;
+
+/**
+ * Whether `target` is inside the popover of `anchor`, or inside a popover opened from a button within
+ * it (at any depth): a pointer-down in a nested popover is not outside the one it came from.
+ */
 export function isInsidePortal(anchor: HTMLElement | null, target: Node): boolean {
   const el = anchor ? portals.get(anchor) : undefined;
-  return !!el && el.contains(target);
+  if (!el) return false;
+  for (let p = portalOf(target); p; ) {
+    if (p === el) return true;
+    const a = anchors.get(p);
+    if (!a) return false;
+    p = portalOf(a);
+  }
+  return false;
 }
 
 /** Where a box of `size` goes next to `a` for `dock`, clamped into `view`. */
@@ -64,6 +84,7 @@ export default function DockPopover({ anchorRef, children }: { anchorRef: RefObj
     const box = ref.current;
     if (!anchor || !box) return;
     portals.set(anchor, box);
+    anchors.set(box, anchor);
     const place = () => {
       const a = anchor.getBoundingClientRect();
       const r = box.getBoundingClientRect();
@@ -76,6 +97,7 @@ export default function DockPopover({ anchorRef, children }: { anchorRef: RefObj
     document.addEventListener("scroll", place, true);
     return () => {
       portals.delete(anchor);
+      anchors.delete(box);
       ro?.disconnect();
       window.removeEventListener("resize", place);
       document.removeEventListener("scroll", place, true);

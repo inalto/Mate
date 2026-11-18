@@ -708,9 +708,39 @@
     "updateSettings": "Impostazioni di aggiornamento"
   },
   "toolbar": {
+    "more": "Altri strumenti",
+    "hiddenTools": "Strumenti nascosti",
+    "customize": "Personalizza la barra…",
+    "customizeTitle": "Personalizza la barra",
+    "row1": "Riga 1",
+    "row2": "Riga 2",
+    "hidden": "Nascosti",
+    "hiddenEmpty": "Niente di nascosto. Trascina qui uno strumento per nasconderlo.",
+    "separator": "Separatore",
+    "moveUp": "Sposta {{item}} su",
+    "moveDown": "Sposta {{item}} giù",
+    "hide": "Nascondi {{item}}",
+    "show": "Mostra {{item}}",
+    "toOtherRow": "Sposta {{item}} nell'altra riga",
+    "removeSeparator": "Rimuovi separatore",
+    "addSeparator": "Aggiungi separatore",
+    "twoRows": "Usa due righe",
+    "twoRowsNote": "Una seconda riga lascia meno spazio alla pagina.",
+    "reset": "Ripristina predefinito",
+    "resetConfirm": "Riportare la barra alla disposizione predefinita?",
+    "rowEmpty": "Ancora niente qui",
     "straightLines": "Linee dritte",
     "autoShapes": "Forme perfette",
     "ruler": "Righello",
+    "items": {
+      "pens": "Penne",
+      "covers": "Coperture",
+      "insert": "Inserisci",
+      "dictate": "Detta",
+      "record": "Registra",
+      "finger": "Modalità dito",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Dita: automatico",
       "draw": "Le dita disegnano",
@@ -969,7 +999,8 @@
     "recent": "Colori recenti",
     "width": "Spessore",
     "moveLeft": "Sposta a sinistra",
-    "moveRight": "Sposta a destra"
+    "moveRight": "Sposta a destra",
+    "remove": "Rimuovi penna"
   },
   "text": {
     "bold": "Grassetto",

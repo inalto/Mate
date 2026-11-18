@@ -711,9 +711,39 @@
     "updateSettings": "Configurações de atualização"
   },
   "toolbar": {
+    "more": "Mais ferramentas",
+    "hiddenTools": "Ferramentas ocultas",
+    "customize": "Personalizar a barra de ferramentas…",
+    "customizeTitle": "Personalizar a barra de ferramentas",
+    "row1": "Linha 1",
+    "row2": "Linha 2",
+    "hidden": "Ocultas",
+    "hiddenEmpty": "Nada oculto. Arraste uma ferramenta para cá para ocultá-la.",
+    "separator": "Separador",
+    "moveUp": "Mover {{item}} para cima",
+    "moveDown": "Mover {{item}} para baixo",
+    "hide": "Ocultar {{item}}",
+    "show": "Mostrar {{item}}",
+    "toOtherRow": "Mover {{item}} para a outra linha",
+    "removeSeparator": "Remover separador",
+    "addSeparator": "Adicionar separador",
+    "twoRows": "Usar duas linhas",
+    "twoRowsNote": "Uma segunda linha deixa menos espaço para a página.",
+    "reset": "Repor o padrão",
+    "resetConfirm": "Voltar a barra de ferramentas ao layout padrão?",
+    "rowEmpty": "Ainda não há nada aqui",
     "straightLines": "Linhas retas",
     "autoShapes": "Formas perfeitas",
     "ruler": "Régua",
+    "items": {
+      "pens": "Canetas",
+      "covers": "Coberturas",
+      "insert": "Inserir",
+      "dictate": "Ditar",
+      "record": "Gravar",
+      "finger": "Modo dedo",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -972,7 +1002,8 @@
     "recent": "Cores recentes",
     "width": "Espessura",
     "moveLeft": "Mover para a esquerda",
-    "moveRight": "Mover para a direita"
+    "moveRight": "Mover para a direita",
+    "remove": "Remover caneta"
   },
   "text": {
     "bold": "Negrito",

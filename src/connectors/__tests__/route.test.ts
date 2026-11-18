@@ -47,6 +47,16 @@ describe("routePath", () => {
     expect(r[r.length - 2].x).toBeLessThan(end.x);
   });
 
+  it("curve_between_two_free_ends_bows_instead_of_running_straight", () => {
+    const start = { x: 0, y: 0 };
+    const end = { x: 200, y: 0 };
+    const r = routePath("curve", start, null, end, null, []);
+    expect(r).toHaveLength(CURVE_SEGMENTS + 1);
+    expect(r[0]).toEqual(start);
+    expect(r[r.length - 1]).toEqual(end);
+    expect(Math.abs(r[CURVE_SEGMENTS / 2].y)).toBeGreaterThan(10);
+  });
+
   it("elbow_is_axis_aligned_and_avoids_both_boxes", () => {
     const cases: [Vec2, "top" | "right" | "bottom" | "left", Vec2, "top" | "right" | "bottom" | "left"][] = [
       [{ x: 100, y: 50 }, "right", { x: 300, y: 250 }, "left"],

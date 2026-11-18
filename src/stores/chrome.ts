@@ -40,6 +40,10 @@ interface ChromeState extends Persisted {
   shortcutsOpen: boolean;
   /** Paper picker (templates) for the focused page. */
   paperPickerOpen: boolean;
+  /** The Customize toolbar dialog. */
+  toolbarCustomizeOpen: boolean;
+  /** The covers "Remove all" confirmation (hosted by the toolbar, so it outlives the More tray). */
+  removeCoversOpen: boolean;
   aboutOpen: boolean;
   /** Version of an update found by a check, or null. Drives the dot on the More menu. */
   updateAvailable: string | null;
@@ -56,6 +60,8 @@ interface ChromeState extends Persisted {
   openPageSettings(pageId: string | null): void;
   setShortcutsOpen(open: boolean): void;
   setPaperPickerOpen(open: boolean): void;
+  setToolbarCustomizeOpen(open: boolean): void;
+  setRemoveCoversOpen(open: boolean): void;
   setAboutOpen(open: boolean): void;
   setUpdateAvailable(version: string | null): void;
   pushModal(): void;
@@ -82,6 +88,8 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     pageSettingsFor: null,
     shortcutsOpen: false,
     paperPickerOpen: false,
+    toolbarCustomizeOpen: false,
+    removeCoversOpen: false,
     aboutOpen: false,
     updateAvailable: null,
     modalDepth: 0,
@@ -101,6 +109,8 @@ export const useChromeStore = create<ChromeState>((set, get) => {
     openPageSettings: (pageSettingsFor) => set({ pageSettingsFor }),
     setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
     setPaperPickerOpen: (paperPickerOpen) => set({ paperPickerOpen }),
+    setToolbarCustomizeOpen: (toolbarCustomizeOpen) => set({ toolbarCustomizeOpen }),
+    setRemoveCoversOpen: (removeCoversOpen) => set({ removeCoversOpen }),
     setAboutOpen: (aboutOpen) => set({ aboutOpen }),
     setUpdateAvailable: (updateAvailable) => set({ updateAvailable }),
     pushModal: () => set((s) => ({ modalDepth: s.modalDepth + 1 })),

@@ -217,3 +217,28 @@ fn cover_defaults_and_old_files() {
     assert_eq!(out["toolbarPresets"][0]["coverShape"], "box");
     assert!(out["toolbarPresets"][1].get("coverShape").is_none());
 }
+
+#[test]
+fn toolbar_layout_defaults_to_none() {
+    assert!(Settings::default().toolbar_layout.is_none());
+    assert!(Settings::from_json_lenient("{}").unwrap().toolbar_layout.is_none());
+}
+
+#[test]
+fn toolbar_layout_round_trips() {
+    let text = r#"{"toolbarLayout":{"rows":[["pens","sep","eraser"],["zoom"]],"known":["pens","eraser","zoom"]}}"#;
+    let s = Settings::from_json_lenient(text).unwrap();
+    let layout = s.toolbar_layout.as_ref().unwrap();
+    assert_eq!(layout.rows, vec![vec!["pens", "sep", "eraser"], vec!["zoom"]]);
+    assert_eq!(layout.known, vec!["pens", "eraser", "zoom"]);
+    let out = serde_json::to_value(&s).unwrap();
+    let expected: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(out["toolbarLayout"], expected["toolbarLayout"]);
+}
+
+#[test]
+fn toolbar_layout_wrong_type_falls_back() {
+    let s = Settings::from_json_lenient(r#"{"toolbarLayout":"top","theme":"dark"}"#).unwrap();
+    assert!(s.toolbar_layout.is_none());
+    assert_eq!(s.theme, "dark");
+}

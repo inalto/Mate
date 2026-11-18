@@ -10,6 +10,15 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// The user's toolbar arrangement: rows of item ids (`"sep"` is a separator),
+/// plus every id the user has already been shown.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ToolbarLayout {
+    pub rows: Vec<Vec<String>>,
+    pub known: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PenPreset {
@@ -224,6 +233,8 @@ pub struct Settings {
     /// Colours the user saved as swatches in the colour pickers (hex, at most 32).
     pub custom_swatches: Vec<String>,
     pub toolbar_presets: Vec<PenPreset>,
+    /// `None` = the built-in default for the platform; see `src/toolbar/layout.ts`.
+    pub toolbar_layout: Option<ToolbarLayout>,
     /// Named graph presets for every graph kind; empty until the user saves one.
     pub graph_presets: Vec<GraphPreset>,
     // Phase 5
@@ -332,6 +343,7 @@ impl Default for Settings {
             recent_colors: Vec::new(),
             custom_swatches: Vec::new(),
             toolbar_presets: default_toolbar_presets(),
+            toolbar_layout: None,
             graph_presets: Vec::new(),
             keybindings: Vec::new(),
             onboarding_done: false,

@@ -711,9 +711,39 @@
     "updateSettings": "Réglages des mises à jour"
   },
   "toolbar": {
+    "more": "Plus d'outils",
+    "hiddenTools": "Outils masqués",
+    "customize": "Personnaliser la barre d'outils…",
+    "customizeTitle": "Personnaliser la barre d'outils",
+    "row1": "Ligne 1",
+    "row2": "Ligne 2",
+    "hidden": "Masqués",
+    "hiddenEmpty": "Rien n'est masqué. Faites glisser un outil ici pour le masquer.",
+    "separator": "Séparateur",
+    "moveUp": "Monter {{item}}",
+    "moveDown": "Descendre {{item}}",
+    "hide": "Masquer {{item}}",
+    "show": "Afficher {{item}}",
+    "toOtherRow": "Déplacer {{item}} vers l'autre ligne",
+    "removeSeparator": "Supprimer le séparateur",
+    "addSeparator": "Ajouter un séparateur",
+    "twoRows": "Utiliser deux lignes",
+    "twoRowsNote": "Une deuxième ligne laisse moins de place à la page.",
+    "reset": "Rétablir par défaut",
+    "resetConfirm": "Remettre la barre d'outils dans sa disposition par défaut ?",
+    "rowEmpty": "Rien ici pour le moment",
     "straightLines": "Lignes droites",
     "autoShapes": "Formes parfaites",
     "ruler": "Règle",
+    "items": {
+      "pens": "Stylos",
+      "covers": "Masques",
+      "insert": "Insérer",
+      "dictate": "Dicter",
+      "record": "Enregistrer",
+      "finger": "Mode doigt",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -972,7 +1002,8 @@
     "recent": "Couleurs récentes",
     "width": "Épaisseur",
     "moveLeft": "Déplacer à gauche",
-    "moveRight": "Déplacer à droite"
+    "moveRight": "Déplacer à droite",
+    "remove": "Supprimer le stylo"
   },
   "text": {
     "bold": "Gras",

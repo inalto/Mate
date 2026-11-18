@@ -711,9 +711,39 @@
     "updateSettings": "Ajustes de actualización"
   },
   "toolbar": {
+    "more": "Más herramientas",
+    "hiddenTools": "Herramientas ocultas",
+    "customize": "Personalizar la barra de herramientas…",
+    "customizeTitle": "Personalizar la barra de herramientas",
+    "row1": "Fila 1",
+    "row2": "Fila 2",
+    "hidden": "Ocultas",
+    "hiddenEmpty": "No hay nada oculto. Arrastra una herramienta aquí para ocultarla.",
+    "separator": "Separador",
+    "moveUp": "Subir {{item}}",
+    "moveDown": "Bajar {{item}}",
+    "hide": "Ocultar {{item}}",
+    "show": "Mostrar {{item}}",
+    "toOtherRow": "Mover {{item}} a la otra fila",
+    "removeSeparator": "Quitar separador",
+    "addSeparator": "Añadir separador",
+    "twoRows": "Usar dos filas",
+    "twoRowsNote": "Una segunda fila deja menos espacio para la página.",
+    "reset": "Restablecer valores predeterminados",
+    "resetConfirm": "¿Devolver la barra de herramientas a su diseño predeterminado?",
+    "rowEmpty": "Aún no hay nada aquí",
     "straightLines": "Líneas rectas",
     "autoShapes": "Formas perfectas",
     "ruler": "Regla",
+    "items": {
+      "pens": "Lápices",
+      "covers": "Cubiertas",
+      "insert": "Insertar",
+      "dictate": "Dictar",
+      "record": "Grabar",
+      "finger": "Modo dedo",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -972,7 +1002,8 @@
     "recent": "Colores recientes",
     "width": "Grosor",
     "moveLeft": "Mover a la izquierda",
-    "moveRight": "Mover a la derecha"
+    "moveRight": "Mover a la derecha",
+    "remove": "Quitar lápiz"
   },
   "text": {
     "bold": "Negrita",

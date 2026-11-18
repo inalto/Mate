@@ -174,4 +174,25 @@ describe("highlighter shapes", () => {
       expect(off).toBeLessThan(width / 4);
     }
   });
+
+  it("a snapped cover square stays a cover stroke and is drawn along the square: every corner is reached", async () => {
+    const { getStrokePoints } = await import("perfect-freehand");
+    const { penParams } = await import("../../ink/strokePoints");
+    const width = 20;
+    const el = snapShapeElement(
+      { type: "rectangle", score: 0.9, rect: { x: 0, y: 0, width: 200, height: 200 }, rotation: 0 },
+      { color: "#FDE047", width, type: "cover" },
+      "pg",
+      "s1",
+      "now",
+    );
+    expect(el.type).toBe("stroke");
+    expect(el.penStyle).toBe("cover");
+    expect(el.isHighlighter).toBe(false);
+    const drawn = getStrokePoints(el.points.map((p) => [p.x, p.y, p.pressure]), { ...penParams("cover", width, false), last: true }).map((s) => s.point);
+    for (const [cx, cy] of [[0, 0], [200, 0], [200, 200], [0, 200]]) {
+      const nearest = Math.min(...drawn.map(([x, y]) => Math.hypot(x - cx, y - cy)));
+      expect(nearest, `corner ${cx},${cy}`).toBeLessThan(width / 4);
+    }
+  });
 });

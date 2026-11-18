@@ -708,9 +708,39 @@
     "updateSettings": "更新设置"
   },
   "toolbar": {
+    "more": "更多工具",
+    "hiddenTools": "隐藏的工具",
+    "customize": "自定义工具栏…",
+    "customizeTitle": "自定义工具栏",
+    "row1": "第 1 行",
+    "row2": "第 2 行",
+    "hidden": "已隐藏",
+    "hiddenEmpty": "没有隐藏的工具。将工具拖到这里即可隐藏。",
+    "separator": "分隔线",
+    "moveUp": "上移{{item}}",
+    "moveDown": "下移{{item}}",
+    "hide": "隐藏{{item}}",
+    "show": "显示{{item}}",
+    "toOtherRow": "将{{item}}移到另一行",
+    "removeSeparator": "移除分隔线",
+    "addSeparator": "添加分隔线",
+    "twoRows": "使用两行",
+    "twoRowsNote": "第二行会减少页面可用的空间。",
+    "reset": "恢复默认",
+    "resetConfirm": "将工具栏恢复为默认布局？",
+    "rowEmpty": "这里还没有内容",
     "straightLines": "直线",
     "autoShapes": "自动规整图形",
     "ruler": "尺子",
+    "items": {
+      "pens": "笔",
+      "covers": "遮盖",
+      "insert": "插入",
+      "dictate": "听写",
+      "record": "录制",
+      "finger": "手指模式",
+      "zoom": "缩放"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -969,7 +999,8 @@
     "recent": "最近使用的颜色",
     "width": "宽度",
     "moveLeft": "左移",
-    "moveRight": "右移"
+    "moveRight": "右移",
+    "remove": "移除笔"
   },
   "text": {
     "bold": "粗体",

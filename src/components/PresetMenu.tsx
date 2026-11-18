@@ -168,6 +168,17 @@ export default function PresetMenu({ preset, index, count, anchorRef, onClose }:
         >
           <CaretRight size={14} />
         </button>
+        <button
+          type="button"
+          className="tb-menu-item"
+          disabled={count <= 1}
+          onClick={() => {
+            ed.getState().removePreset(preset.id);
+            onClose();
+          }}
+        >
+          {t("preset.remove")}
+        </button>
       </div>
     </div>
   );
