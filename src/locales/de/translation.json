@@ -993,7 +993,8 @@
     "recent": "Zuletzt verwendete Farben",
     "width": "Stärke",
     "moveLeft": "Nach links verschieben",
-    "moveRight": "Nach rechts verschieben"
+    "moveRight": "Nach rechts verschieben",
+    "remove": "Stift entfernen"
   },
   "text": {
     "bold": "Fett",

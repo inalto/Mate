@@ -77,31 +77,37 @@
 /* Where content is cut off, the strip fades out over 16 px. */
 .toolbar[data-dock="top"] .tb-scroll[data-fade-start],
 .toolbar[data-dock="bottom"] .tb-scroll[data-fade-start] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px);
   mask-image: linear-gradient(to right, transparent, #000 16px);
 }
 
 .toolbar[data-dock="top"] .tb-scroll[data-fade-end],
 .toolbar[data-dock="bottom"] .tb-scroll[data-fade-end] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
   mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
 }
 
 .toolbar[data-dock="top"] .tb-scroll[data-fade-start][data-fade-end],
 .toolbar[data-dock="bottom"] .tb-scroll[data-fade-start][data-fade-end] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
   mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 }
 
 .toolbar[data-dock="left"] .tb-scroll[data-fade-start],
 .toolbar[data-dock="right"] .tb-scroll[data-fade-start] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px);
   mask-image: linear-gradient(to bottom, transparent, #000 16px);
 }
 
 .toolbar[data-dock="left"] .tb-scroll[data-fade-end],
 .toolbar[data-dock="right"] .tb-scroll[data-fade-end] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
 }
 
 .toolbar[data-dock="left"] .tb-scroll[data-fade-start][data-fade-end],
 .toolbar[data-dock="right"] .tb-scroll[data-fade-start][data-fade-end] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
   mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 }
 
@@ -259,4 +265,22 @@ html.mobile .tbc-btn {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* A small corner mark on buttons whose second press opens options. */
+.tb-btn[data-has-options] {
+  position: relative;
+}
+
+.tb-btn[data-has-options]::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+  pointer-events: none;
 }

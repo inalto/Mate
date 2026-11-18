@@ -721,7 +721,7 @@
     "hide": "隐藏{{item}}",
     "show": "显示{{item}}",
     "toOtherRow": "将{{item}}移到另一行",
-    "removeSeparator": "删除分隔线",
+    "removeSeparator": "移除分隔线",
     "addSeparator": "添加分隔线",
     "twoRows": "使用两行",
     "twoRowsNote": "第二行会减少页面可用的空间。",
@@ -990,7 +990,8 @@
     "recent": "最近使用的颜色",
     "width": "宽度",
     "moveLeft": "左移",
-    "moveRight": "右移"
+    "moveRight": "右移",
+    "remove": "移除笔"
   },
   "text": {
     "bold": "粗体",

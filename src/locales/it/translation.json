@@ -990,7 +990,8 @@
     "recent": "Colori recenti",
     "width": "Spessore",
     "moveLeft": "Sposta a sinistra",
-    "moveRight": "Sposta a destra"
+    "moveRight": "Sposta a destra",
+    "remove": "Rimuovi penna"
   },
   "text": {
     "bold": "Grassetto",

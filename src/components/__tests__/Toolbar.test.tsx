@@ -113,6 +113,12 @@ describe("Toolbar", () => {
     expect(screen.queryByRole("button", { name: "Insert image…" })).toBeNull();
   });
 
+  it("buttons_with_options_are_marked", () => {
+    renderBar();
+    expect(screen.getByRole("button", { name: "Eraser" }).hasAttribute("data-has-options")).toBe(true);
+    expect(screen.getByRole("button", { name: "Lasso" }).hasAttribute("data-has-options")).toBe(false);
+  });
+
   it("undo_and_redo_are_outside_the_scrolling_area", () => {
     renderBar();
     for (const name of ["Undo", "Redo"]) {

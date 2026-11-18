@@ -993,7 +993,8 @@
     "recent": "Couleurs récentes",
     "width": "Épaisseur",
     "moveLeft": "Déplacer à gauche",
-    "moveRight": "Déplacer à droite"
+    "moveRight": "Déplacer à droite",
+    "remove": "Supprimer le stylo"
   },
   "text": {
     "bold": "Gras",

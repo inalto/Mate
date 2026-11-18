@@ -990,7 +990,8 @@
     "recent": "最近使った色",
     "width": "太さ",
     "moveLeft": "左へ移動",
-    "moveRight": "右へ移動"
+    "moveRight": "右へ移動",
+    "remove": "ペンを削除"
   },
   "text": {
     "bold": "太字",

@@ -1275,7 +1275,7 @@ button.card:hover {
   background: var(--color-surface-2);
 }
 
-/* A narrow menu opener beside its button (the mobile toolbar rule below widens it to 40 px). */
+/* A narrow menu opener beside its button (the mobile toolbar rule below keeps this width and only grows to 44 px tall). */
 .tb-btn.tb-caret {
   min-width: 16px;
   padding: 0;
@@ -2043,9 +2043,14 @@ html.mobile .graph-plot {
 
 html.mobile .toolbar .tb-btn,
 html.mobile .tb-tray .tb-btn {
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   flex: none;
+}
+
+html.mobile .toolbar .tb-btn.tb-caret,
+html.mobile .tb-tray .tb-btn.tb-caret {
+  min-width: 16px;
 }
 
 html.mobile .sb-resize {

@@ -15,8 +15,10 @@ import {
   Highlighter,
   ImageSquare,
   FilmSlate,
-  Minus,
+  MagnifyingGlassMinus,
+  MagnifyingGlassPlus,
   Note,
+  Notepad,
   Pen,
   PenNib,
   Plus,
@@ -88,6 +90,7 @@ export function PresetSlot({ preset, index, count }: { preset: PenPreset; index:
         type="button"
         {...hint}
         className={active ? "tb-btn tb-slot active" : "tb-btn tb-slot"}
+        data-has-options={active ? "" : undefined}
         aria-pressed={active}
         aria-label={t("toolbar.presetLabel", { ink: t(INK_LABEL[preset.type]), color: preset.color })}
         onClick={() => (active ? setOpen((o) => !o) : s().setPreset(preset))}
@@ -172,6 +175,7 @@ export function EraserButton() {
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
+        data-has-options=""
         aria-pressed={active}
         aria-label={t("toolbar.eraser")}
         {...hint}
@@ -250,6 +254,7 @@ export function ShapeButton() {
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
+        data-has-options=""
         aria-pressed={active}
         aria-label={t("toolbar.shape")}
         {...hint}
@@ -362,6 +367,7 @@ export function ConnectorButton() {
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
+        data-has-options=""
         aria-pressed={active}
         aria-label={t("connector.tool")}
         {...hint}
@@ -407,6 +413,7 @@ export function FrameButton() {
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
+        data-has-options=""
         aria-pressed={active}
         aria-label={t("frame.tool")}
         {...hint}
@@ -523,6 +530,7 @@ export function InsertSpaceButton() {
       <button
         type="button"
         className={active ? "tb-btn active" : "tb-btn"}
+        data-has-options=""
         aria-pressed={active}
         aria-label={t("toolbar.insertSpace")}
         {...hint}
@@ -716,7 +724,7 @@ export function PaperButton() {
         disabled={!focusedId}
         onClick={() => set(!open)}
       >
-        <Note size={18} />
+        <Notepad size={18} />
       </button>
       {open && page && <PaperPicker key={page.id} page={page} anchorRef={ref} onClose={() => set(false)} />}
     </div>
@@ -809,13 +817,13 @@ export function ZoomBlock() {
   return (
     <>
       <HintButton action="zoom.out" label={t("keys.actions.zoomOut")} onClick={() => zoomStep(1 / ZOOM_STEP)}>
-        <Minus size={16} />
+        <MagnifyingGlassMinus size={16} />
       </HintButton>
       <HintButton action="zoom.reset" label={t("keys.actions.zoomReset")} className="tb-btn tb-zoom" onClick={() => zoomStep(null)}>
         {Math.round(zoom * 100)}%
       </HintButton>
       <HintButton action="zoom.in" label={t("keys.actions.zoomIn")} onClick={() => zoomStep(ZOOM_STEP)}>
-        <Plus size={16} />
+        <MagnifyingGlassPlus size={16} />
       </HintButton>
     </>
   );

@@ -990,7 +990,8 @@
     "recent": "Recent colours",
     "width": "Width",
     "moveLeft": "Move left",
-    "moveRight": "Move right"
+    "moveRight": "Move right",
+    "remove": "Remove pen"
   },
   "text": {
     "bold": "Bold",

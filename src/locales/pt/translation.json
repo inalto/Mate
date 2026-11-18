@@ -993,7 +993,8 @@
     "recent": "Cores recentes",
     "width": "Espessura",
     "moveLeft": "Mover para a esquerda",
-    "moveRight": "Mover para a direita"
+    "moveRight": "Mover para a direita",
+    "remove": "Remover caneta"
   },
   "text": {
     "bold": "Negrito",

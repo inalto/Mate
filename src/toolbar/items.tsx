@@ -17,6 +17,7 @@ import {
   MathOperations,
   Microphone,
   Note,
+  Notepad,
   Pen,
   PlusSquare,
   Presentation,
@@ -105,6 +106,6 @@ export const ITEMS: Record<ItemId, ToolbarItem> = {
   autoShapes: { id: "autoShapes", label: "toolbar.autoShapes", Icon: Shapes, Button: AutoShapesToggle },
   finger: { id: "finger", label: "toolbar.items.finger", Icon: HandPointing, Button: FingerToggle },
   present: { id: "present", label: "present.start", Icon: Presentation, Button: PresentButton },
-  paper: { id: "paper", label: "toolbar.paper", Icon: Note, Button: PaperButton },
+  paper: { id: "paper", label: "toolbar.paper", Icon: Notepad, Button: PaperButton },
   zoom: { id: "zoom", label: "toolbar.items.zoom", Icon: MagnifyingGlass, Button: ZoomBlock },
 };
