@@ -249,7 +249,7 @@ describe("Toolbar", () => {
     useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, toolbarDock: "right" } });
     renderBar();
     expect(screen.getByRole("toolbar", { name: "Editor tools" }).getAttribute("data-dock")).toBe("top");
-    fireEvent.click(screen.getByRole("button", { name: "Move toolbar" }));
+    fireEvent.click(screen.getByRole("button", { name: "More tools" }));
     expect(screen.queryByRole("menuitemradio", { name: "Left" })).toBeNull();
     expect(screen.getByRole("menuitemradio", { name: "Bottom" })).toBeTruthy();
   });
@@ -258,7 +258,7 @@ describe("Toolbar", () => {
     const update = vi.fn(async () => {});
     useSettingsStore.setState({ update });
     renderBar();
-    fireEvent.click(screen.getByRole("button", { name: "Move toolbar" }));
+    fireEvent.click(screen.getByRole("button", { name: "More tools" }));
     const menu = screen.getByRole("menu", { name: "Toolbar position" });
     expect(within(menu).getAllByRole("menuitemradio").map((e) => e.textContent)).toEqual(["Top", "Bottom", "Left", "Right"]);
     expect(within(menu).getByRole("menuitemradio", { name: "Top" }).getAttribute("aria-checked")).toBe("true");

@@ -711,6 +711,9 @@
     "updateSettings": "Réglages des mises à jour"
   },
   "toolbar": {
+    "more": "Plus d'outils",
+    "hiddenTools": "Outils masqués",
+    "customize": "Personnaliser la barre d'outils…",
     "straightLines": "Lignes droites",
     "autoShapes": "Formes parfaites",
     "ruler": "Règle",

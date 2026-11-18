@@ -711,6 +711,9 @@
     "updateSettings": "Update-Einstellungen"
   },
   "toolbar": {
+    "more": "Weitere Werkzeuge",
+    "hiddenTools": "Ausgeblendete Werkzeuge",
+    "customize": "Werkzeugleiste anpassen…",
     "straightLines": "Gerade Linien",
     "autoShapes": "Perfekte Formen",
     "ruler": "Lineal",

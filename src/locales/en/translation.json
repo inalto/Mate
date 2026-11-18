@@ -708,6 +708,9 @@
     "updateSettings": "Update settings"
   },
   "toolbar": {
+    "more": "More tools",
+    "hiddenTools": "Hidden tools",
+    "customize": "Customize toolbar…",
     "straightLines": "Straight lines",
     "autoShapes": "Perfect shapes",
     "ruler": "Ruler",

@@ -1,68 +1,18 @@
 // Editor toolbar: the buttons come from the catalogue (`toolbar/items.tsx`), laid out here.
-import { DotsSixVertical, House } from "@phosphor-icons/react";
-import { useRef, useState, type WheelEvent } from "react";
+import { House } from "@phosphor-icons/react";
+import { useRef, type WheelEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
+import { useChromeStore } from "../stores/chrome";
 import { useSettingsStore } from "../stores/settings";
 import { isMobile } from "../platform";
 import { ITEMS } from "../toolbar/items";
 import { UndoRedo } from "../toolbar/buttons";
+import MoreMenu from "../toolbar/MoreMenu";
 import { resolveLayout, SEP, type Slot } from "../toolbar/layout";
 import { useScrollFade } from "../toolbar/useScrollFade";
 import "../toolbar/toolbar.css";
-import DockPopover, { useDock, wheelToScroll, type Dock } from "./DockPopover";
-import { useDismiss } from "./useDismiss";
-
-const DOCKS: Dock[] = ["top", "bottom", "left", "right"];
-
-/** Last button of the bar: where the bar sits (left/right are not offered on mobile). */
-function DockMenu() {
-  const { t } = useTranslation();
-  const ref = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const dock = useDock();
-  useDismiss(ref, open, () => setOpen(false));
-  const options = isMobile() ? DOCKS.filter((d) => d === "top" || d === "bottom") : DOCKS;
-  return (
-    <div ref={ref} className="tb-anchor">
-      <button
-        type="button"
-        className="tb-btn"
-        aria-label={t("dock.menu")}
-        title={t("dock.menu")}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <DotsSixVertical size={18} />
-      </button>
-      {open && (
-        <DockPopover anchorRef={ref}>
-          <div className="tb-popover tb-menu" role="menu" aria-label={t("dock.position")}>
-            {options.map((d) => (
-              <button
-                key={d}
-                type="button"
-                role="menuitemradio"
-                aria-checked={dock === d}
-                className={dock === d ? "tb-menu-item active" : "tb-menu-item"}
-                onClick={() => {
-                  setOpen(false);
-                  useSettingsStore
-                    .getState()
-                    .update({ toolbarDock: d })
-                    .catch((err) => console.error("saving toolbar position failed", err));
-                }}
-              >
-                {t(`dock.${d}`)}
-              </button>
-            ))}
-          </div>
-        </DockPopover>
-      )}
-    </div>
-  );
-}
+import { useDock, wheelToScroll } from "./DockPopover";
 
 /** One row's items and separators. */
 function Slots({ slots }: { slots: Slot[] }) {
@@ -125,7 +75,7 @@ export default function Toolbar() {
             <div className="tb-fixed tb-end">
               <span className="tb-sep" />
               <UndoRedo />
-              <DockMenu />
+              <MoreMenu onCustomize={() => useChromeStore.getState().setToolbarCustomizeOpen(true)} />
             </div>
           )}
         </div>

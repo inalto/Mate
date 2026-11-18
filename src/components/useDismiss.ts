@@ -1,11 +1,18 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useChromeStore } from "../stores/chrome";
-import { isInsidePortal } from "./DockPopover";
+import { isInsidePortal, isNestedAnchor } from "./DockPopover";
 import { useModal } from "./useModal";
 
-/** Close on pointer-down outside `ref` or Escape while `open`. */
+/**
+ * Close on pointer-down outside `ref` or Escape while `open`. Pointer-downs inside a popover opened
+ * from within this one's popover count as inside.
+ */
 export function useDismiss(ref: RefObject<HTMLElement | null>, open: boolean, onClose: () => void): void {
-  useModal(open);
+  // A popover opened from inside another popover is part of it: the outer one already counts as the
+  // open modal, and a second count would read to the outer one as a dialog opening on top of it.
+  const [nested, setNested] = useState(false);
+  useLayoutEffect(() => setNested(isNestedAnchor(ref.current)), [ref]);
+  useModal(open && !nested);
   const cb = useRef(onClose);
   useEffect(() => {
     cb.current = onClose;

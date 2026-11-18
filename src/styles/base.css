@@ -2041,7 +2041,8 @@ html.mobile .graph-plot {
   -webkit-touch-callout: none;
 }
 
-html.mobile .toolbar .tb-btn {
+html.mobile .toolbar .tb-btn,
+html.mobile .tb-tray .tb-btn {
   min-width: 40px;
   min-height: 40px;
   flex: none;

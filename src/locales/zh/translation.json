@@ -708,6 +708,9 @@
     "updateSettings": "更新设置"
   },
   "toolbar": {
+    "more": "更多工具",
+    "hiddenTools": "隐藏的工具",
+    "customize": "自定义工具栏…",
     "straightLines": "直线",
     "autoShapes": "自动规整图形",
     "ruler": "尺子",

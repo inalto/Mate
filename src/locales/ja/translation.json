@@ -708,6 +708,9 @@
     "updateSettings": "アップデートの設定"
   },
   "toolbar": {
+    "more": "その他のツール",
+    "hiddenTools": "非表示のツール",
+    "customize": "ツールバーをカスタマイズ…",
     "straightLines": "直線",
     "autoShapes": "図形を自動整形",
     "ruler": "定規",

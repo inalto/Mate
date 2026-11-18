@@ -708,6 +708,9 @@
     "updateSettings": "Impostazioni di aggiornamento"
   },
   "toolbar": {
+    "more": "Altri strumenti",
+    "hiddenTools": "Strumenti nascosti",
+    "customize": "Personalizza la barra…",
     "straightLines": "Linee dritte",
     "autoShapes": "Forme perfette",
     "ruler": "Righello",

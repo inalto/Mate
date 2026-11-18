@@ -104,3 +104,14 @@
 .toolbar[data-dock="right"] .tb-scroll[data-fade-start][data-fade-end] {
   mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
 }
+
+/* The More popover: hidden tools as their real buttons, then the menu entries. */
+.tb-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  max-width: min(260px, calc(100vw - 24px));
+  padding: var(--space-1);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
