@@ -412,23 +412,23 @@ describe("touches right after the pen", () => {
     expect(h.onPinch).toHaveBeenCalledWith({ phase: "start", mid: { x: 35, y: 10 }, dist: 50 });
   });
 
-  it("one_finger_right_after_the_pen_does_nothing", () => {
+  it("one_finger_resting_right_after_the_pen_does_nothing", () => {
     const { h, at, hover, finger } = rig();
     hover();
     at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
-    at("pointermove", { ...finger, pointerId: 11, clientX: 30, clientY: 10 }, 120);
-    at("pointerup", { ...finger, pointerId: 11, buttons: 0, clientX: 30, clientY: 10 }, 140);
+    at("pointermove", { ...finger, pointerId: 11, clientX: 14, clientY: 10 }, 120);
+    at("pointerup", { ...finger, pointerId: 11, buttons: 0, clientX: 14, clientY: 10 }, 140);
     expect(h.onPan).not.toHaveBeenCalled();
     expect(h.onPanStart).not.toHaveBeenCalled();
     expect(h.onDown).not.toHaveBeenCalled();
     expect(h.onPanEnd).not.toHaveBeenCalled();
   });
 
-  it("palm_sized_second_contact_stays_rejected", () => {
+  it("definite_palm_second_contact_stays_rejected", () => {
     const { h, at, hover, finger } = rig();
     hover();
     at("pointerdown", { ...finger, pointerId: 11, clientX: 10, clientY: 10 }, 100);
-    at("pointerdown", { ...finger, pointerId: 12, width: 60, height: 60, clientX: 60, clientY: 10 }, 110);
+    at("pointerdown", { ...finger, pointerId: 12, width: 100, height: 100, clientX: 60, clientY: 10 }, 110);
     expect(h.onPinch).not.toHaveBeenCalled();
     expect(h.onPanStart).not.toHaveBeenCalled();
     expect(h.onDown).not.toHaveBeenCalled();
@@ -475,8 +475,131 @@ describe("touches right after the pen", () => {
   it("touch_rejected_classifies", () => {
     const ev = (width: number) => ({ width, height: width }) as PointerEvent;
     expect(touchRejected(ev(8), "high", "auto", true)).toBe("stylus");
-    expect(touchRejected(ev(30), "high", "auto", true)).toBe("palm");
+    // A fingertip-sized contact is held back, not dropped: only a definite palm is dropped for good.
+    expect(touchRejected(ev(30), "high", "auto", true)).toBe("stylus");
+    expect(touchRejected(ev(30), "high", "draw", true)).toBe("stylus");
+    expect(touchRejected(ev(100), "high", "auto", true)).toBe("palm");
     expect(touchRejected(ev(8), "high", "auto", false)).toBeNull();
     expect(touchRejected(ev(8), "high", "draw", true)).toBeNull();
+  });
+});
+
+describe("finger gestures after the pen has written", () => {
+  function rig(fingerAction: FingerAction) {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    const h = {
+      onDown: vi.fn(),
+      onMove: vi.fn(),
+      onUp: vi.fn(),
+      onCancel: vi.fn(),
+      onPan: vi.fn(),
+      onPanStart: vi.fn(),
+      onPanEnd: vi.fn(),
+      onPinch: vi.fn(),
+    };
+    createPointerAdapter(el, h, { palmRejection: "high", fingerAction, getCamera: camera });
+    const at = (type: string, init: PointerEventInit, t: number) => {
+      const ev = new PointerEvent(type, { bubbles: true, cancelable: true, ...init });
+      Object.defineProperty(ev, "timeStamp", { value: t });
+      el.dispatchEvent(ev);
+    };
+    const pen = { pointerId: 1, pointerType: "pen", pressure: 0.5, clientX: 0, clientY: 0 };
+    /** One pen stroke, lifted at t = 1000. */
+    const write = () => {
+      at("pointerdown", { ...pen, buttons: 1 }, 900);
+      at("pointerup", { ...pen, buttons: 0 }, 1000);
+    };
+    // A real fingertip: 25–50 px across, above the 20 px "high" palm threshold.
+    const tip = { pointerType: "touch", width: 30, height: 30, buttons: 1 };
+    return { h, at, pen, write, tip };
+  }
+
+  it("one_finger_pans_at_any_delay_after_pen_up", () => {
+    for (const fingerAction of ["auto", "pan"] as const) {
+      for (const delay of [50, 300, 1000, 1900, 2500]) {
+        const { h, at, write, tip } = rig(fingerAction);
+        write();
+        const t = 1000 + delay;
+        at("pointerdown", { ...tip, pointerId: 11, clientX: 100, clientY: 100 }, t);
+        at("pointermove", { ...tip, pointerId: 11, clientX: 100, clientY: 130 }, t + 20);
+        at("pointermove", { ...tip, pointerId: 11, clientX: 100, clientY: 160 }, t + 40);
+        at("pointerup", { ...tip, pointerId: 11, buttons: 0, clientX: 100, clientY: 160 }, t + 60);
+        const where = `${fingerAction} +${delay} ms`;
+        if (fingerAction === "auto" && delay > 2000) {
+          expect(h.onDown, where).toHaveBeenCalledTimes(2); // long after the pen a finger draws again
+          continue;
+        }
+        expect(h.onDown, where).toHaveBeenCalledTimes(1); // the pen stroke only: no finger ink
+        expect(h.onPanStart, where).toHaveBeenCalledTimes(1);
+        expect(h.onPan, where).toHaveBeenLastCalledWith(0, 30, { fingers: 1, timeStamp: t + 40 });
+        expect(h.onPanEnd, where).toHaveBeenCalledWith(expect.objectContaining({ fingers: 1, cancelled: false, drewMeanwhile: false }));
+      }
+    }
+  });
+
+  it("two_finger_tap_ends_as_a_gesture_at_any_delay_after_pen_up", () => {
+    for (const fingerAction of ["auto", "draw", "pan"] as const) {
+      for (const delay of [50, 300, 1000, 1900, 2500]) {
+        const { h, at, write, tip } = rig(fingerAction);
+        write();
+        const t = 1000 + delay;
+        at("pointerdown", { ...tip, pointerId: 11, clientX: 100, clientY: 100 }, t);
+        at("pointerdown", { ...tip, pointerId: 12, clientX: 160, clientY: 100 }, t + 10);
+        at("pointerup", { ...tip, pointerId: 11, buttons: 0, clientX: 100, clientY: 100 }, t + 80);
+        at("pointerup", { ...tip, pointerId: 12, buttons: 0, clientX: 160, clientY: 100 }, t + 90);
+        const where = `${fingerAction} +${delay} ms`;
+        expect(h.onUp, where).toHaveBeenCalledTimes(1); // the pen stroke only
+        expect(h.onPanEnd, where).toHaveBeenCalledTimes(1);
+        expect(h.onPanEnd, where).toHaveBeenCalledWith(
+          expect.objectContaining({ fingers: 2, cancelled: false, drewMeanwhile: false, travel: 0 }),
+        );
+      }
+    }
+  });
+
+  it("held_back_finger_that_barely_moves_does_not_pan", () => {
+    const { h, at, write, tip } = rig("auto");
+    write();
+    at("pointerdown", { ...tip, pointerId: 11, clientX: 100, clientY: 100 }, 1100);
+    at("pointermove", { ...tip, pointerId: 11, clientX: 104, clientY: 103 }, 1120);
+    at("pointerup", { ...tip, pointerId: 11, buttons: 0, clientX: 104, clientY: 103 }, 1140);
+    expect(h.onPanStart).not.toHaveBeenCalled();
+    expect(h.onPan).not.toHaveBeenCalled();
+  });
+
+  it("hand_landing_before_the_next_stroke_is_dropped_when_the_pen_goes_down", () => {
+    const { h, at, pen, write, tip } = rig("auto");
+    write();
+    at("pointerdown", { ...tip, pointerId: 11, clientX: 100, clientY: 100 }, 1100); // the hand settles
+    at("pointerdown", { ...pen, buttons: 1 }, 1200); // and the pen writes on
+    at("pointermove", { ...tip, pointerId: 11, clientX: 100, clientY: 160 }, 1250);
+    at("pointerdown", { ...tip, pointerId: 12, clientX: 160, clientY: 100 }, 1260);
+    at("pointerup", { ...pen, buttons: 0 }, 1300);
+    at("pointermove", { ...tip, pointerId: 11, clientX: 100, clientY: 220 }, 1350);
+    expect(h.onPanStart).not.toHaveBeenCalled();
+    expect(h.onPan).not.toHaveBeenCalled();
+    expect(h.onPinch).not.toHaveBeenCalled();
+    expect(h.onDown).toHaveBeenCalledTimes(2); // the two pen strokes
+  });
+
+  it("definite_palm_after_the_pen_never_becomes_a_gesture", () => {
+    const { h, at, write, tip } = rig("auto");
+    write();
+    const palm = { ...tip, width: 100, height: 100 };
+    at("pointerdown", { ...palm, pointerId: 11, clientX: 100, clientY: 100 }, 1100);
+    at("pointermove", { ...palm, pointerId: 11, clientX: 100, clientY: 160 }, 1120);
+    at("pointerdown", { ...tip, pointerId: 12, clientX: 300, clientY: 100 }, 1130); // a finger beside it stays alone
+    expect(h.onPanStart).not.toHaveBeenCalled();
+    expect(h.onPinch).not.toHaveBeenCalled();
+  });
+
+  it("palm_sized_contact_after_the_pen_never_draws_with_fingers_set_to_draw", () => {
+    const { h, at, write, tip } = rig("draw");
+    write();
+    at("pointerdown", { ...tip, pointerId: 11, clientX: 100, clientY: 100 }, 1100);
+    at("pointermove", { ...tip, pointerId: 11, clientX: 100, clientY: 160 }, 1120);
+    expect(h.onDown).toHaveBeenCalledTimes(1); // the pen stroke only
+    expect(h.onPanStart).not.toHaveBeenCalled(); // one finger draws in this mode, it never pans
   });
 });
