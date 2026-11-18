@@ -29,14 +29,23 @@ export default function CoversMenu({ onTest }: Props) {
   const { t, i18n } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+  const [openRaw, setOpen] = useState(false);
+  const [confirmingRaw, setConfirming] = useState(false);
   // undefined: not known yet (or the lookup failed); null: never tested.
   const [last, setLast] = useState<RecallRun | null | undefined>(undefined);
   const elements = ed((s) => s.elements);
   const pageId = ed((s) => s.pageId);
   const covers = useMemo(() => coversOf(elements.values()), [elements]);
   const count = covers.length;
+  // With the last cover gone the button is gone too: a menu or confirmation left open must not keep
+  // holding a modal (a stuck count blocks the keys) nor come back, backdrop and all, with the next cover.
+  const open = openRaw && count > 0;
+  const confirming = confirmingRaw && count > 0;
+  useEffect(() => {
+    if (count > 0) return;
+    setOpen(false);
+    setConfirming(false);
+  }, [count]);
   // Locked covers stay when the rest are removed, so the dialog counts only the others.
   const locked = covers.filter(isLocked).length;
   const removable = count - locked;

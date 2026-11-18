@@ -186,4 +186,31 @@ describe("CoversMenu", () => {
     act(() => runForPane(0).getState().end());
     expect(disabled()).toEqual([false, false, false, false]);
   });
+
+  it("covers vanishing under an open menu leave no modal behind and no menu to come back", async () => {
+    const { useChromeStore } = await import("../../stores/chrome");
+    await load([cover("a")]);
+    render(<CoversMenu />);
+    await openMenu();
+    expect(useChromeStore.getState().modalDepth).toBe(1);
+    act(() => void ed().removeAllCovers()); // e.g. the eraser or a selection delete took the last one
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+    act(() => ed().undo());
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+  });
+
+  it("covers vanishing under the confirmation do not bring its backdrop back with the next cover", async () => {
+    const { useChromeStore } = await import("../../stores/chrome");
+    await load([cover("a")]);
+    render(<CoversMenu />);
+    await openMenu();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Remove all covers" }));
+    expect(useChromeStore.getState().modalDepth).toBe(1);
+    act(() => void ed().removeAllCovers());
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+    act(() => ed().undo());
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(useChromeStore.getState().modalDepth).toBe(0);
+  });
 });
