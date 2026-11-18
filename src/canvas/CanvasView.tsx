@@ -574,8 +574,8 @@ function createEngine(
           guided: guided !== null,
         });
         // Perfect-shapes mode: every stroke is recognised on pen-up, whatever the ink-to-shape settings.
-        // Perfect shapes: the highlighter too, but never a cover (a wobbly cover must stay a stroke).
-        const snapping = s.preset.type !== "cover" && (s.autoShapes || inkSnapAllowed(s.preset.type, set));
+        // Perfect shapes: the highlighter and a stroke cover too (each stays its own ink).
+        const snapping = s.autoShapes || inkSnapAllowed(s.preset.type, set);
         snap = !guided && !straight && snapping
           ? createInkSnap({
               dwellMs: Math.min(2000, Math.max(300, set.inkToShapeDwellMs)),
