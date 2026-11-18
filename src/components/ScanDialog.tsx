@@ -20,11 +20,11 @@ import WebcamCapture from "./WebcamCapture";
 
 const PREVIEW_MAX = 320;
 const JPEG_QUALITY = 0.9;
-const MODES: [ScanMode, string][] = [
+const MODES = [
   ["colour", "scan.colour"],
   ["grey", "scan.grey"],
   ["bw", "scan.blackWhite"],
-];
+] as const satisfies readonly (readonly [ScanMode, string])[];
 
 const initialQuad = (p: Pixels): Quad => detectQuad(p) ?? insetQuad(p.width, p.height);
 

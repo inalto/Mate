@@ -18,7 +18,7 @@ vi.mock("../WebcamCapture", () => ({
 
 import { detectQuad } from "../../scan/detect";
 import { openScan, useScanStore, type ScanResult } from "../../scan/open";
-import { configureScanPixels, WORKING_MAX } from "../../scan/pixels";
+import { configureScanPixels, WORKING_MAX, type pixelsToBlob, type sourceToPixels } from "../../scan/pixels";
 import { insetQuad, outputSize } from "../../scan/quad";
 import type { Pixels, Point, Quad } from "../../scan/types";
 import ScanDialog from "../ScanDialog";
@@ -74,7 +74,7 @@ beforeEach(() => {
   decode = vi.fn();
   encode = vi.fn(async (_p: Pixels, type: string) => new Blob(["out"], { type }));
   onDone = vi.fn();
-  configureScanPixels({ decode, encode });
+  configureScanPixels({ decode: decode as unknown as typeof sourceToPixels, encode: encode as unknown as typeof pixelsToBlob });
   useToastStore.getState().dismiss();
 });
 

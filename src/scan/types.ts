@@ -11,7 +11,7 @@ export type Quad = [Point, Point, Point, Point];
 
 /** RGBA, 4 bytes per pixel, row-major. */
 export interface Pixels {
-  data: Uint8ClampedArray;
+  data: Uint8ClampedArray<ArrayBuffer>;
   width: number;
   height: number;
 }

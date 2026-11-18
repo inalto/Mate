@@ -101,7 +101,7 @@ export async function straightenImage(store: EditorStore, elementId: string): Pr
         if (!cur || cur.type !== "image") return; // deleted meanwhile; the asset is left to the garbage collection
         const width = cur.width ?? 0;
         const height = (width * r.height) / r.width;
-        const a = cur.points[0] ?? { x: 0, y: 0 };
+        const a = cur.points[0] ?? { x: 0, y: 0, pressure: 0.5, timestamp: 0 };
         const cx = a.x + width / 2;
         const cy = a.y + (cur.height ?? 0) / 2;
         const content: ImageContent = { ...contentOf<ImageContent>(cur) };
@@ -110,7 +110,7 @@ export async function straightenImage(store: EditorStore, elementId: string): Pr
         delete content.cropLeft;
         delete content.cropRight;
         store.getState().updateElements(
-          [{ ...cur, imageUrl: info.id, height, points: [{ x: cx - width / 2, y: cy - height / 2 }, ...cur.points.slice(1)], content }],
+          [{ ...cur, imageUrl: info.id, height, points: [{ ...a, x: cx - width / 2, y: cy - height / 2 }, ...cur.points.slice(1)], content }],
           "Scan",
         );
       },
