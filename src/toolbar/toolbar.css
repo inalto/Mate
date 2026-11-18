@@ -170,11 +170,64 @@
   gap: 2px;
 }
 
-/* The drag handle: Task 8 makes it draggable. */
+/* The drag handle: a drag starts only here, so a finger that scrolls the list never starts one. */
 .tbc-handle {
   display: inline-flex;
+  padding: 4px 2px;
   color: var(--color-text-muted, currentcolor);
   opacity: 0.6;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.tbc-handle:active {
+  cursor: grabbing;
+}
+
+html.mobile .tbc-handle {
+  padding: 10px 4px;
+}
+
+.tbc-item {
+  position: relative;
+}
+
+.tbc-dragging {
+  opacity: 0.5;
+}
+
+/* The insertion line at the drop slot. */
+.tbc-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-primary);
+  pointer-events: none;
+}
+
+.tbc-drop-after {
+  top: auto;
+  bottom: -2px;
+}
+
+.tbc-drop-empty {
+  position: static;
+}
+
+.tbc-list:empty {
+  min-height: 36px;
+  border: 1px dashed var(--color-border, currentcolor);
+  border-radius: var(--radius-md);
+}
+
+.tbc-drop-hover {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
 }
 
 .tbc-btn {
