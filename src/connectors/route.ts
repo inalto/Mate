@@ -16,6 +16,8 @@ export const ELBOW_PADDING = 16;
 /** Minimum distance of a curve's control points from their anchor. */
 const CURVE_MIN_REACH = 40;
 const CURVE_REACH = 0.4;
+/** Sideways pull of a free-to-free curve's control points, as a fraction of the chord. */
+const CURVE_BOW = 0.3;
 
 /** Unit direction leaving an element through `side`. */
 export const SIDE_DIR: Readonly<Record<Side, Vec2>> = {
@@ -52,6 +54,19 @@ function cubic(a: Vec2, c1: Vec2, c2: Vec2, b: Vec2): Vec2[] {
 function curve(start: Vec2, startSide: Side | null, end: Vec2, endSide: Side | null): Vec2[] {
   const d = dist(start, end);
   if (d === 0) return [{ ...start }, { ...end }];
+  if (!startSide && !endSide) {
+    // Two free ends have no side to leave by: aiming both control points along the chord would
+    // be a straight line, so the curve bows to one side as an arc instead.
+    const u = unit(start, end);
+    const bow = CURVE_BOW * d;
+    const off = { x: -u.y * bow, y: u.x * bow };
+    return cubic(
+      start,
+      { x: start.x + (u.x * d) / 3 + off.x, y: start.y + (u.y * d) / 3 + off.y },
+      { x: end.x - (u.x * d) / 3 + off.x, y: end.y - (u.y * d) / 3 + off.y },
+      end,
+    );
+  }
   const reach = Math.max(CURVE_MIN_REACH, CURVE_REACH * d);
   const ds = startSide ? SIDE_DIR[startSide] : unit(start, end);
   const de = endSide ? SIDE_DIR[endSide] : unit(end, start);
