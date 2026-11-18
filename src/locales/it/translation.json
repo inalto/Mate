@@ -832,8 +832,16 @@
       "demote": "Abbassa di livello",
       "duplicate": "Duplica",
       "split": "Apri in vista divisa",
-      "window": "Apri in una nuova finestra"
-    }
+      "window": "Apri in una nuova finestra",
+      "insertAbove": "Nuova pagina sopra",
+      "insertBelow": "Nuova pagina sotto",
+      "clear": "Svuota pagina…"
+    },
+    "pageActions": "Azioni pagina",
+    "clearTitle": "Svuotare “{{title}}”?",
+    "clearBody": "Tutto ciò che è stato scritto o inserito in questa pagina viene rimosso. Gli elementi bloccati e le pagine PDF importate restano. Puoi annullare l'operazione.",
+    "clearBodyPermanent": "Tutto ciò che è stato scritto o inserito in questa pagina viene rimosso. Gli elementi bloccati e le pagine PDF importate restano. La pagina non è aperta, quindi l'operazione non può essere annullata.",
+    "clearConfirm": "Svuota"
   },
   "library": {
     "openBook": "Apri {{title}}",

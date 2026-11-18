@@ -832,8 +832,16 @@
       "demote": "Demote",
       "duplicate": "Duplicate",
       "split": "Open in split view",
-      "window": "Open in new window"
-    }
+      "window": "Open in new window",
+      "insertAbove": "New page above",
+      "insertBelow": "New page below",
+      "clear": "Clear page…"
+    },
+    "pageActions": "Page actions",
+    "clearTitle": "Clear “{{title}}”?",
+    "clearBody": "Everything written or placed on this page is removed. Locked items and imported PDF pages stay. You can undo this.",
+    "clearBodyPermanent": "Everything written or placed on this page is removed. Locked items and imported PDF pages stay. This page is not open, so this cannot be undone.",
+    "clearConfirm": "Clear"
   },
   "library": {
     "openBook": "Open {{title}}",

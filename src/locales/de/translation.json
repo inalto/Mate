@@ -835,8 +835,16 @@
       "demote": "Herabstufen",
       "duplicate": "Duplizieren",
       "split": "In geteilter Ansicht öffnen",
-      "window": "In neuem Fenster öffnen"
-    }
+      "window": "In neuem Fenster öffnen",
+      "insertAbove": "Neue Seite darüber",
+      "insertBelow": "Neue Seite darunter",
+      "clear": "Seite leeren…"
+    },
+    "pageActions": "Seitenaktionen",
+    "clearTitle": "„{{title}}“ leeren?",
+    "clearBody": "Alles, was auf dieser Seite geschrieben oder eingefügt wurde, wird entfernt. Gesperrte Elemente und importierte PDF-Seiten bleiben. Das lässt sich rückgängig machen.",
+    "clearBodyPermanent": "Alles, was auf dieser Seite geschrieben oder eingefügt wurde, wird entfernt. Gesperrte Elemente und importierte PDF-Seiten bleiben. Die Seite ist nicht geöffnet, daher lässt sich das nicht rückgängig machen.",
+    "clearConfirm": "Leeren"
   },
   "library": {
     "openBook": "{{title}} öffnen",

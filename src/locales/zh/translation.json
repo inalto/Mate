@@ -832,8 +832,16 @@
       "demote": "降低层级",
       "duplicate": "复制",
       "split": "在分屏视图中打开",
-      "window": "在新窗口中打开"
-    }
+      "window": "在新窗口中打开",
+      "insertAbove": "在上方新建页面",
+      "insertBelow": "在下方新建页面",
+      "clear": "清空页面…"
+    },
+    "pageActions": "页面操作",
+    "clearTitle": "清空“{{title}}”？",
+    "clearBody": "此页面上书写或放置的所有内容都将被移除。已锁定的项目和导入的 PDF 页面会保留。此操作可以撤销。",
+    "clearBodyPermanent": "此页面上书写或放置的所有内容都将被移除。已锁定的项目和导入的 PDF 页面会保留。该页面未打开，因此无法撤销。",
+    "clearConfirm": "清空"
   },
   "library": {
     "openBook": "打开{{title}}",

@@ -835,8 +835,16 @@
       "demote": "Rétrograder",
       "duplicate": "Dupliquer",
       "split": "Ouvrir en vue scindée",
-      "window": "Ouvrir dans une nouvelle fenêtre"
-    }
+      "window": "Ouvrir dans une nouvelle fenêtre",
+      "insertAbove": "Nouvelle page au-dessus",
+      "insertBelow": "Nouvelle page en dessous",
+      "clear": "Vider la page…"
+    },
+    "pageActions": "Actions de la page",
+    "clearTitle": "Vider « {{title}} » ?",
+    "clearBody": "Tout ce qui a été écrit ou placé sur cette page est supprimé. Les éléments verrouillés et les pages PDF importées restent. Vous pouvez annuler cette action.",
+    "clearBodyPermanent": "Tout ce qui a été écrit ou placé sur cette page est supprimé. Les éléments verrouillés et les pages PDF importées restent. La page n'est pas ouverte : cette action est irréversible.",
+    "clearConfirm": "Vider"
   },
   "library": {
     "openBook": "Ouvrir {{title}}",

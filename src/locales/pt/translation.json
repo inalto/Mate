@@ -835,8 +835,16 @@
       "demote": "Rebaixar",
       "duplicate": "Duplicar",
       "split": "Abrir em visualização dividida",
-      "window": "Abrir em nova janela"
-    }
+      "window": "Abrir em nova janela",
+      "insertAbove": "Nova página acima",
+      "insertBelow": "Nova página abaixo",
+      "clear": "Limpar página…"
+    },
+    "pageActions": "Ações da página",
+    "clearTitle": "Limpar “{{title}}”?",
+    "clearBody": "Tudo o que foi escrito ou colocado nesta página é removido. Os itens bloqueados e as páginas PDF importadas ficam. Você pode desfazer isto.",
+    "clearBodyPermanent": "Tudo o que foi escrito ou colocado nesta página é removido. Os itens bloqueados e as páginas PDF importadas ficam. A página não está aberta, por isso não é possível desfazer.",
+    "clearConfirm": "Limpar"
   },
   "library": {
     "openBook": "Abrir {{title}}",

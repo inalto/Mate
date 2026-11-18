@@ -832,8 +832,16 @@
       "demote": "レベルを下げる",
       "duplicate": "複製",
       "split": "分割表示で開く",
-      "window": "新しいウィンドウで開く"
-    }
+      "window": "新しいウィンドウで開く",
+      "insertAbove": "上に新しいページ",
+      "insertBelow": "下に新しいページ",
+      "clear": "ページを消去…"
+    },
+    "pageActions": "ページの操作",
+    "clearTitle": "「{{title}}」を消去しますか？",
+    "clearBody": "このページに書いたものや配置したものがすべて削除されます。ロックした項目と読み込んだ PDF ページは残ります。この操作は取り消せます。",
+    "clearBodyPermanent": "このページに書いたものや配置したものがすべて削除されます。ロックした項目と読み込んだ PDF ページは残ります。このページは開かれていないため、取り消せません。",
+    "clearConfirm": "消去"
   },
   "library": {
     "openBook": "{{title}} を開く",
