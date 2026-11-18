@@ -1,0 +1,106 @@
+/* Editor toolbar: rows of a fixed start, a scrolling middle and a fixed end (see components/Toolbar.tsx). */
+.tb-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 0;
+}
+
+.tb-fixed,
+.tb-scroll {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tb-fixed {
+  flex: none;
+}
+
+.tb-scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  scrollbar-width: none;
+}
+
+.tb-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tb-scroll > *,
+.tb-fixed > * {
+  flex: none;
+}
+
+.toolbar[data-dock="top"],
+.toolbar[data-dock="bottom"] {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.toolbar[data-dock="top"] .tb-scroll,
+.toolbar[data-dock="bottom"] .tb-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.toolbar[data-dock="left"],
+.toolbar[data-dock="right"] {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.toolbar[data-dock="left"] .tb-row,
+.toolbar[data-dock="right"] .tb-row,
+.toolbar[data-dock="left"] .tb-fixed,
+.toolbar[data-dock="right"] .tb-fixed,
+.toolbar[data-dock="left"] .tb-scroll,
+.toolbar[data-dock="right"] .tb-scroll {
+  flex-direction: column;
+}
+
+.toolbar[data-dock="left"] .tb-scroll,
+.toolbar[data-dock="right"] .tb-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.toolbar[data-dock="left"] .tb-sep,
+.toolbar[data-dock="right"] .tb-sep {
+  width: 20px;
+  height: 1px;
+  margin: var(--space-1) 0;
+}
+
+/* Where content is cut off, the strip fades out over 16 px. */
+.toolbar[data-dock="top"] .tb-scroll[data-fade-start],
+.toolbar[data-dock="bottom"] .tb-scroll[data-fade-start] {
+  mask-image: linear-gradient(to right, transparent, #000 16px);
+}
+
+.toolbar[data-dock="top"] .tb-scroll[data-fade-end],
+.toolbar[data-dock="bottom"] .tb-scroll[data-fade-end] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+
+.toolbar[data-dock="top"] .tb-scroll[data-fade-start][data-fade-end],
+.toolbar[data-dock="bottom"] .tb-scroll[data-fade-start][data-fade-end] {
+  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+
+.toolbar[data-dock="left"] .tb-scroll[data-fade-start],
+.toolbar[data-dock="right"] .tb-scroll[data-fade-start] {
+  mask-image: linear-gradient(to bottom, transparent, #000 16px);
+}
+
+.toolbar[data-dock="left"] .tb-scroll[data-fade-end],
+.toolbar[data-dock="right"] .tb-scroll[data-fade-end] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+}
+
+.toolbar[data-dock="left"] .tb-scroll[data-fade-start][data-fade-end],
+.toolbar[data-dock="right"] .tb-scroll[data-fade-start][data-fade-end] {
+  mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}

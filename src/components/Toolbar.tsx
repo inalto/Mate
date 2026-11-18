@@ -7,6 +7,9 @@ import { useSettingsStore } from "../stores/settings";
 import { isMobile } from "../platform";
 import { ITEMS } from "../toolbar/items";
 import { UndoRedo } from "../toolbar/buttons";
+import { resolveLayout, SEP, type Slot } from "../toolbar/layout";
+import { useScrollFade } from "../toolbar/useScrollFade";
+import "../toolbar/toolbar.css";
 import DockPopover, { useDock, wheelToScroll, type Dock } from "./DockPopover";
 import { useDismiss } from "./useDismiss";
 
@@ -61,64 +64,72 @@ function DockMenu() {
   );
 }
 
-export default function Toolbar() {
-  const { t } = useTranslation();
-  const dock = useDock();
-  const vertical = dock === "left" || dock === "right";
-  // A mouse wheel has no horizontal axis: turn it into sideways scrolling of a horizontal bar.
+/** One row's items and separators. */
+function Slots({ slots }: { slots: Slot[] }) {
+  return (
+    <>
+      {slots.map((slot, i) => {
+        if (slot === SEP) return <span key={`sep${i}`} className="tb-sep" />;
+        const { Button } = ITEMS[slot];
+        return <Button key={slot} />;
+      })}
+    </>
+  );
+}
+
+/** The scrolling strip of a row. A mouse wheel has no horizontal axis: turn it into sideways scrolling. */
+function Scroll({ slots, vertical }: { slots: Slot[]; vertical: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useScrollFade(ref);
   const onWheel = (e: WheelEvent<HTMLDivElement>) => {
     // React events bubble through portals: ignore wheels over a popover rendered outside the bar.
     if (vertical || !e.currentTarget.contains(e.target as Node)) return;
     const dx = wheelToScroll(e);
     if (dx) e.currentTarget.scrollLeft += dx;
   };
+  return (
+    <div ref={ref} className="tb-scroll" onWheel={onWheel}>
+      <Slots slots={slots} />
+    </div>
+  );
+}
+
+export default function Toolbar() {
+  const { t } = useTranslation();
+  const dock = useDock();
+  const saved = useSettingsStore((s) => s.settings.toolbarLayout);
+  const { rows } = resolveLayout(saved, isMobile());
+  const vertical = dock === "left" || dock === "right";
 
   return (
     <div
       className="toolbar"
       role="toolbar"
       data-dock={dock}
+      data-rows={rows.length}
       aria-orientation={vertical ? "vertical" : "horizontal"}
       aria-label={t("toolbar.label")}
-      onWheel={onWheel}
     >
-      <Link to="/" className="tb-btn" aria-label={t("nav.home")} title={t("nav.home")}>
-        <House size={18} />
-      </Link>
-      <span className="tb-sep" />
-      <ITEMS.pens.Button />
-      <ITEMS.covers.Button />
-      <span className="tb-sep" />
-      <ITEMS.eraser.Button />
-      <ITEMS.shape.Button />
-      <ITEMS.connector.Button />
-      <ITEMS.frame.Button />
-      <ITEMS.note.Button />
-      <ITEMS.mindmap.Button />
-      <ITEMS.text.Button />
-      <ITEMS.image.Button />
-      <ITEMS.media.Button />
-      <ITEMS.dictate.Button />
-      <ITEMS.record.Button />
-      <ITEMS.table.Button />
-      <ITEMS.code.Button />
-      <ITEMS.equation.Button />
-      <ITEMS.graph.Button />
-      <ITEMS.present.Button />
-      <ITEMS.paper.Button />
-      <ITEMS.cursor.Button />
-      <ITEMS.lasso.Button />
-      <ITEMS.insertSpace.Button />
-      {isMobile() && <ITEMS.finger.Button />}
-      <ITEMS.straight.Button />
-      <ITEMS.ruler.Button />
-      <ITEMS.autoShapes.Button />
-      <span className="tb-sep" />
-      <UndoRedo />
-      <span className="tb-sep" />
-      <ITEMS.zoom.Button />
-      <span className="tb-sep" />
-      <DockMenu />
+      {rows.map((slots, r) => (
+        <div key={r} className="tb-row" data-row={r}>
+          {r === 0 && (
+            <div className="tb-fixed tb-start">
+              <Link to="/" className="tb-btn" aria-label={t("nav.home")} title={t("nav.home")}>
+                <House size={18} />
+              </Link>
+              <span className="tb-sep" />
+            </div>
+          )}
+          <Scroll slots={slots} vertical={vertical} />
+          {r === 0 && (
+            <div className="tb-fixed tb-end">
+              <span className="tb-sep" />
+              <UndoRedo />
+              <DockMenu />
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

@@ -1191,7 +1191,7 @@ button.card:hover {
   box-shadow: var(--shadow-bar);
 }
 
-/* Dock bar: spans the pane edge, one track that scrolls (wheel on top/bottom) instead of wrapping.
+/* Dock bar: spans the pane edge. Rows, fixed zones and the scrolling strip are in toolbar/toolbar.css.
    Popovers are portaled out (DockPopover), so the overflow never clips them. */
 .toolbar {
   position: relative;
@@ -1201,23 +1201,6 @@ button.card:hover {
   border: 0;
   border-radius: 0;
   box-shadow: none;
-  scrollbar-width: none;
-}
-
-.toolbar::-webkit-scrollbar {
-  display: none;
-}
-
-.toolbar > * {
-  flex: none;
-}
-
-.toolbar[data-dock="top"],
-.toolbar[data-dock="bottom"] {
-  flex-direction: row;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
 }
 
 .toolbar[data-dock="top"] {
@@ -1230,10 +1213,6 @@ button.card:hover {
 
 .toolbar[data-dock="left"],
 .toolbar[data-dock="right"] {
-  flex-direction: column;
-  flex-wrap: nowrap;
-  overflow-x: hidden;
-  overflow-y: auto;
   padding: var(--space-2) var(--space-1);
 }
 
@@ -1243,13 +1222,6 @@ button.card:hover {
 
 .toolbar[data-dock="right"] {
   border-left: 1px solid var(--color-border);
-}
-
-.toolbar[data-dock="left"] .tb-sep,
-.toolbar[data-dock="right"] .tb-sep {
-  width: 20px;
-  height: 1px;
-  margin: var(--space-1) 0;
 }
 
 .selection-bar {

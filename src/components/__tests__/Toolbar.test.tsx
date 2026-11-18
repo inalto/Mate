@@ -27,6 +27,7 @@ import { useTabsStore } from "../../stores/tabs";
 import { flushSettings, useSettingsStore } from "../../stores/settings";
 import { setPlatformForTests } from "../../platform";
 import { wheelToScroll } from "../DockPopover";
+import { toSaved } from "../../toolbar/layout";
 import Toolbar from "../Toolbar";
 
 const renderBar = () =>
@@ -97,6 +98,73 @@ describe("Toolbar", () => {
     }
   });
 
+  const withLayout = (rows: Parameters<typeof toSaved>[0], extra: Partial<typeof DEFAULT_SETTINGS> = {}) =>
+    useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, ...extra, toolbarLayout: toSaved(rows) } });
+  const buttonNames = (root: Element) =>
+    within(root as HTMLElement)
+      .getAllByRole("button")
+      .map((b) => b.getAttribute("aria-label"));
+
+  it("default_layout_groups_select_tools_before_inserts", () => {
+    renderBar();
+    const names = buttonNames(screen.getByRole("toolbar"));
+    expect(names.indexOf("Select")).toBeGreaterThan(-1);
+    expect(names.indexOf("Select")).toBeLessThan(names.indexOf("Eraser"));
+    expect(screen.queryByRole("button", { name: "Insert image…" })).toBeNull();
+  });
+
+  it("undo_and_redo_are_outside_the_scrolling_area", () => {
+    renderBar();
+    for (const name of ["Undo", "Redo"]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn.closest(".tb-scroll")).toBeNull();
+      expect(btn.closest(".tb-end")).not.toBeNull();
+    }
+    expect(screen.getByRole("link", { name: "Home" }).closest(".tb-start")).not.toBeNull();
+  });
+
+  it("a_saved_layout_orders_and_hides_buttons", () => {
+    withLayout([["pens", "eraser", "sep", "zoom"]]);
+    renderBar();
+    const scroll = document.querySelector(".tb-scroll") as HTMLElement;
+    const names = buttonNames(scroll);
+    const eraser = names.indexOf("Eraser");
+    expect(eraser).toBeGreaterThan(-1);
+    expect(names.indexOf("Zoom out")).toBeGreaterThan(eraser);
+    expect(scroll.querySelectorAll(".tb-sep")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Shape" })).toBeNull();
+  });
+
+  it("two_rows_render_two_row_elements", () => {
+    withLayout([["pens"], ["eraser", "shape"]]);
+    const { rerender } = renderBar();
+    const bar = () => screen.getByRole("toolbar");
+    expect(bar().getAttribute("data-rows")).toBe("2");
+    const rows = bar().querySelectorAll(".tb-row");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[1] as HTMLElement).getByRole("button", { name: "Eraser" })).toBeTruthy();
+    expect(within(rows[1] as HTMLElement).getByRole("button", { name: "Shape" })).toBeTruthy();
+    expect(rows[1].querySelector(".tb-fixed")).toBeNull();
+    withLayout([["pens"], ["eraser", "shape"]], { toolbarDock: "left" });
+    rerender(
+      <MemoryRouter>
+        <Toolbar />
+      </MemoryRouter>,
+    );
+    expect(bar().getAttribute("aria-orientation")).toBe("vertical");
+    expect(bar().getAttribute("data-rows")).toBe("2");
+    expect(bar().querySelectorAll(".tb-row")).toHaveLength(2);
+  });
+
+  it("one_row_by_default_and_the_wheel_scrolls_the_strip_sideways", () => {
+    renderBar();
+    const bar = screen.getByRole("toolbar");
+    expect(bar.getAttribute("data-rows")).toBe("1");
+    const scroll = bar.querySelector(".tb-scroll") as HTMLElement;
+    fireEvent.wheel(scroll, { deltaY: 40, deltaMode: 0 });
+    expect(scroll.scrollLeft).toBe(40);
+  });
+
   it("selects_and_removes_presets", () => {
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Pen #C62828" }));
@@ -134,6 +202,7 @@ describe("Toolbar", () => {
   });
 
   it("insert_image_button_opens_the_picker", () => {
+    withLayout([["pens", "image"]]);
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Insert image…" }));
     expect(pick).toHaveBeenCalledTimes(1);
@@ -143,6 +212,7 @@ describe("Toolbar", () => {
     const addTable = vi.fn();
     const addCodespace = vi.fn();
     useEditorStore.setState({ addTable, addCodespace });
+    withLayout([["pens", "table", "code"]]);
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Insert table" }));
     fireEvent.click(screen.getByRole("button", { name: "Insert code" }));
@@ -153,6 +223,7 @@ describe("Toolbar", () => {
   it("insert_equation_button", () => {
     const addMathBox = vi.fn();
     useEditorStore.setState({ addMathBox });
+    withLayout([["pens", "equation"]]);
     renderBar();
     fireEvent.click(screen.getByRole("button", { name: "Insert equation" }));
     expect(addMathBox).toHaveBeenCalledTimes(1);
