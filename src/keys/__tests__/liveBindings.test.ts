@@ -64,6 +64,8 @@ describe("live bindings", () => {
       [{ key: "0", code: "Digit0", ctrlKey: true }, "zoom.reset"],
       [{ key: "PageUp", code: "PageUp", ctrlKey: true }, "page.prev"],
       [{ key: "PageDown", code: "PageDown", ctrlKey: true }, "page.next"],
+      [{ key: "PageUp", code: "PageUp" }, "page.prev"],
+      [{ key: "PageDown", code: "PageDown" }, "page.next"],
       [{ key: "N", code: "KeyN", ctrlKey: true, shiftKey: true }, "window.openPage"],
       [{ key: "k", code: "KeyK", ctrlKey: true }, "palette.open"],
     ];
