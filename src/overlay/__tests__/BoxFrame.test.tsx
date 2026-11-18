@@ -108,6 +108,38 @@ describe("BoxFrame", () => {
     expect(s().dragging).toBe(false);
   });
 
+  describe("resize_ratio", () => {
+    const drag = (id: string, handle: string, dx: number, dy: number, x0: number, y0: number) => {
+      const { container } = frame(id);
+      const h = container.querySelector(`[data-handle="${handle}"]`) as HTMLElement;
+      fireEvent.pointerDown(h, { clientX: x0, clientY: y0, pointerId: 1, button: 0 });
+      fireEvent.pointerMove(h, { clientX: x0 + dx, clientY: y0 + dy, pointerId: 1 });
+      fireEvent.pointerUp(h, { clientX: x0 + dx, clientY: y0 + dy, pointerId: 1 });
+      return s().elements.get(id)!;
+    };
+    const size = (e: Element) => ({ w: e.boxWidth!, h: e.boxHeight! });
+
+    it("a_graph_corner_resize_keeps_the_boxes_aspect_ratio", async () => {
+      await load([el("g", [[100, 100]], { type: "graph", boxWidth: 400, boxHeight: 300, width: 1 })]);
+      s().select(["g"]);
+      const { w, h } = size(drag("g", "se", 100, 10, 500, 400));
+      expect(w).toBeCloseTo(500);
+      expect(w / h).toBeCloseTo(4 / 3);
+    });
+
+    it("a_graph_side_handle_still_resizes_one_dimension_freely", async () => {
+      await load([el("g", [[100, 100]], { type: "graph", boxWidth: 400, boxHeight: 300, width: 1 })]);
+      s().select(["g"]);
+      expect(size(drag("g", "e", 100, 10, 500, 250))).toEqual({ w: 500, h: 300 });
+    });
+
+    it("a_text_box_corner_resize_stays_free", async () => {
+      await load([box("a", 100, 100, { boxWidth: 400, boxHeight: 300 })]);
+      s().select(["a"]);
+      expect(size(drag("a", "se", 100, 10, 500, 400))).toEqual({ w: 500, h: 310 });
+    });
+  });
+
   it("rotate_handle_with_shift_snaps_to_15_degrees_once", async () => {
     await load([box("a", 100, 100)]);
     s().select(["a"]);

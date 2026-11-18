@@ -121,7 +121,8 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
     // Handles act in the box's own (unrotated) frame.
     const cos = Math.cos(-rotation);
     const sin = Math.sin(-rotation);
-    const keepAspect = el.type === "image" || e.shiftKey;
+    // Images always keep their ratio; a graph does on its corner handles (its sides stay free); Shift forces it.
+    const keepAspect = el.type === "image" || (el.type === "graph" && d.handle.length === 2) || e.shiftKey;
     const r = resizeBox(d.from, d.handle, dx * cos - dy * sin, dx * sin + dy * cos, keepAspect);
     // Edge snapping only for an unrotated box whose sides move freely.
     if (rotation !== 0 || keepAspect || !snapping(e)) return { rect: r, guides: [] };
