@@ -3,11 +3,13 @@
 // element and the editor slot (`data-editor-for`) of the element being edited, when its type has
 // an editor (an empty slot would sit over the element and swallow its input). The layer itself
 // lets pointer events through to the canvas; only its frames, handles and editors take them.
+// When an edit session ends, its editor lets go of the focus and text selection while it is still
+// in the page (./releaseFocus).
 // Also hosts the search flash (page units), the tutor card and the auto-complete arrows (screen
 // space, beside the layer), and the auto-complete popover (beside the clip, like the line-ends one).
 // A lone selected mind map gets its MindmapOverlay (node focus, buttons, node drag), and the node
 // being edited (src/mindmap/editSession.ts) its MindNodeEditor, both in page units.
-import { createElement, useCallback, useEffect, type CSSProperties } from "react";
+import { createElement, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import AutoCompletePopover from "../components/AutoCompletePopover";
 import FlashLayer from "../components/FlashLayer";
 import { contentOf } from "../model/content";
@@ -26,6 +28,7 @@ import { editorFor, NoEditor } from "./editorRegistry";
 import { endMindNodeEdit, useMindEdit } from "../mindmap/editSession";
 import MindmapOverlay from "./MindmapOverlay";
 import MindNodeEditor from "./MindNodeEditor";
+import { releaseTextFocus } from "./releaseFocus";
 
 export default function OverlayLayer({ store }: { store: EditorStore }) {
   const camera = store((s) => s.camera);
@@ -47,6 +50,26 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
   useEffect(() => {
     if (staleEdit) endMindNodeEdit(store);
   }, [staleEdit, store]);
+  // Store listeners run before React removes the editor, so it is still in the page here. Only a
+  // session that ends is released: one that moves on to another element or node hands the focus to
+  // the next editor (and a blur here would close that one).
+  const layerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const release = (selector: string) => {
+      const node = layerRef.current?.querySelector<HTMLElement>(selector);
+      if (node) releaseTextFocus(node);
+    };
+    const unsubEdit = store.subscribe((s, prev) => {
+      if (prev.editingId !== null && s.editingId === null) release(".box-editor");
+    });
+    const unsubMind = useMindEdit.subscribe((m, prev) => {
+      if (prev.store === store && m.store === null) release(".mind-node-editor");
+    });
+    return () => {
+      unsubEdit();
+      unsubMind();
+    };
+  }, [store]);
   const framed = [...selection].map((id) => elements.get(id)).filter((el): el is Element => el !== undefined && isBoxed(el));
   const edited = editingId !== null ? elements.get(editingId) : undefined;
   const editor = edited ? editorFor(edited.type, contentOf<{ subtype?: string }>(edited).subtype) : NoEditor;
@@ -63,7 +86,7 @@ export default function OverlayLayer({ store }: { store: EditorStore }) {
   return (
     <>
       <div className="overlay-clip">
-        <div className="overlay-layer" data-testid="overlay-layer" style={layerStyle}>
+        <div ref={layerRef} className="overlay-layer" data-testid="overlay-layer" style={layerStyle}>
           {editing && (
             <div className="box-editor" data-editor-for={editing.id} data-editor-type={editing.type} style={boxStyle(boxRect(editing), contentMeta(editing).rotation ?? 0)}>
               {createElement(editor, { el: editing, store })}

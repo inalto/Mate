@@ -279,7 +279,7 @@ export interface EditorState {
    * covered (not revealed) cover only the covers among them go: what a cover hides is never erased.
    */
   scribbleErase(ids: string[]): void;
-  updateElements(els: Element[]): void;
+  updateElements(els: Element[], label?: string): void;
   /**
    * Text tool: add an empty text box at `at` (first baseline snapped to ruled lines when the
    * setting is on) and open its editor; its id, or null when refused.
@@ -842,10 +842,20 @@ export function createEditorStore(): EditorStore {
       const top = topZ(get().elements.values());
       const onTop = (el: Element) => (top > 0 && zOf(el) < top ? withMeta(el, { zIndex: top }) : el);
       const added = onTop(shape);
-      // The stroke was never committed: the entry records it (so undo can restore it) but only the
-      // shape is applied now.
-      const actions: Action[] = [{ type: "delete", el: onTop(stroke) }, { type: "add", el: added }];
-      return record("Ink to shape", actions, undefined, [{ type: "add", el: added }]);
+      const drawn = onTop(stroke);
+      const applied: Action[] = [{ type: "add", el: added }];
+      if (get().presenting) return false;
+      if (exceedsLimit(applied)) {
+        set({ limitReached: true, limitKind: "page" });
+        return false;
+      }
+      // The stroke was never committed, and only the shape is applied now. History still holds two
+      // steps, as if it had been: drawing the stroke, then the snap. The first undo gives the stroke
+      // back, the second removes it (without its own entry it would stay and the undo would take
+      // back whatever came before it).
+      flushEraseBatch();
+      history.push({ label: "Draw", actions: [{ type: "add", el: drawn }] });
+      return record("Ink to shape", [{ type: "delete", el: drawn }, ...applied], undefined, applied);
     },
 
     addConnector(input) {
@@ -1122,7 +1132,7 @@ export function createEditorStore(): EditorStore {
       return record("Remove covers", gone.map((el) => ({ type: "delete", el })));
     },
 
-    updateElements(els) {
+    updateElements(els, label = "Edit") {
       const cur = get().elements;
       let clamped = false;
       // A table never grows past MAX_TABLE_CELLS: an over-limit one is cut to the limit and flagged.
@@ -1133,7 +1143,7 @@ export function createEditorStore(): EditorStore {
       };
       // Locked elements are never edited (only unlockSelection changes them).
       record(
-        "Edit",
+        label,
         els
           .filter((e) => cur.has(e.id) && !isLocked(cur.get(e.id)!))
           .map((e) => fit(e))

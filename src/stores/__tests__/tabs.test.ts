@@ -96,3 +96,88 @@ describe("tabs store", () => {
     expect(s().tabs.find((t) => t.id === y)!.focusedPaneIndex).toBe(1);
   });
 });
+
+describe("tabs across books", () => {
+  const section = (id: string, unitId: string) => ({
+    id,
+    unitId,
+    title: id,
+    color: "#000",
+    orderIndex: 0,
+    isExpanded: true,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    version: 0,
+  });
+  const inSection = (id: string, sectionId: string): Page => ({ ...page(id, id.toUpperCase()), sectionId });
+
+  beforeEach(() => {
+    localStorage.clear();
+    useNotebookStore.setState({
+      loaded: true,
+      tree: {
+        bookshelves: [],
+        units: [],
+        sections: [section("s1", "maths"), section("s1b", "maths"), section("s2", "history")],
+        // m1..m3 are in the book "maths" (two sections), h1 and h2 in "history"; x has no known section.
+        pages: [inSection("m1", "s1"), inSection("m2", "s1b"), inSection("m3", "s1"), inSection("h1", "s2"), inSection("h2", "s2"), inSection("x", "gone")],
+      },
+    });
+    useTabsStore.getState().reset();
+  });
+
+  const shown = () => s().tabs.map((t) => t.panes.map((p) => p.pageId).join("|"));
+
+  it("openPage_other_book_opens_new_tab", () => {
+    s().openPage("m1");
+    s().openPage("h1");
+    expect(shown()).toEqual(["m1", "h1"]);
+    expect(s().tabs[1].id).toBe(s().activeTabId);
+  });
+
+  it("openPage_same_book_replaces", () => {
+    s().openPage("m1");
+    s().openPage("m2"); // another section of the same book
+    expect(shown()).toEqual(["m2"]);
+  });
+
+  it("openPage_unknown_book_replaces", () => {
+    s().openPage("m1");
+    s().openPage("x");
+    expect(shown()).toEqual(["x"]);
+    s().openPage("h1");
+    expect(shown()).toEqual(["h1"]);
+  });
+
+  it("openPage_other_book_reuses_its_tab", () => {
+    s().openPage("m1");
+    s().openPage("h1");
+    s().openPage("m1");
+    expect(shown()).toEqual(["m1", "h1"]);
+    expect(s().activeTabId).toBe(s().tabs[0].id);
+  });
+
+  it("openPage_other_book_from_split_keeps_split", () => {
+    s().openPage("m1");
+    s().split(s().activeTabId!, "m2");
+    s().openPage("h1");
+    expect(shown()).toEqual(["m1|m2", "h1"]);
+  });
+
+  it("openPage_follows_the_focused_pane_book", () => {
+    s().openPage("m1");
+    s().split(s().activeTabId!, "h1"); // focus is on h1
+    s().openPage("h2");
+    expect(shown()).toEqual(["m1|h2"]);
+  });
+
+  it("new_tab_sits_after_last_tab_of_its_book", () => {
+    s().openPage("m1");
+    s().openPage("h1");
+    s().openPage("m3", { newTab: true });
+    expect(shown()).toEqual(["m1", "m3", "h1"]);
+    s().activateTab(s().tabs[0].id);
+    s().openPage("h2", { newTab: true });
+    expect(shown()).toEqual(["m1", "m3", "h1", "h2"]);
+  });
+});

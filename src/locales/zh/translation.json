@@ -676,6 +676,7 @@
     "insertTable": "插入表格",
     "insertGraph": "插入图形",
     "insertImage": "插入图片",
+    "scan": "扫描照片",
     "newPage": "新建页面",
     "newSection": "新建分区",
     "openSettings": "打开设置",
@@ -708,9 +709,39 @@
     "updateSettings": "更新设置"
   },
   "toolbar": {
+    "more": "更多工具",
+    "hiddenTools": "隐藏的工具",
+    "customize": "自定义工具栏…",
+    "customizeTitle": "自定义工具栏",
+    "row1": "第 1 行",
+    "row2": "第 2 行",
+    "hidden": "已隐藏",
+    "hiddenEmpty": "没有隐藏的工具。将工具拖到这里即可隐藏。",
+    "separator": "分隔线",
+    "moveUp": "上移{{item}}",
+    "moveDown": "下移{{item}}",
+    "hide": "隐藏{{item}}",
+    "show": "显示{{item}}",
+    "toOtherRow": "将{{item}}移到另一行",
+    "removeSeparator": "移除分隔线",
+    "addSeparator": "添加分隔线",
+    "twoRows": "使用两行",
+    "twoRowsNote": "第二行会减少页面可用的空间。",
+    "reset": "恢复默认",
+    "resetConfirm": "将工具栏恢复为默认布局？",
+    "rowEmpty": "这里还没有内容",
     "straightLines": "直线",
     "autoShapes": "自动规整图形",
     "ruler": "尺子",
+    "items": {
+      "pens": "笔",
+      "covers": "遮盖",
+      "insert": "插入",
+      "dictate": "听写",
+      "record": "录制",
+      "finger": "手指模式",
+      "zoom": "缩放"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -753,6 +784,7 @@
     "cutImages": "裁剪图片",
     "text": "文字",
     "insertImage": "插入图片…",
+    "scan": "扫描",
     "insertTable": "插入表格",
     "insertCode": "插入代码",
     "insertEquation": "插入公式",
@@ -781,6 +813,7 @@
     "pageTitle": "页面标题"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "已打开的页面",
     "close": "关闭{{title}}",
     "split": "分屏视图",
@@ -832,8 +865,16 @@
       "demote": "降低层级",
       "duplicate": "复制",
       "split": "在分屏视图中打开",
-      "window": "在新窗口中打开"
-    }
+      "window": "在新窗口中打开",
+      "insertAbove": "在上方新建页面",
+      "insertBelow": "在下方新建页面",
+      "clear": "清空页面…"
+    },
+    "pageActions": "页面操作",
+    "clearTitle": "清空“{{title}}”？",
+    "clearBody": "此页面上书写或放置的所有内容都将被移除。已锁定的项目和导入的 PDF 页面会保留。此操作可以撤销。",
+    "clearBodyPermanent": "此页面上书写或放置的所有内容都将被移除。已锁定的项目和导入的 PDF 页面会保留。该页面未打开，因此无法撤销。",
+    "clearConfirm": "清空"
   },
   "library": {
     "openBook": "打开{{title}}",
@@ -961,7 +1002,8 @@
     "recent": "最近使用的颜色",
     "width": "宽度",
     "moveLeft": "左移",
-    "moveRight": "右移"
+    "moveRight": "右移",
+    "remove": "移除笔"
   },
   "text": {
     "bold": "粗体",
@@ -1596,5 +1638,32 @@
     "angle": "尺子角度：{{angle}} 度",
     "angleField": "角度（度），0 到 180",
     "rotate": "旋转尺子"
+  },
+  "scan": {
+    "title": "扫描",
+    "takePhoto": "拍照",
+    "choosePhoto": "选择照片",
+    "fromFile": "从文件…",
+    "fromWebcam": "从网络摄像头…",
+    "capture": "拍摄",
+    "rotate": "旋转",
+    "resetCorners": "重置角点",
+    "colour": "彩色",
+    "grey": "灰度",
+    "blackWhite": "黑白",
+    "mode": "清理",
+    "insert": "插入",
+    "cancel": "取消",
+    "working": "正在处理…",
+    "failed": "无法扫描该照片。",
+    "noCamera": "没有可用的摄像头。",
+    "straighten": "拉直",
+    "preview": "预览",
+    "corner": {
+      "topLeft": "左上角",
+      "topRight": "右上角",
+      "bottomRight": "右下角",
+      "bottomLeft": "左下角"
+    }
   }
 }

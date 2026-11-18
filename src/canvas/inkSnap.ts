@@ -2,7 +2,7 @@
 // (≤ 2 screen px since the dwell started, 8 px for a finger) for `dwellMs`, the stroke so far is
 // recognised and, on a match, snaps to a shape (the caller previews it and commits it on pen-up).
 // With snap-on-release, a stroke lifted without a hold is recognised too. The highlighter and the cover never
-// snap. A line or arrow lands on the horizontal / vertical when it is within a few degrees of it,
+// snap on a hold (only in perfect-shapes mode, where each keeps its own ink). A line or arrow lands on the horizontal / vertical when it is within a few degrees of it,
 // and after a hold snapped it, its end follows the pen until it lifts. Any other shape (or curve)
 // a hold snapped is then resized and turned by the pen, about its centre, until the pen lifts.
 import type { Element, PenPreset, Point, Settings } from "../model/types";
@@ -171,14 +171,29 @@ export function createInkSnap(opts: InkSnapOptions): InkSnap {
   };
 }
 
+/** `poly` with extra points along its segments so that no two neighbours are more than `step` apart. */
+export function densify(poly: readonly { x: number; y: number }[], step: number): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const b = poly[i];
+    if (i > 0) {
+      const a = poly[i - 1];
+      const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step);
+      for (let k = 1; k < n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+    }
+    out.push({ x: b.x, y: b.y });
+  }
+  return out;
+}
+
 /** Fill opacity of a perfect shape filled with its own (lighter) stroke colour. */
 export const SNAP_FILL_OPACITY = 0.2;
 
 /**
  * The element for a recognised stroke: a shape with the stroke's colour and width, unfilled or (with
  * `fill`, closed shapes) filled with a light tint of that colour; for a curve, an ink stroke along
- * the fitted curve (even pressure, the preset's ink). The highlighter stays a highlighter: its
- * shape is a highlighter stroke along the outline (an arrow becomes a plain line).
+ * the fitted curve (even pressure, the preset's ink). The highlighter stays a highlighter and a cover stays a cover: its
+ * shape is a stroke of that ink along the outline (an arrow becomes a plain line).
  */
 export function snapShapeElement(
   r: RecognizedShape,
@@ -188,8 +203,10 @@ export function snapShapeElement(
   now: string,
   fill = false,
 ): Element {
-  if (preset.type === "highlighter") {
-    const outline = r.curve ?? shapeOutline(r.type, r.rect, r.rotation)[0] ?? [];
+  if (preset.type === "highlighter" || preset.type === "cover") {
+    // The highlighter's (and the cover's, streamlined the same way) renderer streamlines its points (each is pulled toward the one before), so
+    // an outline of bare corners would be drawn with every corner cut: lay points along the sides.
+    const outline = densify(r.curve ?? shapeOutline(r.type, r.rect, r.rotation)[0] ?? [], Math.max(0.5, preset.width / 8));
     return {
       id,
       pageId,
@@ -197,8 +214,8 @@ export function snapShapeElement(
       points: outline.map((p, i) => ({ x: p.x, y: p.y, pressure: 0.5, timestamp: i })),
       color: preset.color,
       width: preset.width,
-      isHighlighter: true,
-      penStyle: "highlighter",
+      isHighlighter: preset.type === "highlighter",
+      penStyle: preset.type,
       createdAt: now,
       updatedAt: now,
       version: 0,

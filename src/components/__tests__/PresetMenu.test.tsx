@@ -12,9 +12,9 @@ import PresetMenu from "../PresetMenu";
 const cover: PenPreset = { id: "cv", type: "cover", color: "#334155", width: 28, coverShape: "stroke" };
 const pen: PenPreset = { id: "pn", type: "pen", color: "#000000", width: 3 };
 
-const mount = (preset: PenPreset) => {
+const mount = (preset: PenPreset, count = 1, onClose: () => void = () => {}) => {
   useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS, toolbarPresets: [...DEFAULT_SETTINGS.toolbarPresets, preset] } });
-  return render(<PresetMenu preset={preset} index={0} count={1} anchorRef={createRef<HTMLElement>()} onClose={() => {}} />);
+  return render(<PresetMenu preset={preset} index={0} count={count} anchorRef={createRef<HTMLElement>()} onClose={onClose} />);
 };
 const saved = (id: string) => useSettingsStore.getState().settings.toolbarPresets.find((p) => p.id === id);
 
@@ -46,5 +46,18 @@ describe("PresetMenu", () => {
     mount(pen);
     expect(screen.queryByRole("radio", { name: "Box" })).toBeNull();
     expect(screen.queryByRole("radio", { name: "Stroke" })).toBeNull();
+  });
+
+  it("preset_menu_remove_deletes_the_preset", () => {
+    const onClose = vi.fn();
+    mount(pen, 3, onClose);
+    fireEvent.click(screen.getByRole("button", { name: "Remove pen" }));
+    expect(saved("pn")).toBeUndefined();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("remove_is_disabled_for_the_last_preset", () => {
+    mount(pen, 1);
+    expect((screen.getByRole("button", { name: "Remove pen" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

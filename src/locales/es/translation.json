@@ -679,6 +679,7 @@
     "insertTable": "Insertar tabla",
     "insertGraph": "Insertar gráfico",
     "insertImage": "Insertar imagen",
+    "scan": "Escanear una foto",
     "newPage": "Nueva página",
     "newSection": "Nueva sección",
     "openSettings": "Abrir ajustes",
@@ -711,9 +712,39 @@
     "updateSettings": "Ajustes de actualización"
   },
   "toolbar": {
+    "more": "Más herramientas",
+    "hiddenTools": "Herramientas ocultas",
+    "customize": "Personalizar la barra de herramientas…",
+    "customizeTitle": "Personalizar la barra de herramientas",
+    "row1": "Fila 1",
+    "row2": "Fila 2",
+    "hidden": "Ocultas",
+    "hiddenEmpty": "No hay nada oculto. Arrastra una herramienta aquí para ocultarla.",
+    "separator": "Separador",
+    "moveUp": "Subir {{item}}",
+    "moveDown": "Bajar {{item}}",
+    "hide": "Ocultar {{item}}",
+    "show": "Mostrar {{item}}",
+    "toOtherRow": "Mover {{item}} a la otra fila",
+    "removeSeparator": "Quitar separador",
+    "addSeparator": "Añadir separador",
+    "twoRows": "Usar dos filas",
+    "twoRowsNote": "Una segunda fila deja menos espacio para la página.",
+    "reset": "Restablecer valores predeterminados",
+    "resetConfirm": "¿Devolver la barra de herramientas a su diseño predeterminado?",
+    "rowEmpty": "Aún no hay nada aquí",
     "straightLines": "Líneas rectas",
     "autoShapes": "Formas perfectas",
     "ruler": "Regla",
+    "items": {
+      "pens": "Lápices",
+      "covers": "Cubiertas",
+      "insert": "Insertar",
+      "dictate": "Dictar",
+      "record": "Grabar",
+      "finger": "Modo dedo",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -756,6 +787,7 @@
     "cutImages": "Recortar imágenes",
     "text": "Texto",
     "insertImage": "Insertar imagen…",
+    "scan": "Escanear",
     "insertTable": "Insertar tabla",
     "insertCode": "Insertar código",
     "insertEquation": "Insertar ecuación",
@@ -784,6 +816,7 @@
     "pageTitle": "Título de la página"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "Páginas abiertas",
     "close": "Cerrar {{title}}",
     "split": "Vista dividida",
@@ -835,8 +868,16 @@
       "demote": "Bajar de nivel",
       "duplicate": "Duplicar",
       "split": "Abrir en vista dividida",
-      "window": "Abrir en una ventana nueva"
-    }
+      "window": "Abrir en una ventana nueva",
+      "insertAbove": "Nueva página encima",
+      "insertBelow": "Nueva página debajo",
+      "clear": "Vaciar página…"
+    },
+    "pageActions": "Acciones de página",
+    "clearTitle": "¿Vaciar “{{title}}”?",
+    "clearBody": "Se elimina todo lo escrito o colocado en esta página. Los elementos bloqueados y las páginas PDF importadas se conservan. Puedes deshacerlo.",
+    "clearBodyPermanent": "Se elimina todo lo escrito o colocado en esta página. Los elementos bloqueados y las páginas PDF importadas se conservan. La página no está abierta, así que no se puede deshacer.",
+    "clearConfirm": "Vaciar"
   },
   "library": {
     "openBook": "Abrir {{title}}",
@@ -964,7 +1005,8 @@
     "recent": "Colores recientes",
     "width": "Grosor",
     "moveLeft": "Mover a la izquierda",
-    "moveRight": "Mover a la derecha"
+    "moveRight": "Mover a la derecha",
+    "remove": "Quitar lápiz"
   },
   "text": {
     "bold": "Negrita",
@@ -1615,5 +1657,32 @@
     "angle": "Ángulo de la regla: {{angle}} grados",
     "angleField": "Ángulo en grados, de 0 a 180",
     "rotate": "Girar la regla"
+  },
+  "scan": {
+    "title": "Escanear",
+    "takePhoto": "Hacer foto",
+    "choosePhoto": "Elegir foto",
+    "fromFile": "Desde un archivo…",
+    "fromWebcam": "Desde la webcam…",
+    "capture": "Capturar",
+    "rotate": "Girar",
+    "resetCorners": "Restablecer esquinas",
+    "colour": "Color",
+    "grey": "Gris",
+    "blackWhite": "Blanco y negro",
+    "mode": "Limpieza",
+    "insert": "Insertar",
+    "cancel": "Cancelar",
+    "working": "Trabajando…",
+    "failed": "No se pudo escanear esa imagen.",
+    "noCamera": "No hay ninguna cámara disponible.",
+    "straighten": "Enderezar",
+    "preview": "Vista previa",
+    "corner": {
+      "topLeft": "Esquina superior izquierda",
+      "topRight": "Esquina superior derecha",
+      "bottomRight": "Esquina inferior derecha",
+      "bottomLeft": "Esquina inferior izquierda"
+    }
   }
 }

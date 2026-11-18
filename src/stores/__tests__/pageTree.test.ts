@@ -79,4 +79,34 @@ describe("page tree operations", () => {
     await useNotebookStore.getState().duplicatePage("a");
     expect(order).toEqual(["flush", "load"]);
   });
+  it("insertPage_puts_a_sibling_above_or_below", async () => {
+    const above = await useNotebookStore.getState().insertPage("b", "above", "New");
+    expect(above).not.toBeNull();
+    expect(["a", above!.id, "b", "c"].map((id) => get(id).orderIndex)).toEqual([0, 1, 2, 3]);
+    expect(above!.parentId).toBeUndefined();
+    const below = await useNotebookStore.getState().insertPage("c", "below", "Last");
+    expect(get(below!.id).orderIndex).toBe(4);
+  });
+
+  it("insertPage_next_to_a_nested_page_keeps_its_parent_and_depth", async () => {
+    const made = await useNotebookStore.getState().insertPage("b1", "below", "New");
+    expect(made).toMatchObject({ parentId: "b", depth: 1, orderIndex: 1, sectionId: "s" });
+    expect(get("b1").orderIndex).toBe(0);
+    expect(await useNotebookStore.getState().insertPage("nope", "below", "x")).toBeNull();
+  });
+
+  it("movePageTo_places_a_page_among_its_siblings", async () => {
+    await useNotebookStore.getState().movePageTo("c", 0);
+    expect(["c", "a", "b"].map((id) => get(id).orderIndex)).toEqual([0, 1, 2]);
+    await useNotebookStore.getState().movePageTo("c", 99); // clamped to the end
+    expect(["a", "b", "c"].map((id) => get(id).orderIndex)).toEqual([0, 1, 2]);
+    expect(get("b1").orderIndex).toBe(0); // another parent's children are untouched
+  });
+
+  it("movePageTo_its_own_place_writes_nothing", async () => {
+    const notebookIpc = await import("../../ipc/notebook");
+    vi.mocked(notebookIpc.upsertPage).mockClear();
+    await useNotebookStore.getState().movePageTo("a", 0);
+    expect(notebookIpc.upsertPage).not.toHaveBeenCalled();
+  });
 });

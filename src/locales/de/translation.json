@@ -679,6 +679,7 @@
     "insertTable": "Tabelle einfügen",
     "insertGraph": "Graph einfügen",
     "insertImage": "Bild einfügen",
+    "scan": "Foto scannen",
     "newPage": "Neue Seite",
     "newSection": "Neuer Abschnitt",
     "openSettings": "Einstellungen öffnen",
@@ -711,9 +712,39 @@
     "updateSettings": "Update-Einstellungen"
   },
   "toolbar": {
+    "more": "Weitere Werkzeuge",
+    "hiddenTools": "Ausgeblendete Werkzeuge",
+    "customize": "Werkzeugleiste anpassen…",
+    "customizeTitle": "Werkzeugleiste anpassen",
+    "row1": "Zeile 1",
+    "row2": "Zeile 2",
+    "hidden": "Ausgeblendet",
+    "hiddenEmpty": "Nichts ausgeblendet. Zieh ein Werkzeug hierher, um es auszublenden.",
+    "separator": "Trennlinie",
+    "moveUp": "{{item}} nach oben",
+    "moveDown": "{{item}} nach unten",
+    "hide": "{{item}} ausblenden",
+    "show": "{{item}} einblenden",
+    "toOtherRow": "{{item}} in die andere Zeile verschieben",
+    "removeSeparator": "Trennlinie entfernen",
+    "addSeparator": "Trennlinie hinzufügen",
+    "twoRows": "Zwei Zeilen verwenden",
+    "twoRowsNote": "Eine zweite Zeile lässt weniger Platz für die Seite.",
+    "reset": "Auf Standard zurücksetzen",
+    "resetConfirm": "Die Werkzeugleiste auf das Standardlayout zurücksetzen?",
+    "rowEmpty": "Noch nichts hier",
     "straightLines": "Gerade Linien",
     "autoShapes": "Perfekte Formen",
     "ruler": "Lineal",
+    "items": {
+      "pens": "Stifte",
+      "covers": "Abdeckungen",
+      "insert": "Einfügen",
+      "dictate": "Diktieren",
+      "record": "Aufnehmen",
+      "finger": "Fingermodus",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -756,6 +787,7 @@
     "cutImages": "Bilder zuschneiden",
     "text": "Text",
     "insertImage": "Bild einfügen…",
+    "scan": "Scannen",
     "insertTable": "Tabelle einfügen",
     "insertCode": "Code einfügen",
     "insertEquation": "Gleichung einfügen",
@@ -784,6 +816,7 @@
     "pageTitle": "Seitentitel"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "Geöffnete Seiten",
     "close": "{{title}} schließen",
     "split": "Geteilte Ansicht",
@@ -835,8 +868,16 @@
       "demote": "Herabstufen",
       "duplicate": "Duplizieren",
       "split": "In geteilter Ansicht öffnen",
-      "window": "In neuem Fenster öffnen"
-    }
+      "window": "In neuem Fenster öffnen",
+      "insertAbove": "Neue Seite darüber",
+      "insertBelow": "Neue Seite darunter",
+      "clear": "Seite leeren…"
+    },
+    "pageActions": "Seitenaktionen",
+    "clearTitle": "„{{title}}“ leeren?",
+    "clearBody": "Alles, was auf dieser Seite geschrieben oder eingefügt wurde, wird entfernt. Gesperrte Elemente und importierte PDF-Seiten bleiben. Das lässt sich rückgängig machen.",
+    "clearBodyPermanent": "Alles, was auf dieser Seite geschrieben oder eingefügt wurde, wird entfernt. Gesperrte Elemente und importierte PDF-Seiten bleiben. Die Seite ist nicht geöffnet, daher lässt sich das nicht rückgängig machen.",
+    "clearConfirm": "Leeren"
   },
   "library": {
     "openBook": "{{title}} öffnen",
@@ -964,7 +1005,8 @@
     "recent": "Zuletzt verwendete Farben",
     "width": "Stärke",
     "moveLeft": "Nach links verschieben",
-    "moveRight": "Nach rechts verschieben"
+    "moveRight": "Nach rechts verschieben",
+    "remove": "Stift entfernen"
   },
   "text": {
     "bold": "Fett",
@@ -1615,5 +1657,32 @@
     "angle": "Winkel des Lineals: {{angle}} Grad",
     "angleField": "Winkel in Grad, 0 bis 180",
     "rotate": "Lineal drehen"
+  },
+  "scan": {
+    "title": "Scannen",
+    "takePhoto": "Foto aufnehmen",
+    "choosePhoto": "Foto auswählen",
+    "fromFile": "Aus Datei…",
+    "fromWebcam": "Von Webcam…",
+    "capture": "Aufnehmen",
+    "rotate": "Drehen",
+    "resetCorners": "Ecken zurücksetzen",
+    "colour": "Farbe",
+    "grey": "Grau",
+    "blackWhite": "Schwarzweiß",
+    "mode": "Bereinigung",
+    "insert": "Einfügen",
+    "cancel": "Abbrechen",
+    "working": "Wird bearbeitet…",
+    "failed": "Dieses Bild konnte nicht gescannt werden.",
+    "noCamera": "Keine Kamera verfügbar.",
+    "straighten": "Gerade richten",
+    "preview": "Vorschau",
+    "corner": {
+      "topLeft": "Obere linke Ecke",
+      "topRight": "Obere rechte Ecke",
+      "bottomRight": "Untere rechte Ecke",
+      "bottomLeft": "Untere linke Ecke"
+    }
   }
 }

@@ -235,12 +235,52 @@ describe("editor store tools", () => {
     expect(s().elements.get("ink")).toEqual(stroke);
     expect(queue.enqueueUpsert).toHaveBeenLastCalledWith(stroke);
     expect(queue.enqueueDelete).toHaveBeenLastCalledWith("shape-1", "pg");
-    expect(s().canUndo).toBe(false); // the snap was a single entry
+    expect(s().canUndo).toBe(true); // the hand-drawn stroke is still there to take back
     expect(s().canRedo).toBe(true);
 
     s().redo();
     expect(s().elements.has("ink")).toBe(false);
     expect(s().elements.has("shape-1")).toBe(true);
+  });
+
+  it("shape_snap_second_undo_removes_the_stroke_not_the_action_before", async () => {
+    await load([a]);
+    const s = () => useEditorStore.getState();
+    s().addElement(b); // the action before the snapped stroke
+    const stroke = el("ink", [[0, 100], [100, 100], [100, 160], [0, 160], [0, 102]], { color: "#C62828", width: 3 });
+    const shape = shapeElementFor(shapeFromDrag("rectangle", { x: 0, y: 100 }, { x: 100, y: 160 }, false));
+    s().replaceStrokeWithShape(stroke, shape);
+    const ids = () => [...s().elements.keys()].sort();
+    expect(ids()).toEqual(["a", "b", "shape-1"]);
+
+    s().undo(); // the perfect shape goes back to the hand-drawn stroke
+    expect(ids()).toEqual(["a", "b", "ink"]);
+    s().undo(); // the stroke itself goes; what was drawn before it stays
+    expect(ids()).toEqual(["a", "b"]);
+    expect(queue.enqueueDelete).toHaveBeenLastCalledWith("ink", "pg");
+    s().undo();
+    expect(ids()).toEqual(["a"]);
+    expect(s().canUndo).toBe(false);
+
+    s().redo();
+    expect(ids()).toEqual(["a", "b"]);
+    s().redo();
+    expect(ids()).toEqual(["a", "b", "ink"]);
+    s().redo();
+    expect(ids()).toEqual(["a", "b", "shape-1"]);
+    expect(s().canRedo).toBe(false);
+  });
+
+  it("shape_snap_refused_while_presenting_leaves_no_entry", async () => {
+    await load([a]);
+    const s = () => useEditorStore.getState();
+    useEditorStore.setState({ presenting: { index: 0, fill: false } });
+    const stroke = el("ink", [[0, 100], [100, 100]]);
+    const shape = shapeElementFor(shapeFromDrag("rectangle", { x: 0, y: 100 }, { x: 100, y: 160 }, false));
+    expect(s().replaceStrokeWithShape(stroke, shape)).toBe(false);
+    useEditorStore.setState({ presenting: null });
+    expect(s().canUndo).toBe(false);
+    expect([...s().elements.keys()]).toEqual(["a"]);
   });
 
   it("scribble_erase_is_one_entry", async () => {

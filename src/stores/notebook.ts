@@ -43,6 +43,10 @@ interface NotebookState {
   updatePage: (page: Page) => Promise<void>;
   /** Move a page one place up/down among its siblings. */
   movePage: (id: string, dir: -1 | 1) => Promise<void>;
+  /** Move a page to position `index` (clamped) among its siblings; nothing is written when it is already there. */
+  movePageTo: (id: string, index: number) => Promise<void>;
+  /** Create a page just above or below `refId`, as its sibling (same section and parent). Null for an unknown page. */
+  insertPage: (refId: string, where: "above" | "below", title: string) => Promise<Page | null>;
   /** Demote (+1: become a child of the previous sibling) or promote (-1: become a sibling of the parent). */
   indentPage: (id: string, dir: -1 | 1) => Promise<void>;
   /** Copy a page and its elements; the copy follows the original. Resolves to the copy. */
@@ -305,6 +309,29 @@ export const useNotebookStore = create<NotebookState>((set, get) => {
       if (j < 0 || j >= ids.length) return;
       [ids[i], ids[j]] = [ids[j], ids[i]];
       await get().reorder("page", page.parentId ?? null, ids);
+    },
+
+    movePageTo: async (id, index) => {
+      const page = tree().pages.find((p) => p.id === id);
+      if (!page) return;
+      const ids = siblingsOf(page).map((p) => p.id);
+      const from = ids.indexOf(id);
+      const to = Math.min(ids.length - 1, Math.max(0, Math.round(index)));
+      if (from === to) return;
+      ids.splice(to, 0, ...ids.splice(from, 1));
+      await get().reorder("page", page.parentId ?? null, ids);
+    },
+
+    insertPage: async (refId, where, title) => {
+      const ref = tree().pages.find((p) => p.id === refId);
+      if (!ref) return null;
+      const ids = siblingsOf(ref).map((p) => p.id);
+      const at = ids.indexOf(refId) + (where === "below" ? 1 : 0);
+      const made = await get().createPage(ref.sectionId, title, ref.parentId, { orderIndex: at });
+      // The siblings from `at` on move down one place (the new page already holds `at`).
+      ids.splice(at, 0, made.id);
+      await get().reorder("page", ref.parentId ?? null, ids);
+      return tree().pages.find((p) => p.id === made.id) ?? made;
     },
 
     indentPage: async (id, dir) => {

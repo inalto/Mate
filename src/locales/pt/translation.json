@@ -679,6 +679,7 @@
     "insertTable": "Inserir tabela",
     "insertGraph": "Inserir grafo",
     "insertImage": "Inserir imagem",
+    "scan": "Digitalizar uma foto",
     "newPage": "Nova página",
     "newSection": "Nova seção",
     "openSettings": "Abrir configurações",
@@ -711,9 +712,39 @@
     "updateSettings": "Configurações de atualização"
   },
   "toolbar": {
+    "more": "Mais ferramentas",
+    "hiddenTools": "Ferramentas ocultas",
+    "customize": "Personalizar a barra de ferramentas…",
+    "customizeTitle": "Personalizar a barra de ferramentas",
+    "row1": "Linha 1",
+    "row2": "Linha 2",
+    "hidden": "Ocultas",
+    "hiddenEmpty": "Nada oculto. Arraste uma ferramenta para cá para ocultá-la.",
+    "separator": "Separador",
+    "moveUp": "Mover {{item}} para cima",
+    "moveDown": "Mover {{item}} para baixo",
+    "hide": "Ocultar {{item}}",
+    "show": "Mostrar {{item}}",
+    "toOtherRow": "Mover {{item}} para a outra linha",
+    "removeSeparator": "Remover separador",
+    "addSeparator": "Adicionar separador",
+    "twoRows": "Usar duas linhas",
+    "twoRowsNote": "Uma segunda linha deixa menos espaço para a página.",
+    "reset": "Repor o padrão",
+    "resetConfirm": "Voltar a barra de ferramentas ao layout padrão?",
+    "rowEmpty": "Ainda não há nada aqui",
     "straightLines": "Linhas retas",
     "autoShapes": "Formas perfeitas",
     "ruler": "Régua",
+    "items": {
+      "pens": "Canetas",
+      "covers": "Coberturas",
+      "insert": "Inserir",
+      "dictate": "Ditar",
+      "record": "Gravar",
+      "finger": "Modo dedo",
+      "zoom": "Zoom"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -756,6 +787,7 @@
     "cutImages": "Recortar imagens",
     "text": "Texto",
     "insertImage": "Inserir imagem…",
+    "scan": "Digitalizar",
     "insertTable": "Inserir tabela",
     "insertCode": "Inserir código",
     "insertEquation": "Inserir equação",
@@ -784,6 +816,7 @@
     "pageTitle": "Título da página"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "Páginas abertas",
     "close": "Fechar {{title}}",
     "split": "Visualização dividida",
@@ -835,8 +868,16 @@
       "demote": "Rebaixar",
       "duplicate": "Duplicar",
       "split": "Abrir em visualização dividida",
-      "window": "Abrir em nova janela"
-    }
+      "window": "Abrir em nova janela",
+      "insertAbove": "Nova página acima",
+      "insertBelow": "Nova página abaixo",
+      "clear": "Limpar página…"
+    },
+    "pageActions": "Ações da página",
+    "clearTitle": "Limpar “{{title}}”?",
+    "clearBody": "Tudo o que foi escrito ou colocado nesta página é removido. Os itens bloqueados e as páginas PDF importadas ficam. Você pode desfazer isto.",
+    "clearBodyPermanent": "Tudo o que foi escrito ou colocado nesta página é removido. Os itens bloqueados e as páginas PDF importadas ficam. A página não está aberta, por isso não é possível desfazer.",
+    "clearConfirm": "Limpar"
   },
   "library": {
     "openBook": "Abrir {{title}}",
@@ -964,7 +1005,8 @@
     "recent": "Cores recentes",
     "width": "Espessura",
     "moveLeft": "Mover para a esquerda",
-    "moveRight": "Mover para a direita"
+    "moveRight": "Mover para a direita",
+    "remove": "Remover caneta"
   },
   "text": {
     "bold": "Negrito",
@@ -1615,5 +1657,32 @@
     "angle": "Ângulo da régua: {{angle}} graus",
     "angleField": "Ângulo em graus, de 0 a 180",
     "rotate": "Girar a régua"
+  },
+  "scan": {
+    "title": "Digitalizar",
+    "takePhoto": "Tirar foto",
+    "choosePhoto": "Escolher foto",
+    "fromFile": "De um arquivo…",
+    "fromWebcam": "Da webcam…",
+    "capture": "Capturar",
+    "rotate": "Girar",
+    "resetCorners": "Redefinir cantos",
+    "colour": "Cor",
+    "grey": "Cinzento",
+    "blackWhite": "Preto e branco",
+    "mode": "Limpeza",
+    "insert": "Inserir",
+    "cancel": "Cancelar",
+    "working": "Trabalhando…",
+    "failed": "Não foi possível digitalizar essa imagem.",
+    "noCamera": "Nenhuma câmera disponível.",
+    "straighten": "Endireitar",
+    "preview": "Pré-visualização",
+    "corner": {
+      "topLeft": "Canto superior esquerdo",
+      "topRight": "Canto superior direito",
+      "bottomRight": "Canto inferior direito",
+      "bottomLeft": "Canto inferior esquerdo"
+    }
   }
 }

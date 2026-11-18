@@ -676,6 +676,7 @@
     "insertTable": "表を挿入",
     "insertGraph": "グラフを挿入",
     "insertImage": "画像を挿入",
+    "scan": "写真をスキャン",
     "newPage": "新しいページ",
     "newSection": "新しいセクション",
     "openSettings": "設定を開く",
@@ -708,9 +709,39 @@
     "updateSettings": "アップデートの設定"
   },
   "toolbar": {
+    "more": "その他のツール",
+    "hiddenTools": "非表示のツール",
+    "customize": "ツールバーをカスタマイズ…",
+    "customizeTitle": "ツールバーをカスタマイズ",
+    "row1": "1行目",
+    "row2": "2行目",
+    "hidden": "非表示",
+    "hiddenEmpty": "非表示のツールはありません。ここにツールをドラッグすると非表示になります。",
+    "separator": "区切り線",
+    "moveUp": "{{item}}を上へ移動",
+    "moveDown": "{{item}}を下へ移動",
+    "hide": "{{item}}を非表示にする",
+    "show": "{{item}}を表示する",
+    "toOtherRow": "{{item}}をもう一方の行へ移動",
+    "removeSeparator": "区切り線を削除",
+    "addSeparator": "区切り線を追加",
+    "twoRows": "2行にする",
+    "twoRowsNote": "2行にするとページの表示領域が狭くなります。",
+    "reset": "初期設定に戻す",
+    "resetConfirm": "ツールバーを初期のレイアウトに戻しますか？",
+    "rowEmpty": "まだ何もありません",
     "straightLines": "直線",
     "autoShapes": "図形を自動整形",
     "ruler": "定規",
+    "items": {
+      "pens": "ペン",
+      "covers": "カバー",
+      "insert": "挿入",
+      "dictate": "音声入力",
+      "record": "録音",
+      "finger": "指モード",
+      "zoom": "ズーム"
+    },
     "finger": {
       "auto": "Fingers: automatic",
       "draw": "Fingers draw",
@@ -753,6 +784,7 @@
     "cutImages": "画像を切り抜く",
     "text": "テキスト",
     "insertImage": "画像を挿入…",
+    "scan": "スキャン",
     "insertTable": "表を挿入",
     "insertCode": "コードを挿入",
     "insertEquation": "数式を挿入",
@@ -781,6 +813,7 @@
     "pageTitle": "ページのタイトル"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "開いているページ",
     "close": "{{title}} を閉じる",
     "split": "分割表示",
@@ -832,8 +865,16 @@
       "demote": "レベルを下げる",
       "duplicate": "複製",
       "split": "分割表示で開く",
-      "window": "新しいウィンドウで開く"
-    }
+      "window": "新しいウィンドウで開く",
+      "insertAbove": "上に新しいページ",
+      "insertBelow": "下に新しいページ",
+      "clear": "ページを消去…"
+    },
+    "pageActions": "ページの操作",
+    "clearTitle": "「{{title}}」を消去しますか？",
+    "clearBody": "このページに書いたものや配置したものがすべて削除されます。ロックした項目と読み込んだ PDF ページは残ります。この操作は取り消せます。",
+    "clearBodyPermanent": "このページに書いたものや配置したものがすべて削除されます。ロックした項目と読み込んだ PDF ページは残ります。このページは開かれていないため、取り消せません。",
+    "clearConfirm": "消去"
   },
   "library": {
     "openBook": "{{title}} を開く",
@@ -961,7 +1002,8 @@
     "recent": "最近使った色",
     "width": "太さ",
     "moveLeft": "左へ移動",
-    "moveRight": "右へ移動"
+    "moveRight": "右へ移動",
+    "remove": "ペンを削除"
   },
   "text": {
     "bold": "太字",
@@ -1596,5 +1638,32 @@
     "angle": "定規の角度：{{angle}}度",
     "angleField": "角度（度）、0〜180",
     "rotate": "定規を回転"
+  },
+  "scan": {
+    "title": "スキャン",
+    "takePhoto": "写真を撮る",
+    "choosePhoto": "写真を選ぶ",
+    "fromFile": "ファイルから…",
+    "fromWebcam": "ウェブカメラから…",
+    "capture": "撮影",
+    "rotate": "回転",
+    "resetCorners": "角をリセット",
+    "colour": "カラー",
+    "grey": "グレー",
+    "blackWhite": "白黒",
+    "mode": "クリーンアップ",
+    "insert": "挿入",
+    "cancel": "キャンセル",
+    "working": "処理中…",
+    "failed": "その写真をスキャンできませんでした。",
+    "noCamera": "利用できるカメラがありません。",
+    "straighten": "傾きを補正",
+    "preview": "プレビュー",
+    "corner": {
+      "topLeft": "左上の角",
+      "topRight": "右上の角",
+      "bottomRight": "右下の角",
+      "bottomLeft": "左下の角"
+    }
   }
 }

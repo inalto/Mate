@@ -148,6 +148,20 @@ describe("runEditorShortcut", () => {
     expect(focused()).toBe("a1");
   });
 
+  it("a_held_page_turner_pedal_turns_one_page", () => {
+    const ev = (repeat: boolean) => ({ event: { repeat } as KeyboardEvent });
+    const start = focused();
+    runEditorShortcut("page.prev", ev(true));
+    expect(focused()).toBe(start);
+    runEditorShortcut("page.prev", ev(false));
+    const prev = focused();
+    expect(prev).not.toBe(start);
+    runEditorShortcut("page.next", ev(true));
+    expect(focused()).toBe(prev);
+    runEditorShortcut("page.next", ev(false));
+    expect(focused()).toBe(start);
+  });
+
   it("save_flushes_queue_help_opens_overlay_and_window_bridge_is_called", () => {
     runEditorShortcut("save", {});
     expect(elementsQueue.flushAll).toHaveBeenCalled();

@@ -10,10 +10,13 @@ export type { FingerAction };
  * - "off": every touch is accepted, the 45 px definite-palm check included (draws per
  *   settings.fingerAction, else pans/pinches).
  * - "standard" ("low" is the legacy name): rejected when its radius exceeds 45 px (a definite
- *   palm); when a stylus was seen (down, move or hover) in the last 2 s, also when its contact
- *   diameter exceeds 40 px, and with fingerAction "auto"/"pan" any touch is rejected then.
+ *   palm); when a stylus was seen (down, move or hover) in the last 2 s, a contact whose diameter
+ *   exceeds 40 px never draws, and with fingerAction "auto"/"pan" no touch draws then.
  * - "high": as standard, with a 20 px diameter threshold.
  * Without a recent stylus the 20/40 px thresholds do not apply: a fingertip (25–50 px) draws.
+ * A touch that may not draw because of a recent stylus is held back, never dropped: it pans once it
+ * has moved `HELD_PAN_SLOP_PX`, forms a gesture with a second finger, and is dropped for good only
+ * when the pen goes down (it was the hand settling before the next stroke).
  * A touch that lands while a pen/mouse stroke is open is always rejected (resting hand).
  */
 export type PalmRejection = "off" | "standard" | "low" | "high";
@@ -84,6 +87,8 @@ export const BUTTON_BARREL = 2;
 export const BUTTON_ERASER = 32;
 export const STYLUS_SEEN_WINDOW_MS = 2000;
 export const DEFINITE_PALM_RADIUS = 45;
+/** How far (screen px) a finger held back after the pen must move before it pans the page. */
+export const HELD_PAN_SLOP_PX = 10;
 
 /** When a stylus was last seen by any surface (event timeStamp, ms): the canvas adapters and the
  * ruler share it, so a palm on the ruler is judged against the pen that just wrote on the page. */
@@ -140,10 +145,11 @@ export function fingerMayDraw(
   return !stylusRecent || !isPalmContact(e, mode);
 }
 
-/** Why a touch contact is ignored as a drawing/pan start: "palm" (a definite palm, or a palm-sized
- * contact with a stylus seen recently: dropped for good), "stylus" (a fingertip right after the pen
- * while fingers may not draw: held back, it only counts as a gesture once a second finger lands),
- * or null (accepted). */
+/** Why a touch contact is ignored as a drawing/pan start: "palm" (a definite palm: dropped for
+ * good), "stylus" (a contact right after the pen that may not draw, because fingers do not draw
+ * then or because it is palm-sized: held back, it counts as a gesture once it moves or a second
+ * finger lands, and is dropped if the pen goes down first), or null (accepted). A fingertip is
+ * 25–50 px across, so size alone cannot tell it from a palm's edge: only the pen coming down can. */
 export function touchRejected(
   e: Pick<PointerEvent, "width" | "height">,
   mode: PalmRejection,
@@ -153,8 +159,7 @@ export function touchRejected(
   if (mode === "off") return null;
   if (contactRadius(e) > DEFINITE_PALM_RADIUS) return "palm";
   if (!stylusRecent) return null;
-  if (isPalmContact(e, mode)) return "palm";
-  return fingerAction !== "draw" ? "stylus" : null;
+  return fingerAction !== "draw" || isPalmContact(e, mode) ? "stylus" : null;
 }
 
 /** Attach the adapter to `el`; returns a disposer. Options are read at event time. */
@@ -171,8 +176,9 @@ export function createPointerAdapter(
   /** Pointers whose capture we released ourselves; their (async) lostpointercapture is ignored. */
   const expectedRelease = new Set<number>();
   const touches = new Map<number, Vec2>();
-  /** Fingertips that landed right after the pen: held back until a second finger makes a gesture. */
-  const pending = new Map<number, Vec2>();
+  /** Contacts that landed right after the pen, held back until they move or a second finger lands:
+   * where each one landed and where it is now. */
+  const pending = new Map<number, { from: Vec2; at: Vec2 }>();
   let pinching = false;
   /** Current gesture: a touch was cancelled / a pen or mouse stroke was open at some point. */
   let panCancelled = false;
@@ -279,14 +285,15 @@ export function createPointerAdapter(
           addGestureTouch(e); // a further finger joins the running gesture
           return;
         }
-        const first = pending.entries().next().value as [number, Vec2] | undefined;
+        const first = pending.entries().next().value as [number, { at: Vec2 }] | undefined;
         if (first) {
           // Two fingers right after the pen: the held-back one and this one form a gesture.
           pending.delete(first[0]);
-          addGestureTouchAt(first[0], first[1], e.timeStamp);
+          addGestureTouchAt(first[0], first[1].at, e.timeStamp);
           addGestureTouch(e);
         } else {
-          pending.set(e.pointerId, local(e));
+          const at = local(e);
+          pending.set(e.pointerId, { from: at, at });
           capture(e.pointerId);
         }
         return;
@@ -346,8 +353,16 @@ export function createPointerAdapter(
       handlers.onMove(pts, pr.map((x) => toPoint(x, rect)));
       return;
     }
-    if (pending.has(e.pointerId)) {
-      pending.set(e.pointerId, local(e));
+    const held = pending.get(e.pointerId);
+    if (held) {
+      held.at = local(e);
+      // A held-back finger that travels is panning, not a hand settling (which the pen going down
+      // would have dropped): the pan starts here, so the page does not jump by the slop.
+      const moved = Math.hypot(held.at.x - held.from.x, held.at.y - held.from.y) > HELD_PAN_SLOP_PX;
+      if (moved && opts.fingerAction !== "draw") {
+        pending.delete(e.pointerId);
+        addGestureTouchAt(e.pointerId, held.at, e.timeStamp);
+      }
       return;
     }
     const prev = touches.get(e.pointerId);

@@ -181,6 +181,12 @@ export type Theme = "light" | "dark" | "sepia" | "high-contrast";
 /** A cover is drawn either as a freehand stroke or as a box dragged out. */
 export type CoverShape = "stroke" | "box";
 
+/** Toolbar arrangement: rows of item ids (`"sep"` is a separator), plus every id the user has already seen. */
+export interface ToolbarLayout {
+  rows: string[][];
+  known: string[];
+}
+
 export interface PenPreset {
   id: string;
   type: "pen" | "fountain-pen" | "highlighter" | "cover";
@@ -458,6 +464,8 @@ export interface Settings {
   /** Colours the user saved as swatches in the colour pickers (hex, at most 32). */
   customSwatches: string[];
   toolbarPresets: PenPreset[];
+  /** The user's toolbar arrangement; `null` = the built-in default for the platform (see `src/toolbar/layout.ts`). */
+  toolbarLayout: ToolbarLayout | null;
   /** Named graph presets, all kinds (filtered per kind where shown). */
   graphPresets: GraphPreset[];
   /** Per-action key overrides; empty means all defaults. */

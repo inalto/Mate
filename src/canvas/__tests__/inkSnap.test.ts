@@ -147,3 +147,52 @@ describe("ink snap state machine", () => {
     expect(el.content).toMatchObject({ rotation: 0.1 });
   });
 });
+
+describe("highlighter shapes", () => {
+  it("a snapped highlighter square is drawn along the square: every corner is reached", async () => {
+    const { getStrokePoints } = await import("perfect-freehand");
+    const { penParams } = await import("../../ink/strokePoints");
+    const width = 20;
+    const el = snapShapeElement(
+      { type: "rectangle", score: 0.9, rect: { x: 0, y: 0, width: 200, height: 200 }, rotation: 0 },
+      { color: "#FDE047", width, type: "highlighter" },
+      "pg",
+      "s1",
+      "now",
+    );
+    expect(el.type).toBe("stroke");
+    expect(el.penStyle).toBe("highlighter");
+    // The centreline the renderer actually draws (perfect-freehand streamlines the stored points).
+    const drawn = getStrokePoints(el.points.map((p) => [p.x, p.y, p.pressure]), { ...penParams("highlighter", width, false), last: true }).map((s) => s.point);
+    for (const [cx, cy] of [[0, 0], [200, 0], [200, 200], [0, 200]]) {
+      const nearest = Math.min(...drawn.map(([x, y]) => Math.hypot(x - cx, y - cy)));
+      expect(nearest, `corner ${cx},${cy}`).toBeLessThan(width / 4);
+    }
+    // And it stays on the square's sides.
+    for (const [x, y] of drawn) {
+      const off = Math.min(Math.abs(x), Math.abs(x - 200), Math.abs(y), Math.abs(y - 200));
+      expect(off).toBeLessThan(width / 4);
+    }
+  });
+
+  it("a snapped cover square stays a cover stroke and is drawn along the square: every corner is reached", async () => {
+    const { getStrokePoints } = await import("perfect-freehand");
+    const { penParams } = await import("../../ink/strokePoints");
+    const width = 20;
+    const el = snapShapeElement(
+      { type: "rectangle", score: 0.9, rect: { x: 0, y: 0, width: 200, height: 200 }, rotation: 0 },
+      { color: "#FDE047", width, type: "cover" },
+      "pg",
+      "s1",
+      "now",
+    );
+    expect(el.type).toBe("stroke");
+    expect(el.penStyle).toBe("cover");
+    expect(el.isHighlighter).toBe(false);
+    const drawn = getStrokePoints(el.points.map((p) => [p.x, p.y, p.pressure]), { ...penParams("cover", width, false), last: true }).map((s) => s.point);
+    for (const [cx, cy] of [[0, 0], [200, 0], [200, 200], [0, 200]]) {
+      const nearest = Math.min(...drawn.map(([x, y]) => Math.hypot(x - cx, y - cy)));
+      expect(nearest, `corner ${cx},${cy}`).toBeLessThan(width / 4);
+    }
+  });
+});

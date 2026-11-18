@@ -11,7 +11,15 @@ vi.mock("../../../ipc/speech", () => ({
 
 import { cancelDictation, useDictation } from "../../../speech/dictate";
 import { useSettingsStore } from "../../../stores/settings";
-import { DictateButton } from "../../DictateButton";
+import { DictateButton, DictationHost } from "../../DictateButton";
+
+/** The button with the host the toolbar renders for it (consent question, cancel on unmount). */
+const withHost = (
+  <>
+    <DictateButton />
+    <DictationHost />
+  </>
+);
 
 beforeEach(() => useSettingsStore.setState({ settings: { ...DEFAULT_SETTINGS }, loaded: true }));
 afterEach(() => {
@@ -21,7 +29,7 @@ afterEach(() => {
 
 describe("DictateButton", () => {
   it("first press asks for consent; Not now closes the question", async () => {
-    render(<DictateButton />);
+    render(withHost);
     const btn = screen.getByRole("button", { name: "Dictate" });
     expect(btn.getAttribute("aria-pressed")).toBe("false");
     await act(async () => fireEvent.click(btn));
@@ -32,7 +40,7 @@ describe("DictateButton", () => {
   });
 
   it("shows the recording and transcribing states", () => {
-    render(<DictateButton />);
+    render(withHost);
     act(() => useDictation.setState({ phase: "recording", startedAt: Date.now() }));
     const stop = screen.getByRole("button", { name: "Stop dictating" });
     expect(stop.getAttribute("aria-pressed")).toBe("true");
@@ -42,7 +50,7 @@ describe("DictateButton", () => {
   });
 
   it("is disabled while starting, and unmounting cancels dictation", () => {
-    const { unmount } = render(<DictateButton />);
+    const { unmount } = render(withHost);
     act(() => useDictation.setState({ phase: "starting", startedAt: null }));
     expect((screen.getByRole("button", { name: "Dictate" }) as HTMLButtonElement).disabled).toBe(true);
     act(() => useDictation.setState({ phase: "recording", startedAt: Date.now() }));
@@ -54,6 +62,7 @@ describe("DictateButton", () => {
     render(
       <div className="toolbar">
         <DictateButton />
+        <DictationHost />
       </div>,
     );
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Dictate" })));

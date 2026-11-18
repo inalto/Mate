@@ -87,6 +87,52 @@ describe("OverlayLayer", () => {
     unregister();
   });
 
+  it("ending_an_edit_blurs_the_editor_and_drops_its_text_selection", () => {
+    // iPadOS keeps drawing the caret and the selection grabbers of an editable that is removed
+    // while it still holds the focus and the selection: both are let go before the slot leaves.
+    const Editor = () => (
+      <div data-testid="editable" contentEditable suppressContentEditableWarning>
+        some text
+      </div>
+    );
+    const unregister = registerEditor("text-box", Editor);
+    const { getByTestId } = render(<OverlayLayer store={store} />);
+    act(() => s().beginEdit("box"));
+    const editable = getByTestId("editable");
+    editable.focus();
+    const sel = document.getSelection()!;
+    sel.selectAllChildren(editable);
+    expect(document.activeElement).toBe(editable);
+    expect(sel.isCollapsed).toBe(false);
+    const blurred = vi.fn();
+    editable.addEventListener("blur", blurred);
+
+    // Ended away from the canvas (toolbar, keyboard): no canvas touch clears the selection.
+    act(() => s().endEdit());
+    expect(editable.isConnected).toBe(false);
+    expect(blurred).toHaveBeenCalledTimes(1);
+    expect(sel.rangeCount).toBe(0);
+    unregister();
+  });
+
+  it("a_text_selection_outside_the_editor_survives_the_end_of_an_edit", () => {
+    const Editor = () => <span data-testid="tb-editor">x</span>;
+    const unregister = registerEditor("text-box", Editor);
+    const outside = document.createElement("p");
+    outside.textContent = "elsewhere";
+    document.body.appendChild(outside);
+    render(<OverlayLayer store={store} />);
+    act(() => s().beginEdit("box"));
+    const sel = document.getSelection()!;
+    sel.selectAllChildren(outside);
+    act(() => s().endEdit());
+    expect(sel.rangeCount).toBe(1);
+    expect(sel.toString()).toBe("elsewhere");
+    sel.removeAllRanges();
+    outside.remove();
+    unregister();
+  });
+
   it("lazy_editor_loads_on_first_use_and_keeps_its_identity", async () => {
     const Real = ({ el: e }: { el: Element }) => <span data-testid="lazy-editor">{e.id}</span>;
     let release!: () => void;

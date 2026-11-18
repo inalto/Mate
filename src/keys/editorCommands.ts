@@ -277,6 +277,8 @@ export const runEditorShortcut: ShortcutDispatch = (action, detail) => {
   if (!modalAllows(action, detail.phase)) return;
   // Presenting: only the view keys (zoom, pan) and save; PresentationBar owns the navigation keys.
   if (getFocusedEditor().getState().presenting && !PRESENTING_ACTIONS.has(action)) return;
+  // A held page-turner pedal (key auto-repeat) turns one page, not a run of them.
+  if ((action === "page.prev" || action === "page.next") && detail.event?.repeat) return;
   noteShortcutUse(action);
   if (runChromeShortcut(action)) return;
   const s = getFocusedEditor().getState();

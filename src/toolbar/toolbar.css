@@ -1,0 +1,302 @@
+/* Editor toolbar: rows (.tb-line) of a fixed start, a scrolling middle and a fixed end (see
+   components/Toolbar.tsx). Not .tb-row: that is the wrapping row inside popovers (base.css). */
+.tb-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 0;
+}
+
+.tb-fixed,
+.tb-scroll {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tb-fixed {
+  flex: none;
+}
+
+.tb-scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  scrollbar-width: none;
+}
+
+.tb-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.tb-scroll > *,
+.tb-fixed > * {
+  flex: none;
+}
+
+.toolbar[data-dock="top"],
+.toolbar[data-dock="bottom"] {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.toolbar[data-dock="top"] .tb-scroll,
+.toolbar[data-dock="bottom"] .tb-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.toolbar[data-dock="left"],
+.toolbar[data-dock="right"] {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.toolbar[data-dock="left"] .tb-line,
+.toolbar[data-dock="right"] .tb-line,
+.toolbar[data-dock="left"] .tb-fixed,
+.toolbar[data-dock="right"] .tb-fixed,
+.toolbar[data-dock="left"] .tb-scroll,
+.toolbar[data-dock="right"] .tb-scroll {
+  flex-direction: column;
+}
+
+.toolbar[data-dock="left"] .tb-scroll,
+.toolbar[data-dock="right"] .tb-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* A separator with nothing to separate (an item beside it renders nothing, e.g. Covers on a page
+   without covers) is not shown. Only in the scrolling strip: the fixed ends keep theirs. */
+.tb-scroll > .tb-sep:first-child,
+.tb-scroll > .tb-sep:last-child,
+.tb-scroll > .tb-sep + .tb-sep {
+  display: none;
+}
+
+.toolbar[data-dock="left"] .tb-sep,
+.toolbar[data-dock="right"] .tb-sep {
+  width: 20px;
+  height: 1px;
+  margin: var(--space-1) 0;
+}
+
+/* Where content is cut off, the strip fades out over 16 px. */
+.toolbar[data-dock="top"] .tb-scroll[data-fade-start],
+.toolbar[data-dock="bottom"] .tb-scroll[data-fade-start] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px);
+  mask-image: linear-gradient(to right, transparent, #000 16px);
+}
+
+.toolbar[data-dock="top"] .tb-scroll[data-fade-end],
+.toolbar[data-dock="bottom"] .tb-scroll[data-fade-end] {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+
+.toolbar[data-dock="top"] .tb-scroll[data-fade-start][data-fade-end],
+.toolbar[data-dock="bottom"] .tb-scroll[data-fade-start][data-fade-end] {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+
+.toolbar[data-dock="left"] .tb-scroll[data-fade-start],
+.toolbar[data-dock="right"] .tb-scroll[data-fade-start] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px);
+  mask-image: linear-gradient(to bottom, transparent, #000 16px);
+}
+
+.toolbar[data-dock="left"] .tb-scroll[data-fade-end],
+.toolbar[data-dock="right"] .tb-scroll[data-fade-end] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+}
+
+.toolbar[data-dock="left"] .tb-scroll[data-fade-start][data-fade-end],
+.toolbar[data-dock="right"] .tb-scroll[data-fade-start][data-fade-end] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+
+/* The More popover: hidden tools as their real buttons, then the menu entries. */
+.tb-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  max-width: min(260px, calc(100vw - 24px));
+  padding: var(--space-1);
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+}
+
+/* Every hidden tool renders nothing just now (Covers on a page without covers): no empty box. */
+.tb-tray:empty {
+  display: none;
+}
+
+/* The Customize toolbar dialog. */
+.tbc-dialog {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+}
+
+.tbc-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tbc-group h3 {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.tbc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tbc-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-md);
+}
+
+.tbc-item:hover {
+  background: var(--color-surface-2);
+}
+
+.tbc-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tbc-actions {
+  display: flex;
+  gap: 2px;
+}
+
+/* The drag handle: a drag starts only here, so a finger that scrolls the list never starts one. */
+.tbc-handle {
+  display: inline-flex;
+  padding: 4px 2px;
+  color: var(--color-text-muted, currentcolor);
+  opacity: 0.6;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.tbc-handle:active {
+  cursor: grabbing;
+}
+
+html.mobile .tbc-handle {
+  justify-content: center;
+  width: 40px;
+  padding: 10px 4px;
+}
+
+.tbc-item {
+  position: relative;
+}
+
+.tbc-dragging {
+  opacity: 0.5;
+}
+
+/* The insertion line at the drop slot. */
+.tbc-drop-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-primary);
+  pointer-events: none;
+}
+
+.tbc-drop-after {
+  top: auto;
+  bottom: -2px;
+}
+
+.tbc-drop-empty {
+  position: static;
+}
+
+.tbc-list:empty {
+  min-height: 36px;
+  border: 1px dashed var(--color-border, currentcolor);
+  border-radius: var(--radius-md);
+}
+
+.tbc-drop-hover {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-md);
+}
+
+.tbc-btn {
+  min-width: 32px;
+  height: 32px;
+}
+
+html.mobile .tbc-btn {
+  min-width: 40px;
+  height: 40px;
+}
+
+.tbc-empty {
+  margin: 0;
+  padding: var(--space-1);
+}
+
+.tbc-add {
+  margin-top: var(--space-1);
+}
+
+.tbc-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tbc-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A small corner mark on buttons whose second press opens options. */
+.tb-btn[data-has-options] {
+  position: relative;
+}
+
+.tb-btn[data-has-options]::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+  pointer-events: none;
+}

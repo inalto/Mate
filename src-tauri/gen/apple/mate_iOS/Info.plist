@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.9.0</string>
+	<string>1.10.0</string>
 	<key>CFBundleVersion</key>
-	<string>1.9.0</string>
+	<string>1.10.0</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -40,6 +40,8 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Mate uses the camera to scan pages into your notes.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mate uses the microphone to dictate notes.</string>
 	<key>UTExportedTypeDeclarations</key>

@@ -40,6 +40,21 @@ const titleOf = (pageId: string): string =>
 
 const labelOf = (panes: Tab["panes"]): string => panes.map((p) => titleOf(p.pageId)).join(" | ");
 
+/** The book (unit) `pageId` belongs to; null while the tree does not know the page or its section. */
+export function bookOfPage(pageId: string): string | null {
+  const { pages, sections } = useNotebookStore.getState().tree;
+  const sectionId = pages.find((p) => p.id === pageId)?.sectionId;
+  return sections.find((s) => s.id === sectionId)?.unitId ?? null;
+}
+
+/** `tabs` with `tab` added next to the other tabs of its book (after the last one), or at the end. */
+function withNewTab(tabs: Tab[], tab: Tab): Tab[] {
+  const book = bookOfPage(tab.panes[0].pageId);
+  let at = -1;
+  if (book) tabs.forEach((t, i) => (bookOfPage(t.panes[0].pageId) === book ? (at = i) : 0));
+  return at < 0 ? [...tabs, tab] : [...tabs.slice(0, at + 1), tab, ...tabs.slice(at + 1)];
+}
+
 const makeTab = (pageId: string): Tab => ({
   id: crypto.randomUUID(),
   label: titleOf(pageId),
@@ -130,13 +145,18 @@ export const useTabsStore = create<TabsState>((set, get) => {
       // Prefer the active tab so focusing a pane never jumps to another tab showing the same page.
       const showing = tabs.find((t) => t.id === activeTabId && shows(t)) ?? tabs.find(shows);
       const active = tabs.find((t) => t.id === activeTabId);
+      // A page of another book gets its own tab: the book that was open stays open.
+      const fromPage = active?.panes[active.focusedPaneIndex]?.pageId;
+      const from = fromPage ? bookOfPage(fromPage) : null;
+      const to = bookOfPage(pageId);
+      const otherBook = !!from && !!to && from !== to;
       let next: TabsSnapshot;
       if (showing) {
         const i = showing.panes.findIndex((p) => p.pageId === pageId) as PaneIndex;
         next = { tabs: tabs.map((t) => (t.id === showing.id ? { ...t, focusedPaneIndex: i } : t)), activeTabId: showing.id };
-      } else if (wantNewTab || !active) {
+      } else if (wantNewTab || !active || otherBook) {
         const tab = makeTab(pageId);
-        next = { tabs: [...tabs, tab], activeTabId: tab.id };
+        next = { tabs: withNewTab(tabs, tab), activeTabId: tab.id };
       } else {
         const panes = active.panes.map((p, i) => (i === active.focusedPaneIndex ? { pageId } : p)) as Tab["panes"];
         next = { tabs: tabs.map((t) => (t.id === active.id ? withPanes(t, panes, t.focusedPaneIndex) : t)), activeTabId };
