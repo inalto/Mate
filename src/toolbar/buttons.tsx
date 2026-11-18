@@ -73,7 +73,7 @@ function InkIcon({ type, color }: { type: PenPreset["type"]; color?: string }) {
   return <Icon size={18} color={color} weight={color ? "fill" : "regular"} />;
 }
 
-export function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number; count: number }) {
+function PresetSlot({ preset, index, count }: { preset: PenPreset; index: number; count: number }) {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
@@ -111,7 +111,7 @@ export function PresetSlot({ preset, index, count }: { preset: PenPreset; index:
   );
 }
 
-export function AddPenMenu() {
+function AddPenMenu() {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
