@@ -3,6 +3,7 @@
 // no live cover. While a test is asking, the actions that would end or give it away are disabled.
 import { Eye, EyeClosed, EyeSlash, GraduationCap, Trash } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { createStore, useStore, type StoreApi } from "zustand";
 import ConfirmDialog from "../components/ConfirmDialog";
@@ -10,6 +11,7 @@ import DockPopover from "../components/DockPopover";
 import { useDismiss } from "../components/useDismiss";
 import { recallPageStats } from "../ipc/recall";
 import type { RecallRun } from "../model/types";
+import { useChromeStore } from "../stores/chrome";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { isLocked } from "../model/content";
 import { coversOf } from "./cover";
@@ -30,25 +32,19 @@ export default function CoversMenu({ onTest }: Props) {
   const ed = useFocusedEditor();
   const ref = useRef<HTMLDivElement>(null);
   const [openRaw, setOpen] = useState(false);
-  const [confirmingRaw, setConfirming] = useState(false);
   // undefined: not known yet (or the lookup failed); null: never tested.
   const [last, setLast] = useState<RecallRun | null | undefined>(undefined);
   const elements = ed((s) => s.elements);
   const pageId = ed((s) => s.pageId);
   const covers = useMemo(() => coversOf(elements.values()), [elements]);
   const count = covers.length;
-  // With the last cover gone the button is gone too: a menu or confirmation left open must not keep
-  // holding a modal (a stuck count blocks the keys) nor come back, backdrop and all, with the next cover.
+  // With the last cover gone the button is gone too: a menu left open must not keep holding a modal
+  // (a stuck count blocks the keys) nor come back with the next cover.
   const open = openRaw && count > 0;
-  const confirming = confirmingRaw && count > 0;
   useEffect(() => {
-    if (count > 0) return;
-    setOpen(false);
-    setConfirming(false);
+    if (count === 0) setOpen(false);
   }, [count]);
-  // Locked covers stay when the rest are removed, so the dialog counts only the others.
-  const locked = covers.filter(isLocked).length;
-  const removable = count - locked;
+  const removable = count - covers.filter(isLocked).length;
   const run = runOf(ed);
   // Reveal all would show every answer, Cover all and Remove all would pull the test from under it.
   const testing = useStore((run ?? NO_RUN) as StoreApi<Pick<RunState, "phase">>, isActive);
@@ -109,7 +105,7 @@ export default function CoversMenu({ onTest }: Props) {
               disabled={removable === 0 || testing}
               onClick={() => {
                 setOpen(false);
-                setConfirming(true);
+                useChromeStore.getState().setRemoveCoversOpen(true);
               }}
             >
               <Trash size={16} aria-hidden="true" /> {t("covers.removeAll")}
@@ -125,20 +121,46 @@ export default function CoversMenu({ onTest }: Props) {
           </div>
         </DockPopover>
       )}
-      {confirming && (
-        <ConfirmDialog
-          title={t("covers.removeConfirmTitle")}
-          confirmLabel={t("covers.removeAll")}
-          onConfirm={() => {
-            ed.getState().removeAllCovers();
-            setConfirming(false);
-          }}
-          onCancel={() => setConfirming(false)}
-        >
-          {t("covers.removeConfirmBody", { count: removable })}
-          {locked > 0 && <> {t("covers.removeLockedStay", { count: locked })}</>}
-        </ConfirmDialog>
-      )}
     </div>
+  );
+}
+
+/**
+ * The "Remove all covers" confirmation for the focused page, opened by the Covers menu through
+ * `chrome.removeCoversOpen`. Rendered by the toolbar rather than the menu, so it stays when the
+ * menu's button goes (the More tray closes as the dialog opens), and on <body>, above the page:
+ * inside the toolbar's stacking context the canvas would paint over it.
+ */
+export function RemoveCoversConfirm() {
+  const { t } = useTranslation();
+  const ed = useFocusedEditor();
+  const requested = useChromeStore((s) => s.removeCoversOpen);
+  const elements = ed((s) => s.elements);
+  const covers = useMemo(() => coversOf(elements.values()), [elements]);
+  const count = covers.length;
+  // The last cover gone (eraser, delete, another pane) ends the question: it must not keep holding a
+  // modal nor come back, backdrop and all, with the next cover.
+  const open = requested && count > 0;
+  useEffect(() => {
+    if (requested && count === 0) useChromeStore.getState().setRemoveCoversOpen(false);
+  }, [requested, count]);
+  if (!open) return null;
+  // Locked covers stay when the rest are removed, so the dialog counts only the others.
+  const locked = covers.filter(isLocked).length;
+  const close = () => useChromeStore.getState().setRemoveCoversOpen(false);
+  return createPortal(
+    <ConfirmDialog
+      title={t("covers.removeConfirmTitle")}
+      confirmLabel={t("covers.removeAll")}
+      onConfirm={() => {
+        ed.getState().removeAllCovers();
+        close();
+      }}
+      onCancel={close}
+    >
+      {t("covers.removeConfirmBody", { count: count - locked })}
+      {locked > 0 && <> {t("covers.removeLockedStay", { count: locked })}</>}
+    </ConfirmDialog>,
+    document.body,
   );
 }

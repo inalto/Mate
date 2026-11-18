@@ -12,6 +12,8 @@ import MoreMenu from "../toolbar/MoreMenu";
 import { resolveLayout, SEP, type Slot } from "../toolbar/layout";
 import { useScrollFade } from "../toolbar/useScrollFade";
 import "../toolbar/toolbar.css";
+import { RemoveCoversConfirm } from "../covers/CoversMenu";
+import { DictationHost } from "./DictateButton";
 import { useDock, wheelToScroll } from "./DockPopover";
 
 /** One row's items and separators. */
@@ -80,6 +82,10 @@ export default function Toolbar() {
           )}
         </div>
       ))}
+      {/* Dialogs and sessions of tools that outlive their buttons: a hidden tool's button lives in the
+          More tray, which unmounts it when it closes (as it does when one of these dialogs opens). */}
+      <DictationHost />
+      <RemoveCoversConfirm />
     </div>
   );
 }
