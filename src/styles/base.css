@@ -686,8 +686,12 @@ button.card:hover {
   transform-origin: 50% 50%;
 }
 
+/* Its own compositing layer: deselecting drops the whole layer. Painted into the layer under it,
+   iPadOS has left fragments of the handles on screen (a suspected WebKit repaint fault, not
+   confirmed). */
 .box-frame {
   outline: calc(1.5px * var(--overlay-inv-z, 1)) solid var(--color-primary);
+  will-change: transform;
 }
 
 .box-editor {

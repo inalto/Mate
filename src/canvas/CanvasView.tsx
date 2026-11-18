@@ -119,6 +119,13 @@ function createEngine(
   let readout = readoutColors();
   let staticQueued = false;
   let liveQueued = false;
+  /**
+   * The selection has just emptied: the next live frame resets the canvas's backing store instead
+   * of only clearing it. Such a frame erases the selection handles and often draws nothing else,
+   * and iPadOS has left fragments of them on screen (a suspected WebKit repaint fault, not
+   * confirmed); a fresh backing store cannot keep old pixels.
+   */
+  let liveReset = false;
   let rasterTimer: ReturnType<typeof setTimeout> | null = null;
   let snapTimer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
@@ -271,6 +278,10 @@ function createEngine(
   const drawLive = () => {
     liveQueued = false;
     if (disposed || !lctx) return;
+    if (liveReset) {
+      liveReset = false;
+      liveCanvas.width = liveCanvas.width; // assigning the width, even unchanged, resets the canvas
+    }
     lctx.setTransform(1, 0, 0, 1, 0, 0);
     lctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
     const c = st().camera;
@@ -847,6 +858,7 @@ function createEngine(
       requestStatic();
       requestLive();
     }
+    if (prev.selection.size > 0 && s.selection.size === 0) liveReset = true;
     if (s.selection !== prev.selection || s.guides !== prev.guides || s.tool !== prev.tool || s.tempTool !== prev.tempTool) requestLive();
     if (s.presenting !== prev.presenting) {
       // The backdrop hole moved (or the presentation started / ended): repaint the background.
