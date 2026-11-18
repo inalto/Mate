@@ -814,6 +814,7 @@
     "pageTitle": "Titre de la page"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "Pages ouvertes",
     "close": "Fermer {{title}}",
     "split": "Vue scindée",

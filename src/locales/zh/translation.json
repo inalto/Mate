@@ -811,6 +811,7 @@
     "pageTitle": "页面标题"
   },
   "tabs": {
+    "inBook": "{{book}} — {{page}}",
     "label": "已打开的页面",
     "close": "关闭{{title}}",
     "split": "分屏视图",

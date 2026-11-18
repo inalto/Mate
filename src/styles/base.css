@@ -1630,6 +1630,26 @@ button.card:hover {
   cursor: pointer;
 }
 
+/* The tab's book, shown when pages of two or more books are open. */
+.tab-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: var(--space-1);
+  border-radius: 50%;
+}
+
+.tab-book {
+  display: inline-block;
+  max-width: 90px;
+  margin-right: var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
 .tab .icon-btn {
   width: 22px;
   height: 22px;
