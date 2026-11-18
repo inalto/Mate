@@ -25,6 +25,7 @@ export default function MoreMenu({ onCustomize }: { onCustomize(): void }) {
       <button
         type="button"
         className="tb-btn"
+        data-toolbar-more=""
         aria-label={t("toolbar.more")}
         title={t("toolbar.more")}
         aria-haspopup="menu"

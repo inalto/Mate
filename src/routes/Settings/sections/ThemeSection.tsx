@@ -1,9 +1,10 @@
 import { useTranslation } from "react-i18next";
 import type { TKey } from "../../../i18n";
 import type { Theme } from "../../../model/types";
+import { useChromeStore } from "../../../stores/chrome";
 import { useSettingsStore } from "../../../stores/settings";
 import { isMobile } from "../../../platform";
-import { Row, SelectRow, SettingsSection, ToggleRow } from "../rows";
+import { ButtonRow, Row, SelectRow, SettingsSection, ToggleRow } from "../rows";
 
 const THEMES: Array<{ id: Theme; labelKey: TKey }> = [
   { id: "light", labelKey: "settings.theme.light" },
@@ -40,6 +41,12 @@ export default function ThemeSection() {
         options={(["top", "bottom", "left", "right"] as const)
           .filter((d) => !isMobile() || d === "top" || d === "bottom")
           .map((d) => ({ value: d, label: t(`dock.${d}`) }))}
+      />
+      <ButtonRow
+        id="set-toolbarCustomize"
+        label={t("toolbar.customizeTitle")}
+        buttonLabel={t("toolbar.customize")}
+        onClick={() => useChromeStore.getState().setToolbarCustomizeOpen(true)}
       />
       <ToggleRow
         k="invertImagesInDarkMode"
