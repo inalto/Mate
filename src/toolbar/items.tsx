@@ -58,6 +58,7 @@ import {
   ToolButton,
   ZoomBlock,
 } from "./buttons";
+import InsertMenu from "./InsertMenu";
 import type { ItemId } from "./layout";
 
 type IconProps = { size?: number };
@@ -75,11 +76,6 @@ function tool(id: "cursor" | "lasso" | "text", action: ShortcutAction, label: TK
     const { t } = useTranslation();
     return <ToolButton id={id} action={action} label={t(label)} Icon={Icon} />;
   };
-}
-
-/** Placeholder until the insert menu lands. */
-function InsertMenu() {
-  return null;
 }
 
 export const ITEMS: Record<ItemId, ToolbarItem> = {

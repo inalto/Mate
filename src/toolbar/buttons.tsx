@@ -41,7 +41,7 @@ import type { FingerAction, PenPreset, Settings } from "../model/types";
 import { CONNECTOR_MODES } from "../connectors/route";
 import { screenToWorld } from "../canvas/camera";
 import { FRAME_PRESETS, isFrame, presetFrameRect } from "../frames/contain";
-import { isInkTool } from "../stores/editor";
+import { isInkTool, type EditorStore } from "../stores/editor";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { useChromeStore } from "../stores/chrome";
 import { useNotebookStore } from "../stores/notebook";
@@ -754,79 +754,33 @@ export function ToolButton({ id, action, label, Icon }: { id: "cursor" | "lasso"
   );
 }
 
-export function ImageButton() {
-  const { t } = useTranslation();
-  return (
-    <button
-      type="button"
-      className="tb-btn"
-      aria-label={t("toolbar.insertImage")}
-      title={t("toolbar.insertImage")}
-      onClick={() => void pickAndInsertImage()}
-    >
-      <ImageSquare size={18} />
-    </button>
-  );
-}
+/** The six insert actions, shared by the individual buttons and the Insert menu. */
+export type InsertAction = "image" | "media" | "table" | "code" | "equation" | "graph";
+export const INSERT_ACTIONS: Record<InsertAction, (ed: EditorStore) => void> = {
+  image: () => void pickAndInsertImage(),
+  media: () => void pickAndInsertMedia(),
+  table: (ed) => ed.getState().addTable(),
+  code: (ed) => ed.getState().addCodespace(),
+  equation: (ed) => ed.getState().addMathBox(),
+  graph: (ed) => ed.getState().addGraph(),
+};
 
-export function MediaButton() {
-  const { t } = useTranslation();
-  return (
-    <button
-      type="button"
-      className="tb-btn"
-      aria-label={t("media.insert")}
-      title={t("media.insert")}
-      onClick={() => void pickAndInsertMedia()}
-    >
-      <FilmSlate size={18} />
-    </button>
-  );
-}
-
-export function TableButton() {
+function InsertActionButton({ action, label, Icon }: { action: InsertAction; label: TKey; Icon: typeof Table }) {
   const { t } = useTranslation();
   const ed = useFocusedEditor();
-  const s = ed.getState;
   return (
-    <button type="button" className="tb-btn" aria-label={t("toolbar.insertTable")} title={t("toolbar.insertTable")} onClick={() => s().addTable()}>
-      <Table size={18} />
+    <button type="button" className="tb-btn" aria-label={t(label)} title={t(label)} onClick={() => INSERT_ACTIONS[action](ed)}>
+      <Icon size={18} />
     </button>
   );
 }
 
-export function CodeButton() {
-  const { t } = useTranslation();
-  const ed = useFocusedEditor();
-  const s = ed.getState;
-  return (
-    <button type="button" className="tb-btn" aria-label={t("toolbar.insertCode")} title={t("toolbar.insertCode")} onClick={() => s().addCodespace()}>
-      <Code size={18} />
-    </button>
-  );
-}
-
-export function EquationButton() {
-  const { t } = useTranslation();
-  const ed = useFocusedEditor();
-  const s = ed.getState;
-  return (
-    <button type="button" className="tb-btn" aria-label={t("toolbar.insertEquation")} title={t("toolbar.insertEquation")} onClick={() => s().addMathBox()}>
-      <MathOperations size={18} />
-    </button>
-  );
-}
-
-export function GraphButton() {
-  const { t } = useTranslation();
-  const ed = useFocusedEditor();
-  const s = ed.getState;
-  return (
-    <button type="button" className="tb-btn" aria-label={t("toolbar.insertGraph")} title={t("toolbar.insertGraph")} onClick={() => s().addGraph()}>
-      <ChartLine size={18} />
-    </button>
-  );
-}
+export const ImageButton = () => <InsertActionButton action="image" label="toolbar.insertImage" Icon={ImageSquare} />;
+export const MediaButton = () => <InsertActionButton action="media" label="media.insert" Icon={FilmSlate} />;
+export const TableButton = () => <InsertActionButton action="table" label="toolbar.insertTable" Icon={Table} />;
+export const CodeButton = () => <InsertActionButton action="code" label="toolbar.insertCode" Icon={Code} />;
+export const EquationButton = () => <InsertActionButton action="equation" label="toolbar.insertEquation" Icon={MathOperations} />;
+export const GraphButton = () => <InsertActionButton action="graph" label="toolbar.insertGraph" Icon={ChartLine} />;
 
 /** Undo and redo; not a catalogue item, the bar always shows them. */
 export function UndoRedo() {
