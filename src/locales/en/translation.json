@@ -715,6 +715,7 @@
     "row1": "Row 1",
     "row2": "Row 2",
     "hidden": "Hidden",
+    "hiddenEmpty": "Nothing hidden. Drag a tool here to hide it.",
     "separator": "Separator",
     "moveUp": "Move {{item}} up",
     "moveDown": "Move {{item}} down",

@@ -718,6 +718,7 @@
     "row1": "Linha 1",
     "row2": "Linha 2",
     "hidden": "Ocultas",
+    "hiddenEmpty": "Nada oculto. Arraste uma ferramenta para cá para ocultá-la.",
     "separator": "Separador",
     "moveUp": "Mover {{item}} para cima",
     "moveDown": "Mover {{item}} para baixo",

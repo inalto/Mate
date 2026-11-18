@@ -718,6 +718,7 @@
     "row1": "Ligne 1",
     "row2": "Ligne 2",
     "hidden": "Masqués",
+    "hiddenEmpty": "Rien n'est masqué. Faites glisser un outil ici pour le masquer.",
     "separator": "Séparateur",
     "moveUp": "Monter {{item}}",
     "moveDown": "Descendre {{item}}",

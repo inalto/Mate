@@ -715,6 +715,7 @@
     "row1": "第 1 行",
     "row2": "第 2 行",
     "hidden": "已隐藏",
+    "hiddenEmpty": "没有隐藏的工具。将工具拖到这里即可隐藏。",
     "separator": "分隔线",
     "moveUp": "上移{{item}}",
     "moveDown": "下移{{item}}",

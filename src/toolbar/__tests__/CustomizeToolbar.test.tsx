@@ -177,6 +177,28 @@ describe("CustomizeToolbar", () => {
     ).toBe(true);
   });
 
+  it("add_separator_is_disabled_when_one_already_sits_before_the_last_item", () => {
+    withLayout([["pens", "eraser", "ruler"]]);
+    renderDialog();
+    const add = () => screen.getByRole("button", { name: "Add separator" }) as HTMLButtonElement;
+    click("Add separator");
+    expect(saved().rows).toEqual([["pens", "eraser", "sep", "ruler"]]);
+    expect(add().disabled).toBe(true);
+    fireEvent.click(add());
+    expect(saved().rows).toEqual([["pens", "eraser", "sep", "ruler"]]);
+    click("Remove separator");
+    expect(add().disabled).toBe(false);
+  });
+
+  it("an_empty_hidden_list_says_how_to_hide_a_tool", () => {
+    withLayout([ITEM_IDS.filter((id) => id !== "finger")]);
+    renderDialog();
+    expect(screen.getByText("Nothing hidden. Drag a tool here to hide it.")).toBeTruthy();
+    expect(list("Hidden").childNodes).toHaveLength(0); // still :empty, the dashed drop area
+    click("Hide Ruler");
+    expect(screen.queryByText("Nothing hidden. Drag a tool here to hide it.")).toBeNull();
+  });
+
   it("a_mobile_only_item_is_kept_in_the_saved_layout_and_real_indices_are_used", () => {
     withLayout([["pens", "finger", "eraser", "ruler"]]);
     renderDialog();

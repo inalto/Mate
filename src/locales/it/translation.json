@@ -715,6 +715,7 @@
     "row1": "Riga 1",
     "row2": "Riga 2",
     "hidden": "Nascosti",
+    "hiddenEmpty": "Niente di nascosto. Trascina qui uno strumento per nasconderlo.",
     "separator": "Separatore",
     "moveUp": "Sposta {{item}} su",
     "moveDown": "Sposta {{item}} giù",

@@ -317,7 +317,8 @@ export default function CustomizeToolbar({ onClose }: { onClose(): void }) {
         <button
           type="button"
           className="btn tbc-add"
-          disabled={shown.filter((e) => e.slot !== SEP).length < 2}
+          // A separator goes before the last item: with one already there a second press would do nothing.
+          disabled={shown.filter((e) => e.slot !== SEP).length < 2 || shown[shown.length - 2]?.slot === SEP}
           onClick={() => separatorBeforeLast(row)}
         >
           {t("toolbar.addSeparator")}
@@ -380,6 +381,8 @@ export default function CustomizeToolbar({ onClose }: { onClose(): void }) {
                   );
                 })}
               </ul>
+              {/* Outside the list: the empty list stays the dashed drop area (:empty) taking index 0. */}
+              {hidden.length === 0 && <p className="muted tbc-empty">{t("toolbar.hiddenEmpty")}</p>}
             </section>
           </div>
           <div className="tbc-options">

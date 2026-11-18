@@ -718,6 +718,7 @@
     "row1": "Zeile 1",
     "row2": "Zeile 2",
     "hidden": "Ausgeblendet",
+    "hiddenEmpty": "Nichts ausgeblendet. Zieh ein Werkzeug hierher, um es auszublenden.",
     "separator": "Trennlinie",
     "moveUp": "{{item}} nach oben",
     "moveDown": "{{item}} nach unten",

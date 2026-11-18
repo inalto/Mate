@@ -718,6 +718,7 @@
     "row1": "Fila 1",
     "row2": "Fila 2",
     "hidden": "Ocultas",
+    "hiddenEmpty": "No hay nada oculto. Arrastra una herramienta aquí para ocultarla.",
     "separator": "Separador",
     "moveUp": "Subir {{item}}",
     "moveDown": "Bajar {{item}}",
