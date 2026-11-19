@@ -8,7 +8,7 @@ import { loadElements } from "../ipc/elements";
 import { writeExportFile } from "../ipc/export";
 import { PAGE_GAP } from "../model/constants";
 import { isPdfPlacement } from "../model/content";
-import type { Element } from "../model/types";
+import type { Element, Page } from "../model/types";
 import { preparePdfPages } from "../pdf/render";
 import { prepareTextSnapshots } from "../overlay/snapshot";
 import { endAllEdits } from "../overlay/useEditSession";
@@ -102,6 +102,53 @@ export async function renderPagePng(pageId: string, options: Partial<ExportOptio
   return canvasToPng(renderToCanvas(elements, page, opts, pdfTiles, textBitmaps));
 }
 
+/** The elements of `pageId` an export draws: annotations and covers dropped as `options` ask. */
+async function exportElements(pageId: string, options: PageExportOptions): Promise<Element[]> {
+  const loaded = await elementsOf(pageId);
+  // "none": only the imported PDF pages stay (a page without any keeps everything).
+  const kept = options.annotations === "none" && loaded.some(isPdfPlacement) ? loaded.filter(isPdfPlacement) : loaded;
+  const uncovered = options.covers === "hidden" ? kept.filter((e) => !isCover(e)) : kept;
+  return options.mapElements ? options.mapElements(uncovered) : uncovered;
+}
+
+const exportOptions = (page: Page, options: PageExportOptions): ExportOptions => ({
+  scale: 2,
+  theme: "light",
+  background: "plain",
+  pageFrame: page.mode === "page",
+  ...options,
+});
+
+async function elementsToPdf(page: Page, elements: Element[], options: PageExportOptions): Promise<Uint8Array> {
+  const opts = exportOptions(page, options);
+  // jsPDF and pdf-lib are large: loaded on the first PDF export only.
+  const { PDF_RASTER_SCALE, renderToPdf } = await import("./renderToPdf");
+  // Every box rendered before painting (no timeout): a box that cannot be rendered fails the export.
+  const textBitmaps = await prepareTextSnapshots(elements, opts.theme, PDF_RASTER_SCALE);
+  // Sheets backed by an imported PDF keep the original page and are drawn in light colours.
+  if (opts.theme !== "light" && elements.some(isPdfPlacement)) {
+    for (const [k, v] of await prepareTextSnapshots(elements, "light", PDF_RASTER_SCALE)) textBitmaps.set(k, v);
+  }
+  await prepareImages(elements);
+  return renderToPdf(elements, page, {
+    theme: opts.theme,
+    background: opts.background,
+    pages: options.pages ?? "all",
+    currentSheet: options.pages === "current" ? currentSheetIndex(page.id) : undefined,
+    searchable: options.searchable ?? true,
+    region: opts.region,
+    textBitmaps,
+    annotationLayer: options.annotations === "layer",
+  });
+}
+
+/** The PDF of `page` as bytes, without saving it (a book export joins several). */
+export async function renderPagePdf(page: Page, options: PageExportOptions = {}): Promise<Uint8Array> {
+  const elements = await exportElements(page.id, options);
+  await readyGraphs(elements);
+  return elementsToPdf(page, elements, options);
+}
+
 /** Export a page; resolves to the saved path, or `null` if the save dialog was cancelled. */
 export async function exportPage(
   pageId: string,
@@ -112,11 +159,7 @@ export async function exportPage(
   if (!page) throw new Error("page not found");
   // An open box editor keeps its edits locally until the session ends: commit them first.
   endAllEdits();
-  const loaded = await elementsOf(pageId);
-  // "none": only the imported PDF pages stay (a page without any keeps everything).
-  const kept = options.annotations === "none" && loaded.some(isPdfPlacement) ? loaded.filter(isPdfPlacement) : loaded;
-  const uncovered = options.covers === "hidden" ? kept.filter((e) => !isCover(e)) : kept;
-  const elements = options.mapElements ? options.mapElements(uncovered) : uncovered;
+  const elements = await exportElements(pageId, options);
   const filename = pageExportFilename(page.title, EXTENSIONS[format]);
   if (format === "latex") {
     // LaTeX never draws covers: text under a live one is left out rather than given away.
@@ -125,35 +168,8 @@ export async function exportPage(
     return writeExportFile(filename, new TextEncoder().encode(tex));
   }
   await readyGraphs(elements);
-  const opts: ExportOptions = {
-    scale: 2,
-    theme: "light",
-    background: "plain",
-    pageFrame: page.mode === "page",
-    ...options,
-  };
-  if (format === "pdf") {
-    // jsPDF and pdf-lib are large: loaded on the first PDF export only.
-    const { PDF_RASTER_SCALE, renderToPdf } = await import("./renderToPdf");
-    // Every box rendered before painting (no timeout): a box that cannot be rendered fails the export.
-    const textBitmaps = await prepareTextSnapshots(elements, opts.theme, PDF_RASTER_SCALE);
-    // Sheets backed by an imported PDF keep the original page and are drawn in light colours.
-    if (opts.theme !== "light" && elements.some(isPdfPlacement)) {
-      for (const [k, v] of await prepareTextSnapshots(elements, "light", PDF_RASTER_SCALE)) textBitmaps.set(k, v);
-    }
-    await prepareImages(elements);
-    const bytes = await renderToPdf(elements, page, {
-      theme: opts.theme,
-      background: opts.background,
-      pages: options.pages ?? "all",
-      currentSheet: options.pages === "current" ? currentSheetIndex(pageId) : undefined,
-      searchable: options.searchable ?? true,
-      region: opts.region,
-      textBitmaps,
-      annotationLayer: options.annotations === "layer",
-    });
-    return writeExportFile(filename, bytes);
-  }
+  const opts = exportOptions(page, options);
+  if (format === "pdf") return writeExportFile(filename, await elementsToPdf(page, elements, options));
   // Text boxes are drawn from bitmaps rendered asynchronously: have them all ready for the PNG (the
   // SVG embeds their HTML as <foreignObject> instead).
   const textBitmaps = format === "png" ? await prepareTextSnapshots(elements, opts.theme, opts.scale) : undefined;

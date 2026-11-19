@@ -1,9 +1,11 @@
-// Export the current page as PNG, SVG, PDF or LaTeX, or its book as a `.mate` archive.
+// Export the current page as PNG, SVG, PDF or LaTeX, its section or book as one PDF, or its book as
+// a `.mate` archive.
 import { useModal } from "./useModal";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { coversOf } from "../covers/cover";
 import { paddedSelectionRegion } from "../export/copyImage";
+import { exportBook, NoPagesError, PageExportError } from "../export/exportBook";
 import { exportPage, type AnnotationMode, type CoverMode } from "../export/exportPage";
 import { exportUnitArchive } from "../ipc/archive";
 import { isPdfPlacement } from "../model/content";
@@ -17,6 +19,8 @@ import ShareDialog from "./ShareDialog";
 import { showToast } from "./Toast";
 
 type Format = "png" | "svg" | "pdf" | "latex" | "mate";
+/** PDF: the page shown, every page of its section, or every page of its book. */
+type Scope = "page" | "section" | "book";
 
 const FORMATS: Format[] = ["png", "svg", "pdf", "latex", "mate"];
 const SCALES = [1, 2, 3];
@@ -31,13 +35,21 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
   useModal(!sharing);
   const { t } = useTranslation();
   const defaultFormat = useSettingsStore((s) => s.settings.defaultExportFormat);
-  const unitId = useNotebookStore((s) => {
-    const page = s.tree.pages.find((p) => p.id === pageId);
-    return s.tree.sections.find((sec) => sec.id === page?.sectionId)?.unitId ?? null;
-  });
+  const sectionId = useNotebookStore((s) => s.tree.pages.find((p) => p.id === pageId)?.sectionId ?? null);
+  const unitId = useNotebookStore((s) => s.tree.sections.find((sec) => sec.id === sectionId)?.unitId ?? null);
   const unit = useNotebookStore((s) => s.tree.units.find((u) => u.id === unitId) ?? null);
   const [format, setFormatRaw] = useState<Format>(() => initialFormat(defaultFormat));
   const [annotations, setAnnotations] = useState<AnnotationMode>("flat");
+  const [scopeRaw, setScopeRaw] = useState<Scope>("page");
+  /** Section and book are PDF-only choices. */
+  const scope: Scope = format === "pdf" ? scopeRaw : "page";
+  const many = scope !== "page";
+  /** A separate annotation layer does not survive joining pages: section and book flatten. */
+  const setScope = (v: Scope) => {
+    setScopeRaw(v);
+    if (v !== "page") setAnnotations((a) => (a === "layer" ? "flat" : a));
+  };
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   /** "Separate layer" is a PDF-only choice: leaving PDF falls back to flattened. */
   const setFormat = (f: Format) => {
     setFormatRaw(f);
@@ -81,6 +93,12 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
       if (format === "mate") {
         if (!unitId) throw new Error(t("export.notInBook"));
         saved = await exportUnitArchive(unitId, recordings && hasRecordings);
+      } else if (many) {
+        if (scope === "book" ? !unitId : !sectionId) throw new Error(t("export.notInBook"));
+        saved = await exportBook(
+          scope === "book" ? { kind: "book", unitId: unitId! } : { kind: "section", sectionId: sectionId! },
+          { theme, background, searchable, annotations, covers, onProgress: (done, total) => setProgress({ done, total }) },
+        );
       } else if (format === "latex") {
         saved = await exportPage(pageId, "latex", {});
       } else if (format === "pdf") {
@@ -92,8 +110,17 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
       if (saved && isMobile()) showToast(t("export.shared"));
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(
+        err instanceof NoPagesError
+          ? t("export.noPages")
+          : err instanceof PageExportError
+            ? t("export.pageFailed", { title: err.pageTitle, message: err.message })
+            : err instanceof Error
+              ? err.message
+              : String(err),
+      );
       setBusy(false);
+      setProgress(null);
     }
   };
 
@@ -124,6 +151,21 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
             if (f !== "mate") setRecordings(false);
           },
         )}
+        {format === "pdf" && (
+          <>
+            {seg<Scope>(
+              t("export.include"),
+              [
+                ["page", t("export.scopePage")],
+                ["section", t("export.scopeSection")],
+                ...(unitId ? [["book", t("export.scopeBook")] as [Scope, string]] : []),
+              ],
+              scope,
+              setScope,
+            )}
+            <p className="field-hint">{t("export.scopeHint")}</p>
+          </>
+        )}
         {format !== "mate" && format !== "latex" && (
           <>
             {seg<"light" | "dark">(t("export.paper"), [["light", t("settings.theme.light")], ["dark", t("settings.theme.dark")]], theme, setTheme)}
@@ -135,7 +177,7 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
             )}
           </>
         )}
-        {format !== "mate" && format !== "latex" && (
+        {format !== "mate" && format !== "latex" && !many && (
           <label className="field">
             <span className="field-label">{t("exportRegion.selectionOnly")}</span>
             <input
@@ -146,14 +188,15 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
             />
           </label>
         )}
-        {hasPlacements && (format === "pdf" || format === "png" || format === "svg") && (
+        {/* Section and book: the other pages are not loaded here, so both choices are always offered. */}
+        {(hasPlacements || many) && (format === "pdf" || format === "png" || format === "svg") && (
           <>
             {seg<AnnotationMode>(
               t("export.annotations"),
               [
                 ["none", t("export.annotationsNone")],
                 ["flat", t("export.annotationsFlat")],
-                ...(format === "pdf" ? [["layer", t("export.annotationsLayer")] as [AnnotationMode, string]] : []),
+                ...(format === "pdf" && !many ? [["layer", t("export.annotationsLayer")] as [AnnotationMode, string]] : []),
               ],
               annotations,
               setAnnotations,
@@ -161,7 +204,7 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
             <p className="field-hint">{t("export.annotationsHint")}</p>
           </>
         )}
-        {hasCovers && (format === "pdf" || format === "png" || format === "svg") && (
+        {(hasCovers || many) && (format === "pdf" || format === "png" || format === "svg") && (
           <>
             {seg<CoverMode>(t("export.covers"), [["covered", t("export.coversCovered")], ["hidden", t("export.coversHidden")]], covers, setCovers)}
             <p className="field-hint">{t("export.coversHint")}</p>
@@ -170,7 +213,8 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
         {format === "png" && seg(t("export.scale"), SCALES.map((s): [number, string] => [s, t("export.times", { n: s })]), scale, setScale)}
         {format === "pdf" &&
           pageMode &&
-          seg<"all" | "current">(t("export.pages"), [["all", t("export.allSheets")], ["current", t("export.currentSheet")]], pages, setPages)}
+          !many &&
+          seg<"all" | "current">(t("export.sheets"), [["all", t("export.allSheets")], ["current", t("export.currentSheet")]], pages, setPages)}
         {format === "pdf" && (
           <label className="field">
             <span className="field-label">{t("export.searchable")}</span>
@@ -196,7 +240,7 @@ export default function ExportDialog({ pageId, onClose }: { pageId: string; onCl
         <div className="dialog-actions">
           <button type="button" className="btn" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>
           <button type="button" className="btn btn-primary" onClick={() => void run()} disabled={busy}>
-            {busy ? t("export.exporting") : t("export.export")}
+            {busy ? (progress ? t("export.exportingProgress", progress) : t("export.exporting")) : t("export.export")}
           </button>
         </div>
       </div>
