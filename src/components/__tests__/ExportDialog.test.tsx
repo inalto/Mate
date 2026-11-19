@@ -4,6 +4,17 @@ import { DEFAULT_SETTINGS } from "../../model/constants";
 import type { Element, Page, Section, Unit } from "../../model/types";
 
 vi.mock("../../export/exportPage", () => ({ exportPage: vi.fn(async () => "C:/out.png") }));
+vi.mock("../../export/exportBook", () => {
+  class PageExportError extends Error {
+    pageTitle: string;
+    constructor(pageTitle: string, cause: unknown) {
+      super(cause instanceof Error ? cause.message : String(cause));
+      this.pageTitle = pageTitle;
+    }
+  }
+  class NoPagesError extends Error {}
+  return { exportBook: vi.fn(async () => "C:/book.pdf"), PageExportError, NoPagesError };
+});
 vi.mock("../../ipc/archive", () => ({ exportUnitArchive: vi.fn(async () => "C:/book.mate") }));
 vi.mock("../../ipc/elements", () => ({ unitHasRecordings: vi.fn(async () => false) }));
 vi.mock("../ShareDialog", () => ({
@@ -16,6 +27,7 @@ vi.mock("../ShareDialog", () => ({
   ),
 }));
 
+import { exportBook, NoPagesError, PageExportError } from "../../export/exportBook";
 import { exportPage } from "../../export/exportPage";
 import { exportUnitArchive } from "../../ipc/archive";
 import { unitHasRecordings } from "../../ipc/elements";
@@ -94,7 +106,7 @@ describe("ExportDialog", () => {
 
   it("offers page range only for page-mode pages", () => {
     render(<ExportDialog pageId="p1" onClose={onClose} />);
-    expect(screen.queryByRole("group", { name: "Pages" })).toBeNull();
+    expect(screen.queryByRole("group", { name: "Sheets" })).toBeNull();
   });
 
   it("exports LaTeX without paper options", async () => {
@@ -390,5 +402,93 @@ describe("ExportDialog covers", () => {
     store.setState({ loadedPageId: "p2", pageId: "p2", elements: new Map([["cv", { ...cover, pageId: "p2" }]]) });
     rerender(<ExportDialog pageId="p2" onClose={onClose} />);
     expect(pressed("Covered")).toBe("true");
+  });
+
+  describe("section and book as one PDF", () => {
+    const unit: Unit = { id: "u1", title: "Book", isFavourite: false, isExpanded: true, orderIndex: 0, createdAt: STAMP, updatedAt: STAMP, version: 0 };
+    const inBook = (mode: Page["mode"] = "canvas") =>
+      useNotebookStore.setState({ tree: { bookshelves: [], units: [unit], sections: [section], pages: [{ ...page, mode }] } });
+
+    it("offers the choice only for PDF, starting on this page", () => {
+      inBook();
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      expect(screen.getByRole("group", { name: "Include" })).toBeTruthy();
+      expect(pressed("This page")).toBe("true");
+      expect(screen.getByRole("button", { name: "Whole book" })).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: "PNG" }));
+      expect(screen.queryByRole("group", { name: "Include" })).toBeNull();
+    });
+
+    it("exports the section with the chosen options, not the page", async () => {
+      inBook();
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      fireEvent.click(screen.getByRole("button", { name: "This section" }));
+      fireEvent.click(screen.getByRole("button", { name: "Dark" }));
+      fireEvent.click(screen.getByRole("button", { name: "Left out" }));
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+      expect(exportPage).not.toHaveBeenCalled();
+      expect(exportBook).toHaveBeenCalledWith(
+        { kind: "section", sectionId: "s1" },
+        expect.objectContaining({ theme: "dark", background: "plain", searchable: true, annotations: "flat", covers: "hidden" }),
+      );
+    });
+
+    it("exports the whole book and shows the progress", async () => {
+      inBook();
+      let finish!: (path: string) => void;
+      vi.mocked(exportBook).mockImplementationOnce(async (_scope, options) => {
+        options?.onProgress?.(3, 40);
+        return new Promise<string>((resolve) => (finish = resolve));
+      });
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      fireEvent.click(screen.getByRole("button", { name: "Whole book" }));
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      expect(await screen.findByRole("button", { name: "Exporting… 3 / 40" })).toBeTruthy();
+      expect(vi.mocked(exportBook).mock.calls[0][0]).toEqual({ kind: "book", unitId: "u1" });
+      await act(async () => finish("C:/book.pdf"));
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    it("hides what only one page can use, and offers covers and flattened annotations", () => {
+      inBook("page");
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      expect(screen.getByRole("group", { name: "Sheets" })).toBeTruthy();
+      expect(screen.getByRole("checkbox", { name: "Selection only" })).toBeTruthy();
+      expect(screen.queryByRole("group", { name: "Covers" })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Whole book" }));
+      expect(screen.queryByRole("group", { name: "Sheets" })).toBeNull();
+      expect(screen.queryByRole("checkbox", { name: "Selection only" })).toBeNull();
+      expect(pressed("Covered")).toBe("true");
+      expect(screen.getByRole("group", { name: "Annotations" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Separate layer" })).toBeNull();
+    });
+
+    it("has no whole-book choice for a page outside a book", () => {
+      useNotebookStore.setState({ tree: { bookshelves: [], units: [], sections: [], pages: [{ ...page, sectionId: "gone" }] } });
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      expect(screen.getByRole("button", { name: "This section" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Whole book" })).toBeNull();
+    });
+
+    it("names the page that failed and lets the user try again", async () => {
+      inBook();
+      vi.mocked(exportBook).mockRejectedValueOnce(new PageExportError("Friction", new Error("boom")));
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      fireEvent.click(screen.getByRole("button", { name: "Whole book" }));
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      expect((await screen.findByRole("alert")).textContent).toContain("Page “Friction” could not be exported: boom");
+      expect(screen.getByRole("button", { name: "Export" }).hasAttribute("disabled")).toBe(false);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it("says so when there is no page to export", async () => {
+      inBook();
+      vi.mocked(exportBook).mockRejectedValueOnce(new NoPagesError());
+      render(<ExportDialog pageId="p1" onClose={onClose} />);
+      fireEvent.click(screen.getByRole("button", { name: "This section" }));
+      fireEvent.click(screen.getByRole("button", { name: "Export" }));
+      expect((await screen.findByRole("alert")).textContent).toContain("There are no pages to export.");
+    });
   });
 });
