@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Page } from "../../model/types";
-import { clampCamera, screenToWorld, wheelZoomFactor, zoomAt } from "../camera";
+import { cameraAtZoom, clampCamera, initialCamera, screenToWorld, wheelZoomFactor, zoomAt } from "../camera";
+import { PAGE_MODE_TOP_MARGIN } from "../../model/constants";
 
 const page = (mode: Page["mode"]): Page => ({
   id: "p",
@@ -16,6 +17,31 @@ const page = (mode: Page["mode"]): Page => ({
   createdAt: "",
   updatedAt: "",
   version: 0,
+});
+
+describe("cameraAtZoom", () => {
+  const vp = { width: 1000, height: 700 };
+
+  it("page mode keeps z, centres the sheet and puts the top margin at the top", () => {
+    const stack = { width: 600, height: 800, count: 1 };
+    const c = cameraAtZoom(page("page"), vp, 1.5, stack);
+    expect(c).toEqual({ x: (1000 - 600 * 1.5) / 2, y: PAGE_MODE_TOP_MARGIN * 1.5, z: 1.5 });
+  });
+
+  it("at the zoom initialCamera would pick it is initialCamera", () => {
+    const stack = { width: 600, height: 800, count: 1 };
+    const init = initialCamera(page("page"), vp, stack);
+    expect(cameraAtZoom(page("page"), vp, init.z, stack)).toEqual(init);
+  });
+
+  it("canvas mode keeps z at the origin", () => {
+    expect(cameraAtZoom(page("canvas"), vp, 2.5)).toEqual({ x: 0, y: 0, z: 2.5 });
+  });
+
+  it("clamps the zoom to the allowed range", () => {
+    expect(cameraAtZoom(page("canvas"), vp, 50).z).toBe(10);
+    expect(cameraAtZoom(page("canvas"), vp, 0.001).z).toBe(0.1);
+  });
 });
 
 describe("camera", () => {

@@ -131,6 +131,14 @@ export function initialCamera(page: Page, viewport: Viewport, stack?: SheetStack
   return { x: (viewport.width - s.width * z) / 2, y: PAGE_MODE_TOP_MARGIN * z, z };
 }
 
+/** Camera at zoom `z` for a freshly opened page: sheet centred, top margin as `initialCamera` (canvas: origin). */
+export function cameraAtZoom(page: Page, viewport: Viewport, z: number, stack?: SheetStack): Camera {
+  const zc = clampZoom(z);
+  if (page.mode !== "page") return { x: 0, y: 0, z: zc };
+  const s = stack ?? { ...sheetSize(page), count: 1 };
+  return { x: (viewport.width - s.width * zc) / 2, y: PAGE_MODE_TOP_MARGIN * zc, z: zc };
+}
+
 /** World rect (page units). Same shape as spatialIndex `Rect`. */
 interface Bounds {
   x: number;

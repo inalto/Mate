@@ -207,7 +207,8 @@ describe("selection modifiers", () => {
       s().select(["a"]);
       const gestures: [{ x: number; y: number }, { x: number; y: number }][] = [
         [{ x: 50, y: 0 }, { x: 50, y: 300 }], // move
-        [{ x: 101, y: 1 }, { x: 201, y: 50 }], // corner scale
+        // The bar is thinner than SMALL_SELECTION_PX: its corner is grabbed from outside the bounds.
+        [{ x: 106, y: 6 }, { x: 201, y: 50 }], // corner scale
         [{ x: 50, y: -25 }, { x: 150, y: 10 }], // rotate handle
       ];
       for (const [from, to] of gestures) {
@@ -251,6 +252,152 @@ describe("selection modifiers", () => {
       unchanged();
       // With no gesture, Escape is left to the shortcuts.
       expect(escape()).toBe(false);
+    });
+  });
+
+  describe("move handle", () => {
+    // Two bars: bounds -1..101 × -1..101, large enough for the handle below the bottom-centre.
+    const two = () => setup([bar("a", 0, 0), bar("b", 0, 100)]);
+
+    it("dragging_the_handle_below_moves_the_selection", async () => {
+      const tools = await two();
+      s().select(["a", "b"]);
+      // The handle is 24 px below the bottom-centre (50, 101); nothing is under it.
+      drag(tools, { x: 50, y: 125 }, { x: 250, y: 425 });
+      expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 200, y: 300 });
+      expect(s().elements.get("b")!.points[0]).toMatchObject({ x: 200, y: 400 });
+      expect([...s().selection].sort()).toEqual(["a", "b"]);
+    });
+
+    it("the_handle_keeps_shift_axis_lock", async () => {
+      const tools = await two();
+      s().select(["a", "b"]);
+      keys({ shiftKey: true });
+      drag(tools, { x: 50, y: 125 }, { x: 250, y: 165 });
+      expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 200, y: 0 });
+    });
+
+    it("escape_during_a_handle_move_cancels_it", async () => {
+      const tools = await two();
+      s().select(["a", "b"]);
+      tools.down({ x: 50, y: 125 }, "cursor");
+      tools.move([{ x: 250, y: 425 }]);
+      const e = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
+      window.dispatchEvent(e);
+      expect(e.defaultPrevented).toBe(true);
+      tools.up();
+      expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 0, y: 0 });
+      expect(s().canUndo).toBe(false);
+      expect([...s().selection].sort()).toEqual(["a", "b"]);
+    });
+
+    it("no_handle_for_a_locked_selection", async () => {
+      const tools = await setup([bar("a", 0, 0, { content: { locked: true } }), bar("b", 0, 100, { content: { locked: true } })]);
+      s().select(["a", "b"]);
+      drag(tools, { x: 50, y: 125 }, { x: 250, y: 425 });
+      expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 0, y: 0 });
+      expect(s().canUndo).toBe(false);
+    });
+  });
+
+  describe("small selection", () => {
+    // A 6 px dash: bounds -1..7 × -1..1 (the width pads it), far below SMALL_SELECTION_PX.
+    const dash = () => setup([el("d", [[0, 0], [6, 0]])]);
+
+    it("a_press_inside_moves_and_never_scales", async () => {
+      const tools = await dash();
+      s().select(["d"]);
+      // (6, 0) is inside every corner's hit zone; it moves the dash as it is.
+      drag(tools, { x: 6, y: 0 }, { x: 106, y: 50 });
+      const d = s().elements.get("d")!;
+      expect(d.points[0]).toMatchObject({ x: 100, y: 50 });
+      expect(d.points[1]).toMatchObject({ x: 106, y: 50 });
+    });
+
+    it("a_corner_is_still_grabbed_from_outside_the_bounds", async () => {
+      const tools = await dash();
+      s().select(["d"]);
+      drag(tools, { x: 12, y: 6 }, { x: 25, y: 6 });
+      const d = s().elements.get("d")!;
+      expect(d.points[1].x - d.points[0].x).toBeGreaterThan(6);
+    });
+
+    it("the_crosshair_beside_it_moves_it", async () => {
+      const tools = await dash();
+      s().select(["d"]);
+      // Right edge 7 + 24 px, vertically centred.
+      drag(tools, { x: 31, y: 0 }, { x: 131, y: 40 });
+      expect(s().elements.get("d")!.points[0]).toMatchObject({ x: 100, y: 40 });
+    });
+
+    it("no_handle_below_a_small_selection", async () => {
+      const tools = await dash();
+      s().select(["d"]);
+      // Where the handle below would be: an empty press deselects.
+      drag(tools, { x: 3, y: 25 }, { x: 3, y: 25 });
+      expect(s().selection.size).toBe(0);
+      expect(s().elements.get("d")!.points[0]).toMatchObject({ x: 0, y: 0 });
+    });
+  });
+
+  describe("kept lasso outline", () => {
+    const loop = [{ x: -20, y: -20 }, { x: 150, y: -20 }, { x: 150, y: 20 }, { x: -20, y: 20 }];
+    const lasso = (tools: Awaited<ReturnType<typeof setup>>) => {
+      tools.down(loop[0], "cursor");
+      tools.move(loop.slice(1));
+      tools.up();
+    };
+
+    it("is_kept_after_selecting_and_drawn", async () => {
+      const tools = await setup([bar("a", 0, 0)]);
+      lasso(tools);
+      expect([...s().selection]).toEqual(["a"]);
+      expect(tools.lassoOutline()).toEqual(loop);
+      const { ctx, styles } = recordingCtx();
+      tools.draw(ctx, s().camera, 1);
+      expect(styles).toContain("#4a5d4e");
+    });
+
+    it("a_press_inside_it_moves_and_the_outline_follows", async () => {
+      const tools = await setup([bar("a", 0, 0)]);
+      lasso(tools);
+      // Inside the loop, well outside the bar's bounds and their slop.
+      drag(tools, { x: 50, y: 15 }, { x: 150, y: 215 });
+      expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 100, y: 200 });
+      expect(tools.lassoOutline()).toEqual(loop.map((q) => ({ x: q.x + 100, y: q.y + 200 })));
+      // Undoing the move puts the elements back: the outline no longer matches and goes.
+      s().undo();
+      expect(tools.lassoOutline()).toBeNull();
+    });
+
+    it("is_dropped_on_deselect", async () => {
+      const tools = await setup([bar("a", 0, 0)]);
+      lasso(tools);
+      drag(tools, { x: 500, y: 500 }, { x: 500, y: 500 });
+      expect(s().selection.size).toBe(0);
+      expect(tools.lassoOutline()).toBeNull();
+      // Selecting the same element again does not bring it back.
+      s().select(["a"]);
+      expect(tools.lassoOutline()).toBeNull();
+    });
+
+    it("is_dropped_on_scale_and_rotate", async () => {
+      const tools = await setup([bar("a", 0, 0)]);
+      lasso(tools);
+      drag(tools, { x: 106, y: 6 }, { x: 206, y: 6 }); // corner scale
+      expect(tools.lassoOutline()).toBeNull();
+      s().select([]);
+      lasso(tools);
+      expect(tools.lassoOutline()).not.toBeNull();
+      drag(tools, { x: 50, y: -25 }, { x: 150, y: 10 }); // rotate
+      expect(tools.lassoOutline()).toBeNull();
+    });
+
+    it("is_dropped_on_a_tool_change", async () => {
+      const tools = await setup([bar("a", 0, 0)]);
+      lasso(tools);
+      useEditorStore.setState({ tool: "lasso" });
+      expect(tools.lassoOutline()).toBeNull();
     });
   });
 

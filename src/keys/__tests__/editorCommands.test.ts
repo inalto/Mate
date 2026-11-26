@@ -9,7 +9,7 @@ import { useChromeStore } from "../../stores/chrome";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
 import { useTabsStore } from "../../stores/tabs";
-import { runEditorShortcut, sectionPageOrder, turnPage } from "../editorCommands";
+import { runEditorShortcut, sectionPageOrder, stepPage, turnPage } from "../editorCommands";
 import i18n from "../../i18n";
 import { openPageInWindow } from "../windowBridge";
 
@@ -33,9 +33,15 @@ beforeEach(() => {
       "selectAll",
       "select",
       "setPanHold",
+      "carryZoom",
     ].map((k) => [k, vi.fn()]),
   );
-  useEditorStore.setState({ ...spies, selection: new Set<string>(), viewport: { width: 800, height: 600 } } as never);
+  useEditorStore.setState({
+    ...spies,
+    selection: new Set<string>(),
+    viewport: { width: 800, height: 600 },
+    camera: { x: 0, y: 0, z: 1.75 },
+  } as never);
   useChromeStore.setState({ paletteOpen: false, shortcutsOpen: false, modalDepth: 0 });
   useNotebookStore.setState({
     tree: {
@@ -209,6 +215,32 @@ describe("runEditorShortcut", () => {
     expect(spies.setPanHold).not.toHaveBeenCalled(); // a new pan does not start under a modal
     runEditorShortcut("pan", { phase: "up" });
     expect(spies.setPanHold).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("page turns keep the zoom", () => {
+  it("turnPage carries the focused editor's zoom to the page it opens", async () => {
+    await turnPage(-1);
+    expect(focused()).toBe("a1");
+    expect(spies.carryZoom).toHaveBeenCalledWith("a1", 1.75);
+  });
+
+  it("turnPage carries it to a newly created last page", async () => {
+    useNotebookStore.setState({ createPage: vi.fn(async (sectionId: string) => page("new", 2, null, sectionId)) } as never);
+    await turnPage(1);
+    expect(spies.carryZoom).toHaveBeenCalledWith("new", 1.75);
+    expect(focused()).toBe("new");
+  });
+
+  it("stepPage carries it too", () => {
+    stepPage(-1);
+    expect(focused()).toBe("a1");
+    expect(spies.carryZoom).toHaveBeenCalledWith("a1", 1.75);
+  });
+
+  it("opening a page another way does not ask to carry it", () => {
+    useTabsStore.getState().openPage("a");
+    expect(spies.carryZoom).not.toHaveBeenCalled();
   });
 });
 

@@ -6,6 +6,7 @@
 // offered; when every selected element is locked the buttons that would change them are disabled.
 import {
   AlignLeft,
+  ArrowBendUpLeft,
   ArrowElbowRight,
   ArrowRight,
   BezierCurve,
@@ -41,6 +42,7 @@ import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, t
 import { useTranslation } from "react-i18next";
 import type { TKey } from "../i18n";
 import { worldToScreen } from "../canvas/camera";
+import { barClearance, selectionHandles } from "../canvas/toolInteractions";
 import { useFocusedEditor } from "../stores/focusedEditor";
 import { selectionBounds } from "../tools/lasso";
 import { isCover } from "../covers/cover";
@@ -72,6 +74,7 @@ import { copySelectionAsImage } from "../export/copyImage";
 import { placeSelectionBar } from "./selectionBarPlace";
 import CustomSwatches from "./CustomSwatches";
 import SendToPageDialog from "./SendToPageDialog";
+import { goToOrigin, liveOrigin } from "../stores/sendSelection";
 import { createPortal } from "react-dom";
 import { isClosedStroke } from "../ink/closed";
 import { showToast } from "./Toast";
@@ -694,6 +697,8 @@ export default function SelectionBar() {
   const viewport = ed((s) => s.viewport);
   const editingText = ed((s) => s.editingId !== null && s.elements.get(s.editingId)?.type === "text-box");
   const editingId = ed((s) => s.editingId);
+  const tool = ed((s) => s.tempTool ?? s.tool);
+  const autoShapes = ed((s) => s.autoShapes);
   const b = selection.size > 0 && !editingText ? selectionBounds(elements, selection) : null;
   // The bar's real size (its buttons vary with the selection), measured after each render so it is
   // placed whole inside the pane.
@@ -710,10 +715,13 @@ export default function SelectionBar() {
   if (!b) return null;
   const s = ed.getState;
 
-  const tl = worldToScreen(camera, { x: b.x, y: b.y });
-  const { left, top } = placeSelectionBar({ x: tl.x, y: tl.y, width: b.width * camera.z, height: b.height * camera.z }, viewport, barSize);
-
   const selected = [...selection].map((id) => elements.get(id));
+  const tl = worldToScreen(camera, { x: b.x, y: b.y });
+  const onScreen = { x: tl.x, y: tl.y, width: b.width * camera.z, height: b.height * camera.z };
+  // The bar keeps clear of the rotate knob and the move handle, which it would otherwise cover.
+  const handles = selectionHandles(selected.filter((e): e is Element => !!e), camera.z, { tool, autoShapes, editingId });
+  const { left, top } = placeSelectionBar(onScreen, viewport, barSize, handles ? barClearance(onScreen, handles) : undefined);
+
   const first = selected.find((e) => e?.type === "stroke" || e?.type === "shape" || e?.type === "connector");
   const firstShape = selected.find((e) => e?.type === "shape");
   const color = first?.color.toUpperCase();
@@ -741,6 +749,11 @@ export default function SelectionBar() {
   const lockedCount = selected.filter((e) => !!e && isLocked(e)).length;
   /** Every selected element is locked: nothing here may change them. */
   const allLocked = lockedCount > 0 && lockedCount === selected.length;
+  // A copy sent from another page links back to it, while that page still exists.
+  const origin = selected.length === 1 && selected[0] ? liveOrigin(selected[0]) : null;
+  const openOrigin = () => {
+    if (selected[0]) void goToOrigin(selected[0]).then((r) => r === "gone" && showToast(t("selection.originGone")));
+  };
   const copyImage = () => {
     void copySelectionAsImage(ed).then((ok) => {
       if (!ok) showToast(t("exportRegion.copyImageFailed"));
@@ -758,6 +771,11 @@ export default function SelectionBar() {
       <button type="button" className="tb-btn" aria-label={t("selection.sendTo")} title={t("selection.sendTo")} onClick={() => setSending(true)}>
         <PaperPlaneTilt size={16} />
       </button>
+      {origin && (
+        <button type="button" className="tb-btn" aria-label={t("selection.goToOrigin")} title={t("selection.goToOrigin")} onClick={openOrigin}>
+          <ArrowBendUpLeft size={16} />
+        </button>
+      )}
       {/* On <body>: the bar is transformed, which would capture a fixed backdrop. */}
       {sending && createPortal(<SendToPageDialog store={ed} onClose={() => setSending(false)} />, document.body)}
       <button type="button" className="tb-btn" aria-label={t("common.delete")} title={t("common.delete")} disabled={allLocked} onClick={() => s().deleteSelection()}>

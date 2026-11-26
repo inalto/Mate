@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Element } from "../../model/types";
 
@@ -134,7 +134,7 @@ describe("GraphEditor", () => {
     const input = ui.getByLabelText("Expression 1") as HTMLInputElement;
     expect(isTypingTarget(input)).toBe(true);
     act(() => void fireEvent.change(input, { target: { value: "\\sin(x)" } }));
-    act(() => void fireEvent.click(ui.getByRole("button", { name: "Add expression" })));
+    act(() => void fireEvent.click(ui.getByRole("button", { name: "Add function" })));
     act(() => void fireEvent.change(ui.getByLabelText("Expression 2"), { target: { value: "x^2" } }));
     act(() => void fireEvent.click(ui.getByLabelText("Colour of expression 2")));
     act(() => void fireEvent.click(ui.getByLabelText("Hide expression 1")));
@@ -160,10 +160,10 @@ describe("GraphEditor", () => {
     const { id, ui } = insert();
     const input = ui.getByLabelText("Expression 1");
     act(() => void fireEvent.change(input, { target: { value: "\\sqrt{" } }));
-    const err = ui.container.querySelector(".graph-expr-error");
+    const err = document.querySelector(".graph-expr-error");
     expect(err?.textContent).toBeTruthy();
     act(() => void fireEvent.change(input, { target: { value: "\\sqrt{x}" } }));
-    expect(ui.container.querySelector(".graph-expr-error")).toBeNull();
+    expect(document.querySelector(".graph-expr-error")).toBeNull();
     act(() => void fireEvent.change(input, { target: { value: "\\sqrt{" } }));
     act(() => s().endEdit());
     expect(data(id).expressions[0].latex).toBe("\\sqrt{"); // kept as typed
@@ -172,22 +172,22 @@ describe("GraphEditor", () => {
   it("shows_how_the_input_was_read", () => {
     const { ui } = insert();
     const input = ui.getByLabelText("Expression 1");
-    expect(ui.container.querySelector(".graph-expr-preview")).toBeNull(); // nothing for an empty row
+    expect(document.querySelector(".graph-expr-preview")).toBeNull(); // nothing for an empty row
     act(() => void fireEvent.change(input, { target: { value: "y = sqrt(x) + x^10" } }));
     const preview = ui.getByLabelText("How expression 1 is read");
     expect(preview.querySelector(".katex")).not.toBeNull();
     expect(preview.querySelector(".katex annotation, .katex-mathml")).toBeNull(); // html output only
     expect(preview.textContent).toContain("10");
     expect(preview.querySelector(".sqrt")).not.toBeNull();
-    expect(ui.container.querySelector(".graph-expr-error")).toBeNull();
+    expect(document.querySelector(".graph-expr-error")).toBeNull();
     // An error keeps its line under the preview.
     act(() => void fireEvent.change(input, { target: { value: "y = z" } }));
-    expect(ui.container.querySelector(".graph-expr-error")?.textContent).toBe("Unknown symbol: z");
+    expect(document.querySelector(".graph-expr-error")?.textContent).toBe("Unknown symbol: z");
   });
 
   it("delete_removes_a_row", () => {
     const { id, ui } = insert();
-    act(() => void fireEvent.click(ui.getByRole("button", { name: "Add expression" })));
+    act(() => void fireEvent.click(ui.getByRole("button", { name: "Add function" })));
     act(() => void fireEvent.change(ui.getByLabelText("Expression 2"), { target: { value: "x" } }));
     act(() => void fireEvent.click(ui.getByLabelText("Delete expression 1")));
     act(() => s().endEdit());
@@ -272,5 +272,132 @@ describe("GraphEditor", () => {
     act(() => s().endEdit());
     act(() => s().undo());
     expect(s().elements.has(id)).toBe(false);
+  });
+
+  it("opens_a_full_page_dialog_on_the_body_with_three_panes", () => {
+    const { ui } = insert();
+    const dialog = ui.getByRole("dialog", { name: "Edit graph" });
+    expect(ui.container.contains(dialog)).toBe(false); // portaled out of the camera-transformed layer
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(ui.getAllByRole("tab").map((t) => t.textContent)).toEqual(["Functions", "Graph", "Study"]);
+    expect(ui.getAllByRole("tabpanel")).toHaveLength(3);
+    expect(document.activeElement).toBe(ui.getByLabelText("Expression 1"));
+    act(() => void fireEvent.click(ui.getByRole("tab", { name: "Study" })));
+    expect(dialog.getAttribute("data-tab")).toBe("study");
+    expect(ui.getByRole("tab", { name: "Study" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("a_press_inside_the_dialog_keeps_editing_and_done_commits_once", () => {
+    const { id, ui } = insert();
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "x^2" } }));
+    act(() => void fireEvent.pointerDown(ui.getByRole("dialog"), { pointerId: 1, button: 0 }));
+    act(() => void fireEvent.pointerDown(document.querySelector(".graph-backdrop")!, { pointerId: 1, button: 0 }));
+    act(() => void fireEvent.pointerDown(ui.getByTestId("graph-plot"), { pointerId: 1, button: 0 }));
+    expect(s().editingId).toBe(id);
+    act(() => void fireEvent.click(ui.getByRole("button", { name: "Done" })));
+    expect(s().editingId).toBeNull();
+    expect(ui.queryByRole("dialog")).toBeNull();
+    expect(data(id).expressions[0].latex).toBe("x^2");
+    act(() => s().undo());
+    expect(data(id).expressions[0].latex).toBe("");
+    // The close button ends the session the same way.
+    act(() => s().beginEdit(id));
+    act(() => void fireEvent.click(ui.getByRole("button", { name: "Close" })));
+    expect(s().editingId).toBeNull();
+  });
+
+  it("pieces_with_bounds_and_open_or_closed_ends_are_saved", () => {
+    const { id, ui } = insert();
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "x^2" } }));
+    act(() => void fireEvent.click(ui.getByRole("button", { name: "Add piece" })));
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1, piece 2"), { target: { value: "x" } }));
+    act(() => void fireEvent.change(ui.getByLabelText("End of piece 1 of expression 1"), { target: { value: "1" } }));
+    act(() => void fireEvent.click(ui.getByLabelText("Include the end of piece 1 of expression 1")));
+    act(() => void fireEvent.change(ui.getByLabelText("Start of piece 2 of expression 1"), { target: { value: "1" } }));
+    act(() => void fireEvent.click(ui.getByLabelText("Include the start of piece 2 of expression 1")));
+    expect(ui.getByLabelText("Include the end of piece 1 of expression 1").textContent).toBe("]");
+    expect(ui.getByLabelText("Include the start of piece 2 of expression 1").textContent).toBe("(");
+    act(() => s().endEdit());
+    const e = data(id).expressions[0];
+    expect(e.latex).toBe("x^2");
+    expect(e.pieces).toEqual([
+      { latex: "x^2", max: 1, maxClosed: true },
+      { latex: "x", min: 1, minClosed: false },
+    ]);
+    // Removing a piece leaves one bounded piece.
+    act(() => s().beginEdit(id));
+    act(() => void fireEvent.click(ui.getByLabelText("Remove piece 2 of expression 1")));
+    act(() => s().endEdit());
+    expect(data(id).expressions[0].pieces).toEqual([{ latex: "x^2", max: 1, maxClosed: true }]);
+  });
+
+  it("a_restricted_domain_accepts_simple_expressions_and_folds_back_when_unbounded", () => {
+    const { id, ui } = insert();
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "sin(x)" } }));
+    act(() => void fireEvent.click(ui.getByRole("button", { name: "Restrict domain" })));
+    act(() => void fireEvent.change(ui.getByLabelText("Start of piece 1 of expression 1"), { target: { value: "0" } }));
+    act(() => void fireEvent.change(ui.getByLabelText("End of piece 1 of expression 1"), { target: { value: "pi" } }));
+    act(() => s().endEdit());
+    expect(data(id).expressions[0].pieces).toEqual([{ latex: "sin(x)", min: 0, max: Math.PI }]);
+    act(() => s().beginEdit(id));
+    act(() => void fireEvent.change(ui.getByLabelText("Start of piece 1 of expression 1"), { target: { value: "" } }));
+    act(() => void fireEvent.change(ui.getByLabelText("End of piece 1 of expression 1"), { target: { value: "" } }));
+    act(() => s().endEdit());
+    expect(data(id).expressions[0]).not.toHaveProperty("pieces");
+    expect(data(id).expressions[0].latex).toBe("sin(x)");
+  });
+
+  it("a_piece_that_is_not_a_function_of_x_is_an_error", () => {
+    const { ui } = insert();
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "x" } }));
+    act(() => void fireEvent.click(ui.getByRole("button", { name: "Add piece" })));
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1, piece 2"), { target: { value: "r = 1" } }));
+    expect([...document.querySelectorAll(".graph-expr-error")].map((e) => e.textContent)).toContain("Each piece must be a function of x (y = …)");
+  });
+
+  it("the_symbol_bar_inserts_at_the_caret", () => {
+    const { ui } = insert();
+    const input = ui.getByLabelText("Expression 1") as HTMLInputElement;
+    act(() => void fireEvent.focus(input));
+    const bar = ui.getByRole("toolbar", { name: "Maths symbols" });
+    act(() => void fireEvent.click(within(bar).getByRole("button", { name: "Square root" })));
+    expect(input.value).toBe("sqrt()");
+    // the caret goes inside the brackets
+    expect(input.selectionStart).toBe(5);
+    act(() => void fireEvent.click(within(bar).getByRole("button", { name: "Pi" })));
+    expect(input.value).toBe("sqrt(pi)");
+  });
+
+  it("the_study_shows_results_and_its_switches_are_saved", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { id, ui } = insert();
+      act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "x^2 - 4" } }));
+      act(() => void vi.advanceTimersByTime(500));
+      expect(ui.getByRole("heading", { name: "Study of f" })).toBeTruthy();
+      expect(ui.getByText("x = −2, x = 2")).toBeTruthy();
+      expect(ui.getByText("(0, −4)")).toBeTruthy(); // the minimum
+      expect(ui.getByText(/In the visible range/).textContent).toBe("In the visible range: x from −10 to 10.");
+      act(() => void fireEvent.click(ui.getByRole("switch", { name: "Show zeros" })));
+      act(() => void fireEvent.click(ui.getByRole("switch", { name: "Show maxima and minima" })));
+      act(() => void fireEvent.click(ui.getByRole("switch", { name: "Shade the area" })));
+      act(() => s().endEdit());
+      expect(data(id).expressions[0].study).toEqual({ zeros: true, extrema: true, area: { from: 0, to: 1 } });
+      // A switch turned off again goes away.
+      act(() => s().beginEdit(id));
+      act(() => void vi.advanceTimersByTime(500));
+      act(() => void fireEvent.click(ui.getByRole("switch", { name: "Show zeros" })));
+      act(() => s().endEdit());
+      expect(data(id).expressions[0].study).toEqual({ extrema: true, area: { from: 0, to: 1 } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the_study_is_for_functions_of_x_only", () => {
+    const { ui } = insert();
+    act(() => void fireEvent.change(ui.getByLabelText("Expression 1"), { target: { value: "r = 1 + cos(theta)" } }));
+    expect(ui.getByText("The study is available for functions y = f(x) only.")).toBeTruthy();
+    expect(ui.queryByRole("button", { name: "Add piece" })).toBeNull();
   });
 });

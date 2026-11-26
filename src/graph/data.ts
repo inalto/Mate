@@ -10,10 +10,43 @@ export type GraphKind = "2d-function" | "2d-polar" | "2d-parametric";
 
 export interface GraphExpression {
   id: string;
+  /** The expression, or with `pieces` the first piece's (so an older app version still plots something). */
   latex: string;
   /** Light-theme colour (dark themes remap through mapInkColor). */
   color: string;
   visible: boolean;
+  /** Short name shown in the editor (f, g, h…); absent: named after its position. */
+  name?: string;
+  /**
+   * A piecewise function of x: the value at x is the first piece whose interval holds x. Absent (or
+   * one piece without bounds): the expression is `latex` alone, as before pieces existed.
+   */
+  pieces?: GraphPiece[];
+  /** Which results of the function study are drawn on the plot (functions of x only). */
+  study?: GraphStudy;
+}
+
+/**
+ * One piece of a piecewise function: `latex` on the interval from `min` to `max` (missing bound:
+ * unbounded on that side). Ends default to closed at `min` and open at `max`, i.e. [min, max).
+ */
+export interface GraphPiece {
+  latex: string;
+  min?: number;
+  max?: number;
+  minClosed?: boolean;
+  maxClosed?: boolean;
+}
+
+/** The study items drawn on the plot; `area` shades the region between the curve and the x axis. */
+export interface GraphStudy {
+  zeros?: boolean;
+  intercept?: boolean;
+  extrema?: boolean;
+  inflections?: boolean;
+  asymptotes?: boolean;
+  derivative?: boolean;
+  area?: { from: number; to: number };
 }
 
 export interface GraphDomain {
@@ -132,6 +165,43 @@ export function zoomDomain(d: GraphDomain, factor: number, ax: number, ay: numbe
   return ok(next.xMin, next.xMax) && ok(next.yMin, next.yMax) ? next : d;
 }
 
+const MAX_NAME = 16;
+const MAX_PIECES = 32;
+
+/** The well-formed pieces of stored `v` (bad ones dropped), or undefined when none is left. */
+export function validPieces(v: unknown): GraphPiece[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const out: GraphPiece[] = [];
+  for (const raw of v.slice(0, MAX_PIECES)) {
+    const o = obj(raw);
+    if (!o || typeof o.latex !== "string") continue;
+    const min = num(o.min) ? o.min : undefined;
+    const max = num(o.max) ? o.max : undefined;
+    if (min !== undefined && max !== undefined && min > max) continue;
+    out.push({
+      latex: o.latex,
+      ...(min !== undefined ? { min } : {}),
+      ...(max !== undefined ? { max } : {}),
+      ...(typeof o.minClosed === "boolean" ? { minClosed: o.minClosed } : {}),
+      ...(typeof o.maxClosed === "boolean" ? { maxClosed: o.maxClosed } : {}),
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+const STUDY_FLAGS = ["zeros", "intercept", "extrema", "inflections", "asymptotes", "derivative"] as const;
+
+/** The study flags of stored `v` (only `true` flags and a finite area kept), or undefined when empty. */
+export function validStudy(v: unknown): GraphStudy | undefined {
+  const o = obj(v);
+  if (!o) return undefined;
+  const out: GraphStudy = {};
+  for (const k of STUDY_FLAGS) if (o[k] === true) out[k] = true;
+  const area = obj(o.area);
+  if (area && num(area.from) && num(area.to)) out.area = { from: Math.min(area.from, area.to), to: Math.max(area.from, area.to) };
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /** `graphData` of a stored graph element, normalised (missing or malformed fields get defaults). Never throws. */
 export function graphDataOf(el: Pick<Element, "content">): GraphData {
   const g = obj(contentOf<GraphContent>(el).graphData);
@@ -142,12 +212,18 @@ export function graphDataOf(el: Pick<Element, "content">): GraphData {
     expressions: exprs.flatMap((e, i): GraphExpression[] => {
       const o = obj(e);
       if (!o) return [];
+      const pieces = validPieces(o.pieces);
+      const study = validStudy(o.study);
+      const name = typeof o.name === "string" ? o.name.trim().slice(0, MAX_NAME) : "";
       return [
         {
           id: typeof o.id === "string" && o.id ? o.id : `expr-${i}`,
-          latex: typeof o.latex === "string" ? o.latex : "",
+          latex: pieces ? pieces[0].latex : typeof o.latex === "string" ? o.latex : "",
           color: safeColor(o.color, GRAPH_PALETTE[i % GRAPH_PALETTE.length]), // reaches SVG and canvas styles
           visible: o.visible !== false,
+          ...(name ? { name } : {}),
+          ...(pieces ? { pieces } : {}),
+          ...(study ? { study } : {}),
         },
       ];
     }),

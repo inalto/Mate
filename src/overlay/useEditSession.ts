@@ -38,7 +38,8 @@ export function endEditOnOutsidePress(store: EditorStore, id: string, target: Ev
 
 /**
  * `change(cur)` returns the edited element, or `cur`/null when nothing changed. `rootRef` is the
- * editor's DOM root (presses inside its `.box-editor` slot keep editing).
+ * editor's DOM root: presses inside its `.box-editor` slot keep editing, or, for a root outside any
+ * slot (a dialog portaled to <body>, like the graph editor's), presses inside that root.
  */
 export function useEditSession(id: string, store: EditorStore, rootRef: RefObject<HTMLElement | null>, change: (cur: Element) => Element | null): void {
   const changeRef = useRef(change);

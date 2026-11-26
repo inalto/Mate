@@ -1,0 +1,420 @@
+/* Full-page graph editor: Functions | plot | Study side by side; on a narrow screen one pane at a
+   time behind three tabs, edge to edge and clear of the safe-area insets. The rows, inputs and
+   previews reuse the .graph-* rules of base.css. Colours come from the theme tokens. */
+
+.graph-backdrop {
+  z-index: 60;
+}
+
+.graph-dialog {
+  box-sizing: border-box;
+  width: min(1480px, calc(100vw - 2 * var(--space-4)));
+  height: min(980px, calc(100dvh - 2 * var(--space-4)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  outline: none;
+  font: 13px / 1.35 var(--font-ui);
+}
+
+.graph-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.graph-dialog-head h2 {
+  flex: 1;
+  font-size: 16px;
+}
+
+.graph-tabs {
+  display: none;
+}
+
+.graph-dialog-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(280px, 360px);
+  gap: var(--space-3);
+}
+
+.graph-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.graph-pane-functions,
+.graph-pane-study {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-right: var(--space-1);
+}
+
+.graph-pane-graph {
+  overflow: hidden;
+  display: flex;
+}
+
+/* Not upper-cased: a title may hold a function's name (f and F differ). */
+.graph-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.graph-functions,
+.graph-view-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.graph-view-controls {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+/* One function: its head row, then its pieces. */
+.graph-dialog .graph-exprs {
+  gap: var(--space-2);
+}
+
+.graph-dialog .graph-expr {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.graph-dialog .graph-expr[data-selected] {
+  border-color: var(--color-primary);
+}
+
+.graph-fn-name {
+  padding: 2px var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--color-text);
+  font: italic 14px var(--font-mono, monospace);
+  cursor: pointer;
+}
+
+.graph-fn-name[aria-pressed="true"] {
+  background: var(--color-surface-2);
+}
+
+.graph-fn-spacer {
+  flex: 1;
+}
+
+.graph-piece {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 22px;
+}
+
+.graph-piece-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.graph-dialog .graph-expr-input {
+  height: 32px;
+  font-size: 15px;
+}
+
+.graph-dialog .graph-expr-error,
+.graph-dialog .graph-expr-preview {
+  margin-left: 0;
+}
+
+.graph-piece-bounds {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--color-text-muted);
+  font: 13px var(--font-mono, monospace);
+}
+
+.graph-bound-var {
+  margin-right: var(--space-1);
+  font-style: italic;
+}
+
+.graph-bound-input {
+  box-sizing: border-box;
+  width: 0;
+  flex: 1;
+  min-width: 48px;
+  height: 28px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: 13px var(--font-mono, monospace);
+  text-align: center;
+}
+
+.graph-bound-input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+/* An end toggle shows its bracket: [ ] closed, ( ) open. */
+.graph-bound-end {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font: 600 16px var(--font-mono, monospace);
+  cursor: pointer;
+}
+
+.graph-bound-end:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.graph-bound-sep {
+  padding: 0 2px;
+}
+
+.graph-piece-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0 22px;
+}
+
+/* Symbol bar over the focused input (slow to type on a tablet). */
+.graph-symbols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.graph-symbol {
+  min-width: 36px;
+  height: 32px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font: 15px var(--font-mono, monospace);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The plot keeps the graph's shape on the page, centred in its pane. */
+.graph-plot-room {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.graph-dialog .graph-plot {
+  max-width: 100%;
+  max-height: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* Study */
+.graph-study {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.graph-study-note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.graph-study-warning {
+  color: var(--color-danger);
+}
+
+.graph-study-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.graph-study-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.graph-study-head h4 {
+  flex: 1 0 auto;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.graph-study-show {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.graph-study-row {
+  display: grid;
+  grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.graph-study-label {
+  color: var(--color-text-muted);
+}
+
+.graph-study-value {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, monospace);
+}
+
+.graph-study-formula {
+  overflow-x: auto;
+}
+
+.graph-study-formula .katex-display {
+  margin: 0;
+  text-align: left;
+}
+
+.graph-study-bounds {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.graph-study-bounds label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-style: italic;
+}
+
+.graph-study-bounds input {
+  box-sizing: border-box;
+  width: 0;
+  flex: 1;
+  height: 28px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text);
+  font: 13px var(--font-mono, monospace);
+}
+
+.graph-study-bounds input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+/* Medium width: the study goes under the functions. */
+@media (max-width: 1100px) and (min-width: 721px) {
+  .graph-dialog-body {
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .graph-pane-functions {
+    grid-row: 1;
+  }
+
+  .graph-pane-study {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .graph-pane-graph {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* Narrow: edge to edge, one pane at a time behind the tabs. */
+@media (max-width: 720px) {
+  .graph-dialog {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    padding: max(env(safe-area-inset-top), var(--space-2)) max(env(safe-area-inset-right), var(--space-3)) max(env(safe-area-inset-bottom), var(--space-2))
+      max(env(safe-area-inset-left), var(--space-3));
+  }
+
+  html.mobile .graph-dialog {
+    padding-top: max(env(safe-area-inset-top), 24px);
+  }
+
+  .graph-dialog-head {
+    flex-wrap: wrap;
+  }
+
+  .graph-tabs {
+    order: 3;
+    flex: 1 0 100%;
+    display: flex;
+  }
+
+  .graph-tabs [role="tab"] {
+    flex: 1;
+    min-height: 40px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--color-text-muted);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .graph-tabs [role="tab"][aria-selected="true"] {
+    border-bottom-color: var(--color-primary);
+    color: var(--color-text);
+  }
+
+  .graph-dialog-body {
+    display: flex;
+  }
+
+  .graph-pane {
+    flex: 1;
+  }
+
+  .graph-dialog[data-tab="functions"] .graph-pane:not([data-pane="functions"]),
+  .graph-dialog[data-tab="graph"] .graph-pane:not([data-pane="graph"]),
+  .graph-dialog[data-tab="study"] .graph-pane:not([data-pane="study"]) {
+    display: none;
+  }
+}

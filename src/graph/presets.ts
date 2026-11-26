@@ -1,9 +1,16 @@
 // Named graph presets (pure): capture a graph's setup, apply it, and keep the per-kind list
 // (at most one default per kind). Stored in settings.graphPresets, like the pen presets.
 import type { GraphPreset } from "../model/types";
-import type { GraphData, GraphExpression, GraphKind } from "./data";
+import { validPieces, validStudy, type GraphData, type GraphExpression, type GraphKind } from "./data";
 
 const copyExprs = (es: GraphExpression[]): GraphExpression[] => es.map((e) => ({ ...e }));
+
+/** A preset row as a graph row: a fresh id, and its pieces and study checked like stored ones. */
+function fromPreset({ pieces: rawPieces, study: rawStudy, ...e }: GraphExpression): GraphExpression {
+  const pieces = validPieces(rawPieces);
+  const study = validStudy(rawStudy);
+  return { ...e, id: crypto.randomUUID(), ...(pieces ? { pieces, latex: pieces[0].latex } : {}), ...(study ? { study } : {}) };
+}
 
 /** `data` with the preset's domain and grid; its expressions are replaced only when the preset has some. */
 export function applyPreset(data: GraphData, p: GraphPreset): GraphData {
@@ -12,7 +19,7 @@ export function applyPreset(data: GraphData, p: GraphPreset): GraphData {
     domain: { ...p.domain },
     grid: p.grid,
     // Fresh ids: two graphs made from one preset never share row ids.
-    expressions: p.expressions ? p.expressions.map((e) => ({ ...e, id: crypto.randomUUID() })) : data.expressions,
+    expressions: p.expressions ? p.expressions.map(fromPreset) : data.expressions,
   };
 }
 

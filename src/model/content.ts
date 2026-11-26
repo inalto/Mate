@@ -15,6 +15,19 @@ interface ContentMeta {
   rotation?: number;
   /** Never moved, resized, rotated, restyled, erased, deleted, aligned, grouped or lasso-picked. */
   locked?: boolean;
+  /** Where a copy sent to another page first came from (see stores/sendSelection); the very first source, never a hop. */
+  origin?: { pageId: string; elementId: string };
+}
+
+/** The page and element a sent copy came from, or null (never throws, whatever `content` holds). */
+export function originOf(el: Pick<Element, "content">): { pageId: string; elementId: string } | null {
+  const c = el.content;
+  if (!c || typeof c !== "object") return null;
+  const o = (c as { origin?: unknown }).origin;
+  if (!o || typeof o !== "object") return null;
+  const { pageId, elementId } = o as { pageId?: unknown; elementId?: unknown };
+  if (typeof pageId !== "string" || !pageId || typeof elementId !== "string" || !elementId) return null;
+  return { pageId, elementId };
 }
 
 /** True for an element the user locked (`content.locked`); copies of it are unlocked. */

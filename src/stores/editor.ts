@@ -57,6 +57,7 @@ import {
   animateCamera,
   clampCamera,
   fitBounds,
+  cameraAtZoom,
   initialCamera,
   screenToWorld,
   sheetCountFor,
@@ -169,6 +170,8 @@ export interface EditorState {
   /** End the presentation: the camera and tool from before it come back. */
   stopPresentation(): void;
   loadPage(pageId: string): Promise<void>;
+  /** One-shot: the next `loadPage(pageId)` opens at zoom `z` (page turns keep the zoom); a request for another page is dropped. */
+  carryZoom(pageId: string, z: number): void;
   /** Adopt an edited page record (mode, sheet size, background) without reloading elements. */
   refreshPage(page: Page): void;
   /** Pen-down: false (and `limitReached` set) when the page is full, so no stroke may start. */
@@ -611,6 +614,7 @@ const isLabelShape = (el: Element): boolean => el.type === "shape" && isClosedSh
 
 export function createEditorStore(): EditorStore {
   let loadToken = 0;
+  let zoomCarry: { pageId: string; z: number } | null = null;
   // Page-scoped helpers (reset by loadPage).
   const history = new History();
   const index = new SpatialIndex();
@@ -736,9 +740,16 @@ export function createEditorStore(): EditorStore {
       if (from) animateCamera(store, from.camera, PRESENT_CAMERA_MS);
     },
 
+    carryZoom(pageId, z) {
+      zoomCarry = { pageId, z };
+    },
+
     async loadPage(pageId) {
       closeEdit();
       freshText = null;
+      // Taken now (not after the awaits) so a request is never left over for a later load.
+      const carried = zoomCarry?.pageId === pageId ? zoomCarry.z : null;
+      zoomCarry = null;
       const token = ++loadToken;
       const preset = defaultPreset();
       history.clear();
@@ -793,7 +804,14 @@ export function createEditorStore(): EditorStore {
         page: resolved,
         elements,
         contentBottom,
-        camera: clampCamera(initialCamera(resolved, viewport, stack), resolved, viewport, stack),
+        camera: clampCamera(
+          carried === null ? initialCamera(resolved, viewport, stack) : cameraAtZoom(resolved, viewport, carried, stack),
+          resolved,
+          viewport,
+          stack,
+          // Other opens keep their camera exactly as before; only a carried zoom honours the centring setting.
+          carried !== null && useSettingsStore.getState().settings.centerPageHorizontally,
+        ),
         loadedPageId: pageId,
       });
       setPageFrames(pageId, els.filter(isFrame));

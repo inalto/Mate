@@ -220,6 +220,56 @@ describe("BoxFrame", () => {
     expect(container.querySelector(".box-frame")).not.toBeNull();
   });
 
+  describe("move grip", () => {
+    const grip = (c: HTMLElement) => c.querySelector<HTMLElement>(".box-frame-move[data-move-handle]");
+
+    it("a_selected_box_has_a_grip_below_that_drags_it", async () => {
+      await load([box("a", 100, 100)]);
+      s().setTool("lasso");
+      s().select(["a"]);
+      const { container } = frame("a");
+      const g = grip(container)!;
+      expect(g).not.toBeNull();
+      expect(g.classList.contains("side")).toBe(false);
+      expect(g.getAttribute("aria-label")).toBeTruthy();
+      fireEvent.pointerDown(g, { clientX: 0, clientY: 0, pointerId: 1, button: 0, ctrlKey: true });
+      fireEvent.pointerMove(g, { clientX: 100, clientY: 50, pointerId: 1, ctrlKey: true });
+      fireEvent.pointerUp(g, { clientX: 100, clientY: 50, pointerId: 1, ctrlKey: true });
+      expect(s().elements.get("a")!.points[0]).toMatchObject({ x: 200, y: 150 });
+      expect(s().elements.get("a")!.boxWidth).toBe(200);
+    });
+
+    it("no_grip_while_the_box_is_edited_or_locked", async () => {
+      await load([box("a", 100, 100), box("b", 400, 100, { content: { locked: true } })]);
+      s().setTool("lasso");
+      s().select(["a"]);
+      store.setState({ editingId: "a" });
+      expect(grip(frame("a").container)).toBeNull();
+      cleanup();
+      s().select(["b"]);
+      expect(grip(frame("b").container)).toBeNull();
+    });
+
+    it("no_grip_where_the_auto_complete_arrows_are", async () => {
+      // A text box with the cursor tool has its auto-complete arrows below and beside it.
+      await load([box("a", 100, 100), el("i", [[100, 300]], { type: "image", boxWidth: 200, boxHeight: 80, width: 1 })]);
+      s().setTool("cursor");
+      s().select(["a"]);
+      expect(grip(frame("a").container)).toBeNull();
+      cleanup();
+      s().select(["i"]);
+      expect(grip(frame("i").container)).not.toBeNull();
+    });
+
+    it("a_small_box_has_its_grip_beside_it", async () => {
+      await load([box("a", 100, 100, { boxWidth: 20, boxHeight: 20 })]);
+      s().setTool("lasso");
+      s().select(["a"]);
+      const { container } = frame("a");
+      expect(grip(container)!.classList.contains("side")).toBe(true);
+    });
+  });
+
   it("page_mode_move_preview_stops_at_the_sheet_edge_where_the_commit_does", async () => {
     await load([box("a", 100, 100)]);
     store.setState({ page: { ...s().page!, mode: "page" }, contentBottom: 1e5 });

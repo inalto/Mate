@@ -18,7 +18,7 @@ import { getStroke } from "perfect-freehand";
 import { buildBackgroundPattern, type Rect } from "../canvas/background";
 import { CONNECTOR_LABEL_SIZE, connectorCapOutlines, connectorRoute, labelPill } from "../connectors/geometry";
 import { sheetSize } from "../canvas/camera";
-import { graphScene } from "../renderers/graph";
+import { CURVE_DASH, DASHED_CURVE_WIDTH, FILL_OPACITY, graphScene, GUIDE_DASH, GUIDE_WIDTH, MARKER_RADIUS } from "../renderers/graph";
 import { coverOutlineColor, isCover } from "../covers/cover";
 import { capsuleRuns } from "../ink/capsuleRuns";
 import { traceSmoothPolygon } from "../ink/render";
@@ -605,14 +605,39 @@ function paintGraph(p: Painter, el: Element, theme: ThemeName): void {
     };
     lines(scene.grid, scene.colors.grid, 1);
     lines(scene.axes, scene.colors.axis, 1.25);
+    for (const f of scene.fills) {
+      if (f.polygon.length < 3) continue;
+      p.colour(f.color, "fill", FILL_OPACITY);
+      p.polyline(f.polygon, true);
+      p.pdf.fill();
+    }
+    for (const g of scene.guides) {
+      p.colour(g.color, "draw");
+      p.pdf.setLineWidth(GUIDE_WIDTH * p.k);
+      p.pdf.setLineDashPattern(GUIDE_DASH.map((d) => d * p.k), 0);
+      p.moveTo(g.a.x, g.a.y);
+      p.lineTo(g.b.x, g.b.y);
+      p.pdf.stroke();
+      p.pdf.setLineDashPattern([], 0);
+    }
     p.pdf.setLineCap("round");
     p.pdf.setLineJoin("round");
-    p.pdf.setLineWidth(2 * p.k);
     for (const c of scene.curves) {
       if (c.polyline.length < 2) continue;
       p.colour(c.color, "draw");
+      p.pdf.setLineWidth((c.dashed ? DASHED_CURVE_WIDTH : 2) * p.k);
+      if (c.dashed) p.pdf.setLineDashPattern(CURVE_DASH.map((d) => d * p.k), 0);
       p.polyline(c.polyline, false);
       p.pdf.stroke();
+      if (c.dashed) p.pdf.setLineDashPattern([], 0);
+    }
+    for (const m of scene.markers) {
+      // A hollow dot is a ring on the background.
+      const [mx, my] = p.pt(m.x, m.y);
+      p.colour(m.filled ? m.color : scene.colors.background, "fill");
+      p.colour(m.color, "draw");
+      p.pdf.setLineWidth(1.5 * p.k);
+      p.pdf.circle(mx, my, MARKER_RADIUS * p.k, "FD");
     }
     p.pdf.setFont("courier", "normal");
     p.pdf.setFontSize(11 * p.k);

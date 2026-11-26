@@ -15,7 +15,6 @@ export const ELBOW_STUB = 24;
 export const ELBOW_PADDING = 16;
 /** Minimum distance of a curve's control points from their anchor. */
 const CURVE_MIN_REACH = 40;
-const CURVE_REACH = 0.4;
 /** Sideways pull of a free-to-free curve's control points, as a fraction of the chord. */
 const CURVE_BOW = 0.3;
 
@@ -51,31 +50,75 @@ function cubic(a: Vec2, c1: Vec2, c2: Vec2, b: Vec2): Vec2[] {
   return out;
 }
 
-function curve(start: Vec2, startSide: Side | null, end: Vec2, endSide: Side | null): Vec2[] {
+export type CurveShape = "C" | "U" | "S";
+
+/** Distance a U's curve must pass beyond the farther of its two ends, so it clears both shapes. */
+const CURVE_U_MARGIN = 32;
+/** Handle length of a quarter-turn arc, as a fraction of the distance it covers along its own direction. */
+const CURVE_QUARTER = 0.55;
+
+const dot = (a: Vec2, b: Vec2): number => a.x * b.x + a.y * b.y;
+
+/** Nearest axis direction (ties go to x): a free end aims along the axis its chord mostly follows. */
+function snapAxis(v: Vec2): Vec2 {
+  return Math.abs(v.x) >= Math.abs(v.y) ? { x: Math.sign(v.x), y: 0 } : { x: 0, y: Math.sign(v.y) };
+}
+
+/** Directions the two control points extend in: the side's outward direction, or (free end) the snapped chord direction. */
+function curveDirs(start: Vec2, startSide: Side | null, end: Vec2, endSide: Side | null): [Vec2, Vec2] {
+  return [
+    startSide ? SIDE_DIR[startSide] : snapAxis(unit(start, end)),
+    endSide ? SIDE_DIR[endSide] : snapAxis(unit(end, start)),
+  ];
+}
+
+/** S: ends leave in opposite directions; U: the same direction; C: at right angles. Two free ends bow as a C. */
+export function curveShape(startSide: Side | null, endSide: Side | null, start: Vec2, end: Vec2): CurveShape {
+  if (!startSide && !endSide) return "C";
+  const [d1, d2] = curveDirs(start, startSide, end, endSide);
+  const k = dot(d1, d2);
+  return k < -0.5 ? "S" : k > 0.5 ? "U" : "C";
+}
+
+/** The two Bézier control points for a curve from `start` to `end` (see `curveShape` for the cases). */
+export function curveControls(start: Vec2, startSide: Side | null, end: Vec2, endSide: Side | null): [Vec2, Vec2] {
   const d = dist(start, end);
-  if (d === 0) return [{ ...start }, { ...end }];
+  const at = (p: Vec2, dir: Vec2, r: number): Vec2 => ({ x: p.x + dir.x * r, y: p.y + dir.y * r });
   if (!startSide && !endSide) {
     // Two free ends have no side to leave by: aiming both control points along the chord would
     // be a straight line, so the curve bows to one side as an arc instead.
     const u = unit(start, end);
-    const bow = CURVE_BOW * d;
-    const off = { x: -u.y * bow, y: u.x * bow };
-    return cubic(
-      start,
-      { x: start.x + (u.x * d) / 3 + off.x, y: start.y + (u.y * d) / 3 + off.y },
-      { x: end.x - (u.x * d) / 3 + off.x, y: end.y - (u.y * d) / 3 + off.y },
-      end,
-    );
+    const off = { x: -u.y * CURVE_BOW * d, y: u.x * CURVE_BOW * d };
+    return [at({ x: start.x + off.x, y: start.y + off.y }, u, d / 3), at({ x: end.x + off.x, y: end.y + off.y }, u, -d / 3)];
   }
-  const reach = Math.max(CURVE_MIN_REACH, CURVE_REACH * d);
-  const ds = startSide ? SIDE_DIR[startSide] : unit(start, end);
-  const de = endSide ? SIDE_DIR[endSide] : unit(end, start);
-  return cubic(
-    start,
-    { x: start.x + ds.x * reach, y: start.y + ds.y * reach },
-    { x: end.x + de.x * reach, y: end.y + de.y * reach },
-    end,
-  );
+  const [d1, d2] = curveDirs(start, startSide, end, endSide);
+  const delta = { x: end.x - start.x, y: end.y - start.y };
+  const shape = curveShape(startSide, endSide, start, end);
+  if (shape === "S") {
+    const ahead = dot(delta, d1);
+    // Facing each other: a clean S. Facing away: swing out around both shapes, further the further back the end is.
+    const reach = ahead > 0 ? Math.max(CURVE_MIN_REACH, ahead / 2) : CURVE_MIN_REACH + 0.75 * -ahead;
+    return [at(start, d1, reach), at(end, d2, reach)];
+  }
+  if (shape === "U") {
+    // Both handles reach the same line beyond the farther end; a cubic peaks at ~3/4 of its handles' reach, plus slack for the nearer end.
+    const a1 = dot(start, d1);
+    const a2 = dot(end, d1);
+    const far = Math.max(a1, a2);
+    const across = Math.abs(delta.x * d1.y - delta.y * d1.x);
+    const over = Math.max(CURVE_MIN_REACH, (CURVE_U_MARGIN + Math.abs(a1 - a2) / 8) / 0.75 + 0.25 * across);
+    return [at(start, d1, far + over - a1), at(end, d1, far + over - a2)];
+  }
+  return [
+    at(start, d1, Math.max(CURVE_MIN_REACH, CURVE_QUARTER * Math.abs(dot(delta, d1)))),
+    at(end, d2, Math.max(CURVE_MIN_REACH, CURVE_QUARTER * Math.abs(dot(delta, d2)))),
+  ];
+}
+
+function curve(start: Vec2, startSide: Side | null, end: Vec2, endSide: Side | null): Vec2[] {
+  if (dist(start, end) === 0) return [{ ...start }, { ...end }];
+  const [c1, c2] = curveControls(start, startSide, end, endSide);
+  return cubic(start, c1, c2, end);
 }
 
 const strictlyInside = (p: Vec2, r: Rect): boolean => p.x > r.x && p.x < r.x + r.width && p.y > r.y && p.y < r.y + r.height;

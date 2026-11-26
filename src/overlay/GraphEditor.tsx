@@ -1,37 +1,38 @@
-// DOM editor of graphs, mounted by OverlayLayer in the edited graph's slot. A side panel (left of
-// the box, constant screen size) lists the expressions (colour dot cycling through the palette,
-// plain text input (calculator style or LaTeX, see graph/plain), show/hide, delete; under the row a
-// KaTeX rendering of how the input was read, then any parse error, never blocking), the domain
-// inputs and the grid toggle; the plot area fills the box, with wheel zoom about the cursor and
-// drag to pan, and on touch screens two fingers pinch to zoom (and pan). The panel moves to the
-// right of the box, or over it, when the pane has no room on the left, and up when it would run
-// past the bottom. The "same scale" proportion reshapes the box after the view when the session
-// commits. The plot is rebuilt at most once per animation frame (latest state wins); an
-// expression cut short by the plot's time budget shows a warning under its row. The math engine
-// is loaded on mount. Esc ends editing. The session commits once (useEditSession). Registered
-// lazily for "graph" by ./boxEditors.
-import { Eye, EyeSlash, X } from "@phosphor-icons/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+// Editor of graphs, mounted by OverlayLayer in the edited graph's slot: a full-page dialog
+// (portaled to <body>, so the camera transform does not scale it) with three panes — Functions
+// (./graph/FunctionList, then the view settings), the plot (./graph/GraphPlot: wheel zoom, drag pan,
+// pinch) and the Study of the selected function (./graph/StudyPanel). On a narrow screen the panes
+// are tabs, one at a time. The slot itself keeps showing the committed graph. Edits stay local and
+// the session commits once when it ends (useEditSession): Esc, the Done or close button, or a press
+// outside the dialog; presses inside it keep editing (its root is the session's root). The "same
+// scale" proportion reshapes the box after the view on commit. The math engine is loaded on mount.
+// Registered lazily for "graph" by ./boxEditors.
+import { X } from "@phosphor-icons/react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { boxForDomain, graphDataOf, newExpression, nextPaletteColor, zoomDomain, type GraphData, type GraphDomain, type GraphExpression, type GraphKind } from "../graph/data";
-import { loadEngine, engineSync } from "../graph/engine";
-import { pinchDomain, placeGraphPanel, type PanelSide } from "../graph/editorMath";
-import { expressionError, parseExpressionSync } from "../graph/expressions";
-import { toLatex } from "../graph/plain";
-import { applyPreset, rememberGraphKind } from "../graph/presets";
-import { buildPlotScene, type PlotScene } from "../graph/plot";
-import { mapInkColor } from "../ink/theme";
-import { renderLatex } from "../math/katex";
+import { useModal } from "../components/useModal";
+import { boxForDomain, graphDataOf, type GraphData, type GraphDomain, type GraphExpression, type GraphKind, type GraphStudy } from "../graph/data";
+import { engineSync, loadEngine } from "../graph/engine";
+import { parseExpressionSync } from "../graph/expressions";
+import { orderBounds } from "../graph/pieceEdit";
+import { normalizePieces } from "../graph/pieces";
+import { rememberGraphKind } from "../graph/presets";
+import type { PlotScene } from "../graph/plot";
 import { contentOf, type GraphContent } from "../model/content";
 import type { Element } from "../model/types";
-import { drawPlotScene } from "../renderers/graph";
+import { drawPlotScene, graphScene } from "../renderers/graph";
 import { useSettingsStore } from "../stores/settings";
+import "../styles/graph-editor.css";
 import type { BoxEditorProps } from "./editorRegistry";
-import GraphPresets from "./GraphPresets";
+import FunctionList from "./graph/FunctionList";
+import GraphPlot from "./graph/GraphPlot";
+import StudyPanel from "./graph/StudyPanel";
+import ViewControls from "./graph/ViewControls";
 import { useEditSession } from "./useEditSession";
 
-/** Wheel zoom: domain scale per pixel of wheel delta. */
-const ZOOM_PER_PX = 0.001;
+type Tab = "functions" | "graph" | "study";
+const TABS: readonly Tab[] = ["functions", "graph", "study"];
 
 /** The kind stored with the data: that of the first expression that parses. */
 function kindOf(exprs: GraphExpression[], fallback: GraphKind): GraphKind {
@@ -43,47 +44,48 @@ function kindOf(exprs: GraphExpression[], fallback: GraphKind): GraphKind {
   return fallback;
 }
 
-const fmt = (v: number): string => String(Number(v.toPrecision(6)));
-
-/** How the input `text` was read, rendered by KaTeX; nothing when blank or not renderable. */
-function ExprPreview({ text, label }: { text: string; label: string }) {
-  const rendered = useMemo(() => renderLatex(toLatex(text)), [text]);
-  if (rendered.html === "" || rendered.error) return null;
-  // KaTeX output (trust: false), not user HTML.
-  return <div className="graph-expr-preview" role="note" aria-label={label} dangerouslySetInnerHTML={{ __html: rendered.html }} />;
+/** `study` with `patch` merged; cleared flags are dropped, an empty study goes away. */
+function withStudy(e: GraphExpression, patch: Partial<GraphStudy>): GraphExpression {
+  const next: GraphStudy = { ...e.study, ...patch };
+  for (const k of Object.keys(next) as (keyof GraphStudy)[]) if (next[k] === undefined || next[k] === false) delete next[k];
+  const { study: _drop, ...rest } = e;
+  return Object.keys(next).length > 0 ? { ...rest, study: next } : rest;
 }
 
-function DomainInput({ label, value, onValue }: { label: string; value: number; onValue: (v: number) => void }) {
-  // The typed text while the field has focus; otherwise the current value (pan and zoom update it).
-  const [draft, setDraft] = useState<string | null>(null);
-  return (
-    <label className="graph-domain-field">
-      <span>{label}</span>
-      <input
-        type="number"
-        aria-label={label}
-        value={draft ?? fmt(value)}
-        step="any"
-        onChange={(e) => {
-          setDraft(e.target.value);
-          const v = Number(e.target.value);
-          if (e.target.value.trim() !== "" && Number.isFinite(v)) onValue(v);
-        }}
-        onBlur={() => setDraft(null)}
-      />
-    </label>
-  );
+/** The committed graph, drawn in the slot on the page while the dialog is open. */
+function CommittedPlot({ el, zoom }: { el: Element; zoom: number }) {
+  const theme = useSettingsStore((s) => s.settings.theme);
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const w = el.boxWidth ?? 480;
+    const h = el.boxHeight ?? 360;
+    if (!canvas) return;
+    const scale = Math.min(4, Math.max(0.25, zoom)) * (window.devicePixelRatio || 1);
+    canvas.width = Math.max(1, Math.round(w * scale));
+    canvas.height = Math.max(1, Math.round(h * scale));
+    let ctx: CanvasRenderingContext2D | null = null;
+    try {
+      ctx = canvas.getContext("2d");
+    } catch {
+      ctx = null; // no canvas support
+    }
+    if (!ctx) return;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    drawPlotScene(ctx, graphScene(el, theme));
+  }, [el, theme, zoom]);
+  return <canvas ref={ref} className="graph-canvas" aria-hidden="true" />;
 }
 
 export default function GraphEditor({ el, store }: BoxEditorProps) {
   const { t } = useTranslation();
+  useModal();
+  const titleId = useId();
+  const tabsId = useId();
   const theme = useSettingsStore((s) => s.settings.theme);
-  const camera = store((s) => s.camera);
-  const zoom = camera.z;
+  const zoom = store((s) => s.camera.z);
   const rootRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const plotRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<GraphData>(() => graphDataOf(el));
   const latest = useRef(data);
   useLayoutEffect(() => {
@@ -92,10 +94,11 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
   const w = el.boxWidth ?? 480;
   const h = el.boxHeight ?? 360;
 
+  // The dialog is the session's root: presses inside it keep editing, any other press ends it.
   useEditSession(el.id, store, rootRef, (cur: Element) => {
     const d = latest.current;
     const stored = graphDataOf(cur);
-    const next: GraphData = { ...d, kind: kindOf(d.expressions, stored.kind) };
+    const next: GraphData = { ...d, kind: kindOf(d.expressions, stored.kind), expressions: d.expressions.map((e) => normalizePieces(orderBounds(e))) };
     rememberGraphKind(next.kind);
     // Same scale on both axes: the box takes the shape of the view (same area, top-left in place).
     const box = { width: cur.boxWidth ?? w, height: cur.boxHeight ?? h };
@@ -105,19 +108,16 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     return { ...cur, boxWidth: fitted.width, boxHeight: fitted.height, content: { ...contentOf<GraphContent>(cur), subtype: "graph", graphData: next } };
   });
 
-  const update = (fn: (d: GraphData) => GraphData) => setData((d) => fn(d));
-  const setExpr = (id: string, patch: Partial<GraphExpression>) =>
-    update((d) => ({ ...d, expressions: d.expressions.map((e) => (e.id === id ? { ...e, ...patch } : e)) }));
-  const setDomain = (key: keyof GraphDomain, v: number) =>
-    update((d) => {
-      const dom = { ...d.domain, [key]: v };
-      return dom.xMin < dom.xMax && dom.yMin < dom.yMax ? { ...d, domain: dom } : d;
-    });
+  const update = useCallback((fn: (d: GraphData) => GraphData) => setData((d) => fn(d)), []);
+  const setDomain = useCallback((fn: (d: GraphDomain) => GraphDomain) => setData((d) => ({ ...d, domain: fn(d.domain) })), []);
+  const done = useCallback(() => store.getState().endEdit(), [store]);
 
-  // Focus the first expression when the session starts.
-  useEffect(() => {
-    rootRef.current?.querySelector<HTMLInputElement>(".graph-expr-input")?.focus();
-  }, []);
+  // The Study's subject; the first function once the selected one is deleted.
+  const [selectedId, setSelectedId] = useState<string | null>(() => data.expressions[0]?.id ?? null);
+  const found = data.expressions.findIndex((e) => e.id === selectedId);
+  const selectedIndex = found >= 0 ? found : 0;
+  const selected = data.expressions[selectedIndex] ?? null;
+  const [tab, setTab] = useState<Tab>("functions");
 
   // Load the math engine; re-plot once it is there.
   const [engineReady, setEngineReady] = useState(() => engineSync() !== null);
@@ -132,263 +132,127 @@ export default function GraphEditor({ el, store }: BoxEditorProps) {
     };
   }, [engineReady]);
 
-  // Rebuild and draw the plot at most once per frame (box units scaled to device pixels at the zoom).
-  const [warnings, setWarnings] = useState<PlotScene["warnings"]>([]);
-  const frame = useRef<number | null>(null);
-  const plotArgs = useRef({ data, theme, w, h, zoom });
-  useLayoutEffect(() => {
-    plotArgs.current = { data, theme, w, h, zoom };
-    if (frame.current !== null) return;
-    frame.current = requestAnimationFrame(() => {
-      frame.current = null;
-      const a = plotArgs.current;
-      const scene = buildPlotScene(a.data, { w: a.w, h: a.h }, a.theme);
-      setWarnings((prev) => (JSON.stringify(prev) === JSON.stringify(scene.warnings) ? prev : scene.warnings));
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const scale = Math.min(4, Math.max(0.25, a.zoom)) * (window.devicePixelRatio || 1);
-      const cw = Math.max(1, Math.round(a.w * scale));
-      const ch = Math.max(1, Math.round(a.h * scale));
-      if (canvas.width !== cw) canvas.width = cw;
-      if (canvas.height !== ch) canvas.height = ch;
-      let ctx: CanvasRenderingContext2D | null = null;
-      try {
-        ctx = canvas.getContext("2d");
-      } catch {
-        ctx = null; // no canvas support
-      }
-      if (!ctx) return;
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
-      drawPlotScene(ctx, scene);
-    });
-  }, [data, theme, w, h, zoom, engineReady]);
-  useEffect(
-    () => () => {
-      if (frame.current !== null) cancelAnimationFrame(frame.current);
-      frame.current = null;
-    },
+  const [slowIds, setSlowIds] = useState<ReadonlySet<string>>(() => new Set());
+  const onWarnings = useCallback(
+    (ws: PlotScene["warnings"]) =>
+      setSlowIds((prev) => {
+        const next = new Set(ws.map((wn) => wn.id));
+        return next.size === prev.size && [...next].every((id) => prev.has(id)) ? prev : next;
+      }),
     [],
   );
 
-  // Wheel zoom about the cursor (a native, non-passive listener so the page does not zoom too).
+  // Focus the first expression when the session starts; give the focus back when it ends.
   useEffect(() => {
-    const plot = plotRef.current;
-    if (!plot) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const r = plot.getBoundingClientRect();
-      if (r.width <= 0 || r.height <= 0) return;
-      const fx = (e.clientX - r.left) / r.width;
-      const fy = (e.clientY - r.top) / r.height;
-      const factor = Math.exp(e.deltaY * ZOOM_PER_PX);
-      setData((d) => {
-        const ax = d.domain.xMin + fx * (d.domain.xMax - d.domain.xMin);
-        const ay = d.domain.yMax - fy * (d.domain.yMax - d.domain.yMin);
-        return { ...d, domain: zoomDomain(d.domain, factor, ax, ay) };
-      });
+    const before = document.activeElement as HTMLElement | null;
+    (dialogRef.current?.querySelector<HTMLInputElement>(".graph-expr-input") ?? dialogRef.current)?.focus();
+    return () => {
+      if (before && before !== document.body && before.isConnected) before.focus?.();
     };
-    plot.addEventListener("wheel", onWheel, { passive: false });
-    return () => plot.removeEventListener("wheel", onWheel);
   }, []);
 
-  // The panel stays in the pane: beside the box where there is room, over it otherwise.
-  const [panelAt, setPanelAt] = useState<{ side: PanelSide; dy: number }>({ side: "left", dy: 0 });
-  const exprCount = data.expressions.length;
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    const panel = panelRef.current;
-    const pane = root?.closest(".overlay-clip");
-    if (!root || !panel || !pane) return;
-    const c = pane.getBoundingClientRect();
-    const b = root.getBoundingClientRect();
-    const p = panel.getBoundingClientRect();
-    if (c.width <= 0 || c.height <= 0 || p.width <= 0) return; // not laid out (tests)
-    const next = placeGraphPanel(b, p, c);
-    setPanelAt((prev) => (prev.side === next.side && prev.dy === next.dy ? prev : next));
-  }, [camera, w, h, exprCount, warnings]);
-
-  // Drag to pan; two fingers pinch to zoom and pan.
-  const drag = useRef<{ id: number; x: number; y: number; domain: GraphDomain } | null>(null);
-  const touches = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ a: number; b: number; dist: number; mx: number; my: number; domain: GraphDomain } | null>(null);
-  const startPinch = () => {
-    const [a, b] = [...touches.current.entries()];
-    if (!a || !b) return;
-    pinch.current = {
-      a: a[0],
-      b: b[0],
-      dist: Math.hypot(b[1].x - a[1].x, b[1].y - a[1].y),
-      mx: (a[1].x + b[1].x) / 2,
-      my: (a[1].y + b[1].y) / 2,
-      domain: latest.current.domain,
-    };
-    drag.current = null;
-  };
-  const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    if (e.pointerType === "touch") {
-      touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.current.size === 2) {
-        startPinch();
+  // Esc ends editing; Tab stays inside the dialog.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        done();
         return;
       }
-      if (touches.current.size > 2) return;
-    }
-    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, domain: latest.current.domain };
-  };
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (touches.current.has(e.pointerId)) touches.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    const two = pinch.current;
-    if (two) {
-      e.stopPropagation();
-      const a = touches.current.get(two.a);
-      const b = touches.current.get(two.b);
-      const box = e.currentTarget.getBoundingClientRect();
-      if (!a || !b || box.width <= 0 || box.height <= 0) return;
-      const fx = (x: number) => (x - box.left) / box.width;
-      const fy = (y: number) => (y - box.top) / box.height;
-      const next = pinchDomain(two.domain, two.dist, Math.hypot(b.x - a.x, b.y - a.y), fx(two.mx), fy(two.my), fx((a.x + b.x) / 2), fy((a.y + b.y) / 2));
-      update((cur) => ({ ...cur, domain: next }));
-      return;
-    }
-    const g = drag.current;
-    if (!g || g.id !== e.pointerId) return;
-    e.stopPropagation();
-    const r = e.currentTarget.getBoundingClientRect();
-    if (r.width <= 0 || r.height <= 0) return;
-    const dx = ((e.clientX - g.x) / r.width) * (g.domain.xMax - g.domain.xMin);
-    const dy = ((e.clientY - g.y) / r.height) * (g.domain.yMax - g.domain.yMin);
-    const d = g.domain;
-    update((cur) => ({ ...cur, domain: { xMin: d.xMin - dx, xMax: d.xMax - dx, yMin: d.yMin + dy, yMax: d.yMax + dy } }));
-  };
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
-    e.currentTarget.releasePointerCapture?.(e.pointerId);
-    if (touches.current.delete(e.pointerId) && pinch.current) {
-      pinch.current = null;
-      // The finger that stays goes on panning from where it is.
-      const rest = [...touches.current.entries()][0];
-      drag.current = rest ? { id: rest[0], x: rest[1].x, y: rest[1].y, domain: latest.current.domain } : null;
-      return;
-    }
-    if (drag.current?.id === e.pointerId) drag.current = null;
-  };
+      if (e.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      const items = [...(dialog?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled])") ?? [])].filter(
+        (x) => x.offsetParent !== null || x === document.activeElement,
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const at = document.activeElement;
+      const outside = !dialog?.contains(at) || at === dialog;
+      if (e.shiftKey && (at === first || outside)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (at === last || outside)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [done]);
 
-  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      store.getState().endEdit();
-    }
-  };
+  const kind = kindOf(data.expressions, data.kind);
+  const tabLabel: Record<Tab, string> = { functions: t("graph.editor.tabs.functions"), graph: t("graph.editor.tabs.graph"), study: t("graph.editor.tabs.study") };
+  const pane = (id: Tab) => ({ id: `${tabsId}-${id}`, role: "tabpanel", "aria-labelledby": `${tabsId}-${id}-tab`, "data-pane": id });
 
-  const currentKind = kindOf(data.expressions, data.kind);
-
-  return (
-    <div ref={rootRef} className="graph-editor" onKeyDown={onKeyDown}>
-      <div
-        ref={panelRef}
-        className="graph-panel"
-        role="group"
-        aria-label={t("graph.editor.settings")}
-        data-side={panelAt.side}
-        style={{ "--graph-panel-dy": `${panelAt.dy}px` } as CSSProperties}
-      >
-        <ul className="graph-exprs">
-          {data.expressions.map((ex, i) => {
-            const n = i + 1;
-            const err = expressionError(ex.latex);
-            const slow = warnings.some((wn) => wn.id === ex.id);
-            return (
-              <li key={ex.id} className="graph-expr" data-expr-id={ex.id}>
-                <div className="graph-expr-row">
-                  <button
-                    type="button"
-                    className="graph-color"
-                    aria-label={t("graph.editor.colourOf", { n })}
-                    title={t("library.changeColour")}
-                    style={{ background: mapInkColor(ex.color, theme) }}
-                    onClick={() => setExpr(ex.id, { color: nextPaletteColor(ex.color) })}
-                  />
-                  <input
-                    className="graph-expr-input"
-                    aria-label={t("graph.editor.expression", { n })}
-                    aria-invalid={err ? true : undefined}
-                    spellCheck={false}
-                    placeholder="y = x^2"
-                    value={ex.latex}
-                    onChange={(e) => setExpr(ex.id, { latex: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    className="tb-btn graph-icon-btn"
-                    aria-label={ex.visible ? t("graph.editor.hide", { n }) : t("graph.editor.show", { n })}
-                    aria-pressed={!ex.visible}
-                    onClick={() => setExpr(ex.id, { visible: !ex.visible })}
-                  >
-                    {ex.visible ? <Eye size={16} /> : <EyeSlash size={16} />}
-                  </button>
-                  <button
-                    type="button"
-                    className="tb-btn graph-icon-btn"
-                    aria-label={t("graph.editor.delete", { n })}
-                    onClick={() => update((d) => ({ ...d, expressions: d.expressions.filter((e) => e.id !== ex.id) }))}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-                <ExprPreview text={ex.latex} label={t("graph.editor.preview", { n })} />
-                {err && <div className="graph-expr-error">{err}</div>}
-                {!err && slow && <div className="graph-expr-error graph-expr-warning">{t("graph.editor.slow")}</div>}
-              </li>
-            );
-          })}
-        </ul>
-        <button
-          type="button"
-          className="graph-add"
-          aria-label={t("graph.editor.add")}
-          onClick={() => update((d) => ({ ...d, expressions: [...d.expressions, newExpression(d.expressions.length)] }))}
-        >
-          {t("graph.editor.addShort")}
-        </button>
-        <div className="graph-domain">
-          <DomainInput label={t("graph.editor.xMin")} value={data.domain.xMin} onValue={(v) => setDomain("xMin", v)} />
-          <DomainInput label={t("graph.editor.xMax")} value={data.domain.xMax} onValue={(v) => setDomain("xMax", v)} />
-          <DomainInput label={t("graph.editor.yMin")} value={data.domain.yMin} onValue={(v) => setDomain("yMin", v)} />
-          <DomainInput label={t("graph.editor.yMax")} value={data.domain.yMax} onValue={(v) => setDomain("yMax", v)} />
-        </div>
-        <GraphPresets kind={currentKind} data={data} onApply={(p) => update((d) => applyPreset(d, p))} />
-        <div className="graph-aspect">
-          <span className="graph-aspect-label">{t("graph.editor.aspect.label")}</span>
-          <div className="segmented" role="group" aria-label={t("graph.editor.aspect.label")}>
-            <button type="button" aria-pressed={data.aspect !== "equal"} onClick={() => update(({ aspect: _drop, ...d }) => d)}>
-              {t("graph.editor.aspect.free")}
-            </button>
-            <button type="button" aria-pressed={data.aspect === "equal"} onClick={() => update((d) => ({ ...d, aspect: "equal" }))}>
-              {t("graph.editor.aspect.equal")}
-            </button>
+  const dialog = (
+    <div ref={rootRef} className="backdrop graph-backdrop">
+      <div ref={dialogRef} className="card graph-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} data-tab={tab}>
+        <header className="graph-dialog-head">
+          <h2 id={titleId}>{t("graph.editor.title")}</h2>
+          <div className="graph-tabs" role="tablist" aria-label={t("graph.editor.title")}>
+            {TABS.map((id) => (
+              <button
+                key={id}
+                id={`${tabsId}-${id}-tab`}
+                type="button"
+                role="tab"
+                aria-selected={tab === id}
+                aria-controls={`${tabsId}-${id}`}
+                tabIndex={tab === id ? 0 : -1}
+                onClick={() => setTab(id)}
+                onKeyDown={(e) => {
+                  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+                  const next = TABS[(TABS.indexOf(id) + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+                  setTab(next);
+                  document.getElementById(`${tabsId}-${next}-tab`)?.focus();
+                }}
+              >
+                {tabLabel[id]}
+              </button>
+            ))}
           </div>
-          {data.aspect === "equal" && <div className="graph-aspect-hint">{t("graph.editor.aspect.hint")}</div>}
+          <button type="button" className="btn btn-primary graph-done" onClick={done}>
+            {t("graph.editor.done")}
+          </button>
+          <button type="button" className="icon-btn" aria-label={t("common.close")} onClick={done}>
+            <X size={18} />
+          </button>
+        </header>
+        <div className="graph-dialog-body">
+          <div className="graph-pane graph-pane-functions" {...pane("functions")}>
+            <FunctionList
+              data={data}
+              theme={theme}
+              selectedId={selected?.id ?? null}
+              slowIds={slowIds}
+              onSelect={setSelectedId}
+              update={update}
+            />
+            <ViewControls data={data} kind={kind} update={update} />
+          </div>
+          <div className="graph-pane graph-pane-graph" {...pane("graph")}>
+            <GraphPlot data={data} theme={theme} box={{ width: w, height: h }} engineReady={engineReady} setDomain={setDomain} onWarnings={onWarnings} />
+          </div>
+          <div className="graph-pane graph-pane-study" {...pane("study")}>
+            <StudyPanel
+              key={selected?.id ?? "none"}
+              expr={selected}
+              index={Math.max(0, selectedIndex)}
+              domain={data.domain}
+              engineReady={engineReady}
+              onStudy={(patch) => selected && update((d) => ({ ...d, expressions: d.expressions.map((e) => (e.id === selected.id ? withStudy(e, patch) : e)) }))}
+            />
+          </div>
         </div>
-        <label className="graph-grid-toggle">
-          <input type="checkbox" aria-label={t("graph.editor.grid")} checked={data.grid} onChange={(e) => update((d) => ({ ...d, grid: e.target.checked }))} />
-          {t("graph.editor.grid")}
-        </label>
-      </div>
-      <div
-        ref={plotRef}
-        className="graph-plot"
-        data-testid="graph-plot"
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
-        <canvas ref={canvasRef} className="graph-canvas" aria-label={t("graph.editor.plot")} />
       </div>
     </div>
   );
-}
 
+  return (
+    <>
+      <CommittedPlot el={el} zoom={zoom} />
+      {createPortal(dialog, document.body)}
+    </>
+  );
+}
