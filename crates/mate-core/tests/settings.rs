@@ -182,6 +182,35 @@ fn graph_presets_default_empty_and_round_trip_camel_case() {
 }
 
 #[test]
+fn graph_preset_expressions_keep_pieces_name_and_study() {
+    let text = r##"{"id":"g1","name":"Step","kind":"2d-function","domain":{"xMin":-1,"xMax":1,"yMin":-1,"yMax":1},
+        "grid":true,"isDefault":false,"expressions":[{"id":"e","latex":"x^2","color":"#C62828","visible":true,"name":"f",
+        "pieces":[{"latex":"x^2","max":0},{"latex":"x","min":0,"minClosed":false,"maxClosed":true}],
+        "study":{"zeros":true,"area":{"from":0,"to":1}}}]}"##;
+    let p: GraphPreset = serde_json::from_str(text).unwrap();
+    let e = &p.expressions.as_ref().unwrap()[0];
+    let pieces = e.pieces.as_ref().unwrap();
+    assert_eq!(e.name.as_deref(), Some("f"));
+    assert_eq!(pieces.len(), 2);
+    assert_eq!(pieces[0].max, Some(0.0));
+    assert_eq!(pieces[0].min, None);
+    assert_eq!(pieces[1].min_closed, Some(false));
+    let out = serde_json::to_value(&p).unwrap();
+    let ex = &out["expressions"][0];
+    assert_eq!(ex["pieces"][1]["maxClosed"], true);
+    assert!(ex["pieces"][0].get("min").is_none());
+    assert_eq!(ex["study"]["area"]["to"], 1.0);
+    // An expression without the new fields stays as it was.
+    let old = r##"{"id":"g1","name":"Step","kind":"2d-function","domain":{"xMin":-1,"xMax":1,"yMin":-1,"yMax":1},
+        "grid":true,"isDefault":false,"expressions":[{"id":"e","latex":"x^2","color":"#C62828","visible":true}]}"##;
+    let plain = serde_json::to_value(serde_json::from_str::<GraphPreset>(old).unwrap()).unwrap();
+    assert_eq!(
+        plain["expressions"][0],
+        serde_json::json!({"id":"e","latex":"x^2","color":"#C62828","visible":true})
+    );
+}
+
+#[test]
 fn ruler_defaults_and_old_files() {
     let s: Settings = serde_json::from_str("{}").unwrap();
     assert_eq!(s.ruler_units, "both");

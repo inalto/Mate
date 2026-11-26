@@ -1,5 +1,5 @@
 // Graph renderer: draws a graph element's PlotScene (graph/plot) straight to the canvas and as
-// vector SVG (`<line>`, `<polyline>`, `<text>`), so a graph is vector everywhere and never uses a
+// vector SVG (`<line>`, `<polyline>`, `<polygon>`, `<circle>`, `<text>`), so a graph is vector everywhere and never uses a
 // bitmap snapshot. Scenes are cached per element object and theme (elements are immutable: an
 // edit is a new object). Until the lazy math engine has loaded, a graph shows its axes and a
 // "Loading…" label; once it loads, `boxSnapshots.notify` asks the canvas to re-raster those graphs.
@@ -20,6 +20,14 @@ export const GRAPH_FONT = `11px ${FONT_STACKS.mono}`;
 const GRID_WIDTH = 1;
 const AXIS_WIDTH = 1.25;
 const CURVE_WIDTH = 2;
+/** A derivative's curve: thinner and dashed. */
+export const DASHED_CURVE_WIDTH = 1.5;
+export const CURVE_DASH = [5, 4] as const;
+export const GUIDE_WIDTH = 1.25;
+export const GUIDE_DASH = [6, 4] as const;
+/** Opacity of a shaded area. */
+export const FILL_OPACITY = 0.18;
+export const MARKER_RADIUS = 3.5;
 
 const scenes = new WeakMap<Element, Map<ThemeName, PlotScene>>();
 /** Graphs drawn while the engine was loading: re-rastered once it has. */
@@ -78,13 +86,43 @@ export function drawPlotScene(ctx: CanvasRenderingContext2D, scene: PlotScene): 
   };
   strokeLines(scene.grid, colors.grid, GRID_WIDTH);
   strokeLines(scene.axes, colors.axis, AXIS_WIDTH);
+  for (const f of scene.fills) {
+    ctx.beginPath();
+    f.polygon.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.globalAlpha = FILL_OPACITY;
+    ctx.fillStyle = f.color;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  for (const g of scene.guides) {
+    ctx.beginPath();
+    ctx.moveTo(g.a.x, g.a.y);
+    ctx.lineTo(g.b.x, g.b.y);
+    ctx.setLineDash([...GUIDE_DASH]);
+    ctx.strokeStyle = g.color;
+    ctx.lineWidth = GUIDE_WIDTH;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   for (const c of scene.curves) {
     ctx.beginPath();
     c.polyline.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
     ctx.strokeStyle = c.color;
-    ctx.lineWidth = CURVE_WIDTH;
+    ctx.lineWidth = c.dashed ? DASHED_CURVE_WIDTH : CURVE_WIDTH;
+    if (c.dashed) ctx.setLineDash([...CURVE_DASH]);
+    ctx.stroke();
+    if (c.dashed) ctx.setLineDash([]);
+  }
+  for (const m of scene.markers) {
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, MARKER_RADIUS, 0, 2 * Math.PI);
+    ctx.fillStyle = m.filled ? m.color : colors.background;
+    ctx.fill();
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   }
   ctx.font = GRAPH_FONT;
@@ -123,6 +161,8 @@ const linesSvg = (lines: PlotScene["grid"], color: string, width: number): strin
 const textSvg = (t: Text, color: string): string =>
   `<text x="${n(t.x)}" y="${n(t.y)}" fill="${esc(color)}" font-family="${esc(FONT_STACKS.mono)}" font-size="11" text-anchor="${SVG_ANCHOR[t.align]}" dominant-baseline="${SVG_BASELINE[t.baseline]}">${esc(t.text)}</text>`;
 
+const pointsSvg = (pts: PlotScene["curves"][number]["polyline"]): string => pts.map((p) => `${n(p.x)},${n(p.y)}`).join(" ");
+
 /** SVG of `scene` in box-local units. */
 export function plotSceneSvg(scene: PlotScene): string {
   const { w, h, colors } = scene;
@@ -130,10 +170,23 @@ export function plotSceneSvg(scene: PlotScene): string {
     `<rect x="0" y="0" width="${n(w)}" height="${n(h)}" fill="${esc(colors.background)}"/>` +
     linesSvg(scene.grid, colors.grid, GRID_WIDTH) +
     linesSvg(scene.axes, colors.axis, AXIS_WIDTH) +
+    scene.fills.map((f) => `<polygon fill="${esc(f.color)}" fill-opacity="${FILL_OPACITY}" stroke="none" points="${pointsSvg(f.polygon)}"/>`).join("") +
+    scene.guides
+      .map(
+        (g) =>
+          `<line x1="${n(g.a.x)}" y1="${n(g.a.y)}" x2="${n(g.b.x)}" y2="${n(g.b.y)}" stroke="${esc(g.color)}" stroke-width="${GUIDE_WIDTH}" stroke-dasharray="${GUIDE_DASH.join(" ")}"/>`,
+      )
+      .join("") +
     scene.curves
       .map(
         (c) =>
-          `<polyline fill="none" stroke="${esc(c.color)}" stroke-width="${CURVE_WIDTH}" stroke-linejoin="round" stroke-linecap="round" points="${c.polyline.map((p) => `${n(p.x)},${n(p.y)}`).join(" ")}"/>`,
+          `<polyline fill="none" stroke="${esc(c.color)}" stroke-width="${c.dashed ? DASHED_CURVE_WIDTH : CURVE_WIDTH}"${c.dashed ? ` stroke-dasharray="${CURVE_DASH.join(" ")}"` : ""} stroke-linejoin="round" stroke-linecap="round" points="${pointsSvg(c.polyline)}"/>`,
+      )
+      .join("") +
+    scene.markers
+      .map(
+        (m) =>
+          `<circle cx="${n(m.x)}" cy="${n(m.y)}" r="${MARKER_RADIUS}" fill="${esc(m.filled ? m.color : colors.background)}" stroke="${esc(m.color)}" stroke-width="1.5"/>`,
       )
       .join("") +
     scene.labels.map((t) => textSvg(t, colors.text)).join("")

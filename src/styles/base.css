@@ -840,6 +840,64 @@ button.card:hover {
   pointer-events: none;
 }
 
+/* Move grip 24 px below the bottom-centre (beside the right edge of a small box), constant screen
+   size: a 16 px knob with a four-way cross; the ::before widens the hit area to 28 px, the ::after
+   is the stem back to the frame. */
+.box-frame-move {
+  --size: calc(16px * var(--overlay-inv-z, 1));
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 24px * var(--overlay-inv-z, 1));
+  width: var(--size);
+  height: var(--size);
+  margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2);
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #ffffff;
+  border: calc(1.5px * var(--overlay-inv-z, 1)) solid var(--color-primary);
+  color: var(--color-primary);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: move;
+}
+
+.box-frame-move.side {
+  left: calc(100% + 24px * var(--overlay-inv-z, 1));
+  top: 50%;
+}
+
+.box-frame-move > svg {
+  display: block;
+  pointer-events: none;
+}
+
+.box-frame-move::before {
+  content: "";
+  position: absolute;
+  inset: calc(-6px * var(--overlay-inv-z, 1));
+  border-radius: 50%;
+}
+
+.box-frame-move::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: calc(1px * var(--overlay-inv-z, 1));
+  height: calc(16px * var(--overlay-inv-z, 1));
+  background: var(--color-primary);
+  pointer-events: none;
+}
+
+.box-frame-move.side::after {
+  left: auto;
+  right: 100%;
+  top: 50%;
+  bottom: auto;
+  width: calc(16px * var(--overlay-inv-z, 1));
+  height: calc(1px * var(--overlay-inv-z, 1));
+}
+
 /* Angle badge at the box centre while the rotate handle is dragged (kept upright). */
 .box-frame-angle {
   position: absolute;

@@ -6,13 +6,14 @@ import { sheetSize } from "../canvas/camera";
 import { rowBelowDelta } from "../canvas/pageBounds";
 import { loadElements, upsertElements } from "../ipc/elements";
 import { elementsQueue } from "../ipc/elementsQueue";
-import { isLocked, isPdfPlacement } from "../model/content";
+import { isLocked, isPdfPlacement, originOf } from "../model/content";
 import type { Element, NotebookTree, Page } from "../model/types";
 import { translateElements } from "../tools/lasso";
 import { bottomOf, keepInStack, unionBounds, type EditorStore } from "./editor";
 import { useNotebookStore } from "./notebook";
 import { useSettingsStore } from "./settings";
-import { editorForPane } from "./focusedEditor";
+import { editorForPane, getFocusedEditor } from "./focusedEditor";
+import { useTabsStore } from "./tabs";
 
 /** A page that can receive a selection, with where it lives ("Book › Section"). */
 export interface SendTarget {
@@ -45,7 +46,56 @@ export function sendTargets(tree: NotebookTree, currentId: string | null): SendT
 /** The copies of `src` for page `pageId`: fresh ids, connectors re-bound among the copies, unlocked. */
 export function copiesForPage(src: readonly Element[], pageId: string, now: string): Element[] {
   const ids = new Map(src.map((e) => [e.id, crypto.randomUUID()]));
-  return src.map((e) => remapConnectorEnds({ ...e, id: ids.get(e.id)!, pageId, createdAt: now, updatedAt: now, version: 0 }, ids));
+  return src.map((e) => {
+    // The link points to where the thing first came from: a copy of a copy keeps the first origin.
+    const origin = originOf(e) ?? { pageId: e.pageId, elementId: e.id };
+    const base = e.content && typeof e.content === "object" ? (e.content as object) : {};
+    return remapConnectorEnds({ ...e, id: ids.get(e.id)!, pageId, content: { ...base, origin }, createdAt: now, updatedAt: now, version: 0 }, ids);
+  });
+}
+
+/** What `goToOrigin` did: the origin page opened (with the element framed when it was still there), or the page is gone. */
+export type OriginResult = "element" | "page" | "gone";
+
+/** The origin of `el` when its page still exists (not in the bin), else null. */
+export function liveOrigin(el: Pick<Element, "content">): { pageId: string; elementId: string } | null {
+  const o = originOf(el);
+  if (!o) return null;
+  return useNotebookStore.getState().tree.pages.some((p) => p.id === o.pageId && !p.deletedAt) ? o : null;
+}
+
+/** Resolves once `store` finished loading `pageId` (at once if it already has); gives up after `ms`. */
+function whenLoaded(store: EditorStore, pageId: string, ms = 5000): Promise<boolean> {
+  const done = () => store.getState().loadedPageId === pageId;
+  if (done()) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const finish = (ok: boolean) => {
+      clearTimeout(timer);
+      unsub();
+      resolve(ok);
+    };
+    const unsub = store.subscribe(() => done() && finish(true));
+    const timer = setTimeout(() => finish(false), ms);
+  });
+}
+
+/**
+ * Open the page `el` was sent from and, when the original is still there, select and frame it.
+ * "gone" when that page no longer exists (nothing is opened).
+ */
+export async function goToOrigin(el: Pick<Element, "content">): Promise<OriginResult> {
+  const o = liveOrigin(el);
+  if (!o) return "gone";
+  useTabsStore.getState().openPage(o.pageId);
+  // openPage focuses the pane that shows the page; that pane's editor loads it asynchronously.
+  const store = getFocusedEditor();
+  if (!(await whenLoaded(store, o.pageId))) return "page";
+  const s = store.getState();
+  const target = s.elements.get(o.elementId);
+  if (!target || target.deletedAt) return "page";
+  s.select([o.elementId]);
+  s.fitSelection();
+  return "element";
 }
 
 /**

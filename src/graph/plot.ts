@@ -4,13 +4,18 @@
 // of view. The canvas and SVG renderers draw a scene as is. Each expression gets a wall-clock
 // budget: past it its evaluator answers NaN (the curve is cut short) and the scene carries a
 // "too slow" warning for it. Implicit curves (f(x, y) = 0) are traced by marching squares over the
-// window (./sample). While the math engine loads, curves are left out (`pending`).
+// window (./sample). While the math engine loads, curves are left out (`pending`). A piecewise
+// function is sampled piece by piece (./pieces) with dots at the finite piece ends, and the study
+// items switched on for a function (./studyScene) add dots, dashed asymptotes, the derivative's
+// dashed curve and a shaded area.
 import i18n from "../i18n";
 import type { ThemeName } from "../ink/types";
 import { mapInkColor } from "../ink/theme";
 import type { GraphData } from "./data";
 import { parseExpressionSync, type Pending, type ParseResult } from "./expressions";
+import { parsePieces, pieceEnds, runsOf, samplePieces, type PiecewiseFn } from "./pieces";
 import { sampleCurve, sampleImplicit, sampleParametric, type Point2 } from "./sample";
+import { hasStudyItems, studyOverlay } from "./studyScene";
 
 export type { Point2 };
 
@@ -40,6 +45,12 @@ export interface PlotColors {
   text: string;
 }
 
+/** A dot on a curve: a piece end (hollow when open) or a study point. */
+export interface Marker extends Point2 {
+  color: string;
+  filled: boolean;
+}
+
 export interface PlotScene {
   w: number;
   h: number;
@@ -48,7 +59,13 @@ export interface PlotScene {
   axes: Line[];
   grid: Line[];
   ticks: Tick[];
-  curves: { color: string; polyline: Point2[] }[];
+  /** Curves; `dashed` ones (a derivative) are drawn thinner and dashed. */
+  curves: { color: string; polyline: Point2[]; dashed?: boolean }[];
+  /** Shaded regions (an area under a curve), drawn translucent under the curves. */
+  fills: { color: string; polygon: Point2[] }[];
+  /** Dashed straight lines (asymptotes). */
+  guides: (Line & { color: string })[];
+  markers: Marker[];
   labels: Text[];
   /** Per-expression problems found while plotting (e.g. "too slow"). */
   warnings: { id: string; message: string }[];
@@ -223,18 +240,28 @@ export function buildPlotScene(data: GraphData, box: { w: number; h: number }, t
   if (originShown) labels.push({ x: clamp(ax - 4, 0, w), y: clamp(ay + 4, 0, h), text: "0", align: "right", baseline: "top" });
 
   const curves: PlotScene["curves"] = [];
+  const fills: PlotScene["fills"] = [];
+  const guides: PlotScene["guides"] = [];
+  const markers: Marker[] = [];
   const warnings: PlotScene["warnings"] = [];
+  const addMarker = (q: Point2, color: string, filled: boolean, label?: string) => {
+    const at = toBox(q);
+    if (!(at.x >= -1 && at.x <= w + 1 && at.y >= -1 && at.y <= h + 1)) return;
+    markers.push({ ...at, color, filled });
+    if (label) labels.push({ x: clamp(at.x + 5, 0, w), y: clamp(at.y - 5, 0, h), text: label, align: at.x > w - 60 ? "right" : "left", baseline: "bottom" });
+  };
   const parse = opts.parse ?? parseExpressionSync;
   const budget = opts.budgetMs ?? PLOT_BUDGET_MS;
   let pending = false;
   for (const e of data.expressions) {
     if (!e.visible || e.latex.trim() === "") continue;
-    const p = parse(e.latex);
-    if ("pending" in p) {
+    const parsed = parsePieces(e, parse);
+    if ("pending" in parsed) {
       pending = true;
       continue;
     }
-    if ("error" in p) continue;
+    if ("error" in parsed) continue;
+    const color = mapInkColor(e.color, theme);
     // Past the deadline every evaluator of this expression answers NaN.
     const deadline = now() + budget;
     let late = false;
@@ -248,8 +275,27 @@ export function buildPlotScene(data: GraphData, box: { w: number; h: number }, t
         return fn(v);
       };
     const stop = (): boolean => (late ||= now() > deadline);
-    let branches: Point2[][];
-    switch (p.kind) {
+    let branches: Point2[][] = [];
+    const p = "fn" in parsed ? null : parsed.other;
+    if ("fn" in parsed) {
+      const fn = parsed.fn;
+      const timedFn: PiecewiseFn = { ...fn, pieces: fn.pieces.map((q) => ({ ...q, f: timed(q.f) })) };
+      const runs = runsOf(fn, xMin, xMax);
+      branches = samplePieces(timedFn, runs, xMin, xMax, { yRange, stop });
+      for (const end of pieceEnds(fn, runs, xMin, xMax, yRange * 1e-9)) addMarker(end, color, end.filled);
+      if (e.study && hasStudyItems(e.study)) {
+        const o = studyOverlay(fn, e.study, data.domain, budget);
+        if (o.partial) late = true;
+        for (const g of o.guides) for (const run of clipPolyline([toBox(g.a), toBox(g.b)], w, h)) guides.push({ a: run[0], b: run[run.length - 1], color });
+        // Clamping y to the box clips a region between a curve and the axis exactly.
+        for (const poly of o.fills) fills.push({ color, polygon: poly.map((q) => ({ x: clamp(sx(q.x), 0, w), y: clamp(sy(q.y), 0, h) })) });
+        for (const b of o.derivative) for (const polyline of clipPolyline(b.map(toBox), w, h)) curves.push({ color, polyline, dashed: true });
+        for (const m of o.markers) addMarker(m, color, m.filled, m.label);
+      }
+    }
+    switch (p?.kind) {
+      case undefined:
+        break;
       case "of-x":
         branches = sampleCurve(timed(p.f), xMin, xMax, { yRange, stop });
         break;
@@ -280,10 +326,9 @@ export function buildPlotScene(data: GraphData, box: { w: number; h: number }, t
         break;
     }
     if (late) warnings.push({ id: e.id, message: TOO_SLOW });
-    const color = mapInkColor(e.color, theme);
     for (const b of branches) for (const polyline of clipPolyline(b.map(toBox), w, h)) curves.push({ color, polyline });
   }
   if (pending) labels.push({ x: Math.min(6, w), y: Math.min(6, h), text: i18n.t("common.loading"), align: "left", baseline: "top" });
 
-  return { w, h, colors: plotColors(theme), axes, grid, ticks, curves, labels, warnings, pending };
+  return { w, h, colors: plotColors(theme), axes, grid, ticks, curves, fills, guides, markers, labels, warnings, pending };
 }

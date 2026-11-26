@@ -1,14 +1,16 @@
 // Selection frame of one boxed element in the overlay layer (page units; the layer carries the camera
 // transform): an outline, edge strips that move the selection by dragging, and — when it is the only
-// selected element — 8 resize handles and a rotate handle 24 px above the top-centre (none for a
-// frame: frames ignore rotation). The drag shows
+// selected element — 8 resize handles, a rotate handle 24 px above the top-centre (none for a
+// frame: frames ignore rotation) and, with the cursor or lasso tool and not while it is edited, a
+// move grip 24 px below the bottom-centre (beside the right edge of a small box; `selectionHandles`
+// decides, as for the canvas handles). The drag shows
 // a draft frame and commits once on release. Moves and (unrotated) resizes snap to smart guides of
 // the other elements on screen (published to the store for the live layer); Ctrl/Cmd suspends that,
 // Shift locks a move to its dominant axis and snaps rotation to 15°; Escape cancels the drag. A
 // locked box shows no handles, only a lock glyph.
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { angleLabel, guideCandidates, GUIDE_SNAP_PX, lockedAxis, smartMoveDelta, snapAngle } from "../canvas/toolInteractions";
+import { angleLabel, guideCandidates, GUIDE_SNAP_PX, lockedAxis, selectionHandles, smartMoveDelta, snapAngle } from "../canvas/toolInteractions";
 import { isFrame } from "../frames/contain";
 import { isLocked } from "../model/content";
 import type { Element } from "../model/types";
@@ -64,6 +66,11 @@ function snapEdges(r: Rect, handle: Handle, others: readonly Rect[], threshold: 
 
 export default function BoxFrame({ el, store, zoom, handles }: { el: Element; store: EditorStore; zoom: number; handles: boolean }) {
   const { t } = useTranslation();
+  const tool = store((s) => s.tempTool ?? s.tool);
+  const autoShapes = store((s) => s.autoShapes);
+  const editingId = store((s) => s.editingId);
+  // The move grip: below the box, beside a small one (the same rule as the canvas handles and the selection bar's clearance).
+  const movePlace = handles ? (selectionHandles([el], zoom, { tool, autoShapes, editingId })?.move ?? null) : null;
   const drag = useRef<Drag | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   /** Smart-guide candidates of the drag in progress (read once per drag). */
@@ -209,6 +216,19 @@ export default function BoxFrame({ el, store, zoom, handles }: { el: Element; st
       {handles && !locked && HANDLES.map((h) => <div key={h} className={`box-frame-handle ${h}`} data-handle={h} {...grip(h)} />)}
       {handles && !locked && !isFrame(el) && (
         <div className="box-frame-rotate" data-rotate-handle="" role="button" aria-label={t("rotate.handle")} title={t("rotate.handle")} {...grip("rotate")} />
+      )}
+      {movePlace && !locked && (
+        <div
+          className={movePlace === "right" ? "box-frame-move side" : "box-frame-move"}
+          data-move-handle=""
+          role="button"
+          aria-label={t("selection.moveHandle")}
+          title={t("selection.moveHandle")}
+          {...grip(null)}>
+          <svg viewBox="0 0 16 16" width="100%" height="100%" aria-hidden="true">
+            <path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+        </div>
       )}
       {draftRotation !== null && (
         <div

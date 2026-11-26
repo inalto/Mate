@@ -21,6 +21,32 @@ beforeEach(() => {
   s().setViewport({ width: 800, height: 600 });
 });
 
+describe("carryZoom", () => {
+  it("the next loadPage of that page opens at the carried zoom", async () => {
+    useNotebookStore.setState({ loaded: true });
+    s().carryZoom("pg", 2);
+    await s().loadPage("pg");
+    expect(s().camera.z).toBe(2);
+  });
+
+  it("is one-shot: a later load of the same page is back to the usual camera", async () => {
+    useNotebookStore.setState({ loaded: true });
+    s().carryZoom("pg", 2);
+    await s().loadPage("pg");
+    await s().loadPage("pg");
+    expect(s().camera.z).toBe(1);
+  });
+
+  it("a request for another page is ignored and dropped", async () => {
+    useNotebookStore.setState({ loaded: true });
+    s().carryZoom("other", 2);
+    await s().loadPage("pg");
+    expect(s().camera.z).toBe(1);
+    await s().loadPage("other");
+    expect(s().camera.z).toBe(1);
+  });
+});
+
 describe("ruler state", () => {
   it("starts off with no pose and not guiding", () => {
     expect(s().ruler).toEqual({ on: false, pose: null });

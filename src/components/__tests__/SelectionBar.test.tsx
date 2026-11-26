@@ -14,6 +14,7 @@ import { contentOf, type TextBoxContent } from "../../model/content";
 import { shapeFromDrag } from "../../shapes/geometry";
 import { useEditorStore } from "../../stores/editor";
 import { useNotebookStore } from "../../stores/notebook";
+import { useTabsStore } from "../../stores/tabs";
 import SelectionBar from "../SelectionBar";
 import { disposeAll, setWorkerFactory, type WorkerLike } from "../../code/runtime";
 import { codeOf } from "../../text/tableCode";
@@ -243,5 +244,40 @@ describe("SelectionBar align and math", () => {
     expect(screen.getByRole("slider", { name: "Selection width" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Colour #1565C0" }));
     expect(s().elements.get("sc")!.color).toBe("#1565C0");
+  });
+
+  describe("go to origin", () => {
+    const origin = { pageId: "po", elementId: "orig" };
+    const setup = async (elements: ReturnType<typeof el>[], pages: { id: string; deletedAt?: string }[]) => {
+      useNotebookStore.setState({ loaded: true, tree: { ...useNotebookStore.getState().tree, pages: pages as never } });
+      vi.mocked(loadElements).mockResolvedValueOnce(elements);
+      await useEditorStore.getState().loadPage("pg");
+      useEditorStore.setState({ viewport: { width: 1000, height: 800 } });
+    };
+    const sent = (id: string) => el(id, [[0, 0], [100, 0]], { content: { origin } });
+
+    it("is_offered_for_one_selected_copy_whose_origin_page_exists_and_opens_it", async () => {
+      const openPage = vi.fn();
+      useTabsStore.setState({ openPage });
+      await setup([sent("c")], [{ id: "po" }]);
+      useEditorStore.getState().select(["c"]);
+      render(<SelectionBar />);
+      fireEvent.click(screen.getByRole("button", { name: "Go to origin" }));
+      expect(openPage).toHaveBeenCalledWith("po");
+    });
+
+    it("is_not_offered_without_an_origin_for_a_binned_origin_page_or_a_multi_selection", async () => {
+      await setup([sent("c"), sent("d"), el("plain", [[0, 0], [10, 0]])], [{ id: "po", deletedAt: "x" }]);
+      useEditorStore.getState().select(["c"]);
+      render(<SelectionBar />);
+      expect(screen.queryByRole("button", { name: "Go to origin" })).toBeNull(); // page binned
+      act(() => useNotebookStore.setState({ tree: { ...useNotebookStore.getState().tree, pages: [{ id: "po" }] as never } }));
+      act(() => useEditorStore.getState().select(["plain"]));
+      expect(screen.queryByRole("button", { name: "Go to origin" })).toBeNull(); // no origin
+      act(() => useEditorStore.getState().select(["c", "d"]));
+      expect(screen.queryByRole("button", { name: "Go to origin" })).toBeNull(); // two elements
+      act(() => useEditorStore.getState().select(["c"]));
+      expect(screen.getByRole("button", { name: "Go to origin" })).toBeTruthy();
+    });
   });
 });

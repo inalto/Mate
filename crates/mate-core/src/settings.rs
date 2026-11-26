@@ -71,6 +71,29 @@ pub struct GraphExpression {
     pub latex: String,
     pub color: String,
     pub visible: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// A piecewise function (`latex` repeats the first piece's).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pieces: Option<Vec<GraphPiece>>,
+    /// The study items drawn on the plot; opaque here (the app validates it when reading).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub study: Option<serde_json::Value>,
+}
+
+/// One piece of a piecewise function: `latex` on [min, max) by default (missing bound: unbounded).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphPiece {
+    pub latex: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_closed: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_closed: Option<bool>,
 }
 
 /// A named graph setup for one kind (`"2d-function" | "2d-polar" | "2d-parametric"`).

@@ -1,10 +1,10 @@
 // Tester feedback round 3: square graphs with an optional same-scale box, pinch inside the plot,
-// a settings panel that stays in the pane, filled perfect shapes and highlighter shapes.
+// filled perfect shapes and highlighter shapes (the side panel it placed is gone: the editor is full page).
 import { describe, expect, it } from "vitest";
 import { SNAP_FILL_OPACITY, snapShapeElement } from "../../canvas/inkSnap";
 import type { RecognizedShape } from "../../shapes/recognize";
 import { boxForDomain, DEFAULT_DOMAIN, DEFAULT_GRAPH_SIZE, graphDataOf, graphElement } from "../data";
-import { pinchDomain, placeGraphPanel } from "../editorMath";
+import { pinchDomain } from "../editorMath";
 
 describe("graph box", () => {
   it("a_new_graph_is_square", () => {
@@ -56,28 +56,6 @@ describe("pinch inside the plot", () => {
 
   it("a_degenerate_gesture_changes_nothing", () => {
     expect(pinchDomain(d, 0, 100, 0.5, 0.5, 0.5, 0.5)).toBe(d);
-  });
-});
-
-describe("graph settings panel placement", () => {
-  const pane = { left: 0, right: 1000, top: 0, bottom: 700 };
-  const panel = { width: 260, height: 300 };
-
-  it("goes_left_of_the_box_when_there_is_room", () => {
-    expect(placeGraphPanel({ left: 500, right: 900, top: 100 }, panel, pane)).toEqual({ side: "left", dy: 0 });
-  });
-
-  it("goes_right_when_the_box_is_at_the_left_edge", () => {
-    expect(placeGraphPanel({ left: 40, right: 440, top: 100 }, panel, pane).side).toBe("right");
-  });
-
-  it("goes_over_the_box_when_neither_side_has_room", () => {
-    expect(placeGraphPanel({ left: 100, right: 900, top: 100 }, panel, pane).side).toBe("inside");
-  });
-
-  it("moves_up_to_stay_above_the_bottom_but_never_past_the_top", () => {
-    expect(placeGraphPanel({ left: 500, right: 900, top: 600 }, panel, pane).dy).toBe(-200);
-    expect(placeGraphPanel({ left: 500, right: 900, top: -50 }, panel, pane).dy).toBe(50);
   });
 });
 

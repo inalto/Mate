@@ -82,7 +82,14 @@ export function stepPage(dir: -1 | 1): void {
   if (!cur) return;
   const order = sectionPageOrder(pages, cur.sectionId);
   const next = order[order.indexOf(cur.id) + dir];
-  if (next) tabs.openPage(next);
+  if (next) openKeepingZoom(next);
+}
+
+/** Open `pageId` in the focused pane at the zoom that pane has now (page turns keep the zoom). */
+function openKeepingZoom(pageId: string): void {
+  const editor = getFocusedEditor().getState();
+  editor.carryZoom(pageId, editor.camera.z);
+  useTabsStore.getState().openPage(pageId);
 }
 
 /**
@@ -103,7 +110,7 @@ export async function turnPage(dir: -1 | 1): Promise<void> {
   const order = sectionPageOrder(nb.tree.pages, cur.sectionId);
   const next = order[order.indexOf(cur.id) + dir];
   if (next) {
-    useTabsStore.getState().openPage(next);
+    openKeepingZoom(next);
     return;
   }
   if (dir === -1) return;
@@ -111,7 +118,7 @@ export async function turnPage(dir: -1 | 1): Promise<void> {
   turning = true;
   try {
     const created = await nb.createPage(cur.sectionId, i18n.t("common.pageName", { n: count + 1 }));
-    if (focusedPageId(useTabsStore.getState()) === cur.id) useTabsStore.getState().openPage(created.id);
+    if (focusedPageId(useTabsStore.getState()) === cur.id) openKeepingZoom(created.id);
   } catch {
     /* create failed (store reports it); the swipe just does nothing */
   } finally {

@@ -1,7 +1,9 @@
 // Non-ink tool interaction on the canvas: eraser (cursor circle + drag), lasso (freehand polygon;
 // clockwise = select what it encloses, drawn solid; anticlockwise = select what it touches, drawn
 // dashed), selection drag-move (smart guides, grid snap, Shift axis lock, Alt+drag copies, Ctrl/Cmd
-// suspends snapping), corner-handle scaling and the rotate handle, click/double-click on boxed
+// suspends snapping; also from the move handle below the selection, or beside a small one, whose
+// inside always moves; a lasso's loop stays drawn round what it selected and a press inside it moves
+// that), corner-handle scaling and the rotate handle, click/double-click on boxed
 // elements (select / open the editor), shape tool (drag a box, Shift constrains, live preview),
 // connector tool (drag between elements, ends bind to anchors, live preview), a lone selected
 // connector's endpoint handles and label drag, double-click on a connector (label popover), text
@@ -30,7 +32,8 @@ import { isClosedShape, normalizeShape, shapeElement, shapeFromDrag, shapeHit, s
 import { snapLineEnd } from "../shapes/lineSnap";
 import { isCurveStroke, reshapeHandles } from "../shapes/reshape";
 import { polylineTouches } from "../tools/eraser";
-import { lassoMode, lassoSelect, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
+import { lassoMode, lassoSelect, pointInPolygon, rotateElements, scaleElements, selectionBounds, translateElements } from "../tools/lasso";
+import { autoCompletable } from "../tools/autoComplete";
 import { boxRect, elementBounds, isBoxed, type Rect, type SpatialIndex } from "../tools/spatialIndex";
 import { shiftBelow } from "../tools/insertSpace";
 import { isInkTool, sheetStack, spaceShift } from "../stores/editor";
@@ -79,14 +82,104 @@ const ANCHOR_HOT_PX = 5;
 const ACCENT = "#4a5d4e";
 /** A lone reshapable shape's selection box stands this far off it (screen px), clear of its corner handles. */
 export const SHAPE_PAD_PX = 12;
-/** Move handle (drawing tools only): distance below the selection's bottom-centre (screen px). */
+/** Move handle: distance below the selection's bottom-centre, or beside a small one's right edge (screen px). */
 export const MOVE_OFFSET_PX = 24;
 
 /** `b` grown by `pad` on every side. */
 export const growRect = (b: Rect, pad: number): Rect => (pad ? { x: b.x - pad, y: b.y - pad, width: b.width + 2 * pad, height: b.height + 2 * pad } : b);
 
-/** World position of the move handle of bounds `b` at zoom `z`. */
-export const moveHandlePoint = (b: Rect, z: number): Vec2 => ({ x: b.x + b.width / 2, y: b.y + b.height + MOVE_OFFSET_PX / z });
+/** Where a move handle sits: below the bottom-centre, or beside the right edge of a small selection. */
+export type MovePlace = "below" | "right";
+
+/** World position of the move handle of bounds `b` at zoom `z` (`right`: right edge + 24 px, vertically centred). */
+export const moveHandlePoint = (b: Rect, z: number, place: MovePlace = "below"): Vec2 =>
+  place === "right" ? { x: b.x + b.width + MOVE_OFFSET_PX / z, y: b.y + b.height / 2 } : { x: b.x + b.width / 2, y: b.y + b.height + MOVE_OFFSET_PX / z };
+
+/**
+ * A selection whose handle box is narrower or shorter than this (screen px) is small: a press inside
+ * it moves (its corner zones would cover it otherwise) and its move handle sits beside it, where it
+ * does not crowd the rotate knob and the selection bar.
+ */
+export const SMALL_SELECTION_PX = 28;
+/** Hit radius of the canvas rotate knob and move handle (screen px). */
+export const KNOB_HIT_PX = Math.max(HIT_SLOP_PX, ROTATE_R_PX + 4);
+/** Hit radius of BoxFrame's rotate knob and move grip (28 px hit areas, base.css). */
+export const OVERLAY_KNOB_HIT_PX = 14;
+
+export const isSmallBox = (widthPx: number, heightPx: number): boolean => widthPx < SMALL_SELECTION_PX || heightPx < SMALL_SELECTION_PX;
+
+/** What a selection's handles depend on besides the elements. */
+export interface HandleContext {
+  /** The tool in hand (`tempTool ?? tool`). */
+  tool: string;
+  autoShapes: boolean;
+  editingId: string | null;
+}
+
+/** The handles a selection shows (one rule for the canvas, BoxFrame and the selection bar's placement). */
+export interface SelectionHandles {
+  /** A lone boxed element: BoxFrame (DOM) draws the handles, not the canvas. */
+  overlay: boolean;
+  /** How far the handle box stands off the bounds (screen px): a lone shape with its own handles. */
+  padPx: number;
+  rotate: boolean;
+  scale: boolean;
+  move: MovePlace | null;
+}
+
+const NO_HANDLES: SelectionHandles = { overlay: false, padPx: 0, rotate: false, scale: false, move: null };
+
+/**
+ * The handles of the selected elements `sel` at zoom `z`. No handle at all when every element is
+ * locked, and none for a lone connector (it moves from its route). Mind maps only move, frames are
+ * never rotated. The move handle comes with the cursor and lasso tools (and, for a lone shape, with
+ * the drawing tools that edit it), never where the auto-complete arrows of a lone closed shape or
+ * text box are (cursor tool: they sit below and beside it, and that element moves from its body).
+ */
+export function selectionHandles(sel: readonly Element[], z: number, at: HandleContext): SelectionHandles | null {
+  const b = selectionBounds(new Map(sel.map((e) => [e.id, e])), sel.map((e) => e.id));
+  if (!b) return null;
+  const lone = sel.length === 1 ? sel[0] : null;
+  const unlocked = sel.filter((e) => !isLocked(e));
+  const overlay = !!lone && isBoxed(lone);
+  if (unlocked.length === 0 || lone?.type === "connector") return { ...NO_HANDLES, overlay };
+  const selecting = at.tool === "cursor" || at.tool === "lasso";
+  const arrows = at.tool === "cursor" && !!lone && autoCompletable(lone) && !isPdfPlacement(lone) && at.editingId === null;
+  if (overlay && lone) {
+    const move = selecting && !arrows && at.editingId !== lone.id;
+    // BoxFrame's handles sit on the box itself (unrotated, rotating with it).
+    const r = boxRect(lone);
+    return { overlay, padPx: 0, rotate: !isFrame(lone), scale: true, move: move ? (isSmallBox(r.width * z, r.height * z) ? "right" : "below") : null };
+  }
+  const transformable = !unlocked.some((e) => e.type === "mindmap");
+  const one = lone && isShapeLike(lone) ? lone : null;
+  const padPx = one && one.type === "shape" && reshapeHandles(one).length > 0 ? SHAPE_PAD_PX : 0;
+  const drawing = at.tool === "shape" || (isInkTool(at.tool) && at.autoShapes);
+  const move = !arrows && (selecting || (drawing && !!one));
+  const small = isSmallBox(b.width * z + 2 * padPx, b.height * z + 2 * padPx);
+  return { overlay, padPx, rotate: transformable && !unlocked.some(isFrame), scale: transformable, move: move ? (small ? "right" : "below") : null };
+}
+
+/** The rotate knob's and move handle's hit circles (screen px) around the selection's screen box `r`. */
+export function handleSpots(r: Rect, h: SelectionHandles): { x: number; y: number; r: number }[] {
+  const hit = h.overlay ? OVERLAY_KNOB_HIT_PX : KNOB_HIT_PX;
+  const box = growRect(r, h.padPx);
+  const out: { x: number; y: number; r: number }[] = [];
+  if (h.rotate) out.push({ ...rotateHandlePoint(box, 1), r: hit });
+  if (h.move) out.push({ ...moveHandlePoint(box, 1, h.move), r: hit });
+  return out;
+}
+
+/** How far the handles reach above and below the selection's screen box `r` (the selection bar keeps clear of them). */
+export function barClearance(r: Rect, h: SelectionHandles): { above: number; below: number } {
+  let above = 0;
+  let below = 0;
+  for (const c of handleSpots(r, h)) {
+    above = Math.max(above, r.y - (c.y - c.r));
+    below = Math.max(below, c.y + c.r - (r.y + r.height));
+  }
+  return { above, below };
+}
 
 /** True when `el`'s form is edited by handles: a shape, or a curve snapped from ink. */
 export const isShapeLike = (el: Element | undefined): el is Element => !!el && (el.type === "shape" || isCurveStroke(el));
@@ -368,6 +461,8 @@ type Gesture =
       dupKey: string | null;
       /** The copied originals (an Alt+drag): never smart-guide candidates for their own copies. */
       sources: string[];
+      /** The kept lasso outline at the press: drawn with the drag, moved with the commit. */
+      outline: Outline | null;
     }
   /** A reshape handle of the lone selected shape or curve follows the pointer (`apply` gives the result). */
   | { kind: "reshape"; id: string; orig: Element; apply(p: Vec2): Element; start: Vec2; end: Vec2; rect: Rect | null }
@@ -383,6 +478,19 @@ type Gesture =
       keepForm: boolean;
     }
   | { kind: "rotate"; centre: Vec2; from: number; angle: number; orig: Element[] };
+
+/** A lasso's loop kept once it selected (page units), with what it selected and those elements' bounds then. */
+interface Outline {
+  points: Vec2[];
+  ids: ReadonlySet<string>;
+  bounds: Rect;
+  tool: string;
+  pageId: string | null;
+}
+
+const sameIds = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean => a.size === b.size && [...a].every((id) => b.has(id));
+const sameRect = (a: Rect, b: Rect): boolean =>
+  Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.width - b.width) < 1e-6 && Math.abs(a.height - b.height) < 1e-6;
 
 /** A connector end under the pointer: the element it would bind to (`end`), the snapped anchor. */
 interface EndAt {
@@ -549,6 +657,34 @@ export function createToolController(deps: ToolDeps) {
   const replayTap = createReplayTap(deps.store, deps.replay, now, deps.markers, deps.covers);
   /** A cursor press on the already selected recording marker: its quick release without a drag opens it. */
   let markerClick: Tap | null = null;
+  /**
+   * The loop of the lasso that made the selection, kept (and drawn) until the selection changes for
+   * any other reason: another selection, the tool or the page changes, or its elements no longer
+   * sit where they were (an undo, a scale or rotate, any edit). A move takes it along.
+   */
+  let outline: Outline | null = null;
+
+  /** The kept lasso outline while it still frames the selection as it was, else null (and dropped, except mid-move). */
+  const keptOutline = (): Outline | null => {
+    if (!outline) return null;
+    const s = st();
+    const b = selectionBounds(s.elements, s.selection);
+    if (b && s.tool === outline.tool && s.pageId === outline.pageId && sameIds(s.selection, outline.ids) && sameRect(b, outline.bounds)) return outline;
+    // An Alt+drag swaps the selection for its copies mid-move: the commit decides then.
+    if (g.kind !== "move") outline = null;
+    return null;
+  };
+  /** Keep `points` as the outline of the selection as it is now (none when nothing is selected). */
+  const keepOutline = (points: Vec2[]) => {
+    const s = st();
+    const bounds = selectionBounds(s.elements, s.selection);
+    outline = bounds && s.selection.size > 0 ? { points, ids: new Set(s.selection), bounds, tool: s.tool, pageId: s.pageId } : null;
+  };
+  // Another selection, tool or page drops the outline at once (so reselecting the same elements does not bring it back).
+  const unsubOutline = deps.store.subscribe((s, prev) => {
+    if (!outline || g.kind === "move") return;
+    if (s.tool !== outline.tool || s.pageId !== outline.pageId || (s.selection !== prev.selection && !sameIds(s.selection, outline.ids))) outline = null;
+  });
 
   /**
    * Double-click on a boxed element opens its editor, on a connector its label popover (never on a
@@ -631,7 +767,50 @@ export function createToolController(deps: ToolDeps) {
   /** Start a selection move of the selected elements (Alt held: of fresh copies of them, made when the drag starts). */
   const startMove = (p: Vec2): Gesture => {
     const orig = movable();
-    return { kind: "move", start: p, delta: { x: 0, y: 0 }, unclamped: { x: 0, y: 0 }, orig, lifted: false, anchor: anchorOf(orig), started: false, bounds: null, others: null, copy: alt, dupKey: null, sources: [] };
+    return {
+      kind: "move",
+      start: p,
+      delta: { x: 0, y: 0 },
+      unclamped: { x: 0, y: 0 },
+      orig,
+      lifted: false,
+      anchor: anchorOf(orig),
+      started: false,
+      bounds: null,
+      others: null,
+      copy: alt,
+      dupKey: null,
+      sources: [],
+      outline: keptOutline(),
+    };
+  };
+
+  /** The handles of the current selection with `tool` in hand (default: the store's). */
+  const handlesNow = (tool?: string): SelectionHandles | null => {
+    const s = st();
+    const sel = [...s.selection].map((id) => s.elements.get(id)).filter((e): e is Element => !!e);
+    return selectionHandles(sel, s.camera.z, { tool: tool ?? s.tempTool ?? s.tool, autoShapes: s.autoShapes, editingId: s.editingId });
+  };
+
+  /** A press at `p` on the canvas move handle of the selection (with `tool`): starts a move (same path as a press inside it). */
+  const startMoveHandle = (p: Vec2, tool?: string): boolean => {
+    const h = handlesNow(tool);
+    const s = st();
+    const b = selectionBounds(s.elements, s.selection);
+    if (!h?.move || h.overlay || !b) return false;
+    const z = s.camera.z;
+    const m = moveHandlePoint(growRect(b, h.padPx / z), z, h.move);
+    if (Math.hypot(p.x - m.x, p.y - m.y) * z > KNOB_HIT_PX) return false;
+    g = startMove(p);
+    lastTap = null;
+    markerClick = null;
+    return true;
+  };
+
+  /** A small handle box `hb` pressed inside at `p`: its corner zones would cover it, so the press moves instead of scaling. */
+  const insideSmall = (hb: Rect, p: Vec2): boolean => {
+    const z = st().camera.z;
+    return isSmallBox(hb.width * z, hb.height * z) && rectContains(hb, p);
   };
 
   const clearGuides = () => st().setGuides([]);
@@ -796,13 +975,6 @@ export function createToolController(deps: ToolDeps) {
     return isShapeLike(el) && !isLocked(el) ? el : null;
   };
 
-  /** A drawing tool is in hand that also edits shapes: the shape tool, or ink with perfect shapes on. */
-  const drawingEdits = (): boolean => {
-    const s = st();
-    const tool: string = s.tempTool ?? s.tool;
-    return tool === "shape" || (isInkTool(tool) && s.autoShapes);
-  };
-
   /** How far the selection box stands off a lone shape with corner / axis handles (world units). */
   const padFor = (el: Element | null | undefined): number =>
     el && el.type === "shape" && !isLocked(el) && reshapeHandles(el).length > 0 ? SHAPE_PAD_PX / st().camera.z : 0;
@@ -862,17 +1034,11 @@ export function createToolController(deps: ToolDeps) {
     if (!el) return false;
     const s = st();
     const b = selectionBounds(s.elements, s.selection);
-    let started = startLineEnd(p) || startReshape(p);
+    let started = startLineEnd(p) || startReshape(p) || startMoveHandle(p);
     if (!started && b) {
       const hb = growRect(b, padFor(el));
-      started = startTransform(p, b, hb, [el], { rotate: true, scale: true, keepForm: el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle") });
-      if (!started) {
-        const m = moveHandlePoint(hb, s.camera.z);
-        if (Math.hypot(p.x - m.x, p.y - m.y) * s.camera.z <= Math.max(ROTATE_R_PX, HIT_SLOP_PX) + 2) {
-          g = startMove(p);
-          started = true;
-        }
-      }
+      const keepForm = el.type === "shape" && isClosedShape(el.shapeType ?? "rectangle");
+      started = startTransform(p, b, hb, [el], { rotate: true, scale: !insideSmall(hb, p), keepForm });
     }
     if (started) deps.requestLive();
     return started;
@@ -954,6 +1120,12 @@ export function createToolController(deps: ToolDeps) {
     return sel.some((f) => frameHit(f, p, tol, s.camera.z));
   };
 
+  /** `p` is inside the kept outline of the lasso that made the selection (a press there moves it too). */
+  const insideOutline = (p: Vec2): boolean => {
+    const o = keptOutline();
+    return !!o && pointInPolygon(p, o.points);
+  };
+
   const down = (p: Vec2, tool: PointerTool, replayed = false) => {
     const s = st();
     if (!replayed && replayTap.down(p, tool)) {
@@ -1001,6 +1173,8 @@ export function createToolController(deps: ToolDeps) {
       // A lone line's or arrow's end handle: that end follows the pointer.
     } else if ((tool === "cursor" || tool === "lasso") && startReshape(p)) {
       // A lone shape's corner or axis handle, a snapped curve's end or middle: it follows the pointer.
+    } else if ((tool === "cursor" || tool === "lasso") && startMoveHandle(p, tool)) {
+      // The selection's move handle (below it, or beside a small one): a move, as from inside it.
     } else if ((tool === "cursor" || tool === "lasso") && tapEdit(p, tool)) {
       g = { kind: "idle" };
     } else if ((tool === "cursor" || tool === "lasso") && startLabel(p)) {
@@ -1029,13 +1203,14 @@ export function createToolController(deps: ToolDeps) {
         b && hb && orig.length > 0 && !lone && !overlay
           ? startTransform(p, b, hb, orig, {
               rotate: !noRotate,
-              scale: !loneFrame && !moveOnly,
+              // A small selection pressed inside moves: its corners are grabbed from outside it.
+              scale: !loneFrame && !moveOnly && !insideSmall(hb, p),
               keepForm: !!shape && shape.type === "shape" && isClosedShape(shape.shapeType ?? "rectangle"),
             })
           : false;
       if (transform) {
         // The rotate handle or a corner handle: that gesture started.
-      } else if (b && (lone ? connectorHit(lone, p, HIT_SLOP_PX / s.camera.z) : onSelection(b, p))) {
+      } else if (b && (lone ? connectorHit(lone, p, HIT_SLOP_PX / s.camera.z) : onSelection(b, p) || insideOutline(p))) {
         g = startMove(p);
       } else {
         const hit = hitTest(deps.store.spatialIndex(), s.elements, p, HIT_SLOP_PX / s.camera.z);
@@ -1306,24 +1481,42 @@ export function createToolController(deps: ToolDeps) {
         if (g.moved) s.setConnectorLabel(g.id, { text: g.text, t: g.t });
         break;
       case "lasso":
-        if (g.points.length >= 3) s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points, lassoMode(g.points)));
+        if (g.points.length >= 3) {
+          s.select(lassoSelect(s.elements, deps.store.spatialIndex(), g.points, lassoMode(g.points)));
+          // The loop stays drawn round what it selected.
+          keepOutline(g.points);
+        }
         break;
-      case "move":
+      case "move": {
         drop();
         clearGuides();
+        const kept = g.outline;
         // An Alt+drag that ends where it started takes its copies back (no stacked duplicates).
         if (g.dupKey && g.unclamped.x === 0 && g.unclamped.y === 0) {
           s.undo();
           break;
         }
         s.moveSelection(g.delta.x, g.delta.y, g.dupKey ? { label: "Duplicate", mergeKey: g.dupKey, children: false } : undefined);
+        if (kept) {
+          // The outline goes where the selection went (the committed move, after any clamp); a selection
+          // that changed size on the way (a rerouted connector) drops it.
+          const t = st();
+          const nb = selectionBounds(t.elements, t.selection);
+          const dx = nb ? nb.x - kept.bounds.x : 0;
+          const dy = nb ? nb.y - kept.bounds.y : 0;
+          if (nb && Math.abs(nb.width - kept.bounds.width) < 1e-6 && Math.abs(nb.height - kept.bounds.height) < 1e-6) keepOutline(kept.points.map((q) => ({ x: q.x + dx, y: q.y + dy })));
+          else outline = null;
+        }
         break;
+      }
       case "scale":
         drop();
+        outline = null; // the rectangle frame stays; the loop no longer fits
         s.scaleSelection(g.t.origin, g.t.sx, g.t.sy);
         break;
       case "rotate":
         drop();
+        outline = null;
         // One "Rotate" entry for the whole drag.
         s.rotateSelection(g.centre, g.angle);
         break;
@@ -1379,6 +1572,12 @@ export function createToolController(deps: ToolDeps) {
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     let animate = false;
+    // The kept lasso loop: shifted with a move in progress, hidden while scaling or rotating.
+    const loop = g.kind === "move" ? g.outline : g.kind === "idle" ? keptOutline() : null;
+    if (loop) {
+      const d = g.kind === "move" ? g.delta : { x: 0, y: 0 };
+      drawLassoLoop(ctx, loop.points, c, d, true, true);
+    }
     if (g.kind === "space") {
       const y = Math.round(worldToScreen(c, { x: 0, y: g.lineY }).y) + 0.5;
       ctx.save();
@@ -1391,19 +1590,8 @@ export function createToolController(deps: ToolDeps) {
       ctx.stroke();
       ctx.restore();
     } else if (g.kind === "lasso" && g.points.length > 1) {
-      ctx.save();
-      ctx.beginPath();
-      g.points.forEach((q, i) => {
-        const v = worldToScreen(c, q);
-        if (i === 0) ctx.moveTo(v.x, v.y);
-        else ctx.lineTo(v.x, v.y);
-      });
-      ctx.lineWidth = 1.5;
       // Dashed while the loop runs anticlockwise ("touch"), solid while clockwise ("inside").
-      ctx.setLineDash(lassoMode(g.points) === "touch" ? [6, 4] : []);
-      ctx.strokeStyle = "#4a5d4e";
-      ctx.stroke();
-      ctx.restore();
+      drawLassoLoop(ctx, g.points, c, { x: 0, y: 0 }, lassoMode(g.points) === "touch");
     } else if (s.selection.size > 0 && !framedByOverlay(s.elements, s.selection)) {
       // Preview elements replace their originals; locked ones stay where they are.
       const live = new Map(preview.map((e) => [e.id, e]));
@@ -1432,9 +1620,10 @@ export function createToolController(deps: ToolDeps) {
         if (one) {
           const handles = reshapeHandles(one);
           if (handles.length > 0) drawRoundHandles(ctx, handles.map((h) => h.at), c);
-          // With a drawing tool a press inside the shape draws: it moves by its own handle instead.
-          if (drawingEdits() && g.kind === "idle") drawMoveHandle(ctx, hb, c);
         }
+        // The move handle (cursor and lasso; with a drawing tool, a press inside a shape draws, so it moves by this).
+        const mh = selectionHandles(sel, c.z, { tool: s.tempTool ?? s.tool, autoShapes: s.autoShapes, editingId: s.editingId });
+        if (mh?.move && g.kind === "idle") drawMoveHandle(ctx, hb, c, mh.move);
         animate = true;
       }
       // A lone line or arrow: round handles on its ends (drag one to move that end).
@@ -1559,7 +1748,10 @@ export function createToolController(deps: ToolDeps) {
     /** Ink with perfect shapes on: a tap on a shape's outline selects it (see `tapSelect`). */
     tapSelect,
     ...driver,
+    /** The kept loop of the lasso that made the selection (page units), or null. */
+    lassoOutline: (): Vec2[] | null => keptOutline()?.points ?? null,
     dispose() {
+      unsubOutline();
       if (autoCompleteDrivers.get(deps.store) === driver) autoCompleteDrivers.delete(deps.store);
       deps.el.removeEventListener("pointerdown", onPointerMods, true);
       deps.el.removeEventListener("pointermove", onPointerMods, true);
@@ -1647,10 +1839,32 @@ export function drawLineEnds(ctx: CanvasRenderingContext2D, el: Element, c: Came
   drawRoundHandles(ctx, el.points.slice(0, 2), c);
 }
 
-/** The move handle of bounds `b` (a stem and a round knob with a four-way cross), below the bottom-centre. */
-export function drawMoveHandle(ctx: CanvasRenderingContext2D, b: Rect, c: Camera): void {
-  const from = worldToScreen(c, { x: b.x + b.width / 2, y: b.y + b.height });
-  const at = worldToScreen(c, moveHandlePoint(b, c.z));
+/** A lasso loop through world `pts` shifted by `d` (page units), in the lasso's colour; `dashed` for a touch loop or a kept one. */
+export function drawLassoLoop(ctx: CanvasRenderingContext2D, pts: readonly Vec2[], c: Camera, d: Vec2, dashed: boolean, closed = false): void {
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.beginPath();
+  pts.forEach((q, i) => {
+    const v = worldToScreen(c, { x: q.x + d.x, y: q.y + d.y });
+    if (i === 0) ctx.moveTo(v.x, v.y);
+    else ctx.lineTo(v.x, v.y);
+  });
+  if (closed) ctx.closePath();
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash(dashed ? [6, 4] : []);
+  ctx.strokeStyle = ACCENT;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * The move handle of bounds `b` (a stem and a round knob with a four-way cross): below the
+ * bottom-centre, or (`right`, a small selection) beside the right edge's middle.
+ */
+export function drawMoveHandle(ctx: CanvasRenderingContext2D, b: Rect, c: Camera, place: MovePlace = "below"): void {
+  const right = place === "right";
+  const from = worldToScreen(c, right ? { x: b.x + b.width, y: b.y + b.height / 2 } : { x: b.x + b.width / 2, y: b.y + b.height });
+  const at = worldToScreen(c, moveHandlePoint(b, c.z, place));
   const r = ROTATE_R_PX + 2;
   ctx.save();
   ctx.setLineDash([]);
@@ -1659,7 +1873,8 @@ export function drawMoveHandle(ctx: CanvasRenderingContext2D, b: Rect, c: Camera
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
   ctx.moveTo(from.x, from.y);
-  ctx.lineTo(at.x, at.y - r);
+  if (right) ctx.lineTo(at.x - r, at.y);
+  else ctx.lineTo(at.x, at.y - r);
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
